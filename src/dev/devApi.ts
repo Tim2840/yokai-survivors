@@ -85,6 +85,13 @@ export function installDevApi(ctx: DevContext): void {
         tuning: ctx.game.tuningInfo,
       };
     },
+    /** 這一關的地圖摘要（台地、丘、尺寸）：傳送到特定地形、截圖與測試用 */
+    get map() {
+      const r = run();
+      if (!r) return null;
+      const d = r.map.def;
+      return { id: d.id, size: d.size, plateaus: d.plateaus ?? [], hills: d.hills, zones: d.zones };
+    },
     /** 鏡頭狀態與鏡頭下方的地面高度（鏡頭不穿地的檢查用） */
     get camera() {
       const rig = ctx.renderer.rig;
@@ -99,9 +106,11 @@ export function installDevApi(ctx: DevContext): void {
       const i = ctx.renderer.pipeline.renderer.info;
       return { calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs ? i.programs.length : 0 };
     },
+    /** 不畫圖，只讓鏡頭與畫面物件追上（鏡頭掃描測試用，比 render() 快很多） */
+    settle: () => ctx.game.frame(1),
     advance: (dt: number) => ctx.loop.advance(dt),
     render: () => {
-      ctx.game.frame();
+      ctx.game.frame(1);
       ctx.loop.render();
     },
     spawn: (id: string, n: number) => run()?.devSpawn(id, n) ?? 0,

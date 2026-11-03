@@ -205,6 +205,7 @@ export class Game {
   private startRun(): void {
     this.disposeRun();
     this.d.backdrop.visible = false;
+    this.renderer.rig.reset();
     const seed = subSeed(this.d.seed, this.runIndex++);
     this.run = new Run({ seed, yokaiId: this.selectedYokai, mobile: this.d.mobile, bus: this.b, meritStat: 0 });
     this.view = new RunView(this.run, this.renderer);
@@ -299,9 +300,10 @@ export class Game {
   }
 
   // ── 每個畫面幀 ──
-  frame(): void {
+  /** forceDt：測試用，用指定的秒數當這一幀的 dt（讓鏡頭一次追上，不受無頭瀏覽器低幀率影響） */
+  frame(forceDt?: number): void {
     const now = performance.now();
-    const dt = this.lastFrameMs === 0 ? 0 : Math.min(0.1, (now - this.lastFrameMs) / 1000);
+    const dt = forceDt ?? (this.lastFrameMs === 0 ? 0 : Math.min(0.1, (now - this.lastFrameMs) / 1000));
     this.lastFrameMs = now;
     this.time += this.loop.paused ? 0 : dt;
     const run = this.run;

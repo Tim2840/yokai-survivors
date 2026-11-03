@@ -101,6 +101,29 @@ describe('連續計時關卡（D22）', () => {
     expect(e.maxHp[b1]).toBe(e.maxHp[b2]);
   });
 
+  it('同畫面敵人滿了（手機 200 隻）時，頭目一定生得出來（擠掉最遠的一般敵人）', () => {
+    tuning.stageSeconds = 60;
+    tuning.countScale = 60;
+    const bus = new EventBus();
+    const run = new Run({ seed: 12, bus, mobile: true });
+    run.god = true;
+    run.setMove(0, 0);
+    run.devSetTime(30);
+    for (let i = 0; i < 60 * 8 && run.enemies.aliveCount < run.enemies.capacity; i++) {
+      if (run.awaitingPick) run.chooseCard(0);
+      run.step(DT);
+    }
+    expect(run.enemies.aliveCount).toBe(run.enemies.capacity);
+    run.devSetTime(48);
+    for (let i = 0; i < 120; i++) {
+      if (run.awaitingPick) run.chooseCard(0);
+      run.step(DT);
+    }
+    expect(run.director.bossIndex).toBeGreaterThanOrEqual(0);
+    expect(run.enemies.variant[run.director.bossIndex]).toBe(2);
+    expect(run.enemies.aliveCount).toBeLessThanOrEqual(run.enemies.capacity);
+  });
+
   it('打倒頭目 → 傳送門開、發 bossDown；走進去 → 過關（發 stageClear、進過關畫面）；出發 → 第 2 關換地圖、敵人 HP ×1.5', () => {
     tuning.stageSeconds = 60;
     const { run, bus } = make(4, { map: undefined });

@@ -125,6 +125,27 @@ export async function snapshotOf(page) {
   return page.evaluate(() => {
     const g = window.__game;
     const r = g.run;
-    return JSON.stringify({ state: g.state, screens: g.screens, paused: g.paused, wave: r && r.wave, phase: r && r.phase, t: r && Math.floor(r.time), level: r && r.level, kills: r && r.kills, hp: r && Math.ceil(r.hp), pending: r && r.pending, picked: r && r.picked });
+    return JSON.stringify({ state: g.state, screens: g.screens, paused: g.paused, stage: r && r.stage, phase: r && r.phase, t: r && Math.floor(r.time), level: r && r.level, kills: r && r.kills, hp: r && Math.ceil(r.hp), pending: r && r.pending, picked: r && r.picked });
   });
+}
+
+/** 真實的觸控拖曳（CDP touch 事件 → 瀏覽器產生 pointerType = 'touch' 的指標事件）。Playwright 的 touchscreen 只有 tap，所以走 CDP */
+export async function touchDrag(page, from, to, steps = 6) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: from.x, y: from.y, id: 7 }] });
+  for (let i = 1; i <= steps; i++) {
+    const x = from.x + ((to.x - from.x) * i) / steps;
+    const y = from.y + ((to.y - from.y) * i) / steps;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y, id: 7 }] });
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+}
+
+/** 滑鼠拖曳（按住左鍵）。把 yaw／pitch 變化回傳 */
+export async function mouseDrag(page, from, to, steps = 6) {
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps });
+  await page.mouse.up();
 }

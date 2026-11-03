@@ -129,7 +129,9 @@ export class StageDirector {
     // 持續湧出
     this.pending += this.rate() * dt;
     let n = 0;
-    if (this.bossPending && this.enemies.aliveCount < this.enemies.capacity) {
+    if (this.bossPending) {
+      // 頭目是這一關的重點：場上滿了就擠掉最遠的一般敵人，不能因為同畫面上限而生不出來
+      if (this.enemies.aliveCount >= this.enemies.capacity) this.enemies.evictFarthest(px, pz);
       const i = this.spawnOne(this.kindBoss, 2, px, pz, night);
       if (i >= 0) {
         this.bossPending = false;

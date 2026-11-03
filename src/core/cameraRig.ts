@@ -37,6 +37,14 @@ export class CameraRig {
   /** 想要的距離（之後可由縮放調整） */
   desiredDist: number = CAMERA.distance;
 
+  /** 回到預設方向（開新的一局） */
+  reset(): void {
+    this.yaw = 0;
+    this.pitch = CAMERA.pitchDeg * DEG;
+    this.desiredDist = CAMERA.distance;
+    this.dist = CAMERA.distance;
+  }
+
   rotate(dyaw: number, dpitch: number): void {
     this.yaw += dyaw;
     // 保持在 (−π, π]，避免數字無限增大

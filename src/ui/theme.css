@@ -78,7 +78,8 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 }
 
 /* ── 戰鬥 HUD ── */
-.hud { position: fixed; inset: 0; z-index: 10; pointer-events: none; padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; }
+#ui > .hud { pointer-events: none; }
+.hud { position: fixed; inset: 0; z-index: 10; padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; }
 .hud > * { pointer-events: none; }
 .hud-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: 8px; }
 .hud-hp { display: flex; align-items: center; gap: 8px; min-width: 0; }

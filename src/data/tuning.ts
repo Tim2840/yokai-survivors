@@ -6,11 +6,13 @@ import { STAGE } from './stage';
  * （?count=2.5&hp=0.6&dmg=2），主網址不吃。程式讀這個物件，不直接讀 WAVES 的數量與 HP 倍率。
  */
 /**
- * M1／M1.5 試玩預設（G1、G1b 用手感決定）：不是 docs/02 的數字。依據：2026-11-03 無頭機器人探針（tests/unit/m1-balance-probe.test.ts，
- * 5 個種子）——照 docs 原值（數量 ×1、單發）機器人只撐到第 4～5 波；數量 ×2.5、一次 3 顆、濺射 1.2 公尺 → 平均第 15 波、約 1,600 擊殺；
- * 再強（4 顆、1.5 公尺、傷害 ×1.5）5 局全通關。M2 有小妖與 sim 之後移除，改回資料表。
+ * M1／M1.5 試玩預設（G1、G1b 用手感決定）：不是 docs/02 的數字。依據：2026-11-03 無頭機器人探針
+ * （tests/unit/m1-balance-probe.test.ts，4 個種子，只會逃跑繞圈的機器人，第 1 關 10 分鐘）：
+ * 數量 ×2.5、3 顆、濺射 1.2、傷害 ×1 → 平均撐 174 秒（死在頭目之前）；
+ * 數量 ×2.5、4 顆、濺射 1.5、傷害 ×1.5（採用）→ 平均撐 429 秒、2,562 擊殺，頭目出現 2/4、過關 1/4。
+ * 人會比機器人強，所以不再加強。M2 有小妖與 sim 之後移除，改回資料表。
  */
-export const M1_PLAYTEST = { countScale: 2.5, hpScale: WAVES.hpScale as number, damageScale: 1, volley: 3, splash: 1.2, stageSeconds: STAGE.duration as number };
+export const M1_PLAYTEST = { countScale: 2.5, hpScale: WAVES.hpScale as number, damageScale: 1.5, volley: 4, splash: 1.5, stageSeconds: STAGE.duration as number };
 
 export const tuning = {
   /** 敵人數量倍率（見 WAVES.countScale） */

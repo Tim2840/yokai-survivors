@@ -129,6 +129,23 @@ export class Enemies {
     return i;
   }
 
+  /** 場上滿了：擠掉離 (px,pz) 最遠的一隻「一般」敵人（不動精英與頭目），回傳是否擠掉了 */
+  evictFarthest(px: number, pz: number): boolean {
+    let best = -1;
+    let bd = -1;
+    for (let i = 0; i < this.high; i++) {
+      if (!this.alive[i] || this.variant[i] !== 0) continue;
+      const d = (this.x[i] - px) ** 2 + (this.z[i] - pz) ** 2;
+      if (d > bd) {
+        bd = d;
+        best = i;
+      }
+    }
+    if (best < 0) return false;
+    this.kill(best);
+    return true;
+  }
+
   kill(i: number): void {
     if (!this.alive[i]) return;
     this.alive[i] = 0;
