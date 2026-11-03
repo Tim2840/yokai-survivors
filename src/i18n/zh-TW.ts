@@ -10,6 +10,7 @@ export const zhTW = {
   'pause.resume': '繼續',
   'save.failed': '無法存檔：這次的進度可能不會保留',
   'changelog.title': '更新紀錄',
+  'changelog.v2': '加入背景音樂與按鈕音效；畫面加上光暈。',
   'changelog.v1': '建立遊戲骨架：主選單與場景可以載入。',
 } as const;
 

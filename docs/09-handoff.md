@@ -13,7 +13,10 @@
 - 已有：整套規劃文件（docs/01–14）、專案設定（`package.json`、`tsconfig.json`、`vite.config.ts`、`vitest.config.ts`）、搬運的基礎程式（`src/lib`、`src/art`）、測試環境（`tests/unit/setup.ts`）。
 - M0 已有：`src/core`（`bus` 事件匯流排、`loop` 固定步長、`save` 存檔、`renderer` 鏡頭與光源）、`src/game`（`states`／`stateMachine` 狀態機、`changelog`）、`src/i18n`（`t()`、`zh-TW`）、`src/art/palette.ts`、`src/data/camera.ts`（含直式 FOV）、`src/ui`（主選單、提示）、`src/world/stage.ts`（空場景）、`src/dev/devApi.ts`（`__game`：state／seed／paused／simTime／advance／render）。
 - 測試：單元 49 個（含原始碼全掃：中文不寫死、無 `Math.random`、禁用詞、i18n key 存在）；回歸 `b1`（開機到主選單、三種畫面、點擊、畫布非單色、提示不蓋選單）；`npm run check:main`（打包後的主網址沒有 `__game`）；GitHub Actions CI（typecheck、test、build、check:main）。
-- **M0 還沒做（要舊專案的檔案）**：畫質分級與 Bloom（renderer.ts）、音效／音樂引擎（audio.ts、music.ts）、輸入與搖桿（input.ts）、PWA、`pack-artifact.py`、角色展示間。需要使用者用 `add_repo` 把 `Tim2840/Tim-s-Game` 加進 session（唯讀），或決定改成自己重寫。
+- 舊專案搬運（2026-11-03，使用者同意加入舊 repo 唯讀）：後製與畫質分級、音效音樂引擎（都節音階三首）、輸入、PWA、`pack-artifact.py` 都已搬，進度表在 docs/10 第 7 節。角色展示間 M1 再搬。
+- **D15 已改**：升級當下暫停三選一（不是整備時選）。CLAUDE.md 的鐵則已同步。
+- **測試頁**（D19 授權自動更新）：https://claude.ai/artifact/GXGprLDbQYgEHRGByNVnpA （標題「百鬼陣 測試版」，私人，帶 `__game`）。更新步驟：`npm run pack:test` → 用打包檔跑一次 b1（套上 Artifact 外殼，見 2026-11-03 的做法：外殼加 `<link rel="icon" href="data:,">`，否則會有假 404）→ 用 Artifact 工具發佈 `dist-artifact/yokai-test.html`。新 session 發佈時要帶這個網址當 `url`（先 `read`），不然會變成另一個頁面。
+- **主網址**還沒建立：使用者說「發佈」才動（D13），用 `npm run check:main` 的打包檔，標題維持「百鬼陣」。
 - 已知限制：CI 沒跑 Playwright 回歸（要裝瀏覽器，等回歸變多再加）。第一個工作是 M0（docs/05）。
 - 設計上的所有數字都是**未驗證的起始值**（docs/02）。
 
@@ -64,3 +67,4 @@
 | 2026-11-03 | 舊專案 session | 建立規劃文件與起始套件 |
 | 2026-11-03 | 新專案第一個 session | 開工報告與文件審查：修正算術與矛盾、補魂火曲線／流場尋路／直式視野、新增 Q14–Q17、R15–R19；未寫任何遊戲程式 |
 | 2026-11-03 | 同上 | 使用者回答 Q1/Q2/Q3/Q6=A、Q14=先可調 → D14–D18；GDD v0.2；M0 骨架（不含需要舊專案的搬運項目） |
+| 2026-11-03 | 同上 | D15 改為升級時暫停選；Q13 → D19；從舊 repo 搬運 renderer／audio／music／input／PWA／pack-artifact；測試頁發佈 |

@@ -1,4 +1,5 @@
 import './ui/theme.css';
+import { AudioEngine } from './core/audio';
 import { bus } from './core/bus';
 import { FixedLoop } from './core/loop';
 import { Renderer } from './core/renderer';
@@ -25,7 +26,19 @@ function boot(): void {
   const save = loadSave();
 
   const fsm = new GameStateMachine(bus);
-  const renderer = new Renderer(app);
+  // 測試頁可用 ?q=0～4 固定畫質等級（截圖穩定）；主網址不吃這個參數
+  const q = DEV_TOOLS ? new URLSearchParams(location.search).get('q') : null;
+  const renderer = new Renderer(app, {
+    mode: save.settings.quality,
+    onModeChange: (m) => {
+      save.settings.quality = m;
+      writeSave(save);
+    },
+    fixedLevel: q !== null && /^[0-4]$/.test(q) ? Number(q) : undefined,
+  });
+  const audio = new AudioEngine();
+  audio.setVolumes({ sfx: save.settings.sfx, music: save.settings.music });
+  audio.setMusic({ theme: 'title' });
   const { lantern } = buildStage(renderer.scene);
 
   let time = 0;
@@ -49,17 +62,18 @@ function boot(): void {
     }
   });
 
-  buildMenu(
-    ui,
-    () => toast(t('menu.notReady')),
-    () => toast(t('menu.notReady')),
-  );
+  const notReady = () => {
+    audio.sfx('click');
+    toast(t('menu.notReady'));
+  };
+  buildMenu(ui, notReady, notReady);
 
   if (DEV_TOOLS) {
-    void import('./dev/devApi').then((m) => m.installDevApi({ loop, fsm, seed }));
+    void import('./dev/devApi').then((m) => m.installDevApi({ loop, fsm, seed, audio, renderer }));
   }
 
   writeSave(save);
+  renderer.precompile();
   fsm.go('MENU');
   const tick = (now: number) => {
     loop.frame(now);
@@ -69,3 +83,12 @@ function boot(): void {
 }
 
 boot();
+
+// 離線與安裝（PWA）：只有正式網頁版（npm run build 的 dist/）註冊；開發、單檔分享頁、嵌在框架裡都不註冊
+if ('serviceWorker' in navigator && import.meta.env.MODE === 'production' && import.meta.env.PROD && window.self === window.top) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {
+      /* 註冊失敗：遊戲照常，只是不能離線 */
+    });
+  });
+}

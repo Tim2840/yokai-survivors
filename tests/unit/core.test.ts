@@ -164,3 +164,29 @@ describe('固定步長主迴圈', () => {
     expect(draws()).toBe(1);
   });
 });
+
+import { canPlay } from '../../src/core/audio';
+import { AUDIO } from '../../src/data/audio';
+import { degreeToSemitones, MIYAKO } from '../../src/core/music';
+
+describe('音效節流（docs/08 第 3 節）', () => {
+  it('同時最多 maxConcurrent 個', () => {
+    expect(canPlay(1000, 0, AUDIO.maxConcurrent - 1, false)).toBe(true);
+    expect(canPlay(1000, 0, AUDIO.maxConcurrent, false)).toBe(false);
+  });
+  it('高頻音效最短間隔', () => {
+    expect(canPlay(1000, 1000 - AUDIO.minIntervalMs + 1, 0, true)).toBe(false);
+    expect(canPlay(1000, 1000 - AUDIO.minIntervalMs, 0, true)).toBe(true);
+    expect(canPlay(1000, 999, 0, false)).toBe(true);
+  });
+});
+
+describe('音樂音階', () => {
+  it('都節音階：級數 0..5 = 0,1,5,7,8,12；負數往下', () => {
+    expect([0, 1, 2, 3, 4, 5].map((d) => degreeToSemitones(d, MIYAKO))).toEqual([0, 1, 5, 7, 8, 12]);
+    expect(degreeToSemitones(-1, MIYAKO)).toBe(-4);
+  });
+  it('不給音階時是五聲音階（燈落之境的行為不變）', () => {
+    expect([0, 1, 2, 3, 4, 5].map((d) => degreeToSemitones(d))).toEqual([0, 2, 4, 7, 9, 12]);
+  });
+});

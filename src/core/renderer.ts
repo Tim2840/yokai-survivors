@@ -1,13 +1,15 @@
 import * as THREE from 'three';
 import { CAMERA, fovForAspect } from '../data/camera';
 import { palette } from '../art/palette';
+import { createPipeline, type Pipeline } from './postfx';
+import type { Quality } from './save';
 
 /**
- * 渲染器與鏡頭（M0 最小版）。畫質分級與 Bloom 在 M1 從燈落之境的 renderer.ts 搬（docs/10 第 2 節）。
+ * 渲染器與鏡頭。後製與畫質分級在 postfx.ts（從燈落之境搬來）。
  * 光源規則（docs/06 第 6 節）：只有 1 盞方向光（月光）＋ 1 盞點光（跟著玩家），中途不增減。
  */
 export class Renderer {
-  readonly renderer: THREE.WebGLRenderer;
+  readonly pipeline: Pipeline;
   readonly scene = new THREE.Scene();
   readonly camera: THREE.PerspectiveCamera;
   readonly moon: THREE.DirectionalLight;
@@ -16,12 +18,11 @@ export class Renderer {
   readonly target = new THREE.Vector3();
   private readonly offset = new THREE.Vector3();
 
-  constructor(private readonly host: HTMLElement) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    host.appendChild(this.renderer.domElement);
+  constructor(
+    host: HTMLElement,
+    quality: { mode: Quality; onModeChange?: (m: Quality) => void; fixedLevel?: number },
+  ) {
+    this.pipeline = createPipeline(host, quality);
 
     this.scene.background = new THREE.Color(palette.night.sky);
     this.scene.fog = new THREE.Fog(palette.night.fog, 30, 70);
@@ -43,10 +44,8 @@ export class Renderer {
   }
 
   resize(): void {
-    const w = Math.max(1, this.host.clientWidth || window.innerWidth);
-    const h = Math.max(1, this.host.clientHeight || window.innerHeight);
-    this.renderer.setSize(w, h, false);
-    this.camera.aspect = w / h;
+    const { w, h } = this.pipeline.resize();
+    this.camera.aspect = w / Math.max(1, h);
     this.camera.fov = fovForAspect(this.camera.aspect);
     this.camera.updateProjectionMatrix();
   }
@@ -65,7 +64,11 @@ export class Renderer {
     this.camera.position.set(this.target.x + this.offset.x, this.target.y + this.offset.y, this.target.z + this.offset.z);
   }
 
+  precompile(): void {
+    this.pipeline.precompile(this.scene, this.camera);
+  }
+
   render(): void {
-    this.renderer.render(this.scene, this.camera);
+    this.pipeline.render(this.scene, this.camera);
   }
 }

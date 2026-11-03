@@ -20,11 +20,12 @@
 BOOT ─► MENU ─► RUN_SETUP ─► COMBAT ◄─► INTERMISSION ─► RUN_END ─► META_SHOP ─► MENU
                               │                              ▲
                               └──────── 玩家死亡／通關 ────────┘
-  PAUSE 是覆蓋層：只暫停模擬，不改狀態（COMBAT／INTERMISSION 皆可）
+  PAUSE 與 LEVEL_UP（升級選卡）是覆蓋層：只暫停模擬，不改狀態
 ```
 
 - 一個 `GameStateMachine`，每個狀態有 `enter(ctx)`、`update(dt)`、`exit()`；**只有狀態機可以改變狀態**，其他系統用事件請求（`bus.emit('request:state', 'INTERMISSION')`）。
-- **COMBAT 狀態內不允許開啟任何覆蓋層**，除了暫停、設定；要素互動的 UI 是 3D 世界內的提示泡泡（不暫停）。
+- **COMBAT 狀態內只允許三種覆蓋層**：暫停、設定、**升級選卡**（D15：升級當下暫停三選一；有好幾次待選就連續開；賽錢箱也用它）。要素互動的 UI 是 3D 世界內的提示泡泡（不暫停）。
+- 覆蓋層開著時模擬停（`loop.paused`），關掉後恢復；分頁失焦的自動暫停與選卡覆蓋層要能疊（兩個都關掉才恢復），M1 用單元測試守。
 - 狀態轉換有單元測試：所有合法轉換、非法轉換拒絕。
 
 ## 3. 目錄結構

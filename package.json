@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check:main": "npm run build:single:main && node scripts/check-main-build.mjs",
-    "regress": "node scripts/regress.mjs"
+    "regress": "node scripts/regress.mjs",
+    "pack:test": "npm run build:single && python3 scripts/pack-artifact.py dist-artifact/yokai-test.html \"百鬼陣 測試版\""
   },
   "dependencies": {
     "three": "^0.186.1"

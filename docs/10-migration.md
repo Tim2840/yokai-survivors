@@ -66,3 +66,21 @@
 - **`const` 要宣告在使用之前**（Vite 打包後才爆）。
 - **發佈被拒「artifact-pr-review machinery」是壓縮後程式碼被誤判**：長串重複的 `switch`／`find` 改查表。
 - **剛重啟的 Vite 要先手動載一次再跑測試；跑測試時不要改 `src`；不要用 `pkill -f 腳本名稱`。**
+
+## 7. 搬運進度
+
+2026-11-03（M0）：使用者同意以唯讀方式加入舊 repo，從 `953befc` 搬了下面這些。舊 repo 沒有任何改動。
+
+| 舊檔 | 新位置 | 狀態與改動 |
+|---|---|---|
+| `src/core/renderer.ts` | `src/core/postfx.ts`（後製、畫質分級）＋ `src/core/renderer.ts`（鏡頭、光源） | ✓ 拿掉移軸模糊（可讀性優先）；畫質模式存在 `settings.quality`；數字移到 `src/data/quality.ts` |
+| `src/core/audio.ts` | `src/core/audio.ts` | ✓ 只留引擎（unlock、匯流排、tone／noise／chime）；音效清單重寫 12 種；加節流；噪音改用 `Rng`；拿掉環境音 |
+| `src/core/music.ts` | `src/core/music.ts` | ✓ 引擎原樣，只改音階：每首曲子可指定 `scale`（預設五聲，本作用都節 `MIYAKO`） |
+| `src/core/themes.ts` | `src/core/themes.ts` | ✓ 全部重寫：title／battle／intermission 三首，都節音階 |
+| `src/game/input.ts` | `src/core/input.ts` | ✓ 只留移動＋號令；搖桿與號令鈕在 M1 HUD 接上 |
+| `src/pwa/sw.template.js`、`vite.config.ts` 的 PWA 外掛、`manifest.webmanifest` | 同名 | ✓ 換名稱；圖示用 `scripts/tools/make-icons.mjs` 重新畫 |
+| `scripts/pack-artifact.py` | 同名 | ✓ 斷言改成檢查 `#app`、`#ui` |
+| `src/game/events.ts`、`save.ts`、`changelog.ts` | — | 已在 M0 自己重寫（`src/core/bus.ts`、`save.ts`、`src/game/changelog.ts`），不搬 |
+| `scripts/regress.mjs`、`regress/lib.mjs` | — | M0 自己寫了精簡版；稽核腳本（`layoutcheck` 等）到用得上的里程碑再搬 |
+| `src/characters/types.ts`、`src/dev/characterLab.ts` | — | **M1 做第一個模型時搬** |
+| `src/ui/spotlight.ts`、`u6-lesson-walk.mjs` | — | M3 做教學時搬 |
