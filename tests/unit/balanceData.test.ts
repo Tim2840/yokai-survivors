@@ -78,3 +78,11 @@ describe('詛咒祭壇', () => {
     }
   });
 });
+
+describe('局外修行總價（docs/02 7.1／7.4 審查重算）', () => {
+  it('8 項滿級共 12,043', () => {
+    let total = 0;
+    for (const t of TRAINING) for (let lv = 0; lv < TRAINING_MAX_LEVEL; lv++) total += trainingPrice(t, lv);
+    expect(total).toBe(12043);
+  });
+});
