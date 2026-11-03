@@ -1,0 +1,28 @@
+{
+  "name": "yokai-survivors",
+  "private": true,
+  "version": "0.0.1",
+  "description": "百鬼陣（暫名）：古代日本妖怪對抗人類的 3D 固定視角波次制肉鴿割草遊戲",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "build:single": "tsc --noEmit && vite build --mode single",
+    "build:single:main": "tsc --noEmit && vite build --mode single-main",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "playwright": "^1.63.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.1",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^5.0.3"
+  }
+}
