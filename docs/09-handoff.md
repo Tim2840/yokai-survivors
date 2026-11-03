@@ -8,10 +8,13 @@
 
 ## 2. 目前狀態
 
-- **階段：P0 概念完成、第一次文件審查完成（2026-11-03），等待使用者回答 docs/14 的 Q1、Q2、Q3、Q6（以及 Q14、Q16）→ G0 立項。**
+- **階段：G0 立項通過（2026-11-03，D14–D18）。M0 骨架完成**（見下）。下一步 M1 原型。
 - 審查結果：數字與內部矛盾的修正都記在 `docs/02` 第 12 節；設計風險記在 `docs/11` R15–R19 與 `docs/14` Q14–Q17；驗算腳本在 `scripts/audit/`。
 - 已有：整套規劃文件（docs/01–14）、專案設定（`package.json`、`tsconfig.json`、`vite.config.ts`、`vitest.config.ts`）、搬運的基礎程式（`src/lib`、`src/art`）、測試環境（`tests/unit/setup.ts`）。
-- **還沒有**：任何遊戲程式（`src/main.ts` 只是空檔、沒有場景）；CLAUDE.md 提到的 `src/art/palette.ts`、`src/i18n`、`tests/unit/voice.test.ts` 也都還沒建，屬 M0。第一個工作是 M0（docs/05）。
+- M0 已有：`src/core`（`bus` 事件匯流排、`loop` 固定步長、`save` 存檔、`renderer` 鏡頭與光源）、`src/game`（`states`／`stateMachine` 狀態機、`changelog`）、`src/i18n`（`t()`、`zh-TW`）、`src/art/palette.ts`、`src/data/camera.ts`（含直式 FOV）、`src/ui`（主選單、提示）、`src/world/stage.ts`（空場景）、`src/dev/devApi.ts`（`__game`：state／seed／paused／simTime／advance／render）。
+- 測試：單元 49 個（含原始碼全掃：中文不寫死、無 `Math.random`、禁用詞、i18n key 存在）；回歸 `b1`（開機到主選單、三種畫面、點擊、畫布非單色、提示不蓋選單）；`npm run check:main`（打包後的主網址沒有 `__game`）；GitHub Actions CI（typecheck、test、build、check:main）。
+- **M0 還沒做（要舊專案的檔案）**：畫質分級與 Bloom（renderer.ts）、音效／音樂引擎（audio.ts、music.ts）、輸入與搖桿（input.ts）、PWA、`pack-artifact.py`、角色展示間。需要使用者用 `add_repo` 把 `Tim2840/Tim-s-Game` 加進 session（唯讀），或決定改成自己重寫。
+- 已知限制：CI 沒跑 Playwright 回歸（要裝瀏覽器，等回歸變多再加）。第一個工作是 M0（docs/05）。
 - 設計上的所有數字都是**未驗證的起始值**（docs/02）。
 
 ## 3. 你（新 session）的第一個任務：開工報告
@@ -60,3 +63,4 @@
 |---|---|---|
 | 2026-11-03 | 舊專案 session | 建立規劃文件與起始套件 |
 | 2026-11-03 | 新專案第一個 session | 開工報告與文件審查：修正算術與矛盾、補魂火曲線／流場尋路／直式視野、新增 Q14–Q17、R15–R19；未寫任何遊戲程式 |
+| 2026-11-03 | 同上 | 使用者回答 Q1/Q2/Q3/Q6=A、Q14=先可調 → D14–D18；GDD v0.2；M0 骨架（不含需要舊專案的搬運項目） |

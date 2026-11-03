@@ -32,20 +32,23 @@
 
 ### 2.1 M0（W1）
 
-- [ ] 建立專案骨架：Vite＋TS＋Three、`index.html`、`src/main.ts`
-- [ ] 狀態機＋事件匯流排＋i18n＋存檔骨架（含單元測試）
-- [ ] 搬運（docs/10 第 2 節）：renderer、audio、music、input、save 骨架、角色展示間
-- [ ] 回歸骨架（`regress.mjs`、`lib.mjs`）、`__game` 開發介面
-- [ ] GitHub Actions：typecheck＋test＋build
-- [ ] 單檔打包與 `pack-artifact.py`、PWA 骨架
-- [ ] `docs/09-handoff.md` 初版更新（開工報告）
+- [x] 建立專案骨架：Vite＋TS＋Three、`index.html`、`src/main.ts`
+- [x] 狀態機＋事件匯流排＋i18n＋存檔骨架（含單元測試）
+- [ ] 搬運（docs/10 第 2 節）：renderer（畫質分級、Bloom）、audio、music、input、角色展示間——**等舊 repo 存取**（存檔骨架已自己寫）
+- [x] 回歸骨架（`regress.mjs`、`lib.mjs`、`b1`）、`__game` 開發介面
+- [x] GitHub Actions：typecheck＋test＋build＋主網址檢查
+- [ ] 單檔打包 ✓；`pack-artifact.py`、PWA 骨架——**等舊 repo 存取**
+- [x] `docs/09-handoff.md` 更新
 
 ### 2.2 M1（W2–W3）
 
 - [ ] 固定俯角鏡頭與平滑跟隨；`src/data/camera.ts`
 - [ ] 高低差地形（高度圖）原型＋地形種類圖
 - [ ] 提燈小僧（模型＋鬼火）、村人（InstancedMesh）、擊退與命中閃白、傷害數字（池）
-- [ ] 波次計時、魂火與升級、整備三選一（4 張屬性卡）、死亡重來
+- [ ] 波次計時、魂火與升級（docs/02 3.1 的 `need(L)`）、整備三選一（4 張屬性卡）、死亡重來
+- [ ] 波次表做成資料，含數量倍率 `countScale`（D18），G1 試玩調
+- [ ] 敵人流場尋路（docs/06 第 6 節，T7）
+- [ ] 直式手機視野實測（T6）
 - [ ] 手機搖桿；效能量測（T1–T5）
 - [ ] G1 試玩報告
 

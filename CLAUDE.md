@@ -24,7 +24,7 @@
 
 ## 架構鐵則（細節見 docs/06）
 
-- **嚴格狀態機**：`BOOT → MENU → RUN_SETUP → COMBAT → INTERMISSION → (COMBAT …) → RUN_END → META_SHOP → MENU`。**戰鬥中（COMBAT）不跳任何會打斷的彈窗**；升級卡片、地圖要素的選擇都在 INTERMISSION 或要素自己的「站進去／互動」流程裡處理（見 docs/01 第 5 節，這條規則等使用者確認，見 docs/14 Q2）。
+- **嚴格狀態機**：`BOOT → MENU → RUN_SETUP → COMBAT → INTERMISSION → (COMBAT …) → RUN_END → META_SHOP → MENU`。**戰鬥中（COMBAT）不跳任何會打斷的彈窗**；升級卡片、地圖要素的選擇都在 INTERMISSION 或要素自己的「站進去／互動」流程裡處理（使用者已確認，docs/14 D15）。
 - **資料驅動**：所有妖怪、人類、卡片、地圖要素、地形、地圖、局外升級的數字都放 `src/data/`，程式碼裡不准出現平衡用的數字（魔術數字）。
 - **事件匯流排**：系統之間不直接互叫，用 `bus.emit`／`bus.on`。
 - **存檔只存「發生過什麼」**：新欄位補 `defaultSave()`，並測「存檔 → `page.reload()` → 還在」。局外成長、圖鑑、已解鎖內容在存檔；一局內的狀態不存檔（中途離開視為放棄，局外獎勵照結算規則給）。
@@ -48,11 +48,11 @@
 
 ## 開發模式介面
 
-`window.__game`：`state`（目前狀態機）、`seed`、`advance(dt)`、`render()`、`spawn(id, n)`、`setWave(n)`、`give(cardId, rarity)`、`god`（無敵，測試用）、`teleport(x, z)`、`forceElement(id, rarity)`（強制生出某個地圖要素）。**主網址不帶測試工具**（`build:single:main` 拿掉）。
+`window.__game`：`state`（目前狀態機）、`seed`、`advance(dt)`、`render()`、`spawn(id, n)`、`setWave(n)`、`give(cardId, rarity)`、`god`（無敵，測試用）、`teleport(x, z)`、`forceElement(id, rarity)`（強制生出某個地圖要素）。目前（M0）只有 `state`、`seed`、`paused`、`simTime`、`advance`、`render`，其餘隨系統加入；`window.__loop` 是 `advance`／`render` 的別名。**主網址不帶測試工具**（`build:single:main` 拿掉）。
 
 ## 檢查
 
-- `npm run typecheck`；`npm test`（Vitest，純邏輯）；`npm run build`。
+- `npm run typecheck`；`npm test`（Vitest，純邏輯）；`npm run build`；`npm run check:main`（打包後的主網址不含測試工具）。
 - `NODE_PATH=node_modules node scripts/regress.mjs --only <id,…>`（要開著 `npx vite --port 5173`；`--list` 看清單）。
 - 平衡模擬：`npm run sim`（**M2 才會建立**；無頭跑數值模擬，見 docs/07 第 4 節），建立後改數字前後都要跑。
 - **更新紀錄**：每一批影響玩家的改動，在 `src/game/changelog.ts` 最前面加一筆、`CONTENT_VERSION` +1（單元測試守著）；文字是系統口氣、不劇透、台灣用語。

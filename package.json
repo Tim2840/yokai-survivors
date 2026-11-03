@@ -12,7 +12,9 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check:main": "npm run build:single:main && node scripts/check-main-build.mjs",
+    "regress": "node scripts/regress.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"
