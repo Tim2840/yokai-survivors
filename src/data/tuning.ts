@@ -23,6 +23,31 @@ export const tuning = {
   splash: M1_PLAYTEST.splash as number,
 };
 
+const STORE_KEY = 'yokai-survivors-tuning';
+
+/** 測試頁的調整面板：存在這個瀏覽器（Artifact 網址不能帶查詢參數，所以不能靠 ?count=）。壞資料、讀不到就用預設 */
+export function loadTuning(): void {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return;
+    const o = JSON.parse(raw) as Record<string, unknown>;
+    for (const k of Object.keys(M1_PLAYTEST) as (keyof typeof M1_PLAYTEST)[]) {
+      const v = o[k];
+      if (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 100) tuning[k] = v;
+    }
+  } catch {
+    /* 讀不到就用預設 */
+  }
+}
+
+export function saveTuning(): void {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(tuning));
+  } catch {
+    /* 存不了也沒關係 */
+  }
+}
+
 /** 測試用：恢復預設 */
 export function resetTuning(): void {
   Object.assign(tuning, M1_PLAYTEST);

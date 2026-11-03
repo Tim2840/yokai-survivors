@@ -2,7 +2,7 @@ import { t } from '../i18n';
 import { CONTENT_VERSION } from '../game/changelog';
 
 /** 主選單（M0：只有標題與按鈕；開始遊戲在 M1 接上 RUN_SETUP） */
-export function buildMenu(root: HTMLElement, onStart: () => void, onShrine: () => void): HTMLElement {
+export function buildMenu(root: HTMLElement, onStart: () => void, onShrine: () => void, extras: HTMLElement[] = []): HTMLElement {
   const el = document.createElement('div');
   el.className = 'menu';
   el.dataset.screen = 'menu';
@@ -24,7 +24,7 @@ export function buildMenu(root: HTMLElement, onStart: () => void, onShrine: () =
   const ver = document.createElement('span');
   ver.className = 'version';
   ver.textContent = t('menu.version', { version: CONTENT_VERSION });
-  el.append(h1, sub, start, shrine, ver);
+  el.append(h1, sub, start, shrine, ...extras, ver);
   root.appendChild(el);
   return el;
 }

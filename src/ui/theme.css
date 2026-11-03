@@ -96,3 +96,13 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 .stick { display: none; position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: calc(max(34px, env(safe-area-inset-bottom)) + 12px); width: clamp(110px, 28vmin, 150px); aspect-ratio: 1; border-radius: 50%; background: rgba(255,255,255,0.10); border: 2px solid rgba(255,255,255,0.3); touch-action: none; }
 .stick .knob { position: absolute; left: 50%; top: 50%; width: 42%; height: 42%; margin: -21% 0 0 -21%; border-radius: 50%; background: rgba(255,179,92,0.7); pointer-events: none; }
 @media (pointer: coarse) { .stick { display: block; pointer-events: auto !important; } }
+
+.btn.small { min-height: 36px; padding: 4px 14px; font-size: 14px; min-width: 0; }
+.tune-grid { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: center; text-align: left; }
+.tune-grid label { font-size: 15px; }
+.tune-grid input { width: 5.5em; min-height: 36px; font-size: 16px; padding: 2px 8px; border-radius: 8px; border: 2px solid var(--text-dim); background: rgba(255,255,255,0.08); color: var(--text); font-family: inherit; }
+.overlay[data-screen='tuning'] { z-index: 25; }
+@media (max-height: 520px) {
+  .tune-grid { grid-template-columns: 1fr auto 1fr auto; gap: 4px 10px; }
+  .tune-grid label { font-size: 13px; }
+}

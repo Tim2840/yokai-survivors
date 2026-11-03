@@ -12,6 +12,7 @@ import { buildMenu, toast } from '../ui/menu';
 import { buildCardPicker, buildIntermission, buildPause, buildRunEnd, buildSetup } from '../ui/overlays';
 import { t } from '../i18n';
 import { tuning } from '../data/tuning';
+import type { buildTuningPanel } from '../ui/tuningPanel';
 
 export interface GameDeps {
   fsm: GameStateMachine;
@@ -23,6 +24,8 @@ export interface GameDeps {
   ui: HTMLElement;
   seed: number;
   mobile: boolean;
+  /** 測試頁才有（main.ts 在 DEV_TOOLS 時才傳入，主網址的打包不含面板程式）：試玩調整面板的建構函式；有它也代表結算畫面顯示種子 */
+  tuneUi?: typeof buildTuningPanel;
   /** 主選單背景（開局時隱藏） */
   backdrop: { visible: boolean };
   bus?: EventBus;
@@ -69,7 +72,17 @@ export class Game {
     this.save = d.save;
     const ui = d.ui;
 
-    this.menuEl = buildMenu(ui, () => this.go('RUN_SETUP'), () => this.notReady());
+    const tune = d.tuneUi ? d.tuneUi(ui) : null;
+    tune?.onDone(() => {
+      tune.hide();
+      this.audio.sfx('confirm');
+    });
+    this.menuEl = buildMenu(
+      ui,
+      () => this.go('RUN_SETUP'),
+      () => this.notReady(),
+      tune ? [tune.button(() => (this.audio.sfx('click'), tune.show()))] : [],
+    );
     this.setup = buildSetup(
       ui,
       (id) => {
@@ -173,7 +186,7 @@ export class Game {
         this.view?.freeze();
         this.picker.hide();
         this.closePause();
-        if (this.lastEnd) this.end.render(this.lastEnd);
+        if (this.lastEnd) this.end.render(this.lastEnd, this.d.tuneUi ? this.run?.seed : undefined);
         this.end.show();
         this.audio.setMusic({ theme: 'title' });
       },

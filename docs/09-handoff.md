@@ -13,7 +13,7 @@
 - 已有：整套規劃文件（docs/01–14）、專案設定（`package.json`、`tsconfig.json`、`vite.config.ts`、`vitest.config.ts`）、搬運的基礎程式（`src/lib`、`src/art`）、測試環境（`tests/unit/setup.ts`）。
 - M0 已有：`src/core`（`bus` 事件匯流排、`loop` 固定步長、`save` 存檔、`renderer` 鏡頭與光源）、`src/game`（`states`／`stateMachine` 狀態機、`changelog`）、`src/i18n`（`t()`、`zh-TW`）、`src/art/palette.ts`、`src/data/camera.ts`（含直式 FOV）、`src/ui`（主選單、提示）、`src/world/stage.ts`（空場景）、`src/dev/devApi.ts`（`__game`：state／seed／paused／simTime／advance／render）。
 - **M1（2026-11-03）**：`src/data/*`（屬性、妖怪、人類、波次、升級、地形、地圖、可調旋鈕）、`src/systems/*`（流場、空間雜湊、敵人池、鬼火、魂火、發牌、波次導演…，純邏輯）、`src/game/run.ts`（一局的模擬）、`src/game/game.ts`（接狀態機與介面）、`src/render/*` 與 `src/units/*`（3D 外觀）、`src/ui/*`（HUD、選卡、整備、結算、暫停）。一局：選提燈小僧 → 20 波（每波 20 秒）→ 升級當下暫停三選一 → 波與波之間整備 → 死亡或第 20 波通關 → 結算（功德存檔）。**沒有頭目**（第 20 波清完就算通關）、沒有小妖與號令、只有村人、只有 4 張屬性卡。
-- **G1 試玩怎麼調**（測試頁網址後面加參數，只有測試頁有）：`?count=2.5`（敵人數量倍率）、`&hp=1`（敵人 HP）、`&dmg=1`（玩家傷害）、`&volley=3`（鬼火一次幾顆）、`&splash=1.2`（濺射半徑）、`&seed=123`（種子，回報問題請附上）、`&q=0`～`4`（固定畫質）。預設值是 M1 試玩預設（docs/02 第 12 節最新一列），**不是 docs/02 的原值**。
+- **G1 試玩怎麼調**：測試頁主選單有「調整（測試版）」按鈕，可改敵人數量倍率、敵人生命倍率、我方傷害倍率、鬼火一次幾顆、濺射半徑；改了從下一局生效，存在這個瀏覽器裡，有「還原預設」。結算畫面（只有測試頁）會顯示**種子**，回報問題請附上。預設值是 M1 試玩預設（docs/02 第 12 節最新一列），**不是 docs/02 的原值**。（Artifact 網址不能帶 `?count=` 這類查詢參數，所以不能靠網址調；本機開發版與 Playwright 仍可用 `?count=&hp=&dmg=&volley=&splash=&seed=&q=`。）
 - 測試：單元 49 個（含原始碼全掃：中文不寫死、無 `Math.random`、禁用詞、i18n key 存在）；回歸 `b1`（開機到主選單、三種畫面、點擊、畫布非單色、提示不蓋選單）；`npm run check:main`（打包後的主網址沒有 `__game`）；GitHub Actions CI（typecheck、test、build、check:main）。
 - 舊專案搬運（2026-11-03，使用者同意加入舊 repo 唯讀）：後製與畫質分級、音效音樂引擎（都節音階三首）、輸入、PWA、`pack-artifact.py` 都已搬，進度表在 docs/10 第 7 節。角色展示間 M1 再搬。
 - **D15 已改**：升級當下暫停三選一（不是整備時選）。CLAUDE.md 的鐵則已同步。

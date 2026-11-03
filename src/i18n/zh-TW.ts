@@ -81,6 +81,18 @@ export const zhTW = {
   'end.again': '再來一局',
   'end.menu': '回主選單',
   'end.shrine': '神社',
+  'end.seed': '種子 {seed}',
+
+  'tune.open': '調整（測試版）',
+  'tune.title': '試玩調整（測試版）',
+  'tune.note': '改了從下一局開始生效。',
+  'tune.count': '敵人數量倍率',
+  'tune.hp': '敵人生命倍率',
+  'tune.dmg': '我方傷害倍率',
+  'tune.volley': '鬼火一次幾顆',
+  'tune.splash': '濺射半徑（公尺）',
+  'tune.reset': '還原預設',
+  'tune.done': '完成',
 } as const;
 
 export type I18nKey = keyof typeof zhTW;

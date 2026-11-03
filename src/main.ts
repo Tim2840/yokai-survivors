@@ -5,11 +5,12 @@ import { Input } from './core/input';
 import { FixedLoop } from './core/loop';
 import { Renderer } from './core/renderer';
 import { loadSave, writeSave } from './core/save';
-import { applyTuningFromQuery } from './data/tuning';
+import { applyTuningFromQuery, loadTuning } from './data/tuning';
 import { Game } from './game/game';
 import { GameStateMachine } from './game/stateMachine';
 import { t } from './i18n';
 import { toast } from './ui/menu';
+import { buildTuningPanel } from './ui/tuningPanel';
 import { buildStage } from './world/stage';
 
 /** 開發工具（__game）與網址參數（?q、?seed、?count…）只在開發模式與測試頁（build:single）帶上；主網址與正式 build 不帶 */
@@ -24,7 +25,10 @@ function pickSeed(): number {
 function boot(): void {
   const app = document.getElementById('app')!;
   const ui = document.getElementById('ui')!;
-  if (DEV_TOOLS) applyTuningFromQuery(location.search);
+  if (DEV_TOOLS) {
+    loadTuning();
+    applyTuningFromQuery(location.search);
+  }
   const seed = pickSeed();
   const save = loadSave();
   const mobile = matchMedia('(pointer: coarse)').matches;
@@ -59,7 +63,7 @@ function boot(): void {
       renderer.render();
     },
   );
-  game = new Game({ fsm, loop, renderer, audio, input, save, ui, seed, mobile, backdrop: stage.group });
+  game = new Game({ fsm, loop, renderer, audio, input, save, ui, seed, mobile, tuneUi: DEV_TOOLS ? buildTuningPanel : undefined, backdrop: stage.group });
 
   bus.on('saveFailed', () => toast(t('save.failed')));
 

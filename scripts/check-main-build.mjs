@@ -10,7 +10,7 @@ if (!targets.length) {
   console.error('找不到打包檔：先跑 npm run build 與 npm run build:single:main');
   process.exit(1);
 }
-const banned = [/\b__game\b/, /\b__loop\b/, /\binstallDevApi\b/];
+const banned = [/\b__game\b/, /\b__loop\b/, /\binstallDevApi\b/, /\btune-countScale\b/, /\bbtn-tune\b/, /yokai-survivors-tuning/];
 let bad = 0;
 for (const f of targets) {
   const text = readFileSync(f, 'utf8');

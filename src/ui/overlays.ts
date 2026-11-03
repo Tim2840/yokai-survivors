@@ -119,11 +119,11 @@ export function buildRunEnd(parent: HTMLElement, onAgain: () => void, onMenu: ()
   o.el.querySelector('#btn-end-menu')!.addEventListener('click', onMenu);
   o.el.querySelector('#btn-end-shrine')!.addEventListener('click', onShrine);
   return Object.assign(o, {
-    render(r: { result: 'death' | 'victory' | 'abandon'; wave: number; kills: number; level: number; merit: number }) {
+    render(r: { result: 'death' | 'victory' | 'abandon'; wave: number; kills: number; level: number; merit: number }, seed?: number) {
       o.el.querySelector('#end-title')!.textContent = t(`end.${r.result}` as I18nKey);
-      o.el.querySelector('#end-stats')!.innerHTML = [t('end.wave', { n: r.wave }), t('end.kills', { n: r.kills }), t('end.level', { n: r.level }), t('end.merit', { n: r.merit })]
-        .map((s) => `<li>${s}</li>`)
-        .join('');
+      const lines = [t('end.wave', { n: r.wave }), t('end.kills', { n: r.kills }), t('end.level', { n: r.level }), t('end.merit', { n: r.merit })];
+      if (seed !== undefined) lines.push(t('end.seed', { seed }));
+      o.el.querySelector('#end-stats')!.innerHTML = lines.map((s) => `<li>${s}</li>`).join('');
     },
   });
 }
