@@ -8,7 +8,8 @@
 
 ## 2. 目前狀態
 
-- **階段：G0 通過；M0 完成；M1 原型（第一個可玩版本）完成，等使用者 G1 試玩 3 局。**
+- **階段：M1 完成並已試玩；使用者 G1 回饋改變方向（D22–D25）→ 進行 M1.5（連續關卡、自由視角、大起伏地形、跳躍），完成後 G1b。**
+- **方向變更（2026-11-03，使用者）**：像 Megabonk／PokéBonk 的連續計時關卡（取代 20 波）、自由旋轉視角（取代固定視角）、加跳躍鈕、地形更起伏、要素太少（M2 優先做 5 種）。**下面「M1」段落描述的是舊的 20 波固定視角版本，程式正在改。**
 - 審查結果：數字與內部矛盾的修正都記在 `docs/02` 第 12 節；設計風險記在 `docs/11` R15–R19 與 `docs/14` Q14–Q17；驗算腳本在 `scripts/audit/`。
 - 已有：整套規劃文件（docs/01–14）、專案設定（`package.json`、`tsconfig.json`、`vite.config.ts`、`vitest.config.ts`）、搬運的基礎程式（`src/lib`、`src/art`）、測試環境（`tests/unit/setup.ts`）。
 - M0 已有：`src/core`（`bus` 事件匯流排、`loop` 固定步長、`save` 存檔、`renderer` 鏡頭與光源）、`src/game`（`states`／`stateMachine` 狀態機、`changelog`）、`src/i18n`（`t()`、`zh-TW`）、`src/art/palette.ts`、`src/data/camera.ts`（含直式 FOV）、`src/ui`（主選單、提示）、`src/world/stage.ts`（空場景）、`src/dev/devApi.ts`（`__game`：state／seed／paused／simTime／advance／render）。
