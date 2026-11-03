@@ -1,20 +1,22 @@
 import './ui/theme.css';
 import { AudioEngine } from './core/audio';
 import { bus } from './core/bus';
+import { Input } from './core/input';
 import { FixedLoop } from './core/loop';
 import { Renderer } from './core/renderer';
 import { loadSave, writeSave } from './core/save';
+import { applyTuningFromQuery } from './data/tuning';
+import { Game } from './game/game';
 import { GameStateMachine } from './game/stateMachine';
-import { SIMULATED_STATES } from './game/states';
 import { t } from './i18n';
-import { buildMenu, toast } from './ui/menu';
+import { toast } from './ui/menu';
 import { buildStage } from './world/stage';
 
-/** 開發工具（__game）只在開發模式與測試頁（build:single）帶上；主網址與正式 build 不帶 */
+/** 開發工具（__game）與網址參數（?q、?seed、?count…）只在開發模式與測試頁（build:single）帶上；主網址與正式 build 不帶 */
 const DEV_TOOLS = import.meta.env.DEV || import.meta.env.MODE === 'single';
 
 function pickSeed(): number {
-  const q = new URLSearchParams(location.search).get('seed');
+  const q = DEV_TOOLS ? new URLSearchParams(location.search).get('seed') : null;
   if (q && /^\d+$/.test(q)) return Number(q) >>> 0;
   return Date.now() >>> 0;
 }
@@ -22,11 +24,12 @@ function pickSeed(): number {
 function boot(): void {
   const app = document.getElementById('app')!;
   const ui = document.getElementById('ui')!;
+  if (DEV_TOOLS) applyTuningFromQuery(location.search);
   const seed = pickSeed();
   const save = loadSave();
+  const mobile = matchMedia('(pointer: coarse)').matches;
 
   const fsm = new GameStateMachine(bus);
-  // 測試頁可用 ?q=0～4 固定畫質等級（截圖穩定）；主網址不吃這個參數
   const q = DEV_TOOLS ? new URLSearchParams(location.search).get('q') : null;
   const renderer = new Renderer(app, {
     mode: save.settings.quality,
@@ -39,37 +42,29 @@ function boot(): void {
   const audio = new AudioEngine();
   audio.setVolumes({ sfx: save.settings.sfx, music: save.settings.music });
   audio.setMusic({ theme: 'title' });
-  const { lantern } = buildStage(renderer.scene);
+  const input = new Input();
+  const stage = buildStage(renderer.scene);
 
-  let time = 0;
+  let menuTime = 0;
+  let game: Game;
   const loop = new FixedLoop(
-    (dt) => {
-      time += dt;
-      fsm.update(dt);
-      lantern.position.y = Math.sin(time * 2) * 0.08;
-      renderer.follow(lantern.position.x, lantern.position.z, dt);
+    (dt) => fsm.update(dt),
+    () => {
+      game.frame();
+      if (!game.run) {
+        menuTime += 1 / 60;
+        stage.lantern.position.y = Math.sin(menuTime * 2) * 0.08;
+        renderer.follow(0, 0, 1 / 60);
+      }
+      renderer.render();
     },
-    () => renderer.render(),
   );
+  game = new Game({ fsm, loop, renderer, audio, input, save, ui, seed, mobile, backdrop: stage.group });
 
   bus.on('saveFailed', () => toast(t('save.failed')));
 
-  // 分頁失焦：只在模擬中的狀態自動暫停（docs/06 第 5 節）
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && SIMULATED_STATES.includes(fsm.state) && !loop.paused) {
-      loop.paused = true;
-      bus.emit('paused', { paused: true, reason: 'hidden' });
-    }
-  });
-
-  const notReady = () => {
-    audio.sfx('click');
-    toast(t('menu.notReady'));
-  };
-  buildMenu(ui, notReady, notReady);
-
   if (DEV_TOOLS) {
-    void import('./dev/devApi').then((m) => m.installDevApi({ loop, fsm, seed, audio, renderer }));
+    void import('./dev/devApi').then((m) => m.installDevApi({ loop, fsm, seed, audio, renderer, game }));
   }
 
   writeSave(save);

@@ -2,12 +2,12 @@
 // 狀態到 MENU、畫布有畫出東西（不是全黑／全同色）、標題與按鈕在畫面內且點得到、點「開始」有回應、沒有任何頁面錯誤；各截一張圖。
 import { openPage, waitState, press, step, expect, shot, reportErrors, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'b1', desc: '開機到主選單（三種畫面）', max: 120, stall: 30 };
+export const meta = { id: 'b1', desc: '開機到主選單、點神社與開始（三種畫面）', max: 150, stall: 30 };
 
 export async function run(browser) {
   const files = [];
   for (const vp of VIEWPORTS) {
-    const ctx = await openPage(browser, vp);
+    const ctx = await openPage(browser, vp, '?q=4');
     try {
       await step(`${vp.name} 到 MENU`, () => waitState(ctx.page, 'MENU'), meta.stall);
       await step(`${vp.name} 畫布有內容`, async () => {
@@ -27,8 +27,15 @@ export async function run(browser) {
         });
         expect(varied >= 2, `畫布看起來是單一顏色（${vp.name}）`);
       });
-      await step(`${vp.name} 點開始`, async () => {
-        await press(ctx, '#btn-start');
+      await step(`${vp.name} 選單整個在畫面內`, async () => {
+        const inView = await ctx.page.evaluate(() => {
+          const r = document.querySelector('.menu').getBoundingClientRect();
+          return r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth;
+        });
+        expect(inView, `選單超出畫面（${vp.name}）`);
+      });
+      await step(`${vp.name} 點神社：提示泡泡出現、不蓋到選單`, async () => {
+        await press(ctx, '#btn-shrine');
         await ctx.page.waitForFunction(() => {
           const t = document.getElementById('toast');
           return t && !t.classList.contains('hidden') && t.textContent.length > 0;
@@ -40,12 +47,10 @@ export async function run(browser) {
           return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
         });
         expect(!overlap, `提示泡泡蓋到選單（${vp.name}）`);
-        // 選單整個在畫面內
-        const inView = await ctx.page.evaluate(() => {
-          const r = document.querySelector('.menu').getBoundingClientRect();
-          return r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth;
-        });
-        expect(inView, `選單超出畫面（${vp.name}）`);
+      });
+      await step(`${vp.name} 點開始：進選妖怪畫面`, async () => {
+        await press(ctx, '#btn-start');
+        await ctx.page.waitForFunction(() => window.__game.screens.includes('setup'), null, { timeout: 10000 });
       });
       files.push(await shot(ctx, 'b1-menu'));
       reportErrors(ctx);

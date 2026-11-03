@@ -8,14 +8,17 @@
 
 ## 2. 目前狀態
 
-- **階段：G0 立項通過（2026-11-03，D14–D18）。M0 骨架完成**（見下）。下一步 M1 原型。
+- **階段：G0 通過；M0 完成；M1 原型（第一個可玩版本）完成，等使用者 G1 試玩 3 局。**
 - 審查結果：數字與內部矛盾的修正都記在 `docs/02` 第 12 節；設計風險記在 `docs/11` R15–R19 與 `docs/14` Q14–Q17；驗算腳本在 `scripts/audit/`。
 - 已有：整套規劃文件（docs/01–14）、專案設定（`package.json`、`tsconfig.json`、`vite.config.ts`、`vitest.config.ts`）、搬運的基礎程式（`src/lib`、`src/art`）、測試環境（`tests/unit/setup.ts`）。
 - M0 已有：`src/core`（`bus` 事件匯流排、`loop` 固定步長、`save` 存檔、`renderer` 鏡頭與光源）、`src/game`（`states`／`stateMachine` 狀態機、`changelog`）、`src/i18n`（`t()`、`zh-TW`）、`src/art/palette.ts`、`src/data/camera.ts`（含直式 FOV）、`src/ui`（主選單、提示）、`src/world/stage.ts`（空場景）、`src/dev/devApi.ts`（`__game`：state／seed／paused／simTime／advance／render）。
+- **M1（2026-11-03）**：`src/data/*`（屬性、妖怪、人類、波次、升級、地形、地圖、可調旋鈕）、`src/systems/*`（流場、空間雜湊、敵人池、鬼火、魂火、發牌、波次導演…，純邏輯）、`src/game/run.ts`（一局的模擬）、`src/game/game.ts`（接狀態機與介面）、`src/render/*` 與 `src/units/*`（3D 外觀）、`src/ui/*`（HUD、選卡、整備、結算、暫停）。一局：選提燈小僧 → 20 波（每波 20 秒）→ 升級當下暫停三選一 → 波與波之間整備 → 死亡或第 20 波通關 → 結算（功德存檔）。**沒有頭目**（第 20 波清完就算通關）、沒有小妖與號令、只有村人、只有 4 張屬性卡。
+- **G1 試玩怎麼調**（測試頁網址後面加參數，只有測試頁有）：`?count=2.5`（敵人數量倍率）、`&hp=1`（敵人 HP）、`&dmg=1`（玩家傷害）、`&volley=3`（鬼火一次幾顆）、`&splash=1.2`（濺射半徑）、`&seed=123`（種子，回報問題請附上）、`&q=0`～`4`（固定畫質）。預設值是 M1 試玩預設（docs/02 第 12 節最新一列），**不是 docs/02 的原值**。
 - 測試：單元 49 個（含原始碼全掃：中文不寫死、無 `Math.random`、禁用詞、i18n key 存在）；回歸 `b1`（開機到主選單、三種畫面、點擊、畫布非單色、提示不蓋選單）；`npm run check:main`（打包後的主網址沒有 `__game`）；GitHub Actions CI（typecheck、test、build、check:main）。
 - 舊專案搬運（2026-11-03，使用者同意加入舊 repo 唯讀）：後製與畫質分級、音效音樂引擎（都節音階三首）、輸入、PWA、`pack-artifact.py` 都已搬，進度表在 docs/10 第 7 節。角色展示間 M1 再搬。
 - **D15 已改**：升級當下暫停三選一（不是整備時選）。CLAUDE.md 的鐵則已同步。
 - **測試頁**（D19 授權自動更新）：https://claude.ai/artifact/GXGprLDbQYgEHRGByNVnpA （標題「百鬼陣 測試版」，私人，帶 `__game`）。更新步驟：`npm run pack:test` → 用打包檔跑一次 b1（套上 Artifact 外殼，見 2026-11-03 的做法：外殼加 `<link rel="icon" href="data:,">`，否則會有假 404）→ 用 Artifact 工具發佈 `dist-artifact/yokai-test.html`。新 session 發佈時要帶這個網址當 `url`（先 `read`），不然會變成另一個頁面。
+- 已知問題／沒做：角色展示間沒搬；渲染沒做插值；真機效能與搖桿手感沒測；音樂是佔位（17 秒就循環）；人類的圖鑑、頭目、小妖、號令、地圖要素、商店都還沒有。
 - **精緻度排程**（使用者 2026-11-03 要求）：docs/05 第 2.2 節、docs/08 第 7 節；M2b（W8–W9）定視覺與音樂基準，G2b 使用者看過聽過才複製；Q18、Q19 已回答（D20 順延到 6/13；D21 音樂之後由使用者找，我在確認授權前不放外部音檔）。音樂我沒有耳朵，美感必須使用者點頭。
 - **主網址**還沒建立：使用者說「發佈」才動（D13），用 `npm run check:main` 的打包檔，標題維持「百鬼陣」。
 - 已知限制：CI 沒跑 Playwright 回歸（要裝瀏覽器，等回歸變多再加）。第一個工作是 M0（docs/05）。

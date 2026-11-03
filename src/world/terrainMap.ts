@@ -48,6 +48,14 @@ export class TerrainMap {
           const dz = z - hill.z;
           h += hill.height * Math.exp(-(dx * dx + dz * dz) / (2 * hill.sigma * hill.sigma));
         }
+        for (const zn of def.zones) {
+          if (!zn.depth) continue;
+          const d = Math.hypot(x - zn.x, z - zn.z);
+          if (d < zn.r) {
+            const u = 1 - d / zn.r;
+            h -= zn.depth * (u * u * (3 - 2 * u));
+          }
+        }
         this.heights[j * vc + i] = h;
       }
     }

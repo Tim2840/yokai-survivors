@@ -9,7 +9,7 @@ import { PROTOTYPE_MAP, type MapDef } from '../data/maps/prototype';
 import { Rng } from '../lib/random';
 import { TerrainMap } from '../world/terrainMap';
 import { FlowField } from '../systems/flowField';
-import { Enemies } from '../systems/enemies';
+import { Enemies, kindIndex } from '../systems/enemies';
 import { Projectiles } from '../systems/projectiles';
 import { Orbs } from '../systems/orbs';
 import { HitFeed } from '../systems/hitFeed';
@@ -158,6 +158,32 @@ export class Run {
     this.startNextWave();
   }
 
+  /** 開發與測試：在玩家周圍生 n 隻指定的人類（走得到玩家的位置） */
+  devSpawn(kindId: string, n: number): number {
+    const kind = kindIndex(kindId);
+    let made = 0;
+    for (let k = 0; k < n; k++) {
+      for (const r of [8, 6, 10, 12]) {
+        const a = k * 2.399963 + r;
+        const x = this.px + Math.cos(a) * r;
+        const z = this.pz + Math.sin(a) * r;
+        if (this.map.isBlocked(x, z) || !this.flow.reachable(x, z)) continue;
+        if (this.enemies.spawn(kind, x, z, this.wave, this.night, k * 0.7) >= 0) made++;
+        break;
+      }
+    }
+    return made;
+  }
+
+  /** 開發與測試：傳送玩家（不能傳到擋路格） */
+  devTeleport(x: number, z: number): boolean {
+    if (this.map.isBlocked(x, z)) return false;
+    this.px = x;
+    this.pz = z;
+    this.flow.update(x, z, true);
+    return true;
+  }
+
   /** 整備→下一波（外面的狀態機在 INTERMISSION 按「出發」時呼叫） */
   continueFromIntermission(): void {
     if (this.phase !== 'intermission') return;
@@ -298,7 +324,6 @@ export class Run {
       for (let k = 0; k < n; k++) {
         const o = this.splashNear[k];
         if (o === e || !this.enemies.alive[o]) continue;
-        this.feed.push(this.enemies.x[o], this.enemies.z[o], sd, false);
         if (this.enemies.hurt(o, sd, 0, 0, 0)) this.onKill(o);
       }
     }

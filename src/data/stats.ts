@@ -65,3 +65,20 @@ export const CARD_EFFECT: Record<StatId, { target: 'flat' | 'pct'; scale: number
 
 /** 減傷（docs/02 第 3 節）：護甲 A≥0 倍率 = 1 − A/(A+15)，最低 0.25；A<0 倍率 = 1 + |A|/15，最高 1.8 */
 export const ARMOR = { k: 15, minMult: 0.25, maxMult: 1.8 } as const;
+
+/** 卡片說明的格式（對到 i18n 的 card.fmt.*）：pct = 數字後面加 %；flat = 直接加；perSec = 每秒 */
+export const CARD_FORMAT: Record<StatId, 'pct' | 'flat' | 'perSec'> = {
+  maxHp: 'flat',
+  regen: 'perSec',
+  power: 'pct',
+  atkSpeed: 'pct',
+  area: 'pct',
+  crit: 'pct',
+  critDmg: 'pct',
+  speed: 'pct',
+  armor: 'flat',
+  dodge: 'pct',
+  pickup: 'pct',
+  luck: 'flat',
+  merit: 'pct',
+};

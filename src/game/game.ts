@@ -1,0 +1,311 @@
+import { bus, type EventBus } from '../core/bus';
+import type { AudioEngine } from '../core/audio';
+import type { FixedLoop } from '../core/loop';
+import type { Input } from '../core/input';
+import type { Renderer } from '../core/renderer';
+import { loadSave, writeSave, type SaveData } from '../core/save';
+import { Run, subSeed } from './run';
+import type { GameStateMachine } from './stateMachine';
+import { RunView } from '../render/runView';
+import { buildHud, type Hud } from '../ui/hud';
+import { buildMenu, toast } from '../ui/menu';
+import { buildCardPicker, buildIntermission, buildPause, buildRunEnd, buildSetup } from '../ui/overlays';
+import { t } from '../i18n';
+import { tuning } from '../data/tuning';
+
+export interface GameDeps {
+  fsm: GameStateMachine;
+  loop: FixedLoop;
+  renderer: Renderer;
+  audio: AudioEngine;
+  input: Input;
+  save: SaveData;
+  ui: HTMLElement;
+  seed: number;
+  mobile: boolean;
+  /** 主選單背景（開局時隱藏） */
+  backdrop: { visible: boolean };
+  bus?: EventBus;
+}
+
+/**
+ * 把狀態機、模擬（Run）、渲染（RunView）、介面接起來。
+ * 規則（docs/06 第 2 節、D15）：COMBAT 內只允許暫停與「升級選卡」兩種覆蓋層；其他選擇都在別的狀態。
+ */
+export class Game {
+  run: Run | null = null;
+  view: RunView | null = null;
+  runIndex = 0;
+  selectedYokai = 'chochin-kozo';
+  private readonly b: EventBus;
+  private readonly fsm: GameStateMachine;
+  private readonly loop: FixedLoop;
+  private readonly renderer: Renderer;
+  private readonly audio: AudioEngine;
+  private readonly input: Input;
+  private readonly save: SaveData;
+  private readonly hud: Hud;
+  private readonly menuEl: HTMLElement;
+  private readonly setup;
+  private readonly picker;
+  private readonly inter;
+  private readonly end;
+  private readonly pause;
+  private lastEnd: { result: 'death' | 'victory' | 'abandon'; wave: number; kills: number; level: number; merit: number } | null = null;
+  // 每幀音效用的上一次數值
+  private lastKills = 0;
+  private lastXp = 0;
+  private lastHead = 0;
+  private time = 0;
+  private lastFrameMs = 0;
+
+  constructor(private readonly d: GameDeps) {
+    this.b = d.bus ?? bus;
+    this.fsm = d.fsm;
+    this.loop = d.loop;
+    this.renderer = d.renderer;
+    this.audio = d.audio;
+    this.input = d.input;
+    this.save = d.save;
+    const ui = d.ui;
+
+    this.menuEl = buildMenu(ui, () => this.go('RUN_SETUP'), () => this.notReady());
+    this.setup = buildSetup(
+      ui,
+      (id) => {
+        this.selectedYokai = id;
+        this.audio.sfx('confirm');
+        this.go('COMBAT');
+      },
+      () => this.go('MENU'),
+    );
+    this.picker = buildCardPicker(ui, (i) => this.pickCard(i));
+    this.inter = buildIntermission(
+      ui,
+      () => {
+        this.audio.sfx('confirm');
+        this.go('COMBAT');
+      },
+      () => this.quitRun(),
+    );
+    this.end = buildRunEnd(
+      ui,
+      () => this.go('RUN_SETUP'),
+      () => this.go('MENU'),
+      () => this.notReady(),
+    );
+    this.pause = buildPause(ui, () => this.closePause(), () => this.quitRun());
+    this.hud = buildHud(ui);
+    this.hud.pauseButton.addEventListener('click', () => this.togglePause());
+    this.input.attachTouch({ stickBase: this.hud.stickBase, stickKnob: this.hud.stickKnob, commandButton: document.createElement('div') });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape' && !e.repeat) this.togglePause();
+      if (this.picker.visible && ['Digit1', 'Digit2', 'Digit3'].includes(e.code)) this.pickCard(Number(e.code.slice(5)) - 1);
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden' && this.fsm.state === 'COMBAT' && !this.pause.visible && !this.picker.visible) this.openPause();
+    });
+
+    this.registerStates();
+    this.wireEvents();
+  }
+
+  private go(to: Parameters<GameStateMachine['go']>[0]): void {
+    this.b.emit('request:state', { to });
+  }
+
+  private notReady(): void {
+    this.audio.sfx('click');
+    toast(t('menu.notReady'));
+  }
+
+  // ── 狀態 ──
+  private registerStates(): void {
+    const f = this.fsm;
+    f.register('MENU', {
+      enter: () => {
+        this.disposeRun();
+        this.menuEl.classList.remove('hidden');
+        this.audio.setMusic({ theme: 'title' });
+      },
+      exit: () => this.menuEl.classList.add('hidden'),
+    });
+    f.register('RUN_SETUP', {
+      enter: () => {
+        this.disposeRun();
+        this.setup.show();
+        this.audio.setMusic({ theme: 'title' });
+      },
+      exit: () => this.setup.hide(),
+    });
+    f.register('COMBAT', {
+      enter: (from) => {
+        if (from === 'RUN_SETUP') this.startRun();
+        else if (from === 'INTERMISSION') this.run?.continueFromIntermission();
+        this.hud.show(true);
+        this.input.enabled = true;
+        this.audio.setMusic({ theme: 'battle' });
+      },
+      update: (dt) => {
+        const run = this.run;
+        if (!run) return;
+        this.input.poll();
+        run.setMove(this.input.moveX, this.input.moveZ);
+        run.step(dt);
+      },
+      exit: () => {
+        this.input.reset();
+      },
+    });
+    f.register('INTERMISSION', {
+      enter: () => {
+        const r = this.run!;
+        this.inter.render(r.wave, r.kills, r.level);
+        this.inter.show();
+        this.audio.setMusic({ theme: 'intermission' });
+      },
+      exit: () => this.inter.hide(),
+    });
+    f.register('RUN_END', {
+      enter: () => {
+        this.hud.show(false);
+        this.view?.freeze();
+        this.picker.hide();
+        this.closePause();
+        if (this.lastEnd) this.end.render(this.lastEnd);
+        this.end.show();
+        this.audio.setMusic({ theme: 'title' });
+      },
+      exit: () => this.end.hide(),
+    });
+    f.register('META_SHOP', {});
+  }
+
+  private startRun(): void {
+    this.disposeRun();
+    this.d.backdrop.visible = false;
+    const seed = subSeed(this.d.seed, this.runIndex++);
+    this.run = new Run({ seed, yokaiId: this.selectedYokai, mobile: this.d.mobile, bus: this.b, meritStat: 0 });
+    this.view = new RunView(this.run, this.renderer);
+    this.lastKills = 0;
+    this.lastXp = 0;
+    this.lastHead = this.run.feed.head;
+    this.renderer.precompile();
+  }
+
+  private disposeRun(): void {
+    this.view?.dispose();
+    this.view = null;
+    this.run = null;
+    this.d.backdrop.visible = true;
+    this.hud.show(false);
+  }
+
+  // ── 事件 ──
+  private wireEvents(): void {
+    const b = this.b;
+    b.on('levelUp', () => {
+      const run = this.run;
+      if (!run || !run.offer) return;
+      this.loop.hold('levelup');
+      this.picker.render(run.offer, run.pendingPicks);
+      this.picker.show();
+      this.audio.sfx('levelUp');
+    });
+    b.on('waveStart', () => this.audio.sfx('waveStart'));
+    b.on('waveEnd', ({ last }) => {
+      this.audio.sfx('waveEnd');
+      if (!last) this.go('INTERMISSION');
+    });
+    b.on('playerHurt', () => this.audio.sfx('hurt'));
+    b.on('runEnd', (e) => {
+      this.lastEnd = { result: e.result, wave: e.wave, kills: e.kills, level: e.level, merit: e.merit };
+      this.save.merit += e.merit;
+      this.save.stats.runs++;
+      this.save.stats.bestWave = Math.max(this.save.stats.bestWave, e.wave);
+      writeSave(this.save);
+      if (e.result === 'death') this.audio.sfx('death');
+      this.go('RUN_END');
+    });
+  }
+
+  private pickCard(i: number): void {
+    const run = this.run;
+    if (!run || !run.offer) return;
+    this.audio.sfx('cardFlip', ['common', 'rare', 'epic', 'legend'].indexOf(run.offer[i]?.rarity ?? 'common'));
+    const more = run.chooseCard(i);
+    if (more && run.offer) {
+      this.picker.render(run.offer, run.pendingPicks);
+    } else {
+      this.picker.hide();
+      this.loop.release('levelup');
+    }
+  }
+
+  // ── 暫停 ──
+  private openPause(): void {
+    if (this.fsm.state !== 'COMBAT' || this.picker.visible) return;
+    this.loop.hold('user');
+    this.pause.show();
+  }
+
+  private closePause(): void {
+    this.loop.release('user');
+    this.loop.release('hidden');
+    this.pause.hide();
+  }
+
+  private togglePause(): void {
+    if (this.pause.visible) this.closePause();
+    else this.openPause();
+  }
+
+  private quitRun(): void {
+    this.closePause();
+    this.picker.hide();
+    this.loop.release('levelup');
+    this.run?.abandon();
+  }
+
+  // ── 每個畫面幀 ──
+  frame(): void {
+    const now = performance.now();
+    const dt = this.lastFrameMs === 0 ? 0 : Math.min(0.1, (now - this.lastFrameMs) / 1000);
+    this.lastFrameMs = now;
+    this.time += this.loop.paused ? 0 : dt;
+    const run = this.run;
+    if (run && this.view && this.fsm.state !== 'RUN_END') {
+      this.view.update(dt, this.time);
+      this.hud.update(run);
+      // 音效（節流在 audio 內）
+      if (run.feed.head !== this.lastHead) {
+        this.audio.sfx('hit');
+        this.lastHead = run.feed.head;
+      }
+      if (run.kills !== this.lastKills) {
+        this.audio.sfx('enemyDown');
+        this.lastKills = run.kills;
+      }
+      if (run.xp !== this.lastXp) {
+        this.audio.sfx('pickup');
+        this.lastXp = run.xp;
+      }
+    }
+  }
+
+  /** 開發介面用：目前畫面上看得到的畫面名稱 */
+  get screens(): string[] {
+    return [...this.d.ui.querySelectorAll<HTMLElement>('[data-screen]')]
+      .filter((el) => !el.classList.contains('hidden'))
+      .map((el) => el.dataset.screen!);
+  }
+
+  get tuningInfo() {
+    return { ...tuning };
+  }
+
+  reloadSave(): SaveData {
+    return loadSave();
+  }
+}

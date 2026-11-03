@@ -31,7 +31,7 @@ export class Renderer {
     const p = (CAMERA.pitchDeg * Math.PI) / 180;
     this.offset.set(0, Math.sin(p) * CAMERA.distance, Math.cos(p) * CAMERA.distance);
 
-    this.moon = new THREE.DirectionalLight(palette.moon, 1.6);
+    this.moon = new THREE.DirectionalLight(palette.moon, 2.6);
     this.moon.position.set(-8, 20, 6);
     this.scene.add(this.moon);
     this.playerLight = new THREE.PointLight(palette.warm.orange, 30, 12, 1.6);

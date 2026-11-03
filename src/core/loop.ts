@@ -13,7 +13,8 @@ export const MAX_STEPS_PER_FRAME = 6;
 export class FixedLoop {
   private acc = 0;
   private lastMs = -1;
-  paused = false;
+  /** 暫停的原因（可疊）：只有全部解除，模擬才會恢復。例：'user'（暫停鍵）、'hidden'（分頁失焦）、'levelup'（升級選卡） */
+  private readonly holds = new Set<string>();
   /** 已模擬的總時間（秒） */
   simTime = 0;
   steps = 0;
@@ -22,6 +23,22 @@ export class FixedLoop {
     private readonly simulate: (dt: number) => void,
     private readonly draw: (alpha: number) => void,
   ) {}
+
+  get paused(): boolean {
+    return this.holds.size > 0;
+  }
+
+  hold(reason: string): void {
+    this.holds.add(reason);
+  }
+
+  release(reason: string): void {
+    this.holds.delete(reason);
+  }
+
+  isHeld(reason: string): boolean {
+    return this.holds.has(reason);
+  }
 
   /** 每個 requestAnimationFrame 呼叫一次 */
   frame(nowMs: number): void {

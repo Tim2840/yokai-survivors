@@ -30,3 +30,69 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
   .menu .sub { display: none; }
   .btn { min-height: 44px; padding: 6px 20px; }
 }
+
+/* ── 覆蓋層（選妖怪、升級選卡、整備、結算、暫停） ── */
+.overlay { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; pointer-events: auto;
+  background: rgba(10, 12, 28, 0.62); padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); box-sizing: border-box; overflow: auto; }
+.overlay[data-screen='levelup'] { z-index: 30; background: rgba(10, 12, 28, 0.55); }
+.overlay[data-screen='pause'] { z-index: 40; }
+.panel { background: var(--panel); border-radius: 20px; padding: clamp(14px, 3vw, 28px); max-width: min(94vw, 760px); display: flex; flex-direction: column; align-items: center; gap: clamp(8px, 2vh, 16px); text-align: center; margin: auto; }
+.panel h2 { margin: 0; font-size: clamp(20px, 5vw, 30px); letter-spacing: 0.08em; }
+.panel p { margin: 0; color: var(--text-dim); }
+.row { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.stats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 18px; }
+.hint { min-height: 1.2em; font-size: 14px; }
+
+.yokai-row { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.yokai-card { position: relative; width: clamp(140px, 26vw, 190px); min-height: 100px; padding: 12px; border-radius: 16px; border: 2px solid var(--text-dim); background: rgba(255,255,255,0.05);
+  color: var(--text); font-family: inherit; display: flex; flex-direction: column; gap: 6px; cursor: pointer; text-align: center; }
+.yokai-card b { font-size: 20px; }
+.yokai-card span { font-size: 13px; color: var(--text-dim); }
+.yokai-card.selected { border-color: var(--accent); background: rgba(255, 179, 92, 0.14); }
+.yokai-card.locked { opacity: 0.5; cursor: default; }
+.yokai-card em { font-style: normal; font-size: 12px; color: var(--accent); }
+
+.cards { display: flex; gap: clamp(8px, 2vw, 16px); justify-content: center; flex-wrap: wrap; }
+.card { --rc: #e8e6e0; width: clamp(150px, 24vw, 200px); min-height: 150px; padding: 12px 10px; border-radius: 16px; border: 3px solid var(--rc); background: rgba(255,255,255,0.06);
+  color: var(--text); font-family: inherit; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; }
+.card:hover, .card:focus-visible { background: rgba(255,255,255,0.14); outline: none; transform: translateY(-2px); }
+.card b { font-size: 22px; }
+.card .cdesc { font-size: 15px; color: var(--text); }
+.card .rname { font-size: 13px; letter-spacing: 0.3em; color: var(--rc); }
+.card.r-common { --rc: #e8e6e0; } .card.r-rare { --rc: #5ec4e8; } .card.r-epic { --rc: #a678e0; } .card.r-legend { --rc: #ffb347; }
+.shape { width: 22px; height: 22px; background: var(--rc); display: inline-block; }
+.shape.circle { border-radius: 50%; }
+.shape.diamond { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.shape.hex { clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0 50%); }
+.shape.star { clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+@media (max-width: 640px) and (orientation: portrait) {
+  .cards { flex-direction: column; align-items: stretch; width: min(92vw, 420px); }
+  .card { width: auto; min-height: 0; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; align-items: center; padding: 10px 14px; gap: 4px 10px; text-align: left; }
+  .card b { font-size: 20px; }
+  .card .cdesc { flex-basis: 100%; font-size: 14px; }
+}
+@media (max-height: 520px) {
+  .panel { padding: 10px 16px; gap: 6px; }
+  .card { min-height: 0; padding: 8px; }
+  .card b { font-size: 18px; } .card .cdesc { font-size: 13px; }
+}
+
+/* ── 戰鬥 HUD ── */
+.hud { position: fixed; inset: 0; z-index: 10; pointer-events: none; padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; }
+.hud > * { pointer-events: none; }
+.hud-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: 8px; }
+.hud-hp { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.hud-hp .bar { width: clamp(110px, 24vw, 220px); height: 14px; background: rgba(0,0,0,0.45); border-radius: 999px; overflow: hidden; border: 2px solid rgba(255,255,255,0.25); }
+.hud-hp .bar i { display: block; height: 100%; width: 100%; background: linear-gradient(#ff7b6b, #d9503f); border-radius: 999px; }
+.hud-hp span { font-size: 14px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; }
+.hud-wave { display: flex; flex-direction: column; align-items: center; text-shadow: 0 1px 3px #000; }
+.hud-wave b { font-size: clamp(16px, 4vw, 22px); }
+.hud-wave span { font-size: clamp(18px, 4.5vw, 26px); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); }
+.hud-pause { justify-self: end; pointer-events: auto !important; width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.35); background: rgba(0,0,0,0.4); color: var(--text); font-weight: 700; font-size: 16px; letter-spacing: 2px; cursor: pointer; font-family: inherit; }
+.hud-bottom { display: flex; align-items: center; gap: 10px; }
+.xp { flex: 1; height: 10px; background: rgba(0,0,0,0.45); border-radius: 999px; overflow: hidden; border: 2px solid rgba(255,255,255,0.2); }
+.xp i { display: block; height: 100%; width: 0; background: linear-gradient(#bff3ff, #6cc9ef); }
+.hud-bottom span { font-size: 15px; font-weight: 700; text-shadow: 0 1px 2px #000; min-width: 3.5em; text-align: right; }
+.stick { display: none; position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: calc(max(34px, env(safe-area-inset-bottom)) + 12px); width: clamp(110px, 28vmin, 150px); aspect-ratio: 1; border-radius: 50%; background: rgba(255,255,255,0.10); border: 2px solid rgba(255,255,255,0.3); touch-action: none; }
+.stick .knob { position: absolute; left: 50%; top: 50%; width: 42%; height: 42%; margin: -21% 0 0 -21%; border-radius: 50%; background: rgba(255,179,92,0.7); pointer-events: none; }
+@media (pointer: coarse) { .stick { display: block; pointer-events: auto !important; } }

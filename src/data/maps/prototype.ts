@@ -16,6 +16,8 @@ export interface Zone {
   z: number;
   r: number;
   type: TerrainId;
+  /** 這個區域把地面壓低多少（公尺，水池用）；從邊緣平滑加深到中心 */
+  depth?: number;
 }
 export interface Obstacle {
   x: number;
@@ -46,15 +48,15 @@ export const PROTOTYPE_MAP: MapDef = {
   size: { w: 50, d: 50 },
   cell: 1,
   noiseSeed: 7,
-  noiseHeight: 0.12,
+  noiseHeight: 0.08,
   hills: [
     { x: 10, z: -8, height: 2.2, sigma: 4 },
     { x: -12, z: -12, height: 1.2, sigma: 3.5 },
   ],
   zones: [
-    { x: -10, z: 8, r: 6.5, type: 'shallow' },
-    { x: -10, z: 8, r: 3, type: 'deep' },
-    { x: 12, z: 12, r: 4, type: 'shallow' },
+    { x: -10, z: 8, r: 6.5, type: 'shallow', depth: 0.12 },
+    { x: -10, z: 8, r: 3, type: 'deep', depth: 0.4 },
+    { x: 12, z: 12, r: 4, type: 'shallow', depth: 0.1 },
   ],
   obstacles: [
     { x: 6, z: 5, r: 0.9, kind: 'rock' },

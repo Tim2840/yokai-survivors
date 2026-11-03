@@ -64,7 +64,7 @@ export async function waitState(page, state, timeout = 20000) {
 /** 用玩家的方式點：手機 tap、桌面 click。目標要看得見、在畫面內、沒被蓋住。 */
 export async function press(ctx, selector) {
   const { page, vp } = ctx;
-  const el = page.locator(selector);
+  const el = page.locator(selector).first();
   await el.waitFor({ state: 'visible', timeout: 10000 });
   const box = await el.boundingBox();
   expect(box, `${selector} 沒有位置`);
@@ -109,4 +109,22 @@ export async function shot(ctx, name) {
 
 export function reportErrors(ctx) {
   expect(ctx.errors.length === 0, `頁面錯誤（${ctx.vp.name}）：\n${ctx.errors.join('\n')}`);
+}
+
+/** 進一局：主選單 → 開始 → 選妖怪畫面 → 出發（全用真實點擊），等到 COMBAT。query 預設固定畫質與種子，結果可重現 */
+export async function startRun(ctx) {
+  await waitState(ctx.page, 'MENU');
+  await press(ctx, '#btn-start');
+  await ctx.page.waitForFunction(() => window.__game.screens.includes('setup'), null, { timeout: 10000 });
+  await press(ctx, '#btn-setup-go');
+  await waitState(ctx.page, 'COMBAT');
+}
+
+/** 畫面狀態字串（卡住偵測用）：目前看得到的畫面＋這一局的關鍵數字 */
+export async function snapshotOf(page) {
+  return page.evaluate(() => {
+    const g = window.__game;
+    const r = g.run;
+    return JSON.stringify({ state: g.state, screens: g.screens, paused: g.paused, wave: r && r.wave, phase: r && r.phase, t: r && Math.floor(r.time), level: r && r.level, kills: r && r.kills, hp: r && Math.ceil(r.hp), pending: r && r.pending, picked: r && r.picked });
+  });
 }

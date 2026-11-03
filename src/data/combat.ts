@@ -17,7 +17,7 @@ export const COMBAT = {
   /** 單次查詢最多回傳幾個（預先配置的緩衝大小） */
   queryMax: 512,
   /** 傷害數字：同時最多、停留（秒）、上飄速度 */
-  damageNumbers: { max: 64, life: 0.7, rise: 1.6 },
+  damageNumbers: { max: 48, life: 0.6, rise: 1.2 },
   /** 暫停、死亡時的小延遲（秒），讓玩家看見最後一擊 */
   deathDelay: 0.8,
 } as const;

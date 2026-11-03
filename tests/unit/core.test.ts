@@ -148,10 +148,26 @@ describe('固定步長主迴圈', () => {
 
   it('暫停：模擬停、渲染照畫', () => {
     const { loop, sims, draws } = make();
-    loop.paused = true;
+    loop.hold('user');
     for (let i = 0; i < 30; i++) loop.frame(i * 16.7);
     expect(sims()).toBe(0);
     expect(draws()).toBe(30);
+  });
+
+  it('暫停原因可疊：選卡＋失焦同時成立，只解除一個還是停著；全部解除才恢復', () => {
+    const { loop, sims } = make();
+    loop.hold('levelup');
+    loop.hold('hidden');
+    loop.release('levelup');
+    expect(loop.paused).toBe(true);
+    for (let i = 0; i < 10; i++) loop.frame(i * 16.7);
+    expect(sims()).toBe(0);
+    loop.release('hidden');
+    expect(loop.paused).toBe(false);
+    loop.release('hidden'); // 重複解除不出錯
+    loop.frame(1000);
+    loop.frame(1033);
+    expect(sims()).toBeGreaterThan(0);
   });
 
   it('advance(dt) 快進模擬但不畫圖；render() 才畫', () => {
