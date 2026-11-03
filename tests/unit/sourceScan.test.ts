@@ -47,6 +47,11 @@ export function stringLiterals(src: string): string[] {
 const CJK = /[㐀-鿿豈-﫿]/;
 
 describe('原始碼全掃', () => {
+  it('掃描器本身：new Error 的訊息放過、其他字串不放過', () => {
+    const t = "throw new Error(`沒有：${id}`); const a = '玩家看得到';".replace(/new Error\(\s*(['"`])(?:\\.|(?!\1).)*\1/g, 'new Error(');
+    expect(stringLiterals(t).filter((x) => CJK.test(x))).toEqual(['玩家看得到']);
+  });
+
   it('掃描器本身：註解裡的中文不算、字串裡的算', () => {
     const lits = stringLiterals("// 註解\nconst a = '字串'; /* 也是註解 */ const b = \"x\"; const u = 'http://x';");
     expect(lits).toEqual(['字串', 'x', 'http://x']);
@@ -56,9 +61,10 @@ describe('原始碼全掃', () => {
     const bad: string[] = [];
     for (const f of files) {
       if (f.path.startsWith('i18n/')) continue;
-      for (const s of stringLiterals(f.text)) {
-        // 開發用的錯誤訊息（throw new Error）允許中文：玩家看不到
-        if (CJK.test(s) && !/i18n 缺少 key/.test(s)) bad.push(`${f.path}: ${s}`);
+      // 開發用的錯誤訊息（new Error(...)）允許中文：玩家看不到；其餘字串一律不准
+      const text = f.text.replace(/new Error\(\s*(['"`])(?:\\.|(?!\1).)*\1/g, 'new Error(');
+      for (const s of stringLiterals(text)) {
+        if (CJK.test(s)) bad.push(`${f.path}: ${s}`);
       }
     }
     expect(bad).toEqual([]);

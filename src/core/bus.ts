@@ -14,6 +14,16 @@ export interface GameEvents {
   stateRejected: { from: GameState; to: GameState };
   /** 暫停覆蓋層開關（不改狀態） */
   paused: { paused: boolean; reason: 'user' | 'hidden' };
+  /** 玩家升級（pending = 還有幾次待選）；UI 收到後暫停並開選卡面板 */
+  levelUp: { level: number; pending: number };
+  /** 選了一張卡 */
+  cardChosen: { cardId: string; rarity: string };
+  waveStart: { wave: number };
+  /** last = 這是最後一波 */
+  waveEnd: { wave: number; last: boolean };
+  /** 玩家受傷（低頻事件；每擊殺等高頻事件不走匯流排，見 docs/06） */
+  playerHurt: { damage: number; hp: number };
+  runEnd: { result: 'death' | 'victory' | 'abandon'; wave: number; kills: number; level: number; time: number; merit: number };
   /** 存檔寫入失敗（隱私模式、容量不足）；只在第一次失敗時發 */
   saveFailed: { error: string };
 }

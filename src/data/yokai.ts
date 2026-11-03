@@ -1,0 +1,68 @@
+import type { StatId } from './stats';
+
+/** 領頭妖怪（docs/04 第 1 節、docs/02 第 2 節）。M1 只有提燈小僧；河童、赤鬼 M2 加。 */
+export interface WeaponDef {
+  id: string;
+  /** 基礎傷害 */
+  damage: number;
+  /** 攻擊間隔（秒） */
+  interval: number;
+  /** 索敵射程（公尺） */
+  range: number;
+  /** 一次發射幾顆 */
+  volley: number;
+  /** 投射物速度（公尺/秒） */
+  projectileSpeed: number;
+  /** 追蹤轉向速度（弧度/秒） */
+  turnRate: number;
+  /** 投射物壽命（秒） */
+  lifetime: number;
+  /** 命中半徑（公尺） */
+  hitRadius: number;
+  /** 能穿透幾隻（0 = 命中即消失） */
+  pierce: number;
+  /** 命中時對周圍的濺射半徑（公尺，0 = 無）與濺射傷害比例 */
+  splashRadius: number;
+  splashRatio: number;
+  /** 擊退速度（公尺/秒） */
+  knockback: number;
+}
+
+export interface YokaiDef {
+  id: string;
+  /** 基礎屬性的覆寫（沒寫的用 STAT_BASE） */
+  base: Partial<Record<StatId, number>>;
+  weapon: WeaponDef;
+  /** 被動「燈火」：光圈半徑與光圈內人類減速比例 */
+  aura: { radius: number; slow: number };
+  /** 模型尺寸（公尺） */
+  radius: number;
+}
+
+export const YOKAI: Record<string, YokaiDef> = {
+  'chochin-kozo': {
+    id: 'chochin-kozo',
+    base: { maxHp: 100, speed: 4.0 },
+    weapon: {
+      id: 'ghostfire',
+      damage: 8,
+      interval: 0.8,
+      range: 9,
+      volley: 1,
+      projectileSpeed: 12,
+      turnRate: 6,
+      lifetime: 1.6,
+      hitRadius: 0.5,
+      pierce: 0,
+      splashRadius: 0,
+      splashRatio: 0,
+      knockback: 5,
+    },
+    aura: { radius: 5, slow: 0.1 },
+    radius: 0.45,
+  },
+};
+
+export const STARTER_YOKAI = ['chochin-kozo', 'kappa', 'aka-oni'] as const;
+/** M1 已可玩的領頭妖怪（其餘在選單顯示「製作中」） */
+export const PLAYABLE_YOKAI: readonly string[] = ['chochin-kozo'];
