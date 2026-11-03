@@ -1,39 +1,111 @@
 import type { TerrainMap } from '../world/terrainMap';
+import { WALL_TAN } from '../world/terrainMap';
 import { TERRAIN, TERRAIN_IDS } from '../data/terrain';
 
 /**
- * 流場尋路（docs/06 第 6 節，T7）：以玩家所在格為起點，在格子圖上做一次 Dijkstra（8 方向），
- * 得到每格到玩家的「通行距離」；每隻敵人只查自己的格（O(1)）往距離更小的鄰格走。
- * 阻擋格（深水、障礙、陡坡）不可通行；泥濘、淺水成本較高。預先配置，重算不 new。
+ * 流場尋路（docs/06 第 6 節，T7、T8）：以玩家所在的格為起點，在「粗格子」（預設 2 公尺）上做一次 Dijkstra（8 方向），
+ * 得到每格到玩家的通行距離；敵人只查自己所在的格（O(1)）往距離更小的鄰格走。
+ * - 粗格擋路：裡面任何一個細格是擋路格（深水、障礙）。
+ * - 邊可不可走：預先沿著兩格中心連線取樣，最大坡度超過牆（35°）的邊不能走（懸崖）。往上往下都算：人類不會跳下懸崖。
+ * - 玩家站在上不去的台地時，整個區域不連通：`isolated` = true，呼叫端要讓敵人直線朝玩家擠（在懸崖底聚集）、生成不看連通。
+ * 預先配置，重算不 new。
  */
-const COST_BY_INDEX = new Float32Array(TERRAIN_IDS.map((id) => TERRAIN[id].cost));
 const DIAG = Math.SQRT2;
 const NEIGH_DX = new Int8Array([1, -1, 0, 0, 1, 1, -1, -1]);
 const NEIGH_DZ = new Int8Array([0, 0, 1, -1, 1, -1, 1, -1]);
 
+/** 玩家可到的區域小於全部可走區域的這個比例，就視為被困在孤島（台地）上 */
+const ISOLATED_RATIO = 0.5;
+
 export class FlowField {
+  readonly cell: number;
+  readonly cols: number;
+  readonly rows: number;
   readonly dist: Float32Array;
+  readonly blocked: Uint8Array;
+  /** 每格 8 個方向的邊是否能走（索引 = cell × 8 + k） */
+  private readonly edgeOk: Uint8Array;
+  private readonly cost: Float32Array;
   private readonly heap: Int32Array;
   private heapSize = 0;
   private lastCell = -1;
-  /** 目前的目標格 */
   targetCell = -1;
+  /** 這次重算有幾格走得到玩家 */
+  reachableCount = 0;
+  /** 全部可走的粗格數 */
+  readonly walkableCount: number;
 
-  constructor(private readonly map: TerrainMap) {
-    const n = map.cols * map.rows;
+  constructor(
+    private readonly map: TerrainMap,
+    cell = 2,
+  ) {
+    this.cell = cell;
+    this.cols = Math.ceil((map.maxX - map.minX) / cell);
+    this.rows = Math.ceil((map.maxZ - map.minZ) / cell);
+    const n = this.cols * this.rows;
     this.dist = new Float32Array(n).fill(Infinity);
-    // 二元堆：存格子索引；同一格可能多次進堆（惰性刪除），容量給 8 倍
+    this.blocked = new Uint8Array(n);
+    this.cost = new Float32Array(n);
+    this.edgeOk = new Uint8Array(n * 8);
+    this.walkableCount = 0;
     this.heap = new Int32Array(n * 8);
+    const step = map.cell;
+    for (let j = 0; j < this.rows; j++) {
+      for (let i = 0; i < this.cols; i++) {
+        const c = j * this.cols + i;
+        const x0 = map.minX + i * cell;
+        const z0 = map.minZ + j * cell;
+        let b = 0;
+        for (let z = z0 + step / 2; z < z0 + cell; z += step) for (let x = x0 + step / 2; x < x0 + cell; x += step) if (map.isBlocked(x, z)) b = 1;
+        this.blocked[c] = b;
+        if (!b) (this as { walkableCount: number }).walkableCount++;
+        this.cost[c] = TERRAIN[TERRAIN_IDS[map.typeAt(x0 + cell / 2, z0 + cell / 2)]].cost;
+      }
+    }
+    for (let j = 0; j < this.rows; j++) {
+      for (let i = 0; i < this.cols; i++) {
+        const c = j * this.cols + i;
+        if (this.blocked[c]) continue;
+        const cx = map.minX + (i + 0.5) * cell;
+        const cz = map.minZ + (j + 0.5) * cell;
+        for (let k = 0; k < 8; k++) {
+          const ni = i + NEIGH_DX[k];
+          const nj = j + NEIGH_DZ[k];
+          if (ni < 0 || nj < 0 || ni >= this.cols || nj >= this.rows) continue;
+          const nc = nj * this.cols + ni;
+          if (this.blocked[nc]) continue;
+          // 斜走不能切過阻擋的角落
+          if (k >= 4 && (this.blocked[j * this.cols + ni] || this.blocked[nj * this.cols + i])) continue;
+          const tx = map.minX + (ni + 0.5) * cell;
+          const tz = map.minZ + (nj + 0.5) * cell;
+          if (map.maxRiseAlong(cx, cz, tx, tz) <= WALL_TAN) this.edgeOk[c * 8 + k] = 1;
+        }
+      }
+    }
   }
 
-  /** 玩家換格才重算（呼叫端可每步呼叫，這裡自己判斷）。force = true 一定重算。回傳是否重算了 */
+  cellIndex(x: number, z: number): number {
+    let i = Math.floor((x - this.map.minX) / this.cell);
+    let j = Math.floor((z - this.map.minZ) / this.cell);
+    if (i < 0) i = 0;
+    else if (i >= this.cols) i = this.cols - 1;
+    if (j < 0) j = 0;
+    else if (j >= this.rows) j = this.rows - 1;
+    return j * this.cols + i;
+  }
+
+  /** 玩家換格才重算（呼叫端可每步呼叫）。force = true 一定重算。回傳是否重算了 */
   update(targetX: number, targetZ: number, force = false): boolean {
-    const c = this.map.cellIndex(targetX, targetZ);
+    const c = this.cellIndex(targetX, targetZ);
     if (!force && c === this.lastCell) return false;
     this.lastCell = c;
     this.targetCell = c;
     this.build(c);
     return true;
+  }
+
+  get isolated(): boolean {
+    return this.reachableCount < this.walkableCount * ISOLATED_RATIO;
   }
 
   private less(a: number, b: number): boolean {
@@ -73,27 +145,26 @@ export class FlowField {
   }
 
   private build(start: number): void {
-    const { cols, rows, blocked, types } = this.map;
+    const { cols, rows } = this;
     const dist = this.dist;
     dist.fill(Infinity);
     this.heapSize = 0;
-    // 目標格本身就算站得上去（玩家可能站在阻擋格邊緣）
+    this.reachableCount = 0;
     dist[start] = 0;
     this.push(start);
     while (this.heapSize > 0) {
       const c = this.pop();
       const d0 = dist[c];
+      this.reachableCount++;
       const ci = c % cols;
       const cj = (c / cols) | 0;
       for (let k = 0; k < 8; k++) {
+        if (!this.edgeOk[c * 8 + k]) continue;
         const ni = ci + NEIGH_DX[k];
         const nj = cj + NEIGH_DZ[k];
         if (ni < 0 || nj < 0 || ni >= cols || nj >= rows) continue;
         const n = nj * cols + ni;
-        if (blocked[n]) continue;
-        // 斜走不能切過阻擋的角落
-        if (k >= 4 && (blocked[cj * cols + ni] || blocked[nj * cols + ci])) continue;
-        const nd = d0 + (k >= 4 ? DIAG : 1) * COST_BY_INDEX[types[n]];
+        const nd = d0 + (k >= 4 ? DIAG : 1) * this.cost[n];
         if (nd < dist[n]) {
           dist[n] = nd;
           if (this.heapSize < this.heap.length) this.push(n);
@@ -104,32 +175,29 @@ export class FlowField {
 
   /** 該位置走得到玩家嗎（距離有限） */
   reachable(x: number, z: number): boolean {
-    return this.dist[this.map.cellIndex(x, z)] < Infinity;
+    return this.dist[this.cellIndex(x, z)] < Infinity;
   }
 
   /**
    * 從 (x,z) 往哪走：寫入 out[0]、out[1]（單位向量，世界 X／Z）。
-   * 無路可走（被困在不可達區域）回傳 false，out 為 0。
+   * 走不到玩家（被懸崖隔開）回傳 false，out 為 0；呼叫端改成直線朝玩家擠。
    */
   dirAt(x: number, z: number, out: Float32Array): boolean {
-    const { cols, rows, blocked } = this.map;
-    const c = this.map.cellIndex(x, z);
+    const { cols } = this;
+    const c = this.cellIndex(x, z);
     const ci = c % cols;
     const cj = (c / cols) | 0;
     let best = this.dist[c];
-    let bx = 0;
-    let bz = 0;
     if (best === Infinity) {
       out[0] = 0;
       out[1] = 0;
       return false;
     }
+    let bx = 0;
+    let bz = 0;
     for (let k = 0; k < 8; k++) {
-      const ni = ci + NEIGH_DX[k];
-      const nj = cj + NEIGH_DZ[k];
-      if (ni < 0 || nj < 0 || ni >= cols || nj >= rows) continue;
-      if (k >= 4 && (blocked[cj * cols + ni] || blocked[nj * cols + ci])) continue;
-      const d = this.dist[nj * cols + ni];
+      if (!this.edgeOk[c * 8 + k]) continue;
+      const d = this.dist[(cj + NEIGH_DZ[k]) * cols + ci + NEIGH_DX[k]];
       if (d < best) {
         best = d;
         bx = NEIGH_DX[k];

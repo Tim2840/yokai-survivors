@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CAMERA, fovForAspect } from '../data/camera';
+import { CameraRig, type HeightSource } from './cameraRig';
 import { palette } from '../art/palette';
 import { createPipeline, type Pipeline } from './postfx';
 import type { Quality } from './save';
@@ -14,9 +15,8 @@ export class Renderer {
   readonly camera: THREE.PerspectiveCamera;
   readonly moon: THREE.DirectionalLight;
   readonly playerLight: THREE.PointLight;
-  /** 鏡頭注視點（只動 X／Z） */
-  readonly target = new THREE.Vector3();
-  private readonly offset = new THREE.Vector3();
+  /** 自由視角鏡頭的數學（D23） */
+  readonly rig = new CameraRig();
 
   constructor(
     host: HTMLElement,
@@ -25,11 +25,9 @@ export class Renderer {
     this.pipeline = createPipeline(host, quality);
 
     this.scene.background = new THREE.Color(palette.night.sky);
-    this.scene.fog = new THREE.Fog(palette.night.fog, 30, 70);
+    this.scene.fog = new THREE.Fog(palette.night.fog, 45, 140);
 
     this.camera = new THREE.PerspectiveCamera(CAMERA.baseFovDeg, 1, CAMERA.near, CAMERA.far);
-    const p = (CAMERA.pitchDeg * Math.PI) / 180;
-    this.offset.set(0, Math.sin(p) * CAMERA.distance, Math.cos(p) * CAMERA.distance);
 
     this.moon = new THREE.DirectionalLight(palette.moon, 2.6);
     this.moon.position.set(-8, 20, 6);
@@ -40,7 +38,7 @@ export class Renderer {
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
-    this.snapCamera();
+    this.snapCamera(0, 0, 0, { heightAt: () => 0 });
   }
 
   resize(): void {
@@ -50,18 +48,23 @@ export class Renderer {
     this.camera.updateProjectionMatrix();
   }
 
-  /** 鏡頭立刻到位（開局、測試） */
-  snapCamera(): void {
-    this.camera.position.copy(this.target).add(this.offset);
-    this.camera.lookAt(this.target);
+  /** 鏡頭立刻到位（開局、換關、測試） */
+  snapCamera(px: number, py: number, pz: number, map: HeightSource): void {
+    this.rig.snap(px, py, pz, map);
+    this.applyRig();
   }
 
-  /** 平滑跟隨 (x, z)；dt 秒。不配置記憶體。 */
-  follow(x: number, z: number, dt: number): void {
-    const k = 1 - Math.exp(-CAMERA.followDamping * dt);
-    this.target.x += (x - this.target.x) * k;
-    this.target.z += (z - this.target.z) * k;
-    this.camera.position.set(this.target.x + this.offset.x, this.target.y + this.offset.y, this.target.z + this.offset.z);
+  /** 每個畫面幀：鏡頭跟隨玩家（3D 位置）、彈簧臂避開地形 */
+  updateCamera(dt: number, px: number, py: number, pz: number, map: HeightSource): void {
+    this.rig.update(dt, px, py, pz, map);
+    this.applyRig();
+  }
+
+  private applyRig(): void {
+    const r = this.rig;
+    this.camera.position.set(r.x, r.y, r.z);
+    this.camera.lookAt(r.tx, r.ty, r.tz);
+    this.camera.updateMatrixWorld();
   }
 
   precompile(): void {

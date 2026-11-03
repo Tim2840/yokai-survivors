@@ -12,7 +12,9 @@ import { buildMenu, toast } from '../ui/menu';
 import { buildCardPicker, buildIntermission, buildPause, buildRunEnd, buildSetup } from '../ui/overlays';
 import { t } from '../i18n';
 import { tuning } from '../data/tuning';
+import { CAMERA } from '../data/camera';
 import type { buildTuningPanel } from '../ui/tuningPanel';
+import { worldMove } from '../core/cameraRig';
 
 export interface GameDeps {
   fsm: GameStateMachine;
@@ -54,13 +56,15 @@ export class Game {
   private readonly inter;
   private readonly end;
   private readonly pause;
-  private lastEnd: { result: 'death' | 'victory' | 'abandon'; wave: number; kills: number; level: number; merit: number } | null = null;
+  private lastEnd: { result: 'death' | 'victory' | 'abandon'; stage: number; kills: number; level: number; merit: number } | null = null;
   // 每幀音效用的上一次數值
   private lastKills = 0;
   private lastXp = 0;
   private lastHead = 0;
   private time = 0;
   private lastFrameMs = 0;
+  private readonly moveOut = new Float32Array(2);
+  private readonly lookOut = new Float32Array(2);
 
   constructor(private readonly d: GameDeps) {
     this.b = d.bus ?? bus;
@@ -110,7 +114,8 @@ export class Game {
     this.pause = buildPause(ui, () => this.closePause(), () => this.quitRun());
     this.hud = buildHud(ui);
     this.hud.pauseButton.addEventListener('click', () => this.togglePause());
-    this.input.attachTouch({ stickBase: this.hud.stickBase, stickKnob: this.hud.stickKnob, commandButton: document.createElement('div') });
+    this.input.attachTouch({ stickBase: this.hud.stickBase, stickKnob: this.hud.stickKnob, jumpButton: this.hud.jumpButton });
+    this.input.attachLook(this.renderer.pipeline.renderer.domElement);
 
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Escape' && !e.repeat) this.togglePause();
@@ -164,7 +169,9 @@ export class Game {
         const run = this.run;
         if (!run) return;
         this.input.poll();
-        run.setMove(this.input.moveX, this.input.moveZ);
+        worldMove(this.input.moveX, this.input.moveZ, this.renderer.rig.yaw, this.moveOut);
+        run.setMove(this.moveOut[0], this.moveOut[1]);
+        if (this.input.consumeJump()) run.requestJump();
         run.step(dt);
       },
       exit: () => {
@@ -174,7 +181,7 @@ export class Game {
     f.register('INTERMISSION', {
       enter: () => {
         const r = this.run!;
-        this.inter.render(r.wave, r.kills, r.level);
+        this.inter.render(r.stageNumber, r.kills, r.level);
         this.inter.show();
         this.audio.setMusic({ theme: 'intermission' });
       },
@@ -226,17 +233,27 @@ export class Game {
       this.picker.show();
       this.audio.sfx('levelUp');
     });
-    b.on('waveStart', () => this.audio.sfx('waveStart'));
-    b.on('waveEnd', ({ last }) => {
+    b.on('stageStart', () => {
+      this.audio.sfx('waveStart');
+      // 換關：地圖不同，3D 外觀整個重建（第一關的外觀在 startRun 建）
+      if (this.view && this.run) {
+        this.view.dispose();
+        this.view = new RunView(this.run, this.renderer);
+        this.lastHead = this.run.feed.head;
+        this.renderer.precompile();
+      }
+    });
+    b.on('stageClear', ({ last }) => {
       this.audio.sfx('waveEnd');
       if (!last) this.go('INTERMISSION');
     });
+    b.on('bossDown', () => this.audio.sfx('levelUp'));
     b.on('playerHurt', () => this.audio.sfx('hurt'));
     b.on('runEnd', (e) => {
-      this.lastEnd = { result: e.result, wave: e.wave, kills: e.kills, level: e.level, merit: e.merit };
+      this.lastEnd = { result: e.result, stage: e.stage, kills: e.kills, level: e.level, merit: e.merit };
       this.save.merit += e.merit;
       this.save.stats.runs++;
-      this.save.stats.bestWave = Math.max(this.save.stats.bestWave, e.wave);
+      this.save.stats.bestStage = Math.max(this.save.stats.bestStage, e.stage);
       writeSave(this.save);
       if (e.result === 'death') this.audio.sfx('death');
       this.go('RUN_END');
@@ -289,8 +306,13 @@ export class Game {
     this.time += this.loop.paused ? 0 : dt;
     const run = this.run;
     if (run && this.view && this.fsm.state !== 'RUN_END') {
+      // 轉視角（只在沒有被暫停或選卡擋住時）：拖曳與 Q／E 鍵
+      if (!this.loop.paused && this.fsm.state === 'COMBAT') {
+        this.input.consumeLook(this.lookOut);
+        this.renderer.rig.rotate(this.lookOut[0] + this.input.rotateKey * CAMERA.keySpeed * dt, this.lookOut[1]);
+      } else this.input.consumeLook(this.lookOut);
       this.view.update(dt, this.time);
-      this.hud.update(run);
+      this.hud.update(run, this.renderer.rig.yaw);
       // 音效（節流在 audio 內）
       if (run.feed.head !== this.lastHead) {
         this.audio.sfx('hit');

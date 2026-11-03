@@ -34,6 +34,9 @@ export class RunView {
   private readonly playerShadow: THREE.Mesh;
   private readonly aura: THREE.Mesh;
   private readonly numbers: DamageNumbers;
+  private readonly portal: THREE.Group;
+  private readonly portalRing: THREE.Mesh;
+  private readonly portalBeam: THREE.Mesh;
   private readonly timeUniform = { value: 0 };
   private readonly disposables: { dispose(): void }[] = [];
   private readonly group = new THREE.Group();
@@ -131,22 +134,37 @@ export class RunView {
     this.numbers = new DamageNumbers(renderer.camera, run.feed);
     this.group.add(this.numbers.mesh);
 
+    // 傳送門：地上一圈發光環＋一道往上的光柱（遠處也看得到），頭目倒下後才顯示
+    const pg = new THREE.TorusGeometry(1.5, 0.12, 10, 40).rotateX(Math.PI / 2);
+    const pm = glow(palette.fire.soul, 3);
+    this.portalRing = new THREE.Mesh(pg, pm);
+    const bg2 = new THREE.CylinderGeometry(1.4, 1.4, 40, 24, 1, true);
+    const bm2 = new THREE.MeshBasicMaterial({ color: palette.fire.soul, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+    this.portalBeam = new THREE.Mesh(bg2, bm2);
+    this.portalBeam.position.y = 20;
+    this.portal = new THREE.Group();
+    this.portal.add(this.portalRing, this.portalBeam);
+    this.portal.visible = false;
+    this.group.add(this.portal);
+    this.disposables.push(pg, pm, bg2, bm2);
+
     scene.add(this.group);
-    renderer.target.set(run.px, 0, run.pz);
-    renderer.snapCamera();
+    renderer.snapCamera(run.px, run.py, run.pz, run.map);
   }
 
   /** 每個畫面幀呼叫一次（不是每個模擬步）。dt = 這一幀的真實秒數，t = 累計時間 */
   update(dt: number, t: number): void {
     const run = this.run;
     const map = run.map;
-    // 玩家
-    const py = map.heightAt(run.px, run.pz);
-    this.player.root.position.set(run.px, py, run.pz);
+    // 玩家（py = 腳底高度，跳起來時高於地面）
+    const ground = map.heightAt(run.px, run.pz);
+    this.player.root.position.set(run.px, run.py, run.pz);
     this.player.root.rotation.y = run.facing;
-    this.player.update(dt, t, run.moveSpeed > 0.1, run.moveSpeed);
+    this.player.update(dt, t, run.moveSpeed > 0.1 && run.grounded, run.moveSpeed);
     if (run.invul > 0) this.player.setFlash(Math.min(1, run.invul / COMBAT.invulnerable));
-    this.playerShadow.position.set(run.px, py + DECAL_LIFT, run.pz);
+    // 腳下陰影貼著地面，跳得越高越小
+    this.playerShadow.position.set(run.px, ground + DECAL_LIFT, run.pz);
+    this.playerShadow.scale.setScalar(Math.max(0.4, 1.25 - (run.py - ground) * 0.3));
     const ar = run.yokai.aura.radius * run.stats.value.area;
     const ring = (this.aura.geometry.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
     for (let k = 0; k <= AURA_SEGMENTS; k++) {
@@ -164,9 +182,17 @@ export class RunView {
       }
     }
     (this.aura.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
-    // 鏡頭與玩家身上的光
-    this.renderer.follow(run.px, run.pz, dt);
-    this.renderer.playerLight.position.set(run.px, py + 1.6, run.pz);
+    // 自由視角鏡頭與玩家身上的光
+    this.renderer.updateCamera(dt, run.px, run.py, run.pz, map);
+    this.renderer.playerLight.position.set(run.px, run.py + 1.6, run.pz);
+    this.numbers.refreshOrientation(this.renderer.camera);
+    // 傳送門
+    this.portal.visible = run.portal.active;
+    if (run.portal.active) {
+      this.portal.position.set(run.portal.x, run.portal.y, run.portal.z);
+      this.portalRing.rotation.y = t * 1.2;
+      this.portalRing.position.y = 0.6 + Math.sin(t * 2) * 0.12;
+    }
 
     this.timeUniform.value = t % TWO_PI;
 
@@ -182,13 +208,16 @@ export class RunView {
       const x = e.x[i];
       const z = e.z[i];
       const y = map.heightAt(x, z);
-      writeMatrix(em, n, x, y, z, e.yaw[i], 1, 1, 1);
-      writeMatrix(sm, n, x, y + DECAL_LIFT, z, 0, 1, 1, 1);
+      const sc = e.scale[i];
+      writeMatrix(em, n, x, y, z, e.yaw[i], sc, sc, sc);
+      writeMatrix(sm, n, x, y + DECAL_LIFT, z, 0, sc, 1, sc);
       ph[n] = e.phase[i];
       const f = e.flash[i] > 0 ? 1 + (e.flash[i] / COMBAT.hitFlash) * 2.2 : 1;
-      col[n * 3] = f;
-      col[n * 3 + 1] = f;
-      col[n * 3 + 2] = f;
+      // 精英偏紅、頭目更紅（一般人類的顏色不變）
+      const v = e.variant[i];
+      col[n * 3] = f * (v === 0 ? 1 : 1.5);
+      col[n * 3 + 1] = f * (v === 0 ? 1 : v === 1 ? 0.7 : 0.5);
+      col[n * 3 + 2] = f * (v === 0 ? 1 : v === 1 ? 0.7 : 0.5);
       n++;
     }
     this.enemyMesh.count = n;

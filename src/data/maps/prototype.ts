@@ -27,6 +27,18 @@ export interface Obstacle {
   kind: 'lantern' | 'rock';
 }
 
+/** 台地：有陡峭的懸崖邊，但有一條緩坡可以走上去（M1.5） */
+export interface Plateau {
+  x: number;
+  z: number;
+  r: number;
+  height: number;
+  /** 緩坡的方向（弧度，從平台中心往外）與寬度（公尺）；其餘邊是懸崖（寬度 cliffEdge） */
+  rampDir: number;
+  rampWidth: number;
+  cliffEdge: number;
+}
+
 export interface MapDef {
   id: string;
   /** 地圖大小（公尺），中心在原點 */
@@ -41,6 +53,12 @@ export interface MapDef {
   zones: Zone[];
   obstacles: Obstacle[];
   playerStart: { x: number; z: number };
+  /** 台地（可省略） */
+  plateaus?: Plateau[];
+  /** 出生點周圍這個半徑內保證平坦（可省略；之外 12 公尺內漸漸長出起伏） */
+  flatRadius?: number;
+  /** 地圖邊緣這個寬度內，起伏漸漸降到 0（可省略）：不讓高地在邊界被切出一道垂直的牆 */
+  edgeFalloff?: number;
 }
 
 export const PROTOTYPE_MAP: MapDef = {

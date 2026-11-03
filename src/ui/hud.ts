@@ -1,5 +1,4 @@
 import { t } from '../i18n';
-import { WAVES } from '../data/waves';
 import type { Run } from '../game/run';
 
 /**
@@ -10,8 +9,10 @@ export interface Hud {
   root: HTMLElement;
   stickBase: HTMLElement;
   stickKnob: HTMLElement;
+  jumpButton: HTMLButtonElement;
   pauseButton: HTMLButtonElement;
-  update(run: Run): void;
+  /** yaw = 鏡頭的 yaw（傳送門箭頭要相對鏡頭轉） */
+  update(run: Run, yaw: number): void;
   show(visible: boolean): void;
 }
 
@@ -25,20 +26,29 @@ export function buildHud(parent: HTMLElement): Hud {
         <div class="bar"><i id="hp-fill"></i></div>
         <span id="hp-text"></span>
       </div>
-      <div class="hud-wave"><b id="wave-text"></b><span id="wave-timer"></span></div>
+      <div class="hud-wave"><b id="wave-text"></b><span id="wave-timer"></span><em id="wave-note"></em></div>
       <button class="hud-pause" id="btn-pause" type="button" aria-label="${t('pause.button')}">II</button>
     </div>
+    <div class="hud-boss hidden" id="boss-bar"><span>${t('hud.boss')}</span><div class="bar"><i id="boss-fill"></i></div></div>
+    <div class="hud-portal hidden" id="portal-box"><b id="portal-arrow">▲</b><span id="portal-text"></span></div>
     <div class="hud-bottom">
       <div class="xp"><i id="xp-fill"></i></div>
       <span id="lv-text"></span>
     </div>
-    <div class="stick" id="stick-base"><div class="knob" id="stick-knob"></div></div>`;
+    <div class="stick" id="stick-base"><div class="knob" id="stick-knob"></div></div>
+    <button class="jump" id="btn-jump" type="button" aria-label="${t('hud.jump')}">${t('hud.jump')}</button>`;
   parent.appendChild(root);
   const q = <T extends HTMLElement>(id: string) => root.querySelector<T>('#' + id)!;
   const hpFill = q('hp-fill');
   const hpText = q('hp-text');
   const waveText = q('wave-text');
   const timer = q('wave-timer');
+  const note = q('wave-note');
+  const bossBar = q('boss-bar');
+  const bossFill = q('boss-fill');
+  const portalBox = q('portal-box');
+  const portalArrow = q('portal-arrow');
+  const portalText = q('portal-text');
   const xpFill = q('xp-fill');
   const lvText = q('lv-text');
   let lastHp = '';
@@ -46,15 +56,19 @@ export function buildHud(parent: HTMLElement): Hud {
   let lastTimer = -1;
   let lastXp = '';
   let lastLv = -1;
+  let lastNote = '';
+  let lastBoss = false;
+  let lastPortal = -1;
   return {
     root,
     stickBase: q('stick-base'),
     stickKnob: q('stick-knob'),
+    jumpButton: q<HTMLButtonElement>('btn-jump'),
     pauseButton: q<HTMLButtonElement>('btn-pause'),
     show(v) {
       root.classList.toggle('hidden', !v);
     },
-    update(run) {
+    update(run, yaw) {
       const hp = Math.max(0, Math.ceil(run.hp));
       const key = `${hp}/${Math.round(run.maxHp)}`;
       if (key !== lastHp) {
@@ -62,14 +76,45 @@ export function buildHud(parent: HTMLElement): Hud {
         hpText.textContent = key;
         hpFill.style.width = `${Math.max(0, Math.min(1, run.hp / run.maxHp)) * 100}%`;
       }
-      if (run.wave !== lastWave) {
-        lastWave = run.wave;
-        waveText.textContent = t('hud.wave', { n: run.wave });
+      if (run.stageNumber !== lastWave) {
+        lastWave = run.stageNumber;
+        waveText.textContent = t('hud.stage', { n: run.stageNumber });
       }
-      const left = Math.max(0, Math.ceil(WAVES.duration - run.director.time));
+      const left = Math.ceil(run.timeLeft);
       if (left !== lastTimer) {
         lastTimer = left;
-        timer.textContent = String(left);
+        timer.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+      }
+      const noteText = run.director.swarm ? t('hud.swarm') : run.portal.active ? t('hud.bossDown') : '';
+      if (noteText !== lastNote) {
+        lastNote = noteText;
+        note.textContent = noteText;
+        note.classList.toggle('alarm', run.director.swarm);
+      }
+      // 頭目血條
+      const bi = run.director.bossIndex;
+      const bossAlive = bi >= 0 && run.enemies.alive[bi] === 1 && run.enemies.variant[bi] === 2;
+      if (bossAlive !== lastBoss) {
+        lastBoss = bossAlive;
+        bossBar.classList.toggle('hidden', !bossAlive);
+      }
+      if (bossAlive) bossFill.style.width = `${Math.max(0, run.enemies.hp[bi] / run.enemies.maxHp[bi]) * 100}%`;
+      // 傳送門箭頭：相對鏡頭的方向與距離
+      if (run.portal.active) {
+        portalBox.classList.remove('hidden');
+        const dx = run.portal.x - run.px;
+        const dz = run.portal.z - run.pz;
+        const right = Math.cos(yaw) * dx - Math.sin(yaw) * dz;
+        const fwd = -Math.sin(yaw) * dx - Math.cos(yaw) * dz;
+        portalArrow.style.transform = `rotate(${Math.round((Math.atan2(right, fwd) * 180) / Math.PI)}deg)`;
+        const m = Math.round(Math.hypot(dx, dz));
+        if (m !== lastPortal) {
+          lastPortal = m;
+          portalText.textContent = t('hud.portal', { m });
+        }
+      } else if (lastPortal !== -1) {
+        lastPortal = -1;
+        portalBox.classList.add('hidden');
       }
       const xp = `${Math.round((run.xp / run.xpNeeded) * 1000)}`;
       if (xp !== lastXp) {

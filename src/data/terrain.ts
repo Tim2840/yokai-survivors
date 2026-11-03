@@ -28,6 +28,6 @@ export const SLOPE = {
   downhill: 1.1,
   /** 沿移動方向的高度變化率（公尺/公尺）超過這個才算上／下坡 */
   threshold: 0.08,
-  /** 超過這個角度（度）的格子視為牆 */
+  /** 超過這個角度（度）視為牆：人類走不上去，玩家要跳或繞（同 MOVE.maxWalkSlopeDeg） */
   wallDeg: 35,
 } as const;

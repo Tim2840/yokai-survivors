@@ -1,6 +1,7 @@
 import { ENEMIES, ENEMY_IDS } from '../data/enemies';
 import { COMBAT } from '../data/combat';
 import { tuning } from '../data/tuning';
+import { STAGE } from '../data/stage';
 import { enemyHpMult, enemyDamageMult, enemySpeedMult } from '../data/waves';
 import { SpatialHash } from '../lib/spatialHash';
 import type { TerrainMap } from '../world/terrainMap';
@@ -37,6 +38,12 @@ export class Enemies {
   readonly yaw: Float32Array;
   readonly phase: Float32Array;
   readonly kind: Uint8Array;
+  /** 0 一般、1 精英、2 頭目 */
+  readonly variant: Uint8Array;
+  /** 渲染體型倍率 */
+  readonly scale: Float32Array;
+  /** 擊殺掉的魂火倍率後的點數 */
+  readonly pointsLeft: Float32Array;
   readonly alive: Uint8Array;
   /** 用過的最大索引 + 1（渲染與迴圈的上界） */
   high = 0;
@@ -66,6 +73,9 @@ export class Enemies {
     this.yaw = f();
     this.phase = f();
     this.kind = new Uint8Array(capacity);
+    this.variant = new Uint8Array(capacity);
+    this.scale = new Float32Array(capacity).fill(1);
+    this.pointsLeft = new Float32Array(capacity);
     this.alive = new Uint8Array(capacity);
     this.free = new Int32Array(capacity);
     this.hash = new SpatialHash(map.minX, map.minZ, map.maxX - map.minX, map.maxZ - map.minZ, COMBAT.hashCell, capacity);
@@ -79,15 +89,18 @@ export class Enemies {
   }
 
   radius(i: number): number {
-    return KIND_RADIUS[this.kind[i]];
+    return KIND_RADIUS[this.kind[i]] * (this.scale[i] > 1.2 && this.variant[i] === 1 ? 1.2 : 1);
   }
 
   points(i: number): number {
-    return KIND_POINTS[this.kind[i]];
+    return this.pointsLeft[i];
   }
 
-  /** 生一隻；滿了回傳 -1 */
-  spawn(kind: number, x: number, z: number, wave: number, night: number, phase: number): number {
+  /**
+   * 生一隻；滿了回傳 -1。virtualWave = 虛擬波數（docs/02 第 8.1 節）；variant 0 一般／1 精英／2 頭目；stageMult = 第 k 關的 HP 倍率。
+   * 頭目不吃「虛擬波數」的 HP 加成（它的 HP 是固定的佔位值）。
+   */
+  spawn(kind: number, x: number, z: number, virtualWave: number, night: number, phase: number, variant = 0, stageMult = 1): number {
     let i: number;
     if (this.freeTop > 0) i = this.free[--this.freeTop];
     else if (this.high < this.capacity) i = this.high++;
@@ -98,10 +111,15 @@ export class Enemies {
     this.z[i] = z;
     this.kx[i] = 0;
     this.kz[i] = 0;
-    const hp = KIND_HP[kind] * enemyHpMult(wave, night) * tuning.hpScale;
+    const elite = variant === 1;
+    const boss = variant === 2;
+    const hp = KIND_HP[kind] * (boss ? 1 : enemyHpMult(virtualWave, night)) * stageMult * tuning.hpScale * (elite ? STAGE.elite.hp : 1);
     this.hp[i] = hp;
     this.maxHp[i] = hp;
-    this.damage[i] = KIND_CONTACT[kind] * enemyDamageMult(wave);
+    this.damage[i] = KIND_CONTACT[kind] * (boss ? 1 : enemyDamageMult(virtualWave)) * (elite ? STAGE.elite.damage : 1);
+    this.variant[i] = variant;
+    this.scale[i] = boss ? 2.4 : elite ? STAGE.elite.scale : 1;
+    this.pointsLeft[i] = KIND_POINTS[kind] * (elite ? STAGE.elite.orbMult : 1);
     this.speed[i] = KIND_SPEED[kind] * enemySpeedMult(night);
     this.flash[i] = 0;
     this.contactCd[i] = 0;
@@ -147,16 +165,14 @@ export class Enemies {
       // 方向：近距離直線，遠距離流場
       let mx: number;
       let mz: number;
-      if (d2 < 9) {
+      if (d2 < 9 || !flow.dirAt(ex, ez, dir)) {
+        // 近距離、或被懸崖隔開（走不到玩家）：直線朝玩家擠
         const inv = 1 / (Math.sqrt(d2) + 1e-6);
         mx = dx * inv;
         mz = dz * inv;
-      } else if (flow.dirAt(ex, ez, dir)) {
+      } else {
         mx = dir[0];
         mz = dir[1];
-      } else {
-        mx = 0;
-        mz = 0;
       }
       let spd = this.speed[i] * map.speedAt(ex, ez);
       if (d2 < auraR2) spd *= 1 - auraSlow;
@@ -182,9 +198,9 @@ export class Enemies {
       }
       let nx = ex + vx * dt;
       let nz = ez + vz * dt;
-      if (map.isBlocked(nx, nz)) {
-        if (!map.isBlocked(nx, ez)) nz = ez;
-        else if (!map.isBlocked(ex, nz)) nx = ex;
+      if (map.stepBlocked(ex, ez, nx, nz)) {
+        if (!map.stepBlocked(ex, ez, nx, ez)) nz = ez;
+        else if (!map.stepBlocked(ex, ez, ex, nz)) nx = ex;
         else {
           nx = ex;
           nz = ez;

@@ -1,13 +1,16 @@
 import { bus as defaultBus, type EventBus } from '../core/bus';
 import { COMBAT } from '../data/combat';
+import { MOVE } from '../data/movement';
 import { PLAYABLE_YOKAI, YOKAI, type YokaiDef } from '../data/yokai';
 import { PROGRESSION, CARD_POOL_M1, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
 import { RARITY_MULT } from '../data/rarity';
+import { STAGE } from '../data/stage';
 import { WAVES } from '../data/waves';
 import { tuning } from '../data/tuning';
-import { PROTOTYPE_MAP, type MapDef } from '../data/maps/prototype';
+import type { MapDef } from '../data/maps/prototype';
+import { makeHighlands } from '../data/maps/highlands';
 import { Rng } from '../lib/random';
-import { TerrainMap } from '../world/terrainMap';
+import { TerrainMap, WALL_TAN } from '../world/terrainMap';
 import { FlowField } from '../systems/flowField';
 import { Enemies, kindIndex } from '../systems/enemies';
 import { Projectiles } from '../systems/projectiles';
@@ -15,7 +18,7 @@ import { Orbs } from '../systems/orbs';
 import { HitFeed } from '../systems/hitFeed';
 import { Stats, armorMult } from '../systems/stats';
 import { CardDealer, cardById, type CardOffer } from '../systems/cards';
-import { WaveDirector } from '../systems/waves';
+import { StageDirector } from '../systems/stageDirector';
 import { computeMerit } from '../systems/merit';
 import type { StatId } from '../data/stats';
 
@@ -24,9 +27,10 @@ export interface RunOptions {
   yokaiId?: string;
   night?: number;
   mobile?: boolean;
-  map?: MapDef;
+  /** 每一關用哪張地圖（預設：大起伏的 highlands，種子由局的種子與關卡序號衍生） */
+  mapFor?: (stageIndex: number, runSeed: number) => MapDef;
   bus?: EventBus;
-  /** 之前通關過這張地圖嗎（功德 +200） */
+  /** 之前通關過嗎（功德 +200） */
   clearedBefore?: boolean;
   /** 局外的功德加成（M3） */
   meritStat?: number;
@@ -44,53 +48,70 @@ export function subSeed(seed: number, salt: number): number {
 
 /**
  * 一局的模擬（純邏輯，不碰 Three.js；渲染層只讀這裡的陣列與數值）。
- * 狀態機（BOOT/MENU/…）在外面，這裡只有 phase：combat（模擬中）、intermission（整備）、ended。
+ * 關卡（D22）：一關是連續計時，敵人持續湧出；頭目倒下後傳送門開，走進去過關。
+ * 玩家有 3D 位置與跳躍（D24）；移動輸入是「世界座標」的向量（鏡頭相對的換算在外面）。
  * 升級選卡：升級當下 awaitingPick = true，step() 直接返回（模擬凍結），直到選完（D15）。
  */
 export class Run {
   readonly seed: number;
   readonly night: number;
   readonly yokai: YokaiDef;
-  readonly map: TerrainMap;
-  readonly flow: FlowField;
-  readonly enemies: Enemies;
+  // 每一關重建
+  map!: TerrainMap;
+  flow!: FlowField;
+  enemies!: Enemies;
+  director!: StageDirector;
   readonly projectiles: Projectiles;
   readonly orbs: Orbs;
   readonly feed = new HitFeed();
   readonly stats: Stats;
-  readonly director: WaveDirector;
   readonly dealer: CardDealer;
   private readonly rngCombat: Rng;
   private readonly rngCards: Rng;
+  private readonly rngSpawn: Rng;
   private readonly bus: EventBus;
   private readonly opts: RunOptions;
+  private readonly maxEnemies: number;
 
   phase: RunPhase = 'combat';
+  /** 目前這一關的 0 起序號 */
+  stageIndex = -1;
+  /** 這一關已經過的秒數 */
   time = 0;
-  wave = 0;
-  // 玩家
-  px: number;
-  pz: number;
+  // 玩家（py = 腳底高度）
+  px = 0;
+  py = 0;
+  pz = 0;
+  vy = 0;
+  grounded = true;
+  private coyote = 0;
+  private jumpBuf = 0;
+  private hvx = 0;
+  private hvz = 0;
   /** 面向（弧度，atan2(x, z)） */
   facing = 0;
-  /** 本步的移動速度（公尺/秒，給動畫用） */
+  /** 本步的水平速度（公尺/秒，給動畫用） */
   moveSpeed = 0;
   hp: number;
   invul = 0;
   god = false;
   dead = false;
   private deathTimer = 0;
-  // 輸入（-1..1）
+  // 輸入（世界座標的移動向量；-1..1）
   private mx = 0;
   private mz = 0;
+  private jumpReq = false;
   // 成長
   level = 0;
   xp = 0;
   kills = 0;
   pendingPicks = 0;
   offer: CardOffer[] | null = null;
-  /** 已選過的卡（記錄；測試與結算用） */
   readonly picked: CardOffer[] = [];
+  // 頭目與傳送門
+  bossesDefeated = 0;
+  bossDefeated = false;
+  portal = { active: false, x: 0, y: 0, z: 0 };
   private fireCd = 0;
   private readonly near = new Int32Array(COMBAT.queryMax);
   private readonly splashNear = new Int32Array(COMBAT.queryMax);
@@ -103,62 +124,102 @@ export class Run {
     const id = opts.yokaiId ?? 'chochin-kozo';
     if (!PLAYABLE_YOKAI.includes(id)) throw new Error(`這隻妖怪還不能玩：${id}`);
     this.yokai = YOKAI[id];
-    this.map = new TerrainMap(opts.map ?? PROTOTYPE_MAP);
-    this.flow = new FlowField(this.map);
-    const maxEnemies = opts.mobile ? WAVES.maxEnemiesMobile : WAVES.maxEnemiesDesktop;
-    this.enemies = new Enemies(this.map, maxEnemies);
+    this.maxEnemies = opts.mobile ? WAVES.maxEnemiesMobile : WAVES.maxEnemiesDesktop;
     this.projectiles = new Projectiles(300);
     this.orbs = new Orbs(PROGRESSION.maxOrbs);
     this.stats = new Stats(this.yokai.base);
     this.rngCombat = new Rng(subSeed(this.seed, 1));
     this.rngCards = new Rng(subSeed(this.seed, 2));
+    this.rngSpawn = new Rng(subSeed(this.seed, 3));
     this.dealer = new CardDealer(this.rngCards, CARD_POOL_M1, RARITIES_UNLOCKED_M1);
-    this.director = new WaveDirector(new Rng(subSeed(this.seed, 3)), this.map, this.flow, this.enemies, maxEnemies);
-    const start = this.map.def.playerStart;
-    this.px = start.x;
-    this.pz = start.z;
     this.hp = this.stats.value.maxHp;
-    this.flow.update(this.px, this.pz, true);
-    this.startNextWave();
+    this.startNextStage();
   }
 
   get awaitingPick(): boolean {
     return this.offer !== null;
   }
-
   get maxHp(): number {
     return this.stats.value.maxHp;
   }
-
   get xpNeeded(): number {
     return xpNeed(this.level);
   }
-
-  setMove(x: number, z: number): void {
-    this.mx = x;
-    this.mz = z;
+  /** 第幾關（1 起） */
+  get stageNumber(): number {
+    return this.stageIndex + 1;
+  }
+  /** 這一關還剩幾秒（最終蜂群時為 0） */
+  get timeLeft(): number {
+    return Math.max(0, this.director.duration - this.time);
   }
 
-  startNextWave(): void {
-    if (this.phase === 'ended') return;
-    this.wave++;
-    this.phase = 'combat';
-    this.director.start(this.wave);
-    this.fireCd = 0.3;
-    this.bus.emit('waveStart', { wave: this.wave });
+  /** 世界座標的移動向量（長度 > 1 會被正規化）；鏡頭相對的換算由呼叫端做（cameraRig.worldMove） */
+  setMove(wx: number, wz: number): void {
+    this.mx = wx;
+    this.mz = wz;
   }
 
-  /** 開發與測試：直接跳到第 n 波（清掉場上的敵人、投射物、魂火）。n 從 1 起 */
-  setWave(n: number): void {
-    if (this.phase === 'ended') return;
-    this.enemies.reset();
+  requestJump(): void {
+    this.jumpReq = true;
+  }
+
+  // ── 關卡 ─────────────────────────────────────────────────────
+  private buildWorld(): void {
+    const def = this.opts.mapFor ? this.opts.mapFor(this.stageIndex, this.seed) : makeHighlands(subSeed(this.seed, 100 + this.stageIndex));
+    this.map = new TerrainMap(def);
+    this.flow = new FlowField(this.map);
+    this.enemies = new Enemies(this.map, this.maxEnemies);
+    this.director = new StageDirector(this.rngSpawn, this.map, this.flow, this.enemies, this.maxEnemies);
     this.projectiles.reset();
     this.orbs.reset();
-    this.wave = Math.max(1, Math.min(WAVES.total, Math.floor(n))) - 1;
-    this.startNextWave();
+    const s = this.map.def.playerStart;
+    this.px = s.x;
+    this.pz = s.z;
+    this.py = this.map.heightAt(s.x, s.z);
+    this.vy = 0;
+    this.grounded = true;
+    this.hvx = 0;
+    this.hvz = 0;
+    this.flow.update(this.px, this.pz, true);
   }
 
-  /** 開發與測試：在玩家周圍生 n 隻指定的人類（走得到玩家的位置） */
+  startNextStage(): void {
+    if (this.phase === 'ended') return;
+    this.stageIndex++;
+    this.phase = 'combat';
+    this.time = 0;
+    this.bossDefeated = false;
+    this.portal.active = false;
+    this.buildWorld();
+    this.director.start(this.stageIndex);
+    this.fireCd = 0.3;
+    this.bus.emit('stageStart', { stage: this.stageNumber });
+  }
+
+  /** 過關畫面 → 下一關（外面的狀態機在 INTERMISSION 按「出發」時呼叫） */
+  continueFromIntermission(): void {
+    if (this.phase !== 'intermission') return;
+    this.startNextStage();
+  }
+
+  /** 開發與測試：把關卡時間直接設成 t 秒（觸發中間錯過的定時事件不補發；只用來跳到頭目前後） */
+  devSetTime(t: number): void {
+    this.time = t;
+    this.director.time = t;
+    const dur = this.director.duration;
+    this.director.eventsFired = STAGE.events.filter((e) => e.at * dur <= t).length;
+  }
+
+  /** 開發與測試：頭目現在就倒下（走正常的擊殺流程，傳送門會開） */
+  devKillBoss(): boolean {
+    const i = this.director.bossIndex;
+    if (i < 0 || !this.enemies.alive[i]) return false;
+    this.enemies.hp[i] = 0;
+    this.onKill(i);
+    return true;
+  }
+
   devSpawn(kindId: string, n: number): number {
     const kind = kindIndex(kindId);
     let made = 0;
@@ -167,27 +228,25 @@ export class Run {
         const a = k * 2.399963 + r;
         const x = this.px + Math.cos(a) * r;
         const z = this.pz + Math.sin(a) * r;
-        if (this.map.isBlocked(x, z) || !this.flow.reachable(x, z)) continue;
-        if (this.enemies.spawn(kind, x, z, this.wave, this.night, k * 0.7) >= 0) made++;
+        if (this.map.isBlocked(x, z) || !(this.flow.isolated || this.flow.reachable(x, z))) continue;
+        if (this.enemies.spawn(kind, x, z, this.director.virtualWave(), this.night, k * 0.7) >= 0) made++;
         break;
       }
     }
     return made;
   }
 
-  /** 開發與測試：傳送玩家（不能傳到擋路格） */
   devTeleport(x: number, z: number): boolean {
-    if (this.map.isBlocked(x, z)) return false;
+    if (this.map.isBlocked(x, z) || !this.map.inBounds(x, z)) return false;
     this.px = x;
     this.pz = z;
+    this.py = this.map.heightAt(x, z);
+    this.vy = 0;
+    this.grounded = true;
+    this.hvx = 0;
+    this.hvz = 0;
     this.flow.update(x, z, true);
     return true;
-  }
-
-  /** 整備→下一波（外面的狀態機在 INTERMISSION 按「出發」時呼叫） */
-  continueFromIntermission(): void {
-    if (this.phase !== 'intermission') return;
-    this.startNextWave();
   }
 
   // ── 一個模擬步 ───────────────────────────────────────────────
@@ -213,18 +272,50 @@ export class Run {
     const gained = this.orbs.update(dt, this.px, this.pz, s.pickup);
     if (gained > 0) this.addXp(gained);
 
-    this.director.update(dt, this.px, this.pz, this.night);
+    this.director.update(dt, this.px, this.pz, this.night, this.bossDefeated);
 
     if (this.hp <= 0 && !this.god) {
       this.dead = true;
       this.deathTimer = COMBAT.deathDelay;
       return;
     }
-    if (this.director.finished) this.endWave();
+    if (this.portal.active && this.portalReached()) this.clearStage();
+  }
+
+  private portalReached(): boolean {
+    const p = this.portal;
+    return Math.hypot(this.px - p.x, this.pz - p.z) <= STAGE.portalRadius && Math.abs(this.py - p.y) <= STAGE.portalHeight;
+  }
+
+  /** 玩家在 (x1,z1) 這個水平位置、目前腳高 py 時，這一步被擋住嗎（地面與空中規則不同） */
+  private moveBlocked(x0: number, z0: number, x1: number, z1: number): boolean {
+    const m = this.map;
+    if (m.isBlocked(x1, z1)) return true;
+    const h1 = m.heightAt(x1, z1);
+    if (this.grounded) {
+      const dist = Math.hypot(x1 - x0, z1 - z0);
+      return dist > 1e-6 && (h1 - m.heightAt(x0, z0)) / dist > WALL_TAN;
+    }
+    // 空中：腳要高過前方地面才過得去，否則撞上牆
+    return h1 > this.py + 0.05;
   }
 
   private movePlayer(dt: number): void {
     const m = this.map;
+    // 跳躍：土狼時間與跳躍緩衝
+    this.coyote = this.grounded ? MOVE.coyote : Math.max(0, this.coyote - dt);
+    this.jumpBuf = Math.max(0, this.jumpBuf - dt);
+    if (this.jumpReq) {
+      this.jumpBuf = MOVE.jumpBuffer;
+      this.jumpReq = false;
+    }
+    if (this.jumpBuf > 0 && (this.grounded || this.coyote > 0)) {
+      this.vy = MOVE.jumpSpeed;
+      this.grounded = false;
+      this.coyote = 0;
+      this.jumpBuf = 0;
+    }
+    // 想走的水平速度
     let mx = this.mx;
     let mz = this.mz;
     const len = Math.hypot(mx, mz);
@@ -232,37 +323,66 @@ export class Run {
       mx /= len;
       mz /= len;
     }
-    if (len < 1e-3) {
-      this.moveSpeed = 0;
-      return;
+    const mag = Math.min(1, len);
+    let spd = this.stats.value.speed * mag;
+    if (this.grounded && len > 1e-3) {
+      spd *= m.speedAt(this.px, this.pz) * m.slopeMult(this.px, this.pz, this.px + mx, this.pz + mz);
     }
-    let spd = this.stats.value.speed * m.speedAt(this.px, this.pz);
-    spd *= m.slopeMult(this.px, this.pz, this.px + mx, this.pz + mz);
-    const step = Math.min(1, len) * spd * dt;
-    const dirX = mx / Math.max(len, 1e-6);
-    const dirZ = mz / Math.max(len, 1e-6);
-    let nx = this.px + dirX * step;
-    let nz = this.pz + dirZ * step;
+    const dx = len > 1e-3 ? mx / Math.max(mag, 1e-6) : 0;
+    const dz = len > 1e-3 ? mz / Math.max(mag, 1e-6) : 0;
+    const tvx = dx * spd;
+    const tvz = dz * spd;
+    if (this.grounded) {
+      this.hvx = tvx;
+      this.hvz = tvz;
+    } else {
+      const k = Math.min(1, MOVE.airAccel * dt) * MOVE.airControl;
+      this.hvx += (tvx - this.hvx) * k;
+      this.hvz += (tvz - this.hvz) * k;
+    }
+    // 水平移動（軸分離碰撞）
     const r = COMBAT.playerRadius;
-    nx = Math.min(m.maxX - r, Math.max(m.minX + r, nx));
-    nz = Math.min(m.maxZ - r, Math.max(m.minZ + r, nz));
-    if (m.isBlocked(nx, nz)) {
-      if (!m.isBlocked(nx, this.pz)) nz = this.pz;
-      else if (!m.isBlocked(this.px, nz)) nx = this.px;
+    let nx = Math.min(m.maxX - r, Math.max(m.minX + r, this.px + this.hvx * dt));
+    let nz = Math.min(m.maxZ - r, Math.max(m.minZ + r, this.pz + this.hvz * dt));
+    if (this.moveBlocked(this.px, this.pz, nx, nz)) {
+      if (!this.moveBlocked(this.px, this.pz, nx, this.pz)) nz = this.pz;
+      else if (!this.moveBlocked(this.px, this.pz, this.px, nz)) nx = this.px;
       else {
         nx = this.px;
         nz = this.pz;
+        // 撞牆：水平速度歸零（空中也一樣，免得貼著牆一直推）
+        this.hvx = 0;
+        this.hvz = 0;
       }
     }
-    this.moveSpeed = Math.hypot(nx - this.px, nz - this.pz) / dt;
+    const hdist = Math.hypot(nx - this.px, nz - this.pz);
+    this.moveSpeed = hdist / dt;
+    if (this.moveSpeed > 0.05) this.facing = Math.atan2(nx - this.px, nz - this.pz);
     this.px = nx;
     this.pz = nz;
-    this.facing = Math.atan2(dirX, dirZ);
+    // 垂直：走出懸崖邊（向下的坡度超過牆的角度，或一步掉太多）就變成掉落，不貼著崖面滑下去
+    const ground = m.heightAt(this.px, this.pz);
+    if (this.grounded) {
+      const drop = this.py - ground;
+      if (drop > MOVE.stepDown || (hdist > 1e-6 && drop / hdist > WALL_TAN)) {
+        this.grounded = false;
+        this.vy = 0;
+      } else this.py = ground;
+    }
+    if (!this.grounded) {
+      this.vy -= MOVE.gravity * dt;
+      this.py += this.vy * dt;
+      if (this.py <= ground) {
+        this.py = ground;
+        this.vy = 0;
+        this.grounded = true;
+      }
+    }
   }
 
   private contactDamage(): void {
     const e = this.enemies;
-    const n = e.within(this.px, this.pz, COMBAT.playerRadius + 1, this.near);
+    const n = e.within(this.px, this.pz, COMBAT.playerRadius + 2, this.near);
     for (let k = 0; k < n; k++) {
       const i = this.near[k];
       if (!e.alive[i] || e.contactCd[i] > 0) continue;
@@ -270,6 +390,8 @@ export class Run {
       const dz = e.z[i] - this.pz;
       const r = COMBAT.playerRadius + e.radius(i);
       if (dx * dx + dz * dz > r * r) continue;
+      // 跳起來越過人群：腳高於敵人腳底一定高度就不會被這隻的接觸傷害
+      if (this.py - this.map.heightAt(e.x[i], e.z[i]) > MOVE.contactClear * e.scale[i]) continue;
       if (this.invul > 0 || this.god) continue;
       e.contactCd[i] = COMBAT.contactCooldown;
       if (this.rngCombat.next() < this.stats.value.dodge) continue;
@@ -299,7 +421,6 @@ export class Run {
     for (let v = 0; v < volley; v++) {
       const crit = this.rngCombat.next() < s.crit;
       const dmg = w.damage * s.power * tuning.damageScale * (crit ? s.critDmg : 1);
-      // 多顆時左右散開一點
       const spread = (v - (volley - 1) / 2) * 0.18;
       const c = Math.cos(spread);
       const sn = Math.sin(spread);
@@ -316,7 +437,9 @@ export class Run {
     const vl = Math.hypot(pr.vx[p], pr.vz[p]) || 1;
     const dmg = pr.damage[p];
     this.feed.push(this.enemies.x[e], this.enemies.z[e], dmg, pr.crit[p] === 1);
-    if (this.enemies.hurt(e, dmg, pr.vx[p] / vl, pr.vz[p] / vl, w.knockback)) this.onKill(e);
+    // 頭目不被擊退
+    const knock = this.enemies.variant[e] === 2 ? 0 : w.knockback;
+    if (this.enemies.hurt(e, dmg, pr.vx[p] / vl, pr.vz[p] / vl, knock)) this.onKill(e);
     const splashR = tuning.splash > 0 ? tuning.splash : w.splashRadius;
     if (splashR > 0) {
       const n = this.enemies.within(this.enemies.x[e], this.enemies.z[e], splashR * this.stats.value.area, this.splashNear);
@@ -332,8 +455,27 @@ export class Run {
   private onKill(e: number): void {
     this.kills++;
     const value = this.enemies.points(e) * PROGRESSION.orbPerPoint;
-    if (!this.orbs.spawn(this.enemies.x[e], this.enemies.z[e], value)) this.addXp(value);
+    const x = this.enemies.x[e];
+    const z = this.enemies.z[e];
+    const isBoss = this.enemies.variant[e] === 2;
+    if (!this.orbs.spawn(x, z, value)) this.addXp(value);
     this.enemies.kill(e);
+    if (isBoss) this.openPortal(x, z);
+  }
+
+  private openPortal(x: number, z: number): void {
+    this.bossDefeated = true;
+    this.bossesDefeated++;
+    // 頭目倒在擋路格（深水、岩石）時，改開在離玩家近的地方
+    let px = x;
+    let pz = z;
+    if (this.map.isBlocked(px, pz) || !this.map.inBounds(px, pz)) {
+      px = this.px + 3;
+      pz = this.pz;
+      if (this.map.isBlocked(px, pz)) pz = this.pz + 3;
+    }
+    this.portal = { active: true, x: px, y: this.map.heightAt(px, pz), z: pz };
+    this.bus.emit('bossDown', { stage: this.stageNumber });
   }
 
   // ── 成長 ─────────────────────────────────────────────────────
@@ -360,13 +502,7 @@ export class Run {
   chooseCard(index: number): boolean {
     if (!this.offer || index < 0 || index >= this.offer.length) return this.offer !== null;
     const o = this.offer[index];
-    const card = cardById(o.cardId);
-    const before = this.maxHp;
-    this.stats.addCard(card.stat as StatId, card.values[o.rarity]);
-    // 最大生命增加時，現有生命同步增加（不會「變成扣血」）
-    if (this.maxHp > before) this.hp += this.maxHp - before;
-    this.hp = Math.min(this.hp, this.maxHp);
-    this.picked.push(o);
+    this.applyCard(o);
     this.pendingPicks--;
     this.bus.emit('cardChosen', { cardId: o.cardId, rarity: o.rarity });
     if (this.pendingPicks > 0) {
@@ -377,17 +513,23 @@ export class Run {
     return false;
   }
 
-  /** 測試與開發介面：直接給一張卡（不經選卡） */
-  give(cardId: string, rarity: keyof typeof RARITY_MULT): void {
-    const card = cardById(cardId);
+  private applyCard(o: CardOffer): void {
+    const card = cardById(o.cardId);
     const before = this.maxHp;
-    this.stats.addCard(card.stat as StatId, card.values[rarity]);
+    this.stats.addCard(card.stat as StatId, card.values[o.rarity]);
+    // 最大生命增加時，現有生命同步增加（不會「變成扣血」）
     if (this.maxHp > before) this.hp += this.maxHp - before;
-    this.picked.push({ cardId, rarity });
+    this.hp = Math.min(this.hp, this.maxHp);
+    this.picked.push(o);
   }
 
-  // ── 波次與結束 ───────────────────────────────────────────────
-  private endWave(): void {
+  /** 測試與開發介面：直接給一張卡（不經選卡） */
+  give(cardId: string, rarity: keyof typeof RARITY_MULT): void {
+    this.applyCard({ cardId, rarity });
+  }
+
+  // ── 過關與結束 ───────────────────────────────────────────────
+  private clearStage(): void {
     // 沒打完的人類撤退（不給魂火）、投射物消失；場上的魂火全部收進來
     this.enemies.reset();
     this.projectiles.reset();
@@ -395,18 +537,18 @@ export class Run {
     for (let i = 0; i < this.orbs.high; i++) if (this.orbs.alive[i]) rest += this.orbs.value[i];
     this.orbs.reset();
     this.director.active = false;
-    const last = this.wave >= WAVES.total;
+    this.portal.active = false;
+    const last = this.stageNumber >= STAGE.count;
     if (rest > 0) this.addXp(rest);
+    this.bus.emit('stageClear', { stage: this.stageNumber, last });
     if (last) {
-      this.bus.emit('waveEnd', { wave: this.wave, last: true });
       this.finish('victory');
       return;
     }
     this.phase = 'intermission';
-    this.bus.emit('waveEnd', { wave: this.wave, last: false });
   }
 
-  /** 放棄這一局（整備或暫停選單）：局外獎勵照 50% 結算 */
+  /** 放棄這一局（過關畫面或暫停選單）：局外獎勵照 50% 結算 */
   abandon(): void {
     if (this.phase === 'ended') return;
     this.offer = null;
@@ -416,12 +558,14 @@ export class Run {
 
   finish(result: 'death' | 'victory' | 'abandon'): void {
     if (this.phase === 'ended') return;
+    const wasPhase = this.phase;
     this.phase = 'ended';
-    const cleared = result === 'victory' ? this.wave : Math.max(0, this.wave - 1);
+    // 通過的關卡數：勝利 = 全部；其餘 = 已走進傳送門的關（在過關畫面放棄算已通過目前這關）
+    const cleared = result === 'victory' ? this.stageNumber : wasPhase === 'intermission' ? this.stageNumber : this.stageIndex;
     const merit = computeMerit({
-      wavesCleared: cleared,
+      stagesCleared: cleared,
       kills: this.kills,
-      bossDefeated: false,
+      bossesDefeated: this.bossesDefeated,
       firstClear: result === 'victory' && !this.opts.clearedBefore,
       meritStat: this.opts.meritStat ?? 0,
       night: this.night,
@@ -429,7 +573,7 @@ export class Run {
     });
     this.meritEarned = merit;
     this.result = result;
-    this.bus.emit('runEnd', { result, wave: this.wave, kills: this.kills, level: this.level, time: this.time, merit });
+    this.bus.emit('runEnd', { result, stage: this.stageNumber, kills: this.kills, level: this.level, time: this.time, merit });
   }
 
   meritEarned = 0;

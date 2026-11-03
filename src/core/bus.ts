@@ -18,12 +18,15 @@ export interface GameEvents {
   levelUp: { level: number; pending: number };
   /** 選了一張卡 */
   cardChosen: { cardId: string; rarity: string };
-  waveStart: { wave: number };
-  /** last = 這是最後一波 */
-  waveEnd: { wave: number; last: boolean };
+  /** 關卡開始（stage 從 1 起） */
+  stageStart: { stage: number };
+  /** 過關（走進傳送門）；last = 這是最後一關 */
+  stageClear: { stage: number; last: boolean };
+  /** 頭目倒下（傳送門已開） */
+  bossDown: { stage: number };
   /** 玩家受傷（低頻事件；每擊殺等高頻事件不走匯流排，見 docs/06） */
   playerHurt: { damage: number; hp: number };
-  runEnd: { result: 'death' | 'victory' | 'abandon'; wave: number; kills: number; level: number; time: number; merit: number };
+  runEnd: { result: 'death' | 'victory' | 'abandon'; stage: number; kills: number; level: number; time: number; merit: number };
   /** 存檔寫入失敗（隱私模式、容量不足）；只在第一次失敗時發 */
   saveFailed: { error: string };
 }

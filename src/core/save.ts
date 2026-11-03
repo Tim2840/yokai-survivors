@@ -20,7 +20,7 @@ export interface SaveData {
   codex: { humans: Record<string, number> };
   maxNightDepth: number;
   settings: { sfx: number; music: number; quality: Quality; lang: string };
-  stats: { runs: number; bestWave: number };
+  stats: { runs: number; bestStage: number };
   /** 玩家看過的更新紀錄版本（changelog.ts 的 CONTENT_VERSION） */
   seenContentVersion: number;
 }
@@ -39,7 +39,7 @@ export function defaultSave(): SaveData {
     codex: { humans: {} },
     maxNightDepth: 0,
     settings: { sfx: 0.8, music: 0.6, quality: 'auto', lang: 'zh-TW' },
-    stats: { runs: 0, bestWave: 0 },
+    stats: { runs: 0, bestStage: 0 },
     seenContentVersion: 0,
   };
 }

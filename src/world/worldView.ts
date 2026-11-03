@@ -30,6 +30,7 @@ export function buildWorldView(map: TerrainMap, seed: number): WorldView {
   const col = new Float32Array(vc * vr * 3);
   const c = new THREE.Color();
   const tmp = new THREE.Color();
+  const rockColor = new THREE.Color(palette.terrain.rock);
   for (let j = 0; j < vr; j++) {
     for (let i = 0; i < vc; i++) {
       const k = j * vc + i;
@@ -56,9 +57,16 @@ export function buildWorldView(map: TerrainMap, seed: number): WorldView {
       }
       c.setRGB(r / n, g / n, b / n);
       const patch = (fbm(x * 0.35, z * 0.35, seed, 2) - 0.5) * 0.14;
-      const lift = Math.max(0, h) * 0.07;
+      const lift = Math.max(0, h) * 0.035;
+      // 陡處（懸崖、陡坡）露出岩石色，高處略亮
+      const hl = map.heightAt(x - map.cell, z);
+      const hr = map.heightAt(x + map.cell, z);
+      const hu = map.heightAt(x, z - map.cell);
+      const hd = map.heightAt(x, z + map.cell);
+      const steep = Math.min(1, Math.max(0, (Math.hypot(hr - hl, hd - hu) / (2 * map.cell) - 0.45) / 0.5));
       tmp.setRGB(1 + patch + lift, 1 + patch + lift, 1 + patch * 0.6 + lift);
       c.multiply(tmp);
+      if (steep > 0) c.lerp(rockColor, steep * 0.85);
       col[k * 3] = c.r;
       col[k * 3 + 1] = c.g;
       col[k * 3 + 2] = c.b;
@@ -103,7 +111,9 @@ export function buildWorldView(map: TerrainMap, seed: number): WorldView {
     );
     const water = new THREE.Mesh(geo, m);
     water.rotation.x = -Math.PI / 2;
-    water.position.set(z.x, 0.02 + (z.type === 'deep' ? 0.01 : 0), z.z);
+    // 水面高度 = 池中心的地面高度 + 一點點（池塘不放在山上，所以周圍大致等高）
+    const outer = Math.max(...map.def.zones.filter((o) => o.x === z.x && o.z === z.z).map((o) => o.r));
+    water.position.set(z.x, map.heightAt(z.x + outer, z.z) + 0.04 + (z.type === 'deep' ? 0.01 : 0), z.z);
     water.renderOrder = 1;
     group.add(water);
   }

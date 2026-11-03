@@ -15,6 +15,7 @@ export const zhTW = {
   'changelog.v1': '建立遊戲骨架：主選單與場景可以載入。',
   'changelog.v2': '加入背景音樂與按鈕音效；畫面加上光暈。',
   'changelog.v3': '第一個可以玩的版本：提燈小僧、波次、升級選卡、結算。',
+  'changelog.v4': '改成連續計時關卡，視角可旋轉、可跳躍，打倒頭目走進傳送門過關。',
 
   'setup.title': '選一隻妖怪',
   'setup.go': '出發',
@@ -27,7 +28,12 @@ export const zhTW = {
   'yokai.kappa.desc': '回力水盤，在水裡跑得更快。',
   'yokai.aka-oni.desc': '近戰金棒，越挨打越兇。',
 
-  'hud.wave': '第 {n} 波',
+  'hud.stage': '第 {n} 關',
+  'hud.swarm': '最終蜂群！',
+  'hud.boss': '退魔僧',
+  'hud.portal': '傳送門 {m} 公尺',
+  'hud.jump': '跳',
+  'hud.bossDown': '頭目倒下了，去傳送門！',
   'hud.level': 'Lv {n}',
   'hud.hp': '生命',
 
@@ -66,7 +72,7 @@ export const zhTW = {
   'card.fmt.flat': '{name} +{v}',
   'card.fmt.perSec': '{name} +{v} /秒',
 
-  'inter.title': '第 {n} 波完成',
+  'inter.title': '第 {n} 關完成',
   'inter.stats': '擊敗 {kills} 人，Lv {level}',
   'inter.next': '出發',
   'inter.quit': '放棄這一局',
@@ -74,7 +80,7 @@ export const zhTW = {
   'end.death': '倒下了',
   'end.victory': '撐過了所有的夜',
   'end.abandon': '離開了',
-  'end.wave': '撐到第 {n} 波',
+  'end.stage': '撐到第 {n} 關',
   'end.kills': '擊敗 {n} 人',
   'end.level': '等級 {n}',
   'end.merit': '功德 +{n}',
@@ -91,6 +97,7 @@ export const zhTW = {
   'tune.dmg': '我方傷害倍率',
   'tune.volley': '鬼火一次幾顆',
   'tune.splash': '濺射半徑（公尺）',
+  'tune.stage': '關卡長度（秒）',
   'tune.reset': '還原預設',
   'tune.done': '完成',
 } as const;

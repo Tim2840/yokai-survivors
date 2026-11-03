@@ -9,6 +9,7 @@ const FIELDS: { key: keyof typeof M1_PLAYTEST; label: I18nKey; step: string }[] 
   { key: 'damageScale', label: 'tune.dmg', step: '0.1' },
   { key: 'volley', label: 'tune.volley', step: '1' },
   { key: 'splash', label: 'tune.splash', step: '0.1' },
+  { key: 'stageSeconds', label: 'tune.stage', step: '30' },
 ];
 
 export function buildTuningPanel(parent: HTMLElement) {
@@ -16,7 +17,7 @@ export function buildTuningPanel(parent: HTMLElement) {
   el.className = 'overlay hidden';
   el.dataset.screen = 'tuning';
   el.innerHTML = `<div class="panel"><h2>${t('tune.title')}</h2><p>${t('tune.note')}</p>
-    <div class="tune-grid">${FIELDS.map((f) => `<label for="tune-${f.key}">${t(f.label)}</label><input id="tune-${f.key}" type="number" inputmode="decimal" min="0" max="100" step="${f.step}" />`).join('')}</div>
+    <div class="tune-grid">${FIELDS.map((f) => `<label for="tune-${f.key}">${t(f.label)}</label><input id="tune-${f.key}" type="number" inputmode="decimal" min="0" max="3600" step="${f.step}" />`).join('')}</div>
     <div class="row"><button class="btn secondary" id="btn-tune-reset" type="button">${t('tune.reset')}</button><button class="btn" id="btn-tune-done" type="button">${t('tune.done')}</button></div></div>`;
   parent.appendChild(el);
   const input = (k: string) => el.querySelector<HTMLInputElement>('#tune-' + k)!;
@@ -24,7 +25,9 @@ export function buildTuningPanel(parent: HTMLElement) {
   FIELDS.forEach((f) =>
     input(f.key).addEventListener('input', () => {
       const v = Number(input(f.key).value);
-      if (Number.isFinite(v) && v >= 0 && v <= 100 && input(f.key).value !== '') {
+      const hi = f.key === 'stageSeconds' ? 3600 : 100;
+      const lo = f.key === 'stageSeconds' ? 30 : 0;
+      if (Number.isFinite(v) && v >= lo && v <= hi && input(f.key).value !== '') {
         tuning[f.key] = f.key === 'volley' ? Math.floor(v) : v;
         saveTuning();
       }

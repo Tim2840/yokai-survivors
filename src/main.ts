@@ -58,7 +58,9 @@ function boot(): void {
       if (!game.run) {
         menuTime += 1 / 60;
         stage.lantern.position.y = Math.sin(menuTime * 2) * 0.08;
-        renderer.follow(0, 0, 1 / 60);
+        // 主選單背景：鏡頭慢慢繞著場景轉
+        renderer.rig.rotate(0.0012, 0);
+        renderer.updateCamera(1 / 60, 0, 0, 0, { heightAt: () => 0 });
       }
       renderer.render();
     },

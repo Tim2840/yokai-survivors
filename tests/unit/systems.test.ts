@@ -58,18 +58,16 @@ describe('地形', () => {
     expect(map.speedAt(-10 + 5, 8)).toBeCloseTo(0.8);
     expect(map.speedAt(0, 0)).toBe(1);
   });
-  it('高度圖：丘的中心比平地高、最高 ≤ 6 公尺、所有格子坡度 ≤ 35°（沒有被誤判成牆）', () => {
+  it('高度圖：丘的中心比平地高、最高 ≤ 12 公尺；陡坡不再標進阻擋圖（走不走得上去看移動方向的坡度）', () => {
     expect(map.heightAt(10, -8)).toBeGreaterThan(1.8);
-    expect(Math.max(...map.heights)).toBeLessThanOrEqual(6);
-    let steep = 0;
-    for (let j = 0; j < map.rows; j++) for (let i = 0; i < map.cols; i++) {
-      if (map.blocked[j * map.cols + i] && map.types[j * map.cols + i] !== 2) {
-        const cx = map.minX + i + 0.5, cz = map.minZ + j + 0.5;
-        const nearObstacle = PROTOTYPE_MAP.obstacles.some((o) => (cx - o.x) ** 2 + (cz - o.z) ** 2 <= (o.r + 0.4) ** 2);
-        if (!nearObstacle) steep++;
-      }
-    }
-    expect(steep).toBe(0);
+    expect(Math.max(...map.heights)).toBeLessThanOrEqual(12);
+    const nonObstacleBlocked = [...map.blocked].filter((b, c) => {
+      if (!b) return false;
+      const cx = map.minX + (c % map.cols) + 0.5, cz = map.minZ + Math.floor(c / map.cols) + 0.5;
+      const nearObstacle = PROTOTYPE_MAP.obstacles.some((o) => (cx - o.x) ** 2 + (cz - o.z) ** 2 <= (o.r + 0.4) ** 2);
+      return !nearObstacle && map.types[c] !== 2;
+    }).length;
+    expect(nonObstacleBlocked).toBe(0);
   });
   it('上坡 ×0.85、下坡 ×1.1', () => {
     expect(map.slopeMult(7, -8, 9, -8)).toBe(0.85);
@@ -88,46 +86,44 @@ describe('地形', () => {
 describe('流場尋路（T7）', () => {
   const map = new TerrainMap(PROTOTYPE_MAP);
   const flow = new FlowField(map);
-  it('所有可走格子都走得到玩家（深水另一側沒有孤島）', () => {
+  it('所有可走的粗格都走得到玩家（深水另一側沒有孤島）', () => {
     flow.update(0, 0, true);
     let unreachable = 0;
-    for (let c = 0; c < map.blocked.length; c++) if (!map.blocked[c] && flow.dist[c] === Infinity) unreachable++;
+    for (let c = 0; c < flow.blocked.length; c++) if (!flow.blocked[c] && flow.dist[c] === Infinity) unreachable++;
     expect(unreachable).toBe(0);
+    expect(flow.isolated).toBe(false);
   });
   it('從地圖上任何可走格出發，沿流場一直走，一定走到玩家且不踩阻擋格', () => {
     flow.update(0, 0, true);
     const dir = new Float32Array(2);
-    let worst = 0;
-    for (let j = 0; j < map.rows; j += 3) for (let i = 0; i < map.cols; i += 3) {
-      if (map.blocked[j * map.cols + i]) continue;
-      let x = map.minX + i + 0.5;
-      let z = map.minZ + j + 0.5;
+    const target = flow.cellIndex(0, 0);
+    for (let j = 0; j < flow.rows; j += 2) for (let i = 0; i < flow.cols; i += 2) {
+      if (flow.blocked[j * flow.cols + i]) continue;
+      let x = map.minX + (i + 0.5) * flow.cell;
+      let z = map.minZ + (j + 0.5) * flow.cell;
       let steps = 0;
-      const target = map.cellIndex(0, 0);
-      while (map.cellIndex(x, z) !== target && steps < 400) {
+      while (flow.cellIndex(x, z) !== target && steps < 600) {
         expect(flow.dirAt(x, z, dir)).toBe(true);
         x += dir[0] * 0.5;
         z += dir[1] * 0.5;
         expect(map.isBlocked(x, z), `卡進阻擋格 ${x.toFixed(1)},${z.toFixed(1)}`).toBe(false);
         steps++;
       }
-      worst = Math.max(worst, steps);
-      expect(map.cellIndex(x, z), `起點 ${i},${j} 沒走進玩家所在的格`).toBe(target);
+      expect(flow.cellIndex(x, z), `起點 ${i},${j} 沒走進玩家所在的格`).toBe(target);
     }
-    expect(worst).toBeLessThan(400);
   });
-  it('重算一次（50×50 格）CPU 時間 ≤ 1 ms 的 10 倍以內（記錄實測）', () => {
+  it('重算一次（50×50 公尺、2 公尺格）CPU 時間（記錄實測）', () => {
     flow.update(0, 0, true);
     const t0 = performance.now();
-    for (let k = 0; k < 50; k++) flow.update(k % 2 ? 3 : -3, 2, true);
+    for (let k = 0; k < 50; k++) flow.update(k % 2 ? 6 : -6, 2, true);
     const per = (performance.now() - t0) / 50;
-    console.log(`流場重算 ${per.toFixed(3)} ms／次`);
+    console.log(`流場重算（小地圖）${per.toFixed(3)} ms／次`);
     expect(per).toBeLessThan(10);
   });
   it('玩家沒換格就不重算', () => {
     flow.update(1.1, 1.1, true);
     expect(flow.update(1.4, 1.4)).toBe(false);
-    expect(flow.update(3.5, 1.4)).toBe(true);
+    expect(flow.update(5.5, 1.4)).toBe(true);
   });
 });
 
@@ -227,13 +223,13 @@ describe('升級曲線與功德', () => {
     expect(xpNeed(0)).toBe(6);
     expect(xpNeed(10)).toBe(31);
   });
-  it('功德：通關第 20 波、擊殺 670 隻、首次通關 ≈ 600（docs/02 7.4）', () => {
-    const m = computeMerit({ wavesCleared: 20, kills: 670, bossDefeated: true, firstClear: true, meritStat: 0, night: 0, abandoned: false });
-    expect(m).toBeGreaterThanOrEqual(600);
-    expect(m).toBeLessThanOrEqual(620);
+  it('功德（D22 版，docs/02 第 8.1 節）：每關 120 ＋ 擊殺 ÷ 10 ＋ 每隻頭目 100 ＋ 首次通關 200', () => {
+    const m = computeMerit({ stagesCleared: 2, kills: 4000, bossesDefeated: 2, firstClear: true, meritStat: 0, night: 0, abandoned: false });
+    expect(m).toBe(240 + 400 + 200 + 200);
+    expect(computeMerit({ stagesCleared: 1, kills: 2000, bossesDefeated: 1, firstClear: false, meritStat: 0, night: 0, abandoned: false })).toBe(120 + 200 + 100);
   });
   it('放棄只給 50%；夜深度與功德加成相乘', () => {
-    const base = { wavesCleared: 10, kills: 100, bossDefeated: false, firstClear: false, meritStat: 0, night: 0 };
+    const base = { stagesCleared: 1, kills: 100, bossesDefeated: 0, firstClear: false, meritStat: 0, night: 0 };
     expect(computeMerit({ ...base, abandoned: true })).toBe(Math.floor(computeMerit({ ...base, abandoned: false }) * 0.5));
     expect(computeMerit({ ...base, night: 2, abandoned: false })).toBe(Math.floor((120 + 10) * 1.5));
   });
