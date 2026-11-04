@@ -3819,14 +3819,6 @@ for (const strategy of ONLY) for (const useEl of modes) {
 	all.push(...rs);
 	console.log(`- **${strategy}／${useEl ? "用要素" : "不理要素"}**：${summarize(rs)}`);
 }
-console.log("\n## 卡片貢獻（只看「random」策略：選卡是隨機的，所以有沒有拿到某張卡才算接近獨立）；樣本小，看趨勢，不看小差距\n");
-console.log("| 卡 | 平均每局拿幾張 | 拿得比平均多的局：平均存活（秒） | 拿得比平均少的局（秒） |\n|---|---|---|---|");
-var pool = all.filter((r) => r.strategy === "random");
-for (const id of CARD_POOL_M1) {
-	const have = pool.filter((r) => (r.cards[id] ?? 0) >= avg(pool.map((x) => x.cards[id] ?? 0)));
-	const not = pool.filter((r) => (r.cards[id] ?? 0) < avg(pool.map((x) => x.cards[id] ?? 0)));
-	console.log(`| ${id} | ${avg(pool.map((r) => r.cards[id] ?? 0)).toFixed(1)} | ${have.length ? avg(have.map((r) => r.survived)).toFixed(0) : "-"} | ${not.length ? avg(not.map((r) => r.survived)).toFixed(0) : "-"} |`);
-}
 console.log(`\n（耗時 ${((Date.now() - t0) / 1e3).toFixed(0)} 秒）`);
 if (JSON_OUT) writeFileSync(JSON_OUT, JSON.stringify(all, null, 1));
 export {};

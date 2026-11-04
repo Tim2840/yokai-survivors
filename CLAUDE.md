@@ -54,5 +54,5 @@
 
 - `npm run typecheck`；`npm test`（Vitest，純邏輯）；`npm run build`；`npm run check:main`（打包後的主網址不含測試工具）。
 - `NODE_PATH=node_modules node scripts/regress.mjs --only <id,…>`（要開著 `npx vite --port 5173`；`--list` 看清單）。
-- 平衡模擬：`npm run sim`（**M2 才會建立**；無頭跑數值模擬，見 docs/07 第 4 節），建立後改數字前後都要跑。
+- 平衡模擬：`npm run sim -- [--runs 20] [--only random,dps,survive] [--elements on|off|both] [--tune hpScale=1.5,w.hpPerWave=0.25,xp.needPerLevel=4]`（v1 已建立，見 docs/07 第 4 節；約 90 秒）。**改 `src/data` 的數字前後都要跑**，結果寫進 docs/02 變更紀錄。
 - **更新紀錄**：每一批影響玩家的改動，在 `src/game/changelog.ts` 最前面加一筆、`CONTENT_VERSION` +1（單元測試守著）；文字是系統口氣、不劇透、台灣用語。

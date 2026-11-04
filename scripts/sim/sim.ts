@@ -11,7 +11,7 @@ import { writeFileSync } from 'node:fs';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { resetTuning, tuning } from '../../src/data/tuning';
-import { CARD_POOL_M1, PROGRESSION } from '../../src/data/progression';
+import { PROGRESSION } from '../../src/data/progression';
 import { WAVES } from '../../src/data/waves';
 
 const DT = 1 / 60;
@@ -225,15 +225,7 @@ for (const strategy of ONLY) {
   }
 }
 
-// 各卡被選的比例與「拿到它的局」平均存活（粗略的卡片貢獻；樣本小，看趨勢）
-console.log('\n## 卡片貢獻（只看「random」策略：選卡是隨機的，所以有沒有拿到某張卡才算接近獨立）；樣本小，看趨勢，不看小差距\n');
-console.log('| 卡 | 平均每局拿幾張 | 拿得比平均多的局：平均存活（秒） | 拿得比平均少的局（秒） |\n|---|---|---|---|');
-const pool = all.filter((r) => r.strategy === 'random');
-for (const id of CARD_POOL_M1) {
-  const have = pool.filter((r) => (r.cards[id] ?? 0) >= avg(pool.map((x) => x.cards[id] ?? 0)));
-  const not = pool.filter((r) => (r.cards[id] ?? 0) < avg(pool.map((x) => x.cards[id] ?? 0)));
-  console.log(`| ${id} | ${avg(pool.map((r) => r.cards[id] ?? 0)).toFixed(1)} | ${have.length ? avg(have.map((r) => r.survived)).toFixed(0) : '-'} | ${not.length ? avg(not.map((r) => r.survived)).toFixed(0) : '-'} |`);
-}
+// 註：不輸出「拿某張卡的局 vs 沒拿的局」的比較——活得久的局本來就拿到更多卡（存活者偏誤），會誤導；單張卡的價值用 tests/unit/card-dps-probe.test.ts。
 
 console.log(`\n（耗時 ${((Date.now() - t0) / 1000).toFixed(0)} 秒）`);
 if (JSON_OUT) writeFileSync(JSON_OUT, JSON.stringify(all, null, 1));
