@@ -1,6 +1,7 @@
 import { t } from '../i18n';
 import type { I18nKey } from '../i18n/zh-TW';
 import { CARD_FORMAT, type StatId } from '../data/stats';
+import { synergyHints } from '../data/synergies';
 import { cardById, isWeaponCard, type CardOffer } from '../systems/cards';
 import { PLAYABLE_YOKAI, STARTER_YOKAI } from '../data/yokai';
 
@@ -80,7 +81,7 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
   const title = o.el.querySelector<HTMLElement>('#lv-title')!;
   const pending = o.el.querySelector<HTMLElement>('#lv-pending')!;
   return Object.assign(o, {
-    render(offer: CardOffer[], more: number) {
+    render(offer: CardOffer[], more: number, owned: ReadonlySet<string> = new Set(), active: readonly string[] = []) {
       title.textContent = t('levelup.title');
       pending.textContent = more > 1 ? t('levelup.pending', { n: more - 1 }) : '';
       cardsEl.innerHTML = '';
@@ -92,8 +93,16 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
         b.dataset.card = c.cardId;
         b.dataset.rarity = c.rarity;
         b.dataset.index = String(i);
+        // 這張卡能湊成哪些聯動：已經有另一張 → 「選了就觸發」；還沒有 → 「再湊 X 就會 Y」；已觸發過的不顯示
+        const hints = synergyHints(c.cardId, owned, active)
+          .filter((h) => !h.done)
+          .map((h) => {
+            const syn = t(`synergy.${h.id}` as I18nKey);
+            return `<span class="csyn${h.ready ? ' ready' : ''}">${h.ready ? t('card.syn.ready', { name: syn }) : t('card.syn.need', { card: t(`card.${h.partner}` as I18nKey), name: syn })}</span>`;
+          })
+          .join('');
         b.innerHTML = `<span class="shape ${SHAPES[c.rarity]}" aria-hidden="true"></span>
-          <span class="rname">${t(`rarity.${c.rarity}` as I18nKey)}</span><b>${d.name}</b><span class="cdesc">${d.desc}</span>`;
+          <span class="rname">${t(`rarity.${c.rarity}` as I18nKey)}</span><b>${d.name}</b><span class="cdesc">${d.desc}</span>${hints}`;
         b.addEventListener('click', () => onPick(i));
         cardsEl.appendChild(b);
       });

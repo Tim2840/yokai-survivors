@@ -30,6 +30,39 @@ export async function run(browser) {
         expect(inView, `聯動提示超出畫面寬度（${vp.name}）`);
         files.push(await shot(ctx, 's1-synergy'));
       });
+      await step(`${vp.name} 選卡畫面：卡片上寫出能湊成什麼聯動（版面不破）`, async () => {
+        // 重開一局，先給一張「鬼火增殖」，再連續升級；卡池很小，幾次內一定會出現和聯動有關的卡
+        await page.evaluate(() => window.__game.advance(0.1));
+        let sawHint = false;
+        let sawReady = false;
+        for (let k = 0; k < 25 && !(sawHint && sawReady); k++) {
+          // 一次只加一點點魂火，剛好升一級（加太多會一次升幾十級，要連選幾十次）
+          for (let g = 0; g < 40 && !(await page.evaluate(() => window.__game.screens)).includes('levelup'); g++) await page.evaluate(() => window.__game.addXp(20));
+          expect((await page.evaluate(() => window.__game.screens)).includes('levelup'), `加魂火後沒有升級（${vp.name}）`);
+          const info = await page.evaluate(() =>
+            [...document.querySelectorAll('.overlay[data-screen="levelup"] .card')].map((c) => {
+              const r = c.getBoundingClientRect();
+              return { id: c.dataset.card, hints: [...c.querySelectorAll('.csyn')].map((h) => ({ t: h.textContent, ready: h.classList.contains('ready') })), clipped: c.scrollHeight > c.clientHeight + 1 || c.scrollWidth > c.clientWidth + 1, inView: r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight };
+            }),
+          );
+          for (const c of info) {
+            expect(!c.clipped, `帶聯動提示的卡字被切掉（${vp.name}）：${JSON.stringify(c)}`);
+            expect(c.inView, `卡片超出畫面（${vp.name}）：${JSON.stringify(c)}`);
+            for (const h of c.hints) {
+              expect(/聯動/.test(h.t), `提示文字不對：${h.t}`);
+              sawHint = true;
+              if (h.ready) sawReady = true;
+            }
+          }
+          if (!sawHint || k === 0) files.length < 99 && (k === 0 || sawHint) && files.push(await shot(ctx, 's1-pick'));
+          // 優先選有「選了就觸發」或有提示的卡，沒有就選第一張
+          const idx = info.findIndex((c) => c.hints.some((h) => h.ready));
+          await page.locator('.overlay[data-screen="levelup"] .card').nth(Math.max(0, idx)).click();
+          while ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await page.locator('.overlay[data-screen="levelup"] .card').first().click();
+        }
+        expect(sawHint, `連續升級 25 次都沒在卡片上看到聯動提示（${vp.name}）`);
+      }, 60);
+
       await step(`${vp.name} 4 秒後消失`, async () => {
         await page.evaluate(() => window.__game.advance(4.5));
         const lv = await page.evaluate(() => window.__game.screens);

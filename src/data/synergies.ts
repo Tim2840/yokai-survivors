@@ -20,6 +20,24 @@ export interface Synergy {
   };
 }
 
+/** 一張卡跟哪些聯動有關：partner = 另一張卡；ready = 已經有另一張（選了就觸發）；done = 這個聯動已觸發過 */
+export interface SynergyHint {
+  id: string;
+  partner: string;
+  ready: boolean;
+  done: boolean;
+}
+
+export function synergyHints(cardId: string, owned: ReadonlySet<string>, active: readonly string[], list: readonly Synergy[] = SYNERGIES): SynergyHint[] {
+  const out: SynergyHint[] = [];
+  for (const s of list) {
+    if (!s.requires.includes(cardId)) continue;
+    const partner = s.requires[0] === cardId ? s.requires[1] : s.requires[0];
+    out.push({ id: s.id, partner, ready: owned.has(partner), done: active.includes(s.id) });
+  }
+  return out;
+}
+
 /** 提燈小僧的聯動（其他妖怪的聯動在各自的武器卡做好時加入） */
 export const SYNERGIES: readonly Synergy[] = [
   { id: 'chainBlast', requires: ['volley', 'splash'], effect: { splashRatio: 0.4, splashMult: 1.3 } },
