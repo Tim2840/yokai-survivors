@@ -26,6 +26,7 @@
 - **M2-1 完成**：地圖要素框架（`src/data/elements.ts`、`src/systems/elements.ts`、`src/render/elementsView.ts`、HUD 提示）＋石地藏、結界石、詛咒祭壇；單元 + 回歸 `e1`。**使用者回饋 D26 已定**：章節制（每第 3 張地圖 3 關、頭目 HP ×2.5）。
 - **2026-11-04 手感調整（使用者：太簡單）**：試玩預設改成數量 ×2、起步 2 顆、濺射 0.8、傷害 ×1；新增武器卡「鬼火增殖」「爆裂」（`src/data/weaponCards.ts`）。依據與數字在 docs/02 變更紀錄。
 - **D28 卡片聯動已加入**：`src/data/synergies.ts`、`Run.checkSynergies`、HUD 提示、回歸 `s1`。河童、赤鬼的專屬武器卡與聯動等做到這兩隻時加。
+- **下一步（D30）**：系統改版第一步——法具與等級／欄位上限、稀有度倍率與里程碑保證、平方經驗曲線（docs/15 第 3 節 1～3）。研究與來源在 docs/15。
 - **終極技（大招，D29）已加入**：`src/data/ultimates.ts`（4 個提燈小僧大招）、`Run.castUltimate`／`checkFusion`、`src/render/ultFx.ts`、HUD 大招鈕（暫用號令鈕的位置：F 鍵）、能力面板的配方進度、選卡提示；回歸 `u1`；sim 有 `--only ult`、`--cast on|off`。河童／赤鬼大招草案在 docs/04 第 1.4 節。
 - **能力面板**：暫停畫面（或 HUD「能力」鈕、C 鍵）顯示已拿到的卡、累計效果、已觸發聯動、目前所有屬性與鬼火數值、詛咒；資料來自 `summarizeBuild`（src/game/buildSummary.ts）；回歸 `a1`。
 - **`npm run sim` v1 已建立**（docs/07 第 4 節）；改數字前後都要跑。第一輪發現與目標見 docs/02 變更紀錄（防禦流派 0% 過關、要素強度、敵人強度已調）。M2-3（小妖、號令、更多卡）要在 sim 上比較前後。
