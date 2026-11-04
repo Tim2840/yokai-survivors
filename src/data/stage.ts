@@ -3,8 +3,14 @@
  * 取代原本的 20 波：用「虛擬波數」n(t) 沿用既有的敵人強度公式與威脅點數 T(n)。
  */
 export const STAGE = {
-  /** 一局幾關（M1.5 先做 2 關驗證流程；首發目標 3 關） */
-  count: 2,
+  /** 章節制（D26）：一般地圖幾關；每第 everyMaps 張地圖是「大關」，關數增加、最後一關的頭目更強 */
+  chapter: {
+    normalStages: 2,
+    bigStages: 3,
+    everyMaps: 3,
+    /** 大關最後一關的頭目 HP 倍率（佔位，M2 sim 調；頭目的招式強化等 M7 做完整頭目時再加） */
+    bigBossHp: 2.5,
+  },
   /** 關卡長度（秒，可調） */
   duration: 600,
   /** 第 k 關（從 0 起）的敵人 HP 額外倍率 = 1 + hpPerStage × k */
@@ -40,4 +46,19 @@ export interface StageEvent {
   count: number;
   surgeSeconds?: number;
   surgeMult?: number;
+}
+
+/** 第 mapNumber 張地圖（從 1 起）是不是大關 */
+export function isBigMap(mapNumber: number): boolean {
+  return mapNumber >= STAGE.chapter.everyMaps && mapNumber % STAGE.chapter.everyMaps === 0;
+}
+
+/** 這張地圖有幾關 */
+export function stagesForMap(mapNumber: number): number {
+  return isBigMap(mapNumber) ? STAGE.chapter.bigStages : STAGE.chapter.normalStages;
+}
+
+/** 這張地圖第 stageIndex（0 起）關的頭目 HP 倍率：只有大關的最後一關加強 */
+export function bossHpMult(mapNumber: number, stageIndex: number): number {
+  return isBigMap(mapNumber) && stageIndex === stagesForMap(mapNumber) - 1 ? STAGE.chapter.bigBossHp : 1;
 }

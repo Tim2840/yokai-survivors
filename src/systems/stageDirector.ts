@@ -22,6 +22,8 @@ export class StageDirector {
   /** 已觸發的事件數（STAGE.events 依序）與頭目是否已出現 */
   eventsFired = 0;
   bossSpawned = false;
+  /** 頭目 HP 倍率（大關最後一關加強，D26） */
+  bossMult = 1;
   bossIndex = -1;
   /** 小高潮結束的時間（秒）；0 = 沒有進行中的 */
   surgeUntil = 0;
@@ -44,8 +46,9 @@ export class StageDirector {
     private readonly maxEnemies: number,
   ) {}
 
-  start(stage: number): void {
+  start(stage: number, bossMult = 1): void {
     this.stageMult = 1 + STAGE.hpPerStage * stage;
+    this.bossMult = bossMult;
     this.time = 0;
     this.active = true;
     this.pending = 0;
@@ -98,7 +101,7 @@ export class StageDirector {
 
   private spawnOne(kind: number, variant: number, px: number, pz: number, night: number): number {
     if (!this.findSpot(px, pz)) return -1;
-    return this.enemies.spawn(kind, this.spot[0], this.spot[1], this.virtualWave(), night, this.rng.range(0, Math.PI * 2), variant, this.stageMult);
+    return this.enemies.spawn(kind, this.spot[0], this.spot[1], this.virtualWave(), night, this.rng.range(0, Math.PI * 2), variant, variant === 2 ? this.stageMult * this.bossMult : this.stageMult);
   }
 
   update(dt: number, px: number, pz: number, night: number, bossDefeated: boolean): void {

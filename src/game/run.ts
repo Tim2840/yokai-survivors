@@ -4,7 +4,7 @@ import { MOVE } from '../data/movement';
 import { PLAYABLE_YOKAI, YOKAI, type YokaiDef } from '../data/yokai';
 import { PROGRESSION, CARD_POOL_M1, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
 import { RARITY_MULT } from '../data/rarity';
-import { STAGE } from '../data/stage';
+import { STAGE, stagesForMap, bossHpMult } from '../data/stage';
 import { WAVES } from '../data/waves';
 import { tuning } from '../data/tuning';
 import type { MapDef } from '../data/maps/prototype';
@@ -30,6 +30,8 @@ export interface RunOptions {
   /** 每一關用哪張地圖（預設：大起伏的 highlands，種子由局的種子與關卡序號衍生） */
   mapFor?: (stageIndex: number, runSeed: number) => MapDef;
   bus?: EventBus;
+  /** 這一局打的是第幾張地圖（從 1 起，D26 章節制；預設 1） */
+  mapNumber?: number;
   /** 之前通關過嗎（功德 +200） */
   clearedBefore?: boolean;
   /** 局外的功德加成（M3） */
@@ -76,6 +78,9 @@ export class Run {
   phase: RunPhase = 'combat';
   /** 目前這一關的 0 起序號 */
   stageIndex = -1;
+  /** 這一局打第幾張地圖、共幾關（一般 2、大關 3，D26） */
+  readonly mapNumber: number;
+  readonly stageCount: number;
   /** 這一關已經過的秒數 */
   time = 0;
   // 玩家（py = 腳底高度）
@@ -118,6 +123,8 @@ export class Run {
 
   constructor(opts: RunOptions) {
     this.opts = opts;
+    this.mapNumber = opts.mapNumber ?? 1;
+    this.stageCount = stagesForMap(this.mapNumber);
     this.bus = opts.bus ?? defaultBus;
     this.seed = opts.seed >>> 0;
     this.night = opts.night ?? 0;
@@ -192,7 +199,7 @@ export class Run {
     this.bossDefeated = false;
     this.portal.active = false;
     this.buildWorld();
-    this.director.start(this.stageIndex);
+    this.director.start(this.stageIndex, bossHpMult(this.mapNumber, this.stageIndex));
     this.fireCd = 0.3;
     this.bus.emit('stageStart', { stage: this.stageNumber });
   }
@@ -538,7 +545,7 @@ export class Run {
     this.orbs.reset();
     this.director.active = false;
     this.portal.active = false;
-    const last = this.stageNumber >= STAGE.count;
+    const last = this.stageNumber >= this.stageCount;
     if (rest > 0) this.addXp(rest);
     this.bus.emit('stageClear', { stage: this.stageNumber, last });
     if (last) {

@@ -166,7 +166,7 @@ describe('連續計時關卡（D22）', () => {
     let end: { result: string; merit: number; stage: number } | null = null;
     bus.on('runEnd', (e) => (end = e));
     run.god = true;
-    for (let s = 0; s < STAGE.count; s++) {
+    for (let s = 0; s < run.stageCount; s++) {
       while (run.awaitingPick) run.chooseCard(0); // 過關清場收進的魂火可能升級，模擬在選卡前是凍結的（D15）
       run.devSetTime(48);
       for (let i = 0; i < 30; i++) run.step(DT);
@@ -180,11 +180,11 @@ describe('連續計時關卡（D22）', () => {
       }
       if (run.phase === 'intermission') run.continueFromIntermission();
     }
-    expect(run.bossesDefeated, `打倒的頭目數 ${run.bossesDefeated}、階段 ${run.phase}、第 ${run.stageNumber} 關、傳送門 ${JSON.stringify(run.portal)}、玩家 ${run.px.toFixed(1)},${run.pz.toFixed(1)}`).toBe(STAGE.count);
+    expect(run.bossesDefeated, `打倒的頭目數 ${run.bossesDefeated}、階段 ${run.phase}、第 ${run.stageNumber} 關、傳送門 ${JSON.stringify(run.portal)}、玩家 ${run.px.toFixed(1)},${run.pz.toFixed(1)}`).toBe(run.stageCount);
     expect(run.phase).toBe('ended');
     expect(end!.result).toBe('victory');
-    expect(end!.stage).toBe(STAGE.count);
-    expect(end!.merit).toBeGreaterThanOrEqual(120 * STAGE.count + 100 * STAGE.count + 200);
+    expect(end!.stage).toBe(run.stageCount);
+    expect(end!.merit).toBeGreaterThanOrEqual(120 * run.stageCount + 100 * run.stageCount + 200);
   });
 
   it('最終蜂群：時間歸零而頭目還活著 → 速率 ×3、精英每 20 秒一隻、傳送門不開', () => {
