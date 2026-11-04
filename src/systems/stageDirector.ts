@@ -22,6 +22,8 @@ export class StageDirector {
   /** 已觸發的事件數（STAGE.events 依序）與頭目是否已出現 */
   eventsFired = 0;
   bossSpawned = false;
+  /** 外部的湧出倍率（結界圈內 ×1.25 等；每步由 Run 設） */
+  extraMult = 1;
   /** 頭目 HP 倍率（大關最後一關加強，D26） */
   bossMult = 1;
   bossIndex = -1;
@@ -79,6 +81,7 @@ export class StageDirector {
     let r = ((threat(n) / STAGE.rateBaseSeconds) * tuning.countScale);
     if (this.surgeUntil > t) r *= this.surgeMult;
     if (this.swarm) r *= STAGE.swarm.rateMult;
+    r *= this.extraMult;
     return r;
   }
 

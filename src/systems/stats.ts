@@ -8,6 +8,8 @@ export class Stats {
   private readonly base: Record<StatId, number>;
   private readonly flat: Record<StatId, number>;
   private readonly pct: Record<StatId, number>;
+  /** 具名的加成來源（地圖要素：祭壇、結界石、石地藏護甲…）：可以整組換掉或移除，不會有浮點累積誤差 */
+  private readonly mods = new Map<string, { flat?: Partial<Record<StatId, number>>; pct?: Partial<Record<StatId, number>> }>();
   /** 最終值（唯讀使用） */
   readonly value: Record<StatId, number>;
 
@@ -37,10 +39,32 @@ export class Stats {
     this.recompute();
   }
 
+  /** 設定（或換掉）一個具名來源；flat 加進基礎、pct 加進百分比 */
+  setMod(key: string, mod: { flat?: Partial<Record<StatId, number>>; pct?: Partial<Record<StatId, number>> }): void {
+    this.mods.set(key, mod);
+    this.recompute();
+  }
+
+  clearMod(key: string): boolean {
+    const had = this.mods.delete(key);
+    if (had) this.recompute();
+    return had;
+  }
+
+  hasMod(key: string): boolean {
+    return this.mods.has(key);
+  }
+
   recompute(): void {
     for (const s of STAT_IDS) {
       const lim = STAT_LIMITS[s];
-      const raw = (this.base[s] + this.flat[s]) * (1 + this.pct[s]);
+      let f = this.flat[s];
+      let p = this.pct[s];
+      for (const m of this.mods.values()) {
+        f += m.flat?.[s] ?? 0;
+        p += m.pct?.[s] ?? 0;
+      }
+      const raw = (this.base[s] + f) * (1 + p);
       const lo = lim.rel ? this.base[s] * lim.min : lim.min;
       const hi = lim.rel ? this.base[s] * lim.max : lim.max;
       this.value[s] = Math.min(hi, Math.max(lo, raw));

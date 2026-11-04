@@ -19,6 +19,7 @@ import { HitFeed } from '../systems/hitFeed';
 import { Stats, armorMult } from '../systems/stats';
 import { CardDealer, cardById, type CardOffer } from '../systems/cards';
 import { StageDirector } from '../systems/stageDirector';
+import { Elements, type ElementCarry } from '../systems/elements';
 import { computeMerit } from '../systems/merit';
 import type { StatId } from '../data/stats';
 
@@ -63,6 +64,8 @@ export class Run {
   flow!: FlowField;
   enemies!: Enemies;
   director!: StageDirector;
+  elements!: Elements;
+  private readonly elementCarry: ElementCarry = { serial: 0, downKeys: [] };
   readonly projectiles: Projectiles;
   readonly orbs: Orbs;
   readonly feed = new HitFeed();
@@ -71,6 +74,7 @@ export class Run {
   private readonly rngCombat: Rng;
   private readonly rngCards: Rng;
   private readonly rngSpawn: Rng;
+  private readonly rngElements: Rng;
   private readonly bus: EventBus;
   private readonly opts: RunOptions;
   private readonly maxEnemies: number;
@@ -138,6 +142,7 @@ export class Run {
     this.rngCombat = new Rng(subSeed(this.seed, 1));
     this.rngCards = new Rng(subSeed(this.seed, 2));
     this.rngSpawn = new Rng(subSeed(this.seed, 3));
+    this.rngElements = new Rng(subSeed(this.seed, 4));
     this.dealer = new CardDealer(this.rngCards, CARD_POOL_M1, RARITIES_UNLOCKED_M1);
     this.hp = this.stats.value.maxHp;
     this.startNextStage();
@@ -178,6 +183,14 @@ export class Run {
     this.flow = new FlowField(this.map);
     this.enemies = new Enemies(this.map, this.maxEnemies);
     this.director = new StageDirector(this.rngSpawn, this.map, this.flow, this.enemies, this.maxEnemies);
+    this.elements = new Elements(this.rngElements, this.map, this.flow, {
+      stats: this.stats,
+      healFrac: (f) => {
+        this.hp = Math.min(this.maxHp, this.hp + this.maxHp * f);
+      },
+      emitSpawn: (kind, rarity) => this.bus.emit('elementSpawn', { kind, rarity }),
+      emitUsed: (kind, rarity) => this.bus.emit('elementUsed', { kind, rarity }),
+    }, this.elementCarry);
     this.projectiles.reset();
     this.orbs.reset();
     const s = this.map.def.playerStart;
@@ -200,6 +213,7 @@ export class Run {
     this.portal.active = false;
     this.buildWorld();
     this.director.start(this.stageIndex, bossHpMult(this.mapNumber, this.stageIndex));
+    this.elements.start(this.px, this.pz, this.director.duration, this.director.virtualWave(), this.stats.value.luck);
     this.fireCd = 0.3;
     this.bus.emit('stageStart', { stage: this.stageNumber });
   }
@@ -225,6 +239,11 @@ export class Run {
     this.enemies.hp[i] = 0;
     this.onKill(i);
     return true;
+  }
+
+  /** 開發與測試：不管在哪，現在就過關（走正常的過關流程） */
+  devClearStage(): void {
+    if (this.phase === 'combat') this.clearStage();
   }
 
   devSpawn(kindId: string, n: number): number {
@@ -279,6 +298,8 @@ export class Run {
     const gained = this.orbs.update(dt, this.px, this.pz, s.pickup);
     if (gained > 0) this.addXp(gained);
 
+    this.elements.update(dt, this.time, this.director.duration, this.director.virtualWave(), s.luck, this.px, this.py, this.pz);
+    this.director.extraMult = this.elements.spawnMult;
     this.director.update(dt, this.px, this.pz, this.night, this.bossDefeated);
 
     if (this.hp <= 0 && !this.god) {
@@ -545,6 +566,7 @@ export class Run {
     this.orbs.reset();
     this.director.active = false;
     this.portal.active = false;
+    this.elements.endStage();
     const last = this.stageNumber >= this.stageCount;
     if (rest > 0) this.addXp(rest);
     this.bus.emit('stageClear', { stage: this.stageNumber, last });

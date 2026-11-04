@@ -1,3 +1,4 @@
+import type { ElementKind } from '../data/elements';
 import type { AudioEngine } from '../core/audio';
 import type { FixedLoop } from '../core/loop';
 import type { Renderer } from '../core/renderer';
@@ -82,6 +83,9 @@ export function installDevApi(ctx: DevContext): void {
         god: r.god,
         seed: r.seed,
         picked: r.picked.length,
+        stats: { ...r.stats.value },
+        elements: r.elements.slots.filter((s) => s.active).map((s) => ({ kind: s.kind, rarity: s.rarity, x: s.x, y: s.y, z: s.z, announce: s.announce, progress: s.progress, used: s.usedAge >= 0, up: s.up, upPct: s.upPct, down: s.down, downPct: s.downPct, downFlat: s.downFlat })),
+        focus: r.elements.focus ? r.elements.focus.kind : null,
         tuning: ctx.game.tuningInfo,
       };
     },
@@ -116,6 +120,13 @@ export function installDevApi(ctx: DevContext): void {
     spawn: (id: string, n: number) => run()?.devSpawn(id, n) ?? 0,
     /** 把這一關的時間直接跳到 t 秒（跳到頭目前後用） */
     setTime: (t: number) => run()?.devSetTime(t),
+    /** 在玩家身邊放一個地圖要素（kind: jizo／barrier／altar；rarity: common／rare／epic／legend）；回傳位置，放不下是 null */
+    forceElement: (kind: string, rarity: RarityLike) => {
+      const r = run();
+      if (!r) return null;
+      const s = r.elements.devForce(kind as ElementKind, rarity, r.px, r.pz);
+      return s ? { x: s.x, y: s.y, z: s.z } : null;
+    },
     /** 頭目現在就倒下（走正常的擊殺流程，傳送門會開） */
     killBoss: () => run()?.devKillBoss() ?? false,
     give: (cardId: string, rarity: RarityLike) => run()?.give(cardId, rarity),

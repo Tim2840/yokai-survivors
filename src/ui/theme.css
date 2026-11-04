@@ -115,6 +115,15 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 .hud-boss span { font-size: 14px; font-weight: 700; }
 .hud-boss .bar { width: 100%; height: 12px; background: rgba(0,0,0,0.5); border-radius: 999px; overflow: hidden; border: 2px solid rgba(255,255,255,0.3); }
 .hud-boss .bar i { display: block; height: 100%; width: 100%; background: linear-gradient(#ff9a7a, #c23b2b); }
+.hud-element { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 126px); left: 50%; transform: translateX(-50%); display: grid; gap: 3px; justify-items: center; min-width: 200px; max-width: min(92vw, 360px); padding: 6px 14px 8px; border-radius: 12px; background: rgba(20,30,50,0.72); border: 2px solid #e8e6e0; text-shadow: 0 1px 2px #000; text-align: center; }
+.hud-element[data-rarity='rare'] { border-color: #5ec4e8; }
+.hud-element[data-rarity='epic'] { border-color: #a678e0; }
+.hud-element[data-rarity='legend'] { border-color: #ffb347; }
+.hud-element b { font-size: 16px; }
+.hud-element span { font-size: 13px; color: var(--text); }
+.hud-element em { font-size: 12px; font-style: normal; color: var(--text-dim, #b9b2a4); }
+.hud-element .bar { width: 100%; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.18); overflow: hidden; }
+.hud-element .bar i { display: block; height: 100%; width: 0; background: var(--accent, #ffb35c); }
 .hud-portal { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 86px); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 4px 12px; border-radius: 999px; background: rgba(20,30,50,0.6); text-shadow: 0 1px 2px #000; }
 .hud-portal b { display: inline-block; font-size: 22px; color: #9fe8ff; line-height: 1; }
 .hud-portal span { font-size: 14px; }

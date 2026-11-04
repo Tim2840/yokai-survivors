@@ -1,5 +1,8 @@
 import { t } from '../i18n';
 import type { Run } from '../game/run';
+import type { ElementSlot } from '../systems/elements';
+import { BARRIER, JIZO, JIZO_ARMOR_SECONDS } from '../data/elements';
+
 
 /**
  * 戰鬥 HUD（docs/08 第 5 節）：左上生命、上中波數與倒數、右上暫停鈕、下方魂火條與等級、左下虛擬搖桿（觸控裝置）。
@@ -30,6 +33,7 @@ export function buildHud(parent: HTMLElement): Hud {
       <button class="hud-pause" id="btn-pause" type="button" aria-label="${t('pause.button')}">II</button>
     </div>
     <div class="hud-boss hidden" id="boss-bar"><span>${t('hud.boss')}</span><div class="bar"><i id="boss-fill"></i></div></div>
+    <div class="hud-element hidden" id="element-box"><b id="element-title"></b><span id="element-desc"></span><div class="bar"><i id="element-fill"></i></div><em id="element-act"></em></div>
     <div class="hud-portal hidden" id="portal-box"><b id="portal-arrow">▲</b><span id="portal-text"></span></div>
     <div class="hud-bottom">
       <div class="xp"><i id="xp-fill"></i></div>
@@ -49,6 +53,12 @@ export function buildHud(parent: HTMLElement): Hud {
   const portalBox = q('portal-box');
   const portalArrow = q('portal-arrow');
   const portalText = q('portal-text');
+  const elBox = q('element-box');
+  const elTitle = q('element-title');
+  const elDesc = q('element-desc');
+  const elFill = q('element-fill');
+  const elAct = q('element-act');
+  let lastEl = '';
   const xpFill = q('xp-fill');
   const lvText = q('lv-text');
   let lastHp = '';
@@ -116,6 +126,25 @@ export function buildHud(parent: HTMLElement): Hud {
         lastPortal = -1;
         portalBox.classList.add('hidden');
       }
+      // 地圖要素：走近時顯示名稱、效果與按住進度
+      const f = run.elements.focus;
+      if (!f || f.announce > 0 || f.usedAge >= 0) {
+        if (lastEl !== '') {
+          lastEl = '';
+          elBox.classList.add('hidden');
+        }
+      } else {
+        const key = `${f.kind}|${f.rarity}|${f.up}|${f.down}`;
+        if (key !== lastEl) {
+          lastEl = key;
+          elBox.classList.remove('hidden');
+          elBox.dataset.rarity = f.rarity;
+          elTitle.textContent = `${t(`rarity.${f.rarity}`)}・${t(`element.${f.kind}`)}`;
+          elDesc.textContent = describeElement(f);
+          elAct.textContent = f.kind === 'barrier' ? t('element.stand') : t('element.hold');
+        }
+        elFill.style.width = `${f.kind === 'barrier' ? (f.inside ? 100 : 0) : Math.round(f.progress * 100)}%`;
+      }
       const xp = `${Math.round((run.xp / run.xpNeeded) * 1000)}`;
       if (xp !== lastXp) {
         lastXp = xp;
@@ -127,4 +156,18 @@ export function buildHud(parent: HTMLElement): Hud {
       }
     },
   };
+}
+
+/** 要素的效果說明（數字全部來自資料表） */
+function describeElement(f: ElementSlot): string {
+  if (f.kind === 'jizo') {
+    const j = JIZO[f.rarity];
+    return t(f.rarity === 'legend' ? 'element.jizo.descLegend' : 'element.jizo.desc', { heal: Math.round(j.healFrac * 100), armor: j.armor, sec: JIZO_ARMOR_SECONDS });
+  }
+  if (f.kind === 'barrier') return t('element.barrier.desc', { pct: Math.round(BARRIER[f.rarity].bonus * 100) });
+  const up = t(`stat.${f.up}`);
+  const down = t(`stat.${f.down}`);
+  const upPct = Math.round(f.upPct * 100);
+  if (f.downFlat > 0) return t('element.altar.descFlat', { up, upPct, down, downFlat: f.downFlat });
+  return t('element.altar.desc', { up, upPct, down, downPct: Math.round(f.downPct * 100) });
 }

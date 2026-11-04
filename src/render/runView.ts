@@ -9,6 +9,7 @@ import { buildVillagerGeometry } from '../units/villager';
 import { buildWorldView, type WorldView } from '../world/worldView';
 import { writeMatrix, setHugeBounds } from './instancedLayer';
 import { DamageNumbers } from './damageNumbers';
+import { ElementsView } from './elementsView';
 import type { Renderer } from '../core/renderer';
 
 const TWO_PI = Math.PI * 2;
@@ -34,6 +35,7 @@ export class RunView {
   private readonly playerShadow: THREE.Mesh;
   private readonly aura: THREE.Mesh;
   private readonly numbers: DamageNumbers;
+  private readonly elementsView: ElementsView;
   private readonly portal: THREE.Group;
   private readonly portalRing: THREE.Mesh;
   private readonly portalBeam: THREE.Mesh;
@@ -131,6 +133,8 @@ export class RunView {
     this.group.add(this.aura);
     this.disposables.push(ag, am);
 
+    this.elementsView = new ElementsView(run.elements, map);
+    this.group.add(this.elementsView.group);
     this.numbers = new DamageNumbers(renderer.camera, run.feed);
     this.group.add(this.numbers.mesh);
 
@@ -194,6 +198,7 @@ export class RunView {
       this.portalRing.position.y = 0.6 + Math.sin(t * 2) * 0.12;
     }
 
+    this.elementsView.update(t);
     this.timeUniform.value = t % TWO_PI;
 
     // 敵人
@@ -260,6 +265,7 @@ export class RunView {
 
   dispose(): void {
     this.numbers.dispose();
+    this.elementsView.dispose();
     this.player.dispose();
     this.world.dispose();
     for (const d of this.disposables) d.dispose();
