@@ -53,11 +53,11 @@ describe('武器卡（鬼火增殖、爆裂）', () => {
     const run = new Run({ seed: 5, bus: new EventBus() });
     expect(run.volleyBonus).toBe(0);
     run.give('volley', 'epic');
-    expect(run.volleyBonus).toBe(2);
-    for (let i = 0; i < 10; i++) run.give('volley', 'legend');
+    expect(run.volleyBonus).toBeCloseTo(0.6);
+    for (let i = 0; i < 20; i++) run.give('volley', 'legend');
     expect(run.volleyBonus).toBe(WEAPON_LIMITS.volley - 1);
     run.give('splash', 'rare');
-    expect(run.splashBonus).toBeCloseTo(0.9);
+    expect(run.splashBonus).toBeCloseTo(0.5);
     for (let i = 0; i < 10; i++) run.give('splash', 'legend');
     expect(run.splashBonus).toBe(WEAPON_LIMITS.splash);
   });
@@ -86,7 +86,7 @@ describe('卡片聯動（D28）', () => {
     }
   });
 
-  it('貫穿火：每次多 1 顆、每顆多穿透 2 隻（加成值與投射物的穿透次數）', () => {
+  it('貫穿火：鬼火數量 +0.5、穿透 +1（加成值與投射物的穿透次數）', () => {
     const count = (withSynergy: boolean) => {
       const run = new Run({ seed: 9, bus: new EventBus() });
       run.god = true;
@@ -98,12 +98,12 @@ describe('卡片聯動（D28）', () => {
     };
     const a = count(true);
     expect(a.activeSynergies).toContain('piercingFire');
-    expect(a.syn.pierce).toBe(2);
-    expect(a.syn.volley).toBe(1);
+    expect(a.syn.pierce).toBe(1);
+    expect(a.syn.volley).toBe(0.5);
     // 投射物真的帶著額外穿透次數
     const w = a.yokai.weapon;
-    const i = a.projectiles.spawn(0, 0, 1, 0, w, 1, false, -1, a.pierceBonus + a.syn.pierce);
-    expect(a.projectiles.pierceLeft[i]).toBe(w.pierce + 2 + a.pierceBonus);
+    const i = a.projectiles.spawn(0, 0, 1, 0, w, 1, false, -1, Math.floor(a.pierceBonus + a.syn.pierce));
+    expect(a.projectiles.pierceLeft[i]).toBe(w.pierce + Math.floor(a.pierceBonus + a.syn.pierce));
     const b = new Run({ seed: 9, bus: new EventBus() });
     b.give('volley', 'common');
     expect(b.activeSynergies).toHaveLength(0);

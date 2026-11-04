@@ -13,12 +13,12 @@ export interface WeaponCard {
 }
 
 export const WEAPON_CARDS: readonly WeaponCard[] = [
-  /** 鬼火增殖：每次多發射幾顆（總數上限見 WEAPON_LIMITS.volley） */
-  { id: 'volley', weapon: 'volley', values: { common: 1, rare: 1, epic: 2, legend: 2 } },
+  /** 鬼火增殖：每次多發射幾顆（小數 = 機率多一顆；總數上限見 WEAPON_LIMITS.volley）。數值依 2026-11-04 卡片價值探針調整 */
+  { id: 'volley', weapon: 'volley', values: { common: 0.25, rare: 0.4, epic: 0.6, legend: 0.9 } },
   /** 爆裂：命中時濺射半徑（公尺）增加 */
-  { id: 'splash', weapon: 'splash', values: { common: 0.6, rare: 0.9, epic: 1.2, legend: 1.6 } },
+  { id: 'splash', weapon: 'splash', values: { common: 0.3, rare: 0.5, epic: 0.7, legend: 1.0 } },
   /** 穿透：每顆鬼火多穿過幾隻敵人 */
-  { id: 'pierce', weapon: 'pierce', values: { common: 1, rare: 1, epic: 2, legend: 2 } },
+  { id: 'pierce', weapon: 'pierce', values: { common: 0.3, rare: 0.5, epic: 0.8, legend: 1.2 } },
 ];
 
 export const WEAPON_LIMITS = { volley: 7, splash: 4, pierce: 6 } as const;

@@ -91,3 +91,21 @@ describe('局外修行總價（docs/02 7.1／7.4 審查重算）', () => {
     expect(total).toBe(12043);
   });
 });
+
+import { WEAPON_CARDS } from '../../src/data/weaponCards';
+
+describe('武器卡平衡（2026-11-04 卡片價值探針）', () => {
+  it('數值隨稀有度單調遞增，神階 / 凡階不超過 4 倍', () => {
+    for (const c of WEAPON_CARDS) {
+      for (let i = 1; i < RARITIES.length; i++) expect(c.values[RARITIES[i]], c.id).toBeGreaterThan(c.values[RARITIES[i - 1]]);
+      expect(c.values.legend / c.values.common, c.id).toBeLessThanOrEqual(4.5);
+    }
+  });
+  it('單張鬼火增殖、穿透永遠不到整整 1 顆（舊值 +1 顆＝輸出 +50%，一張抵好幾張屬性卡）', () => {
+    for (const id of ['volley', 'pierce']) {
+      const c = WEAPON_CARDS.find((x) => x.id === id)!;
+      for (const r of RARITIES) expect(c.values[r], `${id}/${r}`).toBeLessThan(1.5);
+      expect(c.values.common, id).toBeLessThan(0.5);
+    }
+  });
+});

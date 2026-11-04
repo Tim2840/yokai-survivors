@@ -497,7 +497,9 @@ export class Run {
     const dx = this.enemies.x[target] - this.px;
     const dz = this.enemies.z[target] - this.pz;
     const d = Math.hypot(dx, dz) || 1;
-    const volley = (tuning.volley > 0 ? tuning.volley : w.volley) + this.volleyBonus + this.syn.volley;
+    const volleyExact = (tuning.volley > 0 ? tuning.volley : w.volley) + this.volleyBonus + this.syn.volley;
+    // 小數的部分 = 機率多一顆（卡片的數值是小數，這樣每張卡的價值才能細調）
+    const volley = Math.floor(volleyExact) + (this.rngCombat.next() < volleyExact - Math.floor(volleyExact) ? 1 : 0);
     for (let v = 0; v < volley; v++) {
       const crit = this.rngCombat.next() < s.crit;
       const dmg = w.damage * s.power * tuning.damageScale * (crit ? s.critDmg : 1);
@@ -506,8 +508,15 @@ export class Run {
       const sn = Math.sin(spread);
       const ux = dx / d;
       const uz = dz / d;
-      this.projectiles.spawn(this.px, this.pz, ux * c - uz * sn, ux * sn + uz * c, w, dmg, crit, target, this.pierceBonus + this.syn.pierce);
+      this.projectiles.spawn(this.px, this.pz, ux * c - uz * sn, ux * sn + uz * c, w, dmg, crit, target, this.rollPierce());
     }
+  }
+
+  /** 每顆鬼火的穿透次數：小數 = 機率多穿一隻 */
+  private rollPierce(): number {
+    const p = this.pierceBonus + this.syn.pierce;
+    const base = Math.floor(p);
+    return base + (this.rngCombat.next() < p - base ? 1 : 0);
   }
 
   /** 固定的方法參照：投射物命中時結算傷害（不在迴圈裡建函式） */

@@ -64,7 +64,7 @@ export function describeCard(o: CardOffer): { name: string; desc: string } {
   const card = cardById(o.cardId);
   const v = card.values[o.rarity];
   if (isWeaponCard(card)) {
-    const shown = Number.isInteger(v) ? String(v) : v.toFixed(1);
+    const shown = String(Number(v.toFixed(2)));
     return { name: t(`card.${card.id}` as I18nKey), desc: t(`card.fmt.${card.weapon}` as I18nKey, { v: shown }) };
   }
   const fmt = CARD_FORMAT[card.stat as StatId];

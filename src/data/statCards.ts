@@ -10,10 +10,10 @@ export interface StatCard {
 
 export const STAT_CARDS: readonly StatCard[] = [
   { id: 'hp', stat: 'maxHp', starter: true, values: { common: 10, rare: 16, epic: 24, legend: 35 } },
-  { id: 'power', stat: 'power', starter: true, values: { common: 6, rare: 10, epic: 14, legend: 21 } },
-  { id: 'atkSpeed', stat: 'atkSpeed', starter: true, values: { common: 5, rare: 8, epic: 12, legend: 17 } },
-  { id: 'area', stat: 'area', starter: true, values: { common: 6, rare: 10, epic: 14, legend: 21 } },
-  { id: 'speed', stat: 'speed', starter: true, values: { common: 4, rare: 6, epic: 10, legend: 14 } },
+  { id: 'power', stat: 'power', starter: true, values: { common: 10, rare: 16, epic: 24, legend: 35 } },
+  { id: 'atkSpeed', stat: 'atkSpeed', starter: true, values: { common: 10, rare: 16, epic: 24, legend: 35 } },
+  { id: 'area', stat: 'area', starter: true, values: { common: 10, rare: 16, epic: 24, legend: 35 } },
+  { id: 'speed', stat: 'speed', starter: true, values: { common: 8, rare: 13, epic: 19, legend: 28 } },
   { id: 'crit', stat: 'crit', starter: true, values: { common: 3, rare: 5, epic: 7, legend: 10 } },
   { id: 'critDmg', stat: 'critDmg', starter: true, values: { common: 10, rare: 16, epic: 24, legend: 35 } },
   { id: 'armor', stat: 'armor', starter: true, values: { common: 1, rare: 2, epic: 3, legend: 4 } },

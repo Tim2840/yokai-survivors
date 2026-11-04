@@ -41,6 +41,6 @@ export function synergyHints(cardId: string, owned: ReadonlySet<string>, active:
 /** 提燈小僧的聯動（其他妖怪的聯動在各自的武器卡做好時加入） */
 export const SYNERGIES: readonly Synergy[] = [
   { id: 'chainBlast', requires: ['volley', 'splash'], effect: { splashRatio: 0.4, splashMult: 1.3 } },
-  { id: 'piercingFire', requires: ['volley', 'pierce'], effect: { pierce: 2, volley: 1 } },
+  { id: 'piercingFire', requires: ['volley', 'pierce'], effect: { pierce: 1, volley: 0.5 } },
   { id: 'lanternGlow', requires: ['splash', 'area'], effect: { auraMult: 1.5 } },
 ];
