@@ -81,8 +81,8 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
   const title = o.el.querySelector<HTMLElement>('#lv-title')!;
   const pending = o.el.querySelector<HTMLElement>('#lv-pending')!;
   return Object.assign(o, {
-    render(offer: CardOffer[], more: number, owned: ReadonlySet<string> = new Set(), active: readonly string[] = []) {
-      title.textContent = t('levelup.title');
+    render(offer: CardOffer[], more: number, owned: ReadonlySet<string> = new Set(), active: readonly string[] = [], kind: 'levelup' | 'offering' | 'chest' = 'levelup') {
+      title.textContent = t(kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? 'levelup.offering' : 'levelup.chest');
       pending.textContent = more > 1 ? t('levelup.pending', { n: more - 1 }) : '';
       cardsEl.innerHTML = '';
       offer.forEach((c, i) => {

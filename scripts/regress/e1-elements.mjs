@@ -2,7 +2,7 @@
 // 要素用開發介面放到玩家身邊（隨機落下的位置不固定），其餘（走路、HUD 提示、效果）全用真實輸入與畫面。三種畫面各一次，卡住偵測。
 import { openPage, startRun, step, expect, shot, reportErrors, snapshotOf, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'e1', desc: '地圖要素：走近→提示→按住→效果（石地藏、詛咒祭壇、結界石）三種畫面', max: 400, stall: 60 };
+export const meta = { id: 'e1', desc: '地圖要素：走近→提示→按住→效果（石地藏、詛咒祭壇、結界石）三種畫面', max: 600, stall: 60 };
 
 const SIDES = [[0, 3, 'KeyW', 0, -1], [0, -3, 'KeyS', 0, 1], [-3, 0, 'KeyD', 1, 0], [3, 0, 'KeyA', -1, 0]];
 
@@ -111,6 +111,51 @@ export async function run(browser) {
         await leave(spot);
         const s2 = await stats();
         expect(Math.abs(s2.power - s0.power) < 1e-6, `走出圈外攻擊力沒恢復：${s2.power}`);
+      });
+
+      await step(`${vp.name} 賽錢箱：按住 → 扣生命 → 三選一面板（標題不同）→ 真的點卡 → 繼續`, async () => {
+        const hp0 = (await page.evaluate(() => window.__game.run)).hp;
+        const spot = await approach('offering', 'rare');
+        await page.evaluate(() => { window.__game.advance(0.3); window.__game.render(); });
+        const desc = await page.locator('#element-desc').innerText();
+        expect(/20%/.test(desc), `賽錢箱說明沒寫出代價 20%：${desc}`);
+        for (let i = 0; i < 12 && !(await page.evaluate(() => window.__game.screens)).includes('levelup'); i++) await page.evaluate(() => window.__game.advance(0.25));
+        expect((await page.evaluate(() => window.__game.screens)).includes('levelup'), `按住賽錢箱後沒有開選卡面板（${vp.name}）`);
+        const title = await page.locator('.overlay[data-screen="levelup"] h2').innerText();
+        expect(/賽錢箱/.test(title), `面板標題不對：${title}`);
+        const rar = await page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card')].map((c) => c.dataset.rarity));
+        expect(rar.length === 3 && rar.every((x) => x === 'epic'), `靈階賽錢箱應給三張妖階卡：${rar}`);
+        const r1 = await page.evaluate(() => window.__game.run);
+        expect(r1.hp < hp0, `賽錢箱沒扣生命：${hp0} → ${r1.hp}`);
+        await page.locator('.overlay[data-screen="levelup"] .card').first().click();
+        await page.waitForFunction(() => !window.__game.screens.includes('levelup'), null, { timeout: 5000 });
+        await leave(spot);
+      });
+
+      await step(`${vp.name} 寶箱：按住 → 免費三選一`, async () => {
+        const hp0 = (await page.evaluate(() => window.__game.run)).hp;
+        const spot = await approach('chest', 'epic');
+        for (let i = 0; i < 12 && !(await page.evaluate(() => window.__game.screens)).includes('levelup'); i++) await page.evaluate(() => window.__game.advance(0.25));
+        expect((await page.evaluate(() => window.__game.screens)).includes('levelup'), `按住寶箱後沒有開選卡面板（${vp.name}）`);
+        const title = await page.locator('.overlay[data-screen="levelup"] h2').innerText();
+        expect(/寶箱/.test(title), `面板標題不對：${title}`);
+        await page.locator('.overlay[data-screen="levelup"] .card').nth(1).click();
+        await page.waitForFunction(() => !window.__game.screens.includes('levelup'), null, { timeout: 5000 });
+        const r1 = await page.evaluate(() => window.__game.run);
+        expect(r1.hp >= hp0 - 1, `寶箱不該扣生命：${hp0} → ${r1.hp}`);
+        await leave(spot);
+      });
+
+      await step(`${vp.name} 神籤：按住 → HUD 顯示抽到的結果`, async () => {
+        const spot = await approach('omikuji', 'epic');
+        await play(1.5);
+        await page.evaluate(() => window.__game.render());
+        const box = page.locator('#synergy-box');
+        expect(await box.isVisible(), `抽完神籤沒有結果提示（${vp.name}）`);
+        const txt = await box.innerText();
+        expect(/大吉|中吉|小吉|末吉|凶/.test(txt), `神籤結果文字不對：${txt}`);
+        files.push(await shot(ctx, 'e1-omikuji'));
+        await leave(spot);
       });
 
       await dismiss();

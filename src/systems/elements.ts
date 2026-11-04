@@ -19,7 +19,16 @@ import {
   JIZO,
   JIZO_ARMOR_SECONDS,
   JIZO_HOLD_SECONDS,
+  CHEST_HOLD_SECONDS,
+  ELEMENT_PER_KIND,
+  OFFERING,
+  OFFERING_HOLD_SECONDS,
+  OMIKUJI_EFFECT,
+  OMIKUJI_HOLD_SECONDS,
+  OMIKUJI_RESULTS,
+  OMIKUJI_WEIGHTS,
   type ElementKind,
+  type OmikujiResult,
 } from '../data/elements';
 
 /** 給要素系統用的「玩家端」介面：只做它需要的事，不讓它碰整個 Run */
@@ -30,6 +39,12 @@ export interface ElementHost {
   /** 加一項整局有效的詛咒（讓敵人變強），key 用來之後單獨解除 */
   setCurse(key: string, id: CurseId, v: number): void;
   clearCurse(key: string): void;
+  /** 賽錢箱：生命夠不夠付（付完至少剩 1 點）、付、開三選一面板（rarity 階的卡、連選 picks 次） */
+  canPayHpFrac(frac: number): boolean;
+  payHpFrac(frac: number): void;
+  openPick(rarity: Rarity, picks: number, kind: 'offering' | 'chest'): void;
+  addMerit(n: number): void;
+  notifyOmikuji(result: OmikujiResult): void;
   emitSpawn(kind: ElementKind, rarity: Rarity): void;
   emitUsed(kind: ElementKind, rarity: Rarity): void;
 }
@@ -57,6 +72,8 @@ export interface ElementSlot {
   progress: number;
   /** 玩家現在在範圍內 */
   inside: boolean;
+  /** 付不起代價（賽錢箱生命不夠）：進度不前進，HUD 提示 */
+  blocked: boolean;
   /** 被用掉後經過的秒數（< 0 = 還沒用過）；給外觀做消失動畫 */
   usedAge: number;
   /** 詛咒祭壇：抽到的效果（前 effectCount 個有效）。curse = true 是讓敵人變強的詛咒，否則是玩家屬性的好處（v 為相對比例） */
@@ -71,9 +88,11 @@ export interface AltarEffect {
 }
 
 const USED_FADE = 0.7;
+/** 各要素按住幾秒（結界石不用按住） */
+const HOLD: Partial<Record<ElementKind, number>> = { jizo: JIZO_HOLD_SECONDS, altar: ALTAR_HOLD_SECONDS, offering: OFFERING_HOLD_SECONDS, omikuji: OMIKUJI_HOLD_SECONDS, chest: CHEST_HOLD_SECONDS };
 
 function blankSlot(): ElementSlot {
-  return { active: false, kind: 'jizo', rarity: 'common', x: 0, y: 0, z: 0, age: 0, life: 0, announce: 0, progress: 0, inside: false, usedAge: -1, effects: Array.from({ length: ALTAR_MAX_EFFECTS }, () => ({ id: 'power' as StatId | CurseId, v: 0, curse: false })), effectCount: 0 };
+  return { active: false, kind: 'jizo', rarity: 'common', x: 0, y: 0, z: 0, age: 0, life: 0, announce: 0, progress: 0, inside: false, blocked: false, usedAge: -1, effects: Array.from({ length: ALTAR_MAX_EFFECTS }, () => ({ id: 'power' as StatId | CurseId, v: 0, curse: false })), effectCount: 0 };
 }
 
 /** 依虛擬波數取稀有度權重（幸運乘在非凡權重上） */
@@ -96,7 +115,8 @@ export class Elements {
   spawnMult = 1;
   private nextDrop = 0;
   private drops = 0;
-  private readonly timed: { key: string; until: number }[] = [];
+  private readonly timed: { key: string; until: number; curse?: boolean }[] = [];
+  private luck = 0;
   private clock = 0;
 
   constructor(
@@ -130,7 +150,10 @@ export class Elements {
   }
 
   private clearAllMods(): void {
-    for (const t of this.timed) this.host.stats.clearMod(t.key);
+    for (const t of this.timed) {
+      if (t.curse) this.host.clearCurse(t.key);
+      else this.host.stats.clearMod(t.key);
+    }
     this.timed.length = 0;
     for (const s of this.slots) this.host.stats.clearMod(`barrier:${this.slots.indexOf(s)}`);
   }
@@ -150,10 +173,12 @@ export class Elements {
 
   update(dt: number, t: number, duration: number, virtualWave: number, luck: number, px: number, py: number, pz: number): void {
     this.clock = t;
+    this.luck = luck;
     // 限時效果到期
     for (let i = this.timed.length - 1; i >= 0; i--) {
       if (t >= this.timed[i].until) {
-        this.host.stats.clearMod(this.timed[i].key);
+        if (this.timed[i].curse) this.host.clearCurse(this.timed[i].key);
+        else this.host.stats.clearMod(this.timed[i].key);
         this.timed.splice(i, 1);
       }
     }
@@ -207,8 +232,9 @@ export class Elements {
       }
       const near = dist <= ELEMENT_RULES.useRadius && vertical;
       s.inside = near;
-      if (near) {
-        const hold = s.kind === 'altar' ? ALTAR_HOLD_SECONDS : JIZO_HOLD_SECONDS;
+      s.blocked = s.kind === 'offering' && !this.host.canPayHpFrac(OFFERING[s.rarity].costFrac);
+      if (near && !s.blocked) {
+        const hold = HOLD[s.kind] ?? JIZO_HOLD_SECONDS;
         s.progress = Math.min(1, s.progress + dt / hold);
         if (s.progress >= 1) {
           this.use(i);
@@ -254,9 +280,57 @@ export class Elements {
       }
       st.setMod(`altar:${n}:boons`, { pct });
     }
+    else if (s.kind === 'offering') {
+      const o = OFFERING[s.rarity];
+      this.host.payHpFrac(o.costFrac);
+      this.host.openPick(o.reward, o.picks, 'offering');
+    } else if (s.kind === 'chest') {
+      this.host.openPick(s.rarity, 1, 'chest');
+    } else if (s.kind === 'omikuji') this.drawOmikuji(s);
     s.usedAge = 0;
     s.progress = 1;
     this.host.emitUsed(s.kind, s.rarity);
+  }
+
+  /** 神籤：依稀有度與幸運抽結果（幸運把凶類權重乘以 1/(1+luck/100)），套用限時效果 */
+  private drawOmikuji(s: ElementSlot): void {
+    const w = OMIKUJI_WEIGHTS[s.rarity];
+    const dampen = 1 / (1 + Math.max(0, this.luck) / 100);
+    let total = 0;
+    const ws = OMIKUJI_RESULTS.map((r) => {
+      const v = w[r] * (r === 'kyo' || r === 'daikyo' ? dampen : 1);
+      total += v;
+      return v;
+    });
+    let r = this.rng.next() * total;
+    let result: OmikujiResult = OMIKUJI_RESULTS[0];
+    for (let i = 0; i < ws.length; i++) {
+      r -= ws[i];
+      if (r < 0) {
+        result = OMIKUJI_RESULTS[i];
+        break;
+      }
+    }
+    this.applyOmikuji(result);
+  }
+
+  /** 套用神籤結果（測試也直接呼叫） */
+  applyOmikuji(result: OmikujiResult): void {
+    const f = OMIKUJI_EFFECT[result];
+    const key = `omikuji:${this.carry.serial++}`;
+    if (f.pct || f.flat) {
+      this.host.stats.setMod(key, { pct: f.pct, flat: f.flat });
+      this.timed.push({ key, until: this.clock + f.seconds });
+    }
+    if (f.curse) {
+      for (const [id, v] of Object.entries(f.curse)) {
+        const k = `${key}:${id}`;
+        this.host.setCurse(k, id as CurseId, v);
+        this.timed.push({ key: k, until: this.clock + f.seconds, curse: true });
+      }
+    }
+    if (f.merit) this.host.addMerit(f.merit);
+    this.host.notifyOmikuji(result);
   }
 
   // ── 落下 ─────────────────────────────────────────────────────
@@ -264,7 +338,7 @@ export class Elements {
     let total = 0;
     const w: number[] = [];
     for (const k of ELEMENT_KINDS) {
-      const ok = this.countKind(k) < ELEMENT_RULES.perKind;
+      const ok = this.countKind(k) < (ELEMENT_PER_KIND[k] ?? ELEMENT_RULES.perKind);
       const v = ok ? ELEMENT_WEIGHTS[k] : 0;
       w.push(v);
       total += v;
@@ -341,6 +415,7 @@ export class Elements {
     s.announce = announce;
     s.progress = 0;
     s.inside = false;
+    s.blocked = false;
     s.usedAge = -1;
     if (kind === 'altar') this.rollAltar(s);
     this.host.emitSpawn(kind, rarity);

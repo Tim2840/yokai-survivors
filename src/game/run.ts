@@ -137,6 +137,13 @@ export class Run {
   readonly syn = { splashRatio: 0, splashMult: 1, pierce: 0, volley: 0, auraMult: 1 };
   /** 最近一次聯動觸發的時間（模擬累計秒）與 id，HUD 顯示提示用 */
   lastSynergy: { id: string; at: number } | null = null;
+  /** 神籤的功德獎勵累計、最近一次神籤結果（HUD 提示用） */
+  bonusMerit = 0;
+  lastOmikuji: { id: string; at: number } | null = null;
+  /** 目前這個選卡面板的來源：升級／賽錢箱／寶箱；賽錢箱、寶箱的剩餘選卡次數與稀有度 */
+  offerKind: 'levelup' | 'offering' | 'chest' = 'levelup';
+  private bonusLeft = 0;
+  private bonusRarity: import('../data/rarity').Rarity = 'rare';
   /** 這一局累計的模擬秒數（跨關） */
   clock = 0;
   private fireCd = 0;
@@ -205,6 +212,17 @@ export class Run {
       stats: this.stats,
       healFrac: (f) => {
         this.hp = Math.min(this.maxHp, this.hp + this.maxHp * f);
+      },
+      canPayHpFrac: (f) => this.hp > this.maxHp * f + 1,
+      payHpFrac: (f) => {
+        this.hp -= this.maxHp * f;
+      },
+      openPick: (rarity, picks, kind) => this.openBonusPick(rarity, picks, kind),
+      addMerit: (n) => {
+        this.bonusMerit += n;
+      },
+      notifyOmikuji: (result) => {
+        this.lastOmikuji = { id: result, at: this.clock };
       },
       setCurse: (key, id, v) => {
         this.curseSources.set(key, { id, v });
@@ -561,12 +579,41 @@ export class Run {
   }
 
   /** 玩家選了第 index 張卡。回傳是否還有下一次待選（UI 繼續開著面板） */
+  /** 賽錢箱、寶箱：開三選一面板（模擬暫停，沿用升級選卡的同一個面板，D15），連選 picks 次 */
+  private openBonusPick(rarity: import('../data/rarity').Rarity, picks: number, kind: 'offering' | 'chest'): void {
+    if (this.offer !== null) return;
+    this.bonusLeft = picks;
+    this.bonusRarity = rarity;
+    this.offerKind = kind;
+    this.offer = this.dealer.dealRarity(rarity);
+    this.bus.emit('levelUp', { level: this.level, pending: this.bonusLeft });
+  }
+
+  /** 面板上「還有幾次」：賽錢箱／寶箱看剩下的連選次數，升級看待選的升級數 */
+  get picksLeft(): number {
+    return this.offerKind === 'levelup' ? this.pendingPicks : this.bonusLeft;
+  }
+
   chooseCard(index: number): boolean {
     if (!this.offer || index < 0 || index >= this.offer.length) return this.offer !== null;
     const o = this.offer[index];
     this.applyCard(o);
-    this.pendingPicks--;
     this.bus.emit('cardChosen', { cardId: o.cardId, rarity: o.rarity });
+    if (this.offerKind !== 'levelup') {
+      this.bonusLeft--;
+      if (this.bonusLeft > 0) {
+        this.offer = this.dealer.dealRarity(this.bonusRarity);
+        return true;
+      }
+      this.offerKind = 'levelup';
+      this.offer = null;
+      if (this.pendingPicks > 0) {
+        this.makeOffer();
+        return true;
+      }
+      return false;
+    }
+    this.pendingPicks--;
     if (this.pendingPicks > 0) {
       this.makeOffer();
       return true;
@@ -643,6 +690,8 @@ export class Run {
     if (this.phase === 'ended') return;
     this.offer = null;
     this.pendingPicks = 0;
+    this.bonusLeft = 0;
+    this.offerKind = 'levelup';
     this.finish('abandon');
   }
 
@@ -652,7 +701,7 @@ export class Run {
     this.phase = 'ended';
     // 通過的關卡數：勝利 = 全部；其餘 = 已走進傳送門的關（在過關畫面放棄算已通過目前這關）
     const cleared = result === 'victory' ? this.stageNumber : wasPhase === 'intermission' ? this.stageNumber : this.stageIndex;
-    const merit = computeMerit({
+    const merit = this.bonusMerit + computeMerit({
       stagesCleared: cleared,
       kills: this.kills,
       bossesDefeated: this.bossesDefeated,

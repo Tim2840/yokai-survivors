@@ -4,7 +4,7 @@ import type { Run } from '../game/run';
 import type { CurseId } from '../data/altar';
 import type { StatId } from '../data/stats';
 import type { ElementSlot } from '../systems/elements';
-import { BARRIER, JIZO, JIZO_ARMOR_SECONDS } from '../data/elements';
+import { BARRIER, JIZO, JIZO_ARMOR_SECONDS, OFFERING } from '../data/elements';
 
 
 /**
@@ -134,7 +134,10 @@ export function buildHud(parent: HTMLElement): Hud {
       }
       // 卡片聯動：觸發後顯示 4 秒（不是彈窗，不暫停）
       const sy = run.lastSynergy;
-      const synText = sy && run.clock - sy.at < 4 ? t('hud.synergy', { name: t(`synergy.${sy.id}` as I18nKey), desc: t(`synergy.${sy.id}.desc` as I18nKey) }) : '';
+      const om = run.lastOmikuji;
+      let synText = sy && run.clock - sy.at < 4 ? t('hud.synergy', { name: t(`synergy.${sy.id}` as I18nKey), desc: t(`synergy.${sy.id}.desc` as I18nKey) }) : '';
+      // 神籤的結果也用同一個提示框（比較新的優先）
+      if (om && run.clock - om.at < 4 && (!sy || om.at >= sy.at || run.clock - sy.at >= 4)) synText = t(`omikuji.${om.id}` as I18nKey);
       if (synText !== lastSyn) {
         lastSyn = synText;
         synBox.textContent = synText;
@@ -148,7 +151,7 @@ export function buildHud(parent: HTMLElement): Hud {
           elBox.classList.add('hidden');
         }
       } else {
-        const key = `${f.kind}|${f.rarity}|${f.effects.slice(0, f.effectCount).map((x) => x.id).join(',')}`;
+        const key = `${f.kind}|${f.rarity}|${f.blocked ? 'x' : ''}|${f.effects.slice(0, f.effectCount).map((x) => x.id).join(',')}`;
         if (key !== lastEl) {
           lastEl = key;
           elBox.classList.remove('hidden');
@@ -178,6 +181,13 @@ function describeElement(f: ElementSlot): string {
     const j = JIZO[f.rarity];
     return t(f.rarity === 'legend' ? 'element.jizo.descLegend' : 'element.jizo.desc', { heal: Math.round(j.healFrac * 100), armor: j.armor, sec: JIZO_ARMOR_SECONDS });
   }
+  if (f.kind === 'offering') {
+    const o = OFFERING[f.rarity];
+    if (f.blocked) return t('element.offering.poor');
+    return t('element.offering.desc', { cost: Math.round(o.costFrac * 100), rarity: t(`rarity.${o.reward}`), more: o.picks > 1 ? t('element.offering.more', { n: o.picks }) : '' });
+  }
+  if (f.kind === 'chest') return t('element.chest.desc', { rarity: t(`rarity.${f.rarity}`) });
+  if (f.kind === 'omikuji') return t('element.omikuji.desc');
   if (f.kind === 'barrier') return t('element.barrier.desc', { pct: Math.round(BARRIER[f.rarity].bonus * 100) });
   // 詛咒祭壇：把抽到的每個效果列出來，詛咒（敵人變強）與好處（自己變強）用 +％ 寫在一起
   const parts: string[] = [];

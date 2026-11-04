@@ -230,7 +230,7 @@ export class Game {
       const run = this.run;
       if (!run || !run.offer) return;
       this.loop.hold('levelup');
-      this.picker.render(run.offer, run.pendingPicks, run.ownedCards, run.activeSynergies);
+      this.picker.render(run.offer, run.picksLeft, run.ownedCards, run.activeSynergies, run.offerKind);
       this.picker.show();
       this.audio.sfx('levelUp');
     });
@@ -267,7 +267,7 @@ export class Game {
     this.audio.sfx('cardFlip', ['common', 'rare', 'epic', 'legend'].indexOf(run.offer[i]?.rarity ?? 'common'));
     const more = run.chooseCard(i);
     if (more && run.offer) {
-      this.picker.render(run.offer, run.pendingPicks, run.ownedCards, run.activeSynergies);
+      this.picker.render(run.offer, run.picksLeft, run.ownedCards, run.activeSynergies, run.offerKind);
     } else {
       this.picker.hide();
       this.loop.release('levelup');

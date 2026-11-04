@@ -46,6 +46,14 @@ export class CardDealer {
     private readonly unlocked: readonly Rarity[],
   ) {}
 
+  /** 固定稀有度的三選一（賽錢箱、寶箱）：n 張不同的卡，全部是 rarity 階 */
+  dealRarity(rarity: Rarity, n: number = CARD_CHOICES): CardOffer[] {
+    const ids = [...this.pool];
+    const out: CardOffer[] = [];
+    for (let k = 0; k < n && ids.length > 0; k++) out.push({ cardId: ids.splice(Math.floor(this.rng.next() * ids.length), 1)[0], rarity });
+    return out;
+  }
+
   deal(level: number, luck: number, n: number = CARD_CHOICES): CardOffer[] {
     const weights = cardRarityWeights(level, luck, [...this.unlocked]);
     const ids = [...this.pool];

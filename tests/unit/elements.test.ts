@@ -5,7 +5,7 @@ import { STAGE } from '../../src/data/stage';
 import { tuning } from '../../src/data/tuning';
 import { RARITIES, type Rarity } from '../../src/data/rarity';
 import { ALTAR_BOON_PCT, ALTAR_CURSE, ALTAR_EFFECT_COUNT, ALTAR_BOONS, ALTAR_CURSE_IDS } from '../../src/data/altar';
-import { ELEMENT_RULES, JIZO, JIZO_ARMOR_SECONDS, JIZO_HOLD_SECONDS, ALTAR_HOLD_SECONDS, BARRIER, BARRIER_SPAWN_MULT, BARRIER_RADIUS } from '../../src/data/elements';
+import { ELEMENT_KINDS, ELEMENT_PER_KIND, OFFERING, OFFERING_HOLD_SECONDS, OMIKUJI_EFFECT, OMIKUJI_RESULTS, OMIKUJI_WEIGHTS, CHEST_HOLD_SECONDS, OMIKUJI_HOLD_SECONDS, ELEMENT_RULES, JIZO, JIZO_ARMOR_SECONDS, JIZO_HOLD_SECONDS, ALTAR_HOLD_SECONDS, BARRIER, BARRIER_SPAWN_MULT, BARRIER_RADIUS } from '../../src/data/elements';
 import { STAT_LIMITS, STAT_IDS } from '../../src/data/stats';
 import { Elements, elementRarityWeights } from '../../src/systems/elements';
 import { TerrainMap } from '../../src/world/terrainMap';
@@ -44,7 +44,7 @@ function stubElements(seed: number) {
   const stats = new Stats();
   const start = map.def.playerStart;
   flow.update(start.x, start.z, true);
-  const el = new Elements(new Rng(seed), map, flow, { stats, healFrac: () => {}, emitSpawn: () => {}, emitUsed: () => {} });
+  const el = new Elements(new Rng(seed), map, flow, { stats, healFrac: () => {}, canPayHpFrac: () => true, payHpFrac: () => {}, openPick: () => {}, addMerit: () => {}, notifyOmikuji: () => {}, setCurse: () => {}, clearCurse: () => {}, emitSpawn: () => {}, emitUsed: () => {} });
   return { map, flow, stats, el, start };
 }
 
@@ -60,7 +60,7 @@ describe('地圖要素：落下規則（種子全掃）', () => {
         if (t % 30 !== 0) continue;
         const live = el.slots.filter((s) => s.active);
         expect(live.length, `種子 ${seed}`).toBeLessThanOrEqual(R.maxActive);
-        for (const kind of ['jizo', 'barrier', 'altar']) expect(live.filter((s) => s.kind === kind).length).toBeLessThanOrEqual(R.perKind);
+        for (const kind of ELEMENT_KINDS) expect(live.filter((s) => s.kind === kind).length).toBeLessThanOrEqual(ELEMENT_PER_KIND[kind] ?? R.perKind);
         for (const s of live) {
           const key = `${s.kind}@${s.x.toFixed(2)},${s.z.toFixed(2)}`;
           seen.add(key);
@@ -268,3 +268,119 @@ describe('要素過期', () => {
 });
 
 export type { Rarity };
+
+describe('賽錢箱、神籤、寶箱（M2-2）', () => {
+  it('賽錢箱：按住 1.5 秒 → 扣生命、開對應稀有度的三選一；妖階連選 2 次；生命不夠不能用', () => {
+    for (const r of RARITIES) {
+      const { run } = make(21);
+      run.god = true;
+      const s = run.elements.devForce('offering', r, run.px, run.pz)!;
+      const o = OFFERING[r];
+      const hp0 = run.hp;
+      stand(run, s.x, s.z, OFFERING_HOLD_SECONDS - 0.3);
+      expect(run.offer, `${r} 未按滿就不該開面板`).toBeNull();
+      run.devTeleport(s.x, s.z);
+      for (let i = 0; i < 40 && !run.offer; i++) run.step(DT);
+      expect(run.offer, `${r} 按滿後應開三選一`).not.toBeNull();
+      expect(run.offerKind).toBe('offering');
+      expect(run.offer!.length).toBe(3);
+      expect(run.offer!.every((c) => c.rarity === o.reward)).toBe(true);
+      expect(run.hp).toBeLessThan(hp0);
+      expect(run.hp).toBeGreaterThan(0);
+      for (let k = 0; k < o.picks; k++) {
+        expect(run.offer, `${r} 第 ${k + 1} 次選卡`).not.toBeNull();
+        run.chooseCard(0);
+      }
+      expect(run.offer, `${r} 選完 ${o.picks} 次後面板要關`).toBeNull();
+      expect(run.offerKind).toBe('levelup');
+    }
+  });
+
+  it('賽錢箱：生命低於代價 + 1 → 進度不前進、不開面板、不扣血', () => {
+    const { run } = make(22);
+    const s = run.elements.devForce('offering', 'legend', run.px, run.pz)!;
+    run.hp = run.maxHp * 0.3;
+    const hp0 = run.hp;
+    stand(run, s.x, s.z, 3);
+    expect(s.blocked).toBe(true);
+    expect(s.progress).toBe(0);
+    expect(run.offer).toBeNull();
+    expect(run.hp).toBeGreaterThanOrEqual(hp0);
+  });
+
+  it('寶箱：免費、三張都是它的稀有度、只選一次', () => {
+    for (const r of RARITIES) {
+      const { run } = make(23);
+      const s = run.elements.devForce('chest', r, run.px, run.pz)!;
+      const hp0 = run.hp;
+      run.devTeleport(s.x, s.z);
+      for (let i = 0; i < Math.round((CHEST_HOLD_SECONDS + 0.5) / DT) && !run.offer; i++) run.step(DT);
+      expect(run.offer, r).not.toBeNull();
+      expect(run.offerKind).toBe('chest');
+      expect(run.offer!.every((c) => c.rarity === r)).toBe(true);
+      expect(run.hp).toBeGreaterThanOrEqual(hp0 - 1e-6);
+      run.chooseCard(1);
+      expect(run.offer).toBeNull();
+    }
+  });
+
+  it('神籤：每種結果的效果與持續時間；到期恢復；凶類是讓敵人變強', () => {
+    for (const res of OMIKUJI_RESULTS) {
+      const { run } = make(24);
+      const f = OMIKUJI_EFFECT[res];
+      const before = { ...run.stats.value };
+      const merit0 = run.bonusMerit;
+      run.elements.applyOmikuji(res);
+      expect(run.lastOmikuji?.id).toBe(res);
+      for (const [k, v] of Object.entries(f.pct ?? {})) expect(run.stats.value[k as 'power']).toBeCloseTo(before[k as 'power'] * (1 + v));
+      if (f.flat) expect(run.stats.value.regen).toBeCloseTo(before.regen + f.flat.regen);
+      if (f.curse) for (const [k, v] of Object.entries(f.curse)) expect(run.curse[k as 'enemySpeed']).toBeCloseTo(v);
+      if (f.merit) expect(run.bonusMerit).toBe(merit0 + f.merit);
+      advance(run, f.seconds + 1);
+      expect(run.stats.value.power).toBeCloseTo(before.power);
+      expect(run.stats.value.regen).toBeCloseTo(before.regen);
+      expect(run.curse.enemySpeed + run.curse.enemyDamage).toBeCloseTo(0);
+    }
+  });
+
+  it('神籤：按住 1 秒抽一次、只能用一次；權重每階加總 100；凶類隨稀有度變少、幸運再壓低', () => {
+    for (const r of RARITIES) expect(OMIKUJI_RESULTS.reduce((a, k) => a + OMIKUJI_WEIGHTS[r][k], 0)).toBe(100);
+    for (let i = 1; i < RARITIES.length; i++) {
+      const a = OMIKUJI_WEIGHTS[RARITIES[i - 1]];
+      const b = OMIKUJI_WEIGHTS[RARITIES[i]];
+      expect(b.kyo + b.daikyo).toBeLessThanOrEqual(a.kyo + a.daikyo);
+    }
+    const { run } = make(25);
+    const s = run.elements.devForce('omikuji', 'epic', run.px, run.pz)!;
+    stand(run, s.x, s.z, OMIKUJI_HOLD_SECONDS + 0.3);
+    expect(run.lastOmikuji).not.toBeNull();
+  });
+
+  it('神籤：大量抽樣的結果分佈接近權重，幸運高時凶類變少', () => {
+    const draw = (luck: number) => {
+      const { el, start } = stubElements(3);
+      const counts: Record<string, number> = {};
+      for (const r of OMIKUJI_RESULTS) counts[r] = 0;
+      const s = el.devForce('omikuji', 'common', start.x, start.z)!;
+      void s;
+      // 直接用 Elements 的內部抽籤：透過 update 把 luck 帶進去，再重複放置、使用
+      for (let n = 0; n < 2000; n++) {
+        const slot = el.devForce('omikuji', 'common', start.x, start.z)!;
+        slot.progress = 0.999;
+        const host = (el as unknown as { host: { notifyOmikuji: (r: string) => void } }).host;
+        let got = '';
+        host.notifyOmikuji = (r) => (got = r);
+        el.update(0.1, n * 0.1, 600, 1, luck, slot.x, slot.y, slot.z);
+        if (got) counts[got]++;
+      }
+      return counts;
+    };
+    const a = draw(0);
+    const total = Object.values(a).reduce((x, y) => x + y, 0);
+    expect(total).toBeGreaterThan(1500);
+    expect(a.shokichi / total).toBeGreaterThan(0.2);
+    expect(a.shokichi / total).toBeLessThan(0.4);
+    const b = draw(300);
+    expect((b.kyo + b.daikyo) / Object.values(b).reduce((x, y) => x + y, 0)).toBeLessThan((a.kyo + a.daikyo) / total);
+  });
+});

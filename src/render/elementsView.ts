@@ -17,6 +17,9 @@ interface SlotView {
   jizo: THREE.Group;
   barrier: THREE.Group;
   altar: THREE.Group;
+  offering: THREE.Group;
+  omikuji: THREE.Group;
+  chest: THREE.Group;
   beam: THREE.Mesh;
   beamMat: THREE.MeshBasicMaterial;
   ring: THREE.Mesh;
@@ -58,6 +61,19 @@ export class ElementsView {
     const gAltarBase = roundedCylinder(0.75, 0.9, 0.55, 0.15);
     const gAltarTop = roundedCylinder(0.5, 0.65, 0.3, 0.1);
     const gFlame = teardrop(0.32, 0.9, { bulge: 0.35, sharp: 1.4 });
+    const wood = soft('#8a5a3a');
+    const woodDark = soft('#5a3a26');
+    const redLid = soft('#b8352c');
+    const gold = glow('#ffd27a', 1.6);
+    const gBox = roundedCylinder(0.62, 0.68, 0.62, 0.12, 20);
+    const gLid = roundedCylinder(0.7, 0.7, 0.14, 0.06, 20);
+    const gCoin = new THREE.TorusGeometry(0.16, 0.045, 8, 18);
+    const gPost = roundedCylinder(0.26, 0.34, 1.0, 0.1, 14);
+    const gStick = new THREE.CylinderGeometry(0.035, 0.035, 0.7, 6);
+    const gTag = ball(0.1, 10, 8);
+    const gDome = new THREE.SphereGeometry(0.66, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+    const gBand = new THREE.TorusGeometry(0.66, 0.05, 8, 24).rotateX(Math.PI / 2);
+    this.disposables.push(wood, woodDark, redLid, gold, gBox, gLid, gCoin, gPost, gStick, gTag, gDome, gBand);
     const gBeam = new THREE.CylinderGeometry(0.4, 0.4, BEAM_H, 20, 1, true);
     const gRing = new THREE.RingGeometry(R.useRadius - 0.12, R.useRadius, 40).rotateX(-Math.PI / 2);
     const gFill = new THREE.CircleGeometry(R.useRadius - 0.12, 40).rotateX(-Math.PI / 2);
@@ -89,6 +105,36 @@ export class ElementsView {
       const flame = new THREE.Mesh(gFlame, purple);
       flame.position.y = 0.85;
       altar.add(ab, at, flame);
+      // 賽錢箱：木桶身＋紅蓋＋金幣
+      const offering = new THREE.Group();
+      const ob = new THREE.Mesh(gBox, wood);
+      const ol = new THREE.Mesh(gLid, redLid);
+      ol.position.y = 0.62;
+      const oc = new THREE.Mesh(gCoin, gold);
+      oc.position.set(0, 0.38, 0.66);
+      offering.add(ob, ol, oc);
+      // 神籤：木柱上插一束籤
+      const omikuji = new THREE.Group();
+      const op = new THREE.Mesh(gPost, woodDark);
+      omikuji.add(op);
+      for (let k = 0; k < 6; k++) {
+        const st = new THREE.Mesh(gStick, wood);
+        const a = (k / 6) * Math.PI * 2;
+        st.position.set(Math.cos(a) * 0.1, 1.25, Math.sin(a) * 0.1);
+        st.rotation.set(Math.sin(a) * 0.28, 0, -Math.cos(a) * 0.28);
+        omikuji.add(st);
+      }
+      const ot = new THREE.Mesh(gTag, redLid);
+      ot.position.set(0, 0.8, 0.3);
+      omikuji.add(ot);
+      // 寶箱：木桶身＋圓頂蓋＋金邊
+      const chest = new THREE.Group();
+      const cb = new THREE.Mesh(gBox, wood);
+      const cd = new THREE.Mesh(gDome, woodDark);
+      cd.position.y = 0.62;
+      const cg = new THREE.Mesh(gBand, gold);
+      cg.position.y = 0.64;
+      chest.add(cb, cd, cg);
       // 稀有度光圈（互動範圍）、進度填色、光柱
       const ringMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });
       const ring = new THREE.Mesh(gRing, ringMat);
@@ -115,10 +161,10 @@ export class ElementsView {
       zone.renderOrder = 2;
       zone.visible = false;
       this.disposables.push(ringMat, fillMat, beamMat, zg, zoneMat);
-      root.add(jizo, barrier, altar, ring, fill, beam);
+      root.add(jizo, barrier, altar, offering, omikuji, chest, ring, fill, beam);
       root.visible = false;
       this.group.add(root, zone);
-      this.views.push({ root, jizo, barrier, altar, beam, beamMat, ring, ringMat, fill, fillMat, zone, zoneMat, flame, zx: NaN, zz: NaN });
+      this.views.push({ root, jizo, barrier, altar, offering, omikuji, chest, beam, beamMat, ring, ringMat, fill, fillMat, zone, zoneMat, flame, zx: NaN, zz: NaN });
     }
   }
 
@@ -157,6 +203,9 @@ export class ElementsView {
       v.jizo.visible = s.kind === 'jizo';
       v.barrier.visible = s.kind === 'barrier';
       v.altar.visible = s.kind === 'altar';
+      v.offering.visible = s.kind === 'offering';
+      v.omikuji.visible = s.kind === 'omikuji';
+      v.chest.visible = s.kind === 'chest';
       v.ringMat.color.copy(c);
       v.fillMat.color.copy(c);
       v.beamMat.color.copy(c);
@@ -169,6 +218,9 @@ export class ElementsView {
       v.jizo.scale.setScalar(g);
       v.barrier.scale.setScalar(g);
       v.altar.scale.setScalar(g);
+      v.offering.scale.setScalar(g);
+      v.omikuji.scale.setScalar(g);
+      v.chest.scale.setScalar(g);
       v.beamMat.opacity = (ann ? 0.26 : 0.08 + 0.03 * Math.sin(t * 2 + i)) * fade;
       // 結界石的環是範圍；其他兩種是互動圈
       const isBarrier = s.kind === 'barrier';

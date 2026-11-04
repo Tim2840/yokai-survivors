@@ -1,7 +1,7 @@
 import type { Rarity } from './rarity';
 
 /** 地圖要素（docs/02 第 6 節）。M2 先做石地藏、結界石、詛咒祭壇；其餘隨後加入。 */
-export const ELEMENT_KINDS = ['jizo', 'barrier', 'altar'] as const;
+export const ELEMENT_KINDS = ['jizo', 'barrier', 'altar', 'offering', 'omikuji', 'chest'] as const;
 export type ElementKind = (typeof ELEMENT_KINDS)[number];
 
 /** 出現規則（docs/02 第 6.3 節，改成連續關卡：用「關卡經過比例」取代「整備」） */
@@ -30,7 +30,9 @@ export const ELEMENT_RULES = {
 } as const;
 
 /** 要素種類權重（地圖可覆寫） */
-export const ELEMENT_WEIGHTS: Record<ElementKind, number> = { jizo: 1, barrier: 1, altar: 1 };
+export const ELEMENT_WEIGHTS: Record<ElementKind, number> = { jizo: 1, barrier: 1, altar: 1, offering: 1, omikuji: 1, chest: 0.6 };
+/** 同種同時最多幾個（沒寫的用 ELEMENT_RULES.perKind） */
+export const ELEMENT_PER_KIND: Partial<Record<ElementKind, number>> = { chest: 1, omikuji: 1 };
 
 /** 稀有度權重（依虛擬波數；docs/02 第 6.3 節）。波數落在哪一列取最後一個 from <= n */
 export const ELEMENT_RARITY_BY_WAVE: readonly { from: number; w: Record<Rarity, number> }[] = [
@@ -64,3 +66,35 @@ export const BARRIER_SPAWN_MULT = 1.25;
 
 /** 詛咒祭壇（①）：按住秒數 */
 export const ALTAR_HOLD_SECONDS = 1.5;
+
+/** 賽錢箱（docs/02 第 6.2 節②）：付出最大生命的比例（不致死），換一次三選一（三張都是 reward 階）；picks = 連選幾次 */
+export const OFFERING: Record<Rarity, { costFrac: number; reward: Rarity; picks: number }> = {
+  common: { costFrac: 0.1, reward: 'rare', picks: 1 },
+  rare: { costFrac: 0.2, reward: 'epic', picks: 1 },
+  epic: { costFrac: 0.3, reward: 'epic', picks: 2 },
+  legend: { costFrac: 0.4, reward: 'legend', picks: 1 },
+};
+export const OFFERING_HOLD_SECONDS = 1.5;
+
+/** 寶箱（M2 新增，docs/02 沒有原案）：不用付代價，一次三選一（三張都是同稀有度），數量少 */
+export const CHEST_HOLD_SECONDS = 1.0;
+
+/** 神籤（③）：抽一次，結果隨機；好結果 60 秒、凶 45 秒。weights 依稀有度（凡／靈／妖／神） */
+export const OMIKUJI_HOLD_SECONDS = 1.0;
+export const OMIKUJI_RESULTS = ['daikichi', 'chukichi', 'shokichi', 'suekichi', 'kyo', 'daikyo'] as const;
+export type OmikujiResult = (typeof OMIKUJI_RESULTS)[number];
+export const OMIKUJI_WEIGHTS: Record<Rarity, Record<OmikujiResult, number>> = {
+  common: { daikichi: 5, chukichi: 15, shokichi: 30, suekichi: 20, kyo: 20, daikyo: 10 },
+  rare: { daikichi: 8, chukichi: 20, shokichi: 32, suekichi: 20, kyo: 15, daikyo: 5 },
+  epic: { daikichi: 12, chukichi: 26, shokichi: 32, suekichi: 18, kyo: 10, daikyo: 2 },
+  legend: { daikichi: 20, chukichi: 32, shokichi: 30, suekichi: 15, kyo: 3, daikyo: 0 },
+};
+/** 各結果的效果：pct／flat = 自己的屬性；curse = 讓敵人變強（凶類）；merit = 功德；seconds = 持續 */
+export const OMIKUJI_EFFECT: Record<OmikujiResult, { seconds: number; pct?: Partial<Record<'power' | 'atkSpeed' | 'area' | 'speed', number>>; flat?: { regen: number }; curse?: Partial<Record<'enemySpeed' | 'enemyDamage', number>>; merit?: number }> = {
+  daikichi: { seconds: 60, pct: { power: 0.25, atkSpeed: 0.25, area: 0.25, speed: 0.25 } },
+  chukichi: { seconds: 60, pct: { power: 0.25 } },
+  shokichi: { seconds: 60, flat: { regen: 2 } },
+  suekichi: { seconds: 0, merit: 5 },
+  kyo: { seconds: 45, curse: { enemySpeed: 0.15 } },
+  daikyo: { seconds: 45, curse: { enemyDamage: 0.3 } },
+};
