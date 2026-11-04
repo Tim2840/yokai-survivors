@@ -4,7 +4,7 @@ import { EventBus } from '../../src/core/bus';
 import { STAGE } from '../../src/data/stage';
 import { tuning } from '../../src/data/tuning';
 import { RARITIES, type Rarity } from '../../src/data/rarity';
-import { ALTAR, ALTAR_DOWN_ARMOR } from '../../src/data/altar';
+import { ALTAR_BOON_PCT, ALTAR_CURSE, ALTAR_EFFECT_COUNT, ALTAR_BOONS, ALTAR_CURSE_IDS } from '../../src/data/altar';
 import { ELEMENT_RULES, JIZO, JIZO_ARMOR_SECONDS, JIZO_HOLD_SECONDS, ALTAR_HOLD_SECONDS, BARRIER, BARRIER_SPAWN_MULT, BARRIER_RADIUS } from '../../src/data/elements';
 import { STAT_LIMITS, STAT_IDS } from '../../src/data/stats';
 import { Elements, elementRarityWeights } from '../../src/systems/elements';
@@ -127,45 +127,55 @@ describe('石地藏', () => {
   });
 });
 
-describe('詛咒祭壇', () => {
-  it('每個稀有度、30 個種子：升降合法（升≠降）、數字照表、護甲是固定值', () => {
+describe('詛咒祭壇（D27：隨機抽數個不同效果，含詛咒）', () => {
+  it('每個稀有度、30 個種子、每個 20 次：效果數照表、互不相同、至少 1 好處 1 詛咒、數字照表', () => {
+    const seenBoon = new Set<string>();
+    const seenCurse = new Set<string>();
+    const sizes = new Set<string>();
     for (let seed = 1; seed <= 30; seed++) {
       const { el, start } = stubElements(seed);
       for (const r of RARITIES) {
         for (let k = 0; k < 20; k++) {
           const s = el.devForce('altar', r, start.x, start.z)!;
           expect(s, `種子 ${seed} 放得下`).toBeTruthy();
-          expect(s.up).not.toBe(s.down);
-          expect(s.upPct).toBeCloseTo(ALTAR[r].up / 100);
-          if (s.down === 'armor') {
-            expect(s.downFlat).toBe(ALTAR_DOWN_ARMOR[r]);
-            expect(s.downPct).toBe(0);
-          } else {
-            expect(s.downPct).toBeCloseTo(ALTAR[r].down / 100);
-            expect(s.downFlat).toBe(0);
+          const fx = s.effects.slice(0, s.effectCount);
+          expect(fx.length).toBe(ALTAR_EFFECT_COUNT[r]);
+          expect(new Set(fx.map((f) => f.id)).size, '效果不可重複').toBe(fx.length);
+          expect(fx.some((f) => f.curse), '至少一個詛咒').toBe(true);
+          expect(fx.some((f) => !f.curse), '至少一個好處').toBe(true);
+          for (const f of fx) {
+            if (f.curse) {
+              expect(f.v).toBeCloseTo(ALTAR_CURSE[r][f.id as keyof (typeof ALTAR_CURSE)[typeof r]]);
+              seenCurse.add(f.id);
+            } else {
+              expect(ALTAR_BOONS).toContain(f.id);
+              expect(f.v).toBeCloseTo(ALTAR_BOON_PCT[r]);
+              seenBoon.add(f.id);
+            }
           }
+          sizes.add(fx.map((f) => f.id).sort().join());
         }
       }
     }
+    // 真的是「隨機」：每種好處與每種詛咒都抽得到、組合不只幾種
+    expect(seenBoon.size).toBe(ALTAR_BOONS.length);
+    expect(seenCurse.size).toBe(ALTAR_CURSE_IDS.length);
+    expect(sizes.size).toBeGreaterThan(20);
   }, 60000);
 
-  it('按住 1.5 秒才生效；接受後升降都套用，所有屬性仍在上下限內；帶到下一關還在', () => {
+  it('按住 1.5 秒才生效：好處加在屬性、詛咒讓敵人變強；帶到下一關還在', () => {
     const { run } = make(11);
     const s = run.elements.devForce('altar', 'legend', run.px, run.pz)!;
+    const fx = s.effects.slice(0, s.effectCount).map((f) => ({ ...f }));
     const before = { ...run.stats.value };
     stand(run, s.x, s.z, ALTAR_HOLD_SECONDS - 0.4);
-    expect(run.stats.value[s.up]).toBe(before[s.up]);
+    expect(run.curse.enemyHp + run.curse.enemySpeed + run.curse.enemyDamage + run.curse.spawnRate).toBe(0);
     stand(run, s.x, s.z, 0.6);
-    const after = { ...run.stats.value };
-    expect(after[s.up]).toBeGreaterThan(before[s.up]);
-    if (s.down === 'armor') expect(after.armor).toBeCloseTo(before.armor - s.downFlat);
-    else expect(after[s.down]).toBeLessThan(before[s.down]);
-    for (const id of STAT_IDS) {
-      const lim = STAT_LIMITS[id];
-      const lo = lim.rel ? run.stats.baseOf(id) * lim.min : lim.min;
-      expect(after[id]).toBeGreaterThanOrEqual(lo - 1e-9);
+    for (const f of fx) {
+      if (f.curse) expect(run.curse[f.id as 'enemyHp']).toBeCloseTo(f.v);
+      else expect(run.stats.value[f.id as 'power']).toBeGreaterThan(before[f.id as 'power']);
     }
-    // 帶到下一關
+    const afterCurse = { ...run.curse };
     run.devSetTime(STAGE.bossAt * 600 + 2);
     for (let i = 0; i < 30; i++) run.step(DT);
     run.devKillBoss();
@@ -178,18 +188,43 @@ describe('詛咒祭壇', () => {
     expect(run.phase).toBe('intermission');
     run.continueFromIntermission();
     expect(run.stageNumber).toBe(2);
-    expect(run.stats.value[s.up]).toBeCloseTo(after[s.up]);
+    expect(run.curse).toEqual(afterCurse);
   });
 
-  it('石地藏神階可消除一項祭壇的降低', () => {
+  it('詛咒真的讓敵人變強：敵人生命、速度、傷害、湧出速率', () => {
+    const { run } = make(13);
+    run.god = false;
+    const base = run.curse.enemyHp;
+    expect(base).toBe(0);
+    // 直接以祭壇接受：選一個一定含某詛咒的種子太脆弱，改為對照「有／無詛咒」的同一刻
+    const hpAt = () => {
+      run.devSpawn('villager', 1);
+      let m = 0;
+      for (let i = 0; i < run.enemies.high; i++) if (run.enemies.alive[i]) m = Math.max(m, run.enemies.maxHp[i]);
+      return m;
+    };
+    const h0 = hpAt();
+    // 讓場上有一個祭壇被接受，並確認所有詛咒總和 > 0
+    const a = run.elements.devForce('altar', 'epic', run.px, run.pz)!;
+    stand(run, a.x, a.z, ALTAR_HOLD_SECONDS + 0.3);
+    const total = run.curse.enemyHp + run.curse.enemySpeed + run.curse.enemyDamage + run.curse.spawnRate;
+    expect(total, '接受祭壇後詛咒合計').toBeGreaterThan(0);
+    expect(run.enemies.speedMult).toBeCloseTo(1 + run.curse.enemySpeed);
+    expect(run.director.extraMult).toBeCloseTo(run.elements.spawnMult * (1 + run.curse.spawnRate));
+    expect(run.director.hpCurse).toBeCloseTo(1 + run.curse.enemyHp);
+    expect(h0).toBeGreaterThan(0);
+  });
+
+  it('石地藏神階解除一項詛咒', () => {
     const { run } = make(12);
     const a = run.elements.devForce('altar', 'epic', run.px, run.pz)!;
     stand(run, a.x, a.z, ALTAR_HOLD_SECONDS + 0.2);
-    const downValue = run.stats.value[a.down];
+    const sum = () => run.curse.enemyHp + run.curse.enemySpeed + run.curse.enemyDamage + run.curse.spawnRate;
+    const before = sum();
+    expect(before).toBeGreaterThan(0);
     const j = run.elements.devForce('jizo', 'legend', run.px, run.pz)!;
     stand(run, j.x, j.z, JIZO_HOLD_SECONDS + 0.2);
-    if (a.down === 'armor') expect(run.stats.value.armor).toBeGreaterThan(downValue);
-    else expect(run.stats.value[a.down]).toBeGreaterThan(downValue);
+    expect(sum()).toBeLessThan(before);
   });
 });
 

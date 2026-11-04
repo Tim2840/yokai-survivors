@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { RARITIES, RARITY_MULT, cardRarityWeights } from '../../src/data/rarity';
 import { STAT_CARDS } from '../../src/data/statCards';
 import { TRAINING, TRAINING_MAX_LEVEL, trainingPrice } from '../../src/data/meta';
-import { ALTAR } from '../../src/data/altar';
+import { ALTAR_BOON_PCT, ALTAR_CURSE, ALTAR_CURSE_IDS, ALTAR_EFFECT_COUNT, ALTAR_MAX_EFFECTS } from '../../src/data/altar';
 
 // 資料表「全掃」：docs/02 的數字有沒有互相矛盾（這是結構與單調性檢查，不是平衡驗證）
 describe('稀有度', () => {
@@ -68,13 +68,18 @@ describe('局外修行', () => {
   });
 });
 
-describe('詛咒祭壇', () => {
-  it('利弊比隨稀有度提高，且代價絕對值也變大（docs/02 原則 3）', () => {
+describe('詛咒祭壇（D27）', () => {
+  it('好處與每一項詛咒的數字都隨稀有度變大；每階抽的效果數遞增或持平且不超過上限', () => {
     for (let i = 1; i < RARITIES.length; i++) {
-      const a = ALTAR[RARITIES[i - 1]];
-      const b = ALTAR[RARITIES[i]];
-      expect(b.up / b.down).toBeGreaterThan(a.up / a.down);
-      expect(b.down).toBeGreaterThan(a.down);
+      const a = RARITIES[i - 1];
+      const b = RARITIES[i];
+      expect(ALTAR_BOON_PCT[b]).toBeGreaterThan(ALTAR_BOON_PCT[a]);
+      for (const id of ALTAR_CURSE_IDS) expect(ALTAR_CURSE[b][id]).toBeGreaterThan(ALTAR_CURSE[a][id]);
+      expect(ALTAR_EFFECT_COUNT[b]).toBeGreaterThanOrEqual(ALTAR_EFFECT_COUNT[a]);
+    }
+    for (const r of RARITIES) {
+      expect(ALTAR_EFFECT_COUNT[r]).toBeGreaterThanOrEqual(2);
+      expect(ALTAR_EFFECT_COUNT[r]).toBeLessThanOrEqual(ALTAR_MAX_EFFECTS);
     }
   });
 });

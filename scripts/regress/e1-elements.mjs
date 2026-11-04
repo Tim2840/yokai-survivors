@@ -80,19 +80,25 @@ export async function run(browser) {
         expect(!(await page.locator('#element-box').isVisible()), `離開了提示還在（${vp.name}）`);
       });
 
-      await step(`${vp.name} 詛咒祭壇：按住 1.5 秒 → 一項上升一項下降`, async () => {
+      await step(`${vp.name} 詛咒祭壇：按住 1.5 秒 → 隨機數個效果（好處加屬性、詛咒讓敵人變強）`, async () => {
         const s0 = await stats();
         const spot = await approach('altar', 'epic');
         const info = (await el()).find((e) => e.kind === 'altar' && Math.hypot(e.x - spot.x, e.z - spot.z) < 0.01);
         expect(info, '找不到剛放的祭壇');
+        expect(info.effects.length === 3, `妖階祭壇應該抽 3 個效果：${JSON.stringify(info.effects)}`);
         await page.evaluate(() => { window.__game.advance(0.3); window.__game.render(); });
         const desc = await page.locator('#element-desc').innerText();
-        expect(/\+48%/.test(desc), `祭壇說明沒寫出 +48%：${desc}`);
+        const shown = desc.split('\n').filter(Boolean).length;
+        expect(shown === 3, `祭壇說明應該列出 3 個效果：${desc}`);
+        expect(/敵人/.test(desc), `說明裡沒有詛咒（敵人變強）：${desc}`);
         files.push(await shot(ctx, 'e1-altar'));
         await play(2);
         const s1 = await stats();
-        expect(s1[info.up] > s0[info.up], `提升的屬性 ${info.up} 沒變大：${s0[info.up]} → ${s1[info.up]}`);
-        expect(s1[info.down] < s0[info.down], `降低的屬性 ${info.down} 沒變小：${s0[info.down]} → ${s1[info.down]}`);
+        const curse = await page.evaluate(() => window.__game.run.curse);
+        for (const f of info.effects) {
+          if (f.curse) expect(Math.abs(curse[f.id] - f.v) < 1e-6, `詛咒 ${f.id} 沒生效：${JSON.stringify(curse)}`);
+          else expect(s1[f.id] > s0[f.id], `好處 ${f.id} 沒變大：${s0[f.id]} → ${s1[f.id]}`);
+        }
         await leave(spot);
       });
 

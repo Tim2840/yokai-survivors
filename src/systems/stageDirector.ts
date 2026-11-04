@@ -24,6 +24,8 @@ export class StageDirector {
   bossSpawned = false;
   /** 外部的湧出倍率（結界圈內 ×1.25 等；每步由 Run 設） */
   extraMult = 1;
+  /** 詛咒讓敵人 HP 變多的倍率（每步由 Run 設） */
+  hpCurse = 1;
   /** 頭目 HP 倍率（大關最後一關加強，D26） */
   bossMult = 1;
   bossIndex = -1;
@@ -104,7 +106,7 @@ export class StageDirector {
 
   private spawnOne(kind: number, variant: number, px: number, pz: number, night: number): number {
     if (!this.findSpot(px, pz)) return -1;
-    return this.enemies.spawn(kind, this.spot[0], this.spot[1], this.virtualWave(), night, this.rng.range(0, Math.PI * 2), variant, variant === 2 ? this.stageMult * this.bossMult : this.stageMult);
+    return this.enemies.spawn(kind, this.spot[0], this.spot[1], this.virtualWave(), night, this.rng.range(0, Math.PI * 2), variant, (variant === 2 ? this.stageMult * this.bossMult : this.stageMult) * this.hpCurse);
   }
 
   update(dt: number, px: number, pz: number, night: number, bossDefeated: boolean): void {

@@ -120,7 +120,7 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 .hud-element[data-rarity='epic'] { border-color: #a678e0; }
 .hud-element[data-rarity='legend'] { border-color: #ffb347; }
 .hud-element b { font-size: 16px; }
-.hud-element span { font-size: 13px; color: var(--text); }
+.hud-element span { font-size: 13px; color: var(--text); white-space: pre-line; }
 .hud-element em { font-size: 12px; font-style: normal; color: var(--text-dim, #b9b2a4); }
 .hud-element .bar { width: 100%; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.18); overflow: hidden; }
 .hud-element .bar i { display: block; height: 100%; width: 0; background: var(--accent, #ffb35c); }

@@ -22,6 +22,7 @@ import { StageDirector } from '../systems/stageDirector';
 import { Elements, type ElementCarry } from '../systems/elements';
 import { computeMerit } from '../systems/merit';
 import type { StatId } from '../data/stats';
+import { ALTAR_CURSE_IDS, type CurseId } from '../data/altar';
 
 export interface RunOptions {
   seed: number;
@@ -65,6 +66,9 @@ export class Run {
   enemies!: Enemies;
   director!: StageDirector;
   elements!: Elements;
+  /** 詛咒祭壇留下的詛咒（整局有效）：來源 key → 效果；totals 是各項的相對增加合計 */
+  private readonly curseSources = new Map<string, { id: CurseId; v: number }>();
+  readonly curse: Record<CurseId, number> = { enemyHp: 0, enemySpeed: 0, enemyDamage: 0, spawnRate: 0 };
   private readonly elementCarry: ElementCarry = { serial: 0, downKeys: [] };
   readonly projectiles: Projectiles;
   readonly orbs: Orbs;
@@ -188,6 +192,14 @@ export class Run {
       healFrac: (f) => {
         this.hp = Math.min(this.maxHp, this.hp + this.maxHp * f);
       },
+      setCurse: (key, id, v) => {
+        this.curseSources.set(key, { id, v });
+        this.recomputeCurse();
+      },
+      clearCurse: (key) => {
+        this.curseSources.delete(key);
+        this.recomputeCurse();
+      },
       emitSpawn: (kind, rarity) => this.bus.emit('elementSpawn', { kind, rarity }),
       emitUsed: (kind, rarity) => this.bus.emit('elementUsed', { kind, rarity }),
     }, this.elementCarry);
@@ -202,6 +214,11 @@ export class Run {
     this.hvx = 0;
     this.hvz = 0;
     this.flow.update(this.px, this.pz, true);
+  }
+
+  private recomputeCurse(): void {
+    for (const id of ALTAR_CURSE_IDS) this.curse[id] = 0;
+    for (const c of this.curseSources.values()) this.curse[c.id] += c.v;
   }
 
   startNextStage(): void {
@@ -299,7 +316,9 @@ export class Run {
     if (gained > 0) this.addXp(gained);
 
     this.elements.update(dt, this.time, this.director.duration, this.director.virtualWave(), s.luck, this.px, this.py, this.pz);
-    this.director.extraMult = this.elements.spawnMult;
+    this.director.extraMult = this.elements.spawnMult * (1 + this.curse.spawnRate);
+    this.director.hpCurse = 1 + this.curse.enemyHp;
+    this.enemies.speedMult = 1 + this.curse.enemySpeed;
     this.director.update(dt, this.px, this.pz, this.night, this.bossDefeated);
 
     if (this.hp <= 0 && !this.god) {
@@ -423,7 +442,7 @@ export class Run {
       if (this.invul > 0 || this.god) continue;
       e.contactCd[i] = COMBAT.contactCooldown;
       if (this.rngCombat.next() < this.stats.value.dodge) continue;
-      const dmg = e.damage[i] * armorMult(this.stats.value.armor);
+      const dmg = e.damage[i] * (1 + this.curse.enemyDamage) * armorMult(this.stats.value.armor);
       this.hp -= dmg;
       this.invul = COMBAT.invulnerable;
       this.bus.emit('playerHurt', { damage: dmg, hp: this.hp });

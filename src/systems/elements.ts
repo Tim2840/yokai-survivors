@@ -5,12 +5,7 @@ import type { Stats } from './stats';
 import { pickRarity } from './cards';
 import { RARITIES, type Rarity } from '../data/rarity';
 import type { StatId } from '../data/stats';
-import {
-  ALTAR,
-  ALTAR_DOWN_ARMOR,
-  ALTAR_DOWN_PCT,
-  ALTAR_UP,
-} from '../data/altar';
+import { ALTAR_BOONS, ALTAR_BOON_PCT, ALTAR_CURSE, ALTAR_CURSE_IDS, ALTAR_EFFECT_COUNT, ALTAR_MAX_EFFECTS, type CurseId } from '../data/altar';
 import {
   ALTAR_HOLD_SECONDS,
   BARRIER,
@@ -32,6 +27,9 @@ export interface ElementHost {
   stats: Stats;
   /** 立刻回復最大生命的 frac 倍 */
   healFrac(frac: number): void;
+  /** 加一項整局有效的詛咒（讓敵人變強），key 用來之後單獨解除 */
+  setCurse(key: string, id: CurseId, v: number): void;
+  clearCurse(key: string): void;
   emitSpawn(kind: ElementKind, rarity: Rarity): void;
   emitUsed(kind: ElementKind, rarity: Rarity): void;
 }
@@ -61,18 +59,21 @@ export interface ElementSlot {
   inside: boolean;
   /** 被用掉後經過的秒數（< 0 = 還沒用過）；給外觀做消失動畫 */
   usedAge: number;
-  /** 詛咒祭壇：提升與降低的屬性與數值（pct 為比例；降低護甲時 downFlat 有值） */
-  up: StatId;
-  upPct: number;
-  down: StatId;
-  downPct: number;
-  downFlat: number;
+  /** 詛咒祭壇：抽到的效果（前 effectCount 個有效）。curse = true 是讓敵人變強的詛咒，否則是玩家屬性的好處（v 為相對比例） */
+  effects: AltarEffect[];
+  effectCount: number;
+}
+
+export interface AltarEffect {
+  id: StatId | CurseId;
+  v: number;
+  curse: boolean;
 }
 
 const USED_FADE = 0.7;
 
 function blankSlot(): ElementSlot {
-  return { active: false, kind: 'jizo', rarity: 'common', x: 0, y: 0, z: 0, age: 0, life: 0, announce: 0, progress: 0, inside: false, usedAge: -1, up: 'power', upPct: 0, down: 'maxHp', downPct: 0, downFlat: 0 };
+  return { active: false, kind: 'jizo', rarity: 'common', x: 0, y: 0, z: 0, age: 0, life: 0, announce: 0, progress: 0, inside: false, usedAge: -1, effects: Array.from({ length: ALTAR_MAX_EFFECTS }, () => ({ id: 'power' as StatId | CurseId, v: 0, curse: false })), effectCount: 0 };
 }
 
 /** 依虛擬波數取稀有度權重（幸運乘在非凡權重上） */
@@ -239,13 +240,19 @@ export class Elements {
       const key = `jizo:${this.carry.serial++}`;
       st.setMod(key, { flat: { armor: j.armor } });
       this.timed.push({ key, until: this.clock + JIZO_ARMOR_SECONDS });
-      if (s.rarity === 'legend' && this.carry.downKeys.length > 0) st.clearMod(this.carry.downKeys.shift()!);
+      if (s.rarity === 'legend' && this.carry.downKeys.length > 0) this.host.clearCurse(this.carry.downKeys.shift()!);
     } else if (s.kind === 'altar') {
       const n = this.carry.serial++;
-      st.setMod(`altar:${n}:up`, { pct: { [s.up]: s.upPct } });
-      const downKey = `altar:${n}:down`;
-      st.setMod(downKey, s.downFlat !== 0 ? { flat: { [s.down]: -s.downFlat } } : { pct: { [s.down]: -s.downPct } });
-      this.carry.downKeys.push(downKey);
+      const pct: Partial<Record<StatId, number>> = {};
+      for (let k = 0; k < s.effectCount; k++) {
+        const f = s.effects[k];
+        if (f.curse) {
+          const key = `altar:${n}:${f.id}`;
+          this.host.setCurse(key, f.id as CurseId, f.v);
+          this.carry.downKeys.push(key);
+        } else pct[f.id as StatId] = f.v;
+      }
+      st.setMod(`altar:${n}:boons`, { pct });
     }
     s.usedAge = 0;
     s.progress = 1;
@@ -339,21 +346,34 @@ export class Elements {
     this.host.emitSpawn(kind, rarity);
   }
 
-  /** 祭壇的「升＋降」：一組合法組合（升 ≠ 降） */
+  /** 祭壇：隨機抽數個不同的效果，至少 1 個好處、1 個詛咒（D27） */
   private rollAltar(s: ElementSlot): void {
-    const a = ALTAR[s.rarity];
-    s.up = this.rng.pick(ALTAR_UP);
-    s.upPct = a.up / 100;
-    // 降低：護甲改成固定值，其餘是百分比
-    const downs: StatId[] = [...ALTAR_DOWN_PCT.filter((d) => d !== s.up), 'armor'];
-    s.down = this.rng.pick(downs);
-    if (s.down === 'armor') {
-      s.downFlat = ALTAR_DOWN_ARMOR[s.rarity];
-      s.downPct = 0;
-    } else {
-      s.downFlat = 0;
-      s.downPct = a.down / 100;
+    const n = ALTAR_EFFECT_COUNT[s.rarity];
+    const boons = [...ALTAR_BOONS];
+    const curses = [...ALTAR_CURSE_IDS];
+    const take = <T,>(arr: T[]): T => arr.splice(Math.floor(this.rng.next() * arr.length), 1)[0];
+    const picked: AltarEffect[] = [];
+    picked.push({ id: take(boons), v: ALTAR_BOON_PCT[s.rarity], curse: false });
+    const c0 = take(curses);
+    picked.push({ id: c0, v: ALTAR_CURSE[s.rarity][c0], curse: true });
+    while (picked.length < n) {
+      // 其餘的從剩下的好處與詛咒合併抽，不重複
+      const total = boons.length + curses.length;
+      if (total === 0) break;
+      const k = Math.floor(this.rng.next() * total);
+      if (k < boons.length) picked.push({ id: boons.splice(k, 1)[0], v: ALTAR_BOON_PCT[s.rarity], curse: false });
+      else {
+        const c = curses.splice(k - boons.length, 1)[0];
+        picked.push({ id: c, v: ALTAR_CURSE[s.rarity][c], curse: true });
+      }
     }
+    // 順序打散，不讓玩家永遠看到「好處在前」
+    for (let i = picked.length - 1; i > 0; i--) {
+      const j = Math.floor(this.rng.next() * (i + 1));
+      [picked[i], picked[j]] = [picked[j], picked[i]];
+    }
+    s.effectCount = picked.length;
+    for (let i = 0; i < picked.length; i++) Object.assign(s.effects[i], picked[i]);
   }
 
   /** 開發與測試：在 (x,z) 或玩家身邊 3 公尺的平地，立刻放一個（可選指定稀有度） */

@@ -1,5 +1,7 @@
 import { t } from '../i18n';
 import type { Run } from '../game/run';
+import type { CurseId } from '../data/altar';
+import type { StatId } from '../data/stats';
 import type { ElementSlot } from '../systems/elements';
 import { BARRIER, JIZO, JIZO_ARMOR_SECONDS } from '../data/elements';
 
@@ -134,7 +136,7 @@ export function buildHud(parent: HTMLElement): Hud {
           elBox.classList.add('hidden');
         }
       } else {
-        const key = `${f.kind}|${f.rarity}|${f.up}|${f.down}`;
+        const key = `${f.kind}|${f.rarity}|${f.effects.slice(0, f.effectCount).map((x) => x.id).join(',')}`;
         if (key !== lastEl) {
           lastEl = key;
           elBox.classList.remove('hidden');
@@ -165,9 +167,12 @@ function describeElement(f: ElementSlot): string {
     return t(f.rarity === 'legend' ? 'element.jizo.descLegend' : 'element.jizo.desc', { heal: Math.round(j.healFrac * 100), armor: j.armor, sec: JIZO_ARMOR_SECONDS });
   }
   if (f.kind === 'barrier') return t('element.barrier.desc', { pct: Math.round(BARRIER[f.rarity].bonus * 100) });
-  const up = t(`stat.${f.up}`);
-  const down = t(`stat.${f.down}`);
-  const upPct = Math.round(f.upPct * 100);
-  if (f.downFlat > 0) return t('element.altar.descFlat', { up, upPct, down, downFlat: f.downFlat });
-  return t('element.altar.desc', { up, upPct, down, downPct: Math.round(f.downPct * 100) });
+  // 詛咒祭壇：把抽到的每個效果列出來，詛咒（敵人變強）與好處（自己變強）用 +％ 寫在一起
+  const parts: string[] = [];
+  for (let k = 0; k < f.effectCount; k++) {
+    const x = f.effects[k];
+    const name = x.curse ? t(`curse.${x.id as CurseId}`) : t(`stat.${x.id as StatId}`);
+    parts.push(t('element.altar.effect', { name, pct: Math.round(x.v * 100) }));
+  }
+  return parts.join('\n');
 }

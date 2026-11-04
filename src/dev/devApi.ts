@@ -84,7 +84,8 @@ export function installDevApi(ctx: DevContext): void {
         seed: r.seed,
         picked: r.picked.length,
         stats: { ...r.stats.value },
-        elements: r.elements.slots.filter((s) => s.active).map((s) => ({ kind: s.kind, rarity: s.rarity, x: s.x, y: s.y, z: s.z, announce: s.announce, progress: s.progress, used: s.usedAge >= 0, up: s.up, upPct: s.upPct, down: s.down, downPct: s.downPct, downFlat: s.downFlat })),
+        elements: r.elements.slots.filter((s) => s.active).map((s) => ({ kind: s.kind, rarity: s.rarity, x: s.x, y: s.y, z: s.z, announce: s.announce, progress: s.progress, used: s.usedAge >= 0, effects: s.effects.slice(0, s.effectCount).map((f) => ({ ...f })) })),
+        curse: { ...r.curse },
         focus: r.elements.focus ? r.elements.focus.kind : null,
         tuning: ctx.game.tuningInfo,
       };

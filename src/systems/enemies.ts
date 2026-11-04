@@ -166,6 +166,9 @@ export class Enemies {
    * 每個模擬步：往玩家走（流場）、被光圈減速、擊退衰減、軟推擠、碰撞阻擋。
    * auraRadius／auraSlow：提燈小僧的「燈火」；px、pz：玩家位置。
    */
+  /** 敵人移動速度倍率（詛咒；每步由 Run 設） */
+  speedMult = 1;
+
   update(dt: number, px: number, pz: number, flow: FlowField, auraRadius: number, auraSlow: number): void {
     const map = this.map;
     const decay = Math.pow(COMBAT.knockbackDecay, dt);
@@ -191,7 +194,7 @@ export class Enemies {
         mx = dir[0];
         mz = dir[1];
       }
-      let spd = this.speed[i] * map.speedAt(ex, ez);
+      let spd = this.speed[i] * this.speedMult * map.speedAt(ex, ez);
       if (d2 < auraR2) spd *= 1 - auraSlow;
       let vx = mx * spd + this.kx[i];
       let vz = mz * spd + this.kz[i];
