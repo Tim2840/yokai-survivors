@@ -76,7 +76,11 @@ export async function press(ctx, selector) {
     const target = document.querySelector(sel);
     return !!hit && !!target && (hit === target || target.contains(hit));
   }, [x, y, selector]);
-  expect(top, `${selector} 被別的東西蓋住（${vp.name}）`);
+  if (!top) {
+    // 找出是誰蓋住（診斷用）
+    const who = await page.evaluate(([px, py]) => { const h = document.elementFromPoint(px, py); return h ? `${h.tagName}#${h.id}.${h.className}` + ' / 畫面：' + JSON.stringify(window.__game ? window.__game.screens : null) : 'null'; }, [x, y]);
+    expect(false, `${selector} 被別的東西蓋住（${vp.name}）：蓋住的是 ${who}`);
+  }
   if (vp.hasTouch) await page.touchscreen.tap(x, y);
   else await page.mouse.click(x, y);
 }

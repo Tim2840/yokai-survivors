@@ -87,6 +87,8 @@ export async function run(browser) {
       });
 
       await step(`${vp.name} 暫停面板開著時，拖曳不轉視角`, async () => {
+        // 這一路上可能剛好升級（模擬暫停、選卡面板蓋住 HUD）：像玩家一樣先選完卡
+        while ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await page.locator('.overlay[data-screen="levelup"] .card').first().click();
         await press(ctx, '#btn-pause');
         await page.waitForFunction(() => window.__game.screens.includes('pause'));
         const y0 = (await cam()).yaw;
