@@ -80,8 +80,10 @@ export async function run(browser) {
           await page.mouse.down();
           await page.mouse.move(sx + side[3] * 40, sy + side[4] * 40, { steps: 4 });
         }
-        for (let i = 0; i < 12; i++) {
+        for (let i = 0; i < 24; i++) {
           await page.evaluate(() => window.__game.advance(0.25));
+          // 升級選卡會讓模擬暫停（D15）：玩家要先選完卡才會繼續走（打包檔的種子是隨機的，偶爾剛好在這時升級）
+          if ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await dismissLevelUps();
           if ((await page.evaluate(() => window.__game.state)) === 'INTERMISSION') break;
         }
         if (!vp.hasTouch) await page.keyboard.up(side[2]);
