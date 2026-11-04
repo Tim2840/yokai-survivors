@@ -15,6 +15,7 @@ export const zhTW = {
   'changelog.v1': '建立遊戲骨架：主選單與場景可以載入。',
   'changelog.v2': '加入背景音樂與按鈕音效；畫面加上光暈。',
   'changelog.v3': '第一個可以玩的版本：提燈小僧、波次、升級選卡、結算。',
+  'changelog.v6': '開局火力變弱、敵人變多；鬼火與濺射改靠升級卡長出來。',
   'changelog.v5': '地圖上會落下石地藏、結界石、詛咒祭壇：走近按住或站進去就有效果。',
   'changelog.v4': '改成連續計時關卡，視角可旋轉、可跳躍，打倒頭目走進傳送門過關。',
 
@@ -57,6 +58,10 @@ export const zhTW = {
   'rarity.rare': '靈',
   'rarity.epic': '妖',
   'rarity.legend': '神',
+  'card.volley': '鬼火增殖',
+  'card.splash': '爆裂',
+  'card.fmt.volley': '每次多發射 {v} 顆',
+  'card.fmt.splash': '濺射半徑 +{v} 公尺',
   'card.hp': '強健',
   'card.power': '力量',
   'card.atkSpeed': '迅捷',

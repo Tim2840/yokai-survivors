@@ -1,5 +1,6 @@
 import { RARITIES, cardRarityWeights, type Rarity } from '../data/rarity';
 import { STAT_CARDS, type StatCard } from '../data/statCards';
+import { WEAPON_CARDS, type WeaponCard } from '../data/weaponCards';
 import { CARD_CHOICES, PITY_LEVELUPS } from '../data/progression';
 import type { Rng } from '../lib/random';
 
@@ -9,12 +10,14 @@ export interface CardOffer {
   rarity: Rarity;
 }
 
-const BY_ID = new Map<string, StatCard>(STAT_CARDS.map((c) => [c.id, c]));
-export const cardById = (id: string): StatCard => {
+export type AnyCard = StatCard | WeaponCard;
+const BY_ID = new Map<string, AnyCard>([...STAT_CARDS, ...WEAPON_CARDS].map((c) => [c.id, c]));
+export const cardById = (id: string): AnyCard => {
   const c = BY_ID.get(id);
   if (!c) throw new Error(`沒有這張卡：${id}`);
   return c;
 };
+export const isWeaponCard = (c: AnyCard): c is WeaponCard => 'weapon' in c;
 
 /** 依權重抽一個稀有度（單一次亂數） */
 export function pickRarity(rng: Rng, weights: Record<Rarity, number>): Rarity {

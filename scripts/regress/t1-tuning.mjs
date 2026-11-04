@@ -9,6 +9,7 @@ export async function run(browser) {
   for (const vp of VIEWPORTS) {
     const ctx = await openPage(browser, vp, '?q=4&seed=21');
     const { page } = ctx;
+    let defaultCount = '';
     try {
       await page.waitForFunction(() => window.__game && window.__game.state === 'MENU');
       await step(`${vp.name} 開面板：五個欄位與按鈕都在畫面內`, async () => {
@@ -21,13 +22,15 @@ export async function run(browser) {
         files.push(await shot(ctx, 't1-panel'));
       });
       await step(`${vp.name} 改數量倍率 → 完成 → 開局用新值`, async () => {
+        defaultCount = await page.locator('#tune-countScale').inputValue();
+        expect(defaultCount !== '1.5', `預設值不能是測試要改成的 1.5（${vp.name}）`);
         await page.locator('#tune-countScale').fill('1.5');
-        await page.locator('#tune-volley').fill('2');
+        await page.locator('#tune-volley').fill('3');
         await press(ctx, '#btn-tune-done');
         await page.waitForFunction(() => !window.__game.screens.includes('tuning'));
         await startRun(ctx);
         const r = await page.evaluate(() => window.__game.run);
-        expect(r.tuning.countScale === 1.5 && r.tuning.volley === 2, `開局沒用到新值（${vp.name}）：${JSON.stringify(r.tuning)}`);
+        expect(r.tuning.countScale === 1.5 && r.tuning.volley === 3, `開局沒用到新值（${vp.name}）：${JSON.stringify(r.tuning)}`);
         await page.evaluate(() => window.__game.advance(1));
       });
       await step(`${vp.name} 重載後還在、還原預設`, async () => {
@@ -36,7 +39,7 @@ export async function run(browser) {
         await press(ctx, '#btn-tune');
         expect(await page.locator('#tune-countScale').inputValue() === '1.5', `重載後數量倍率不是 1.5（${vp.name}）`);
         await press(ctx, '#btn-tune-reset');
-        expect(await page.locator('#tune-countScale').inputValue() === '2.5', `還原後不是預設 2.5（${vp.name}）`);
+        expect(await page.locator('#tune-countScale').inputValue() === defaultCount, `還原後不是預設 ${defaultCount}（${vp.name}）`);
         await press(ctx, '#btn-tune-done');
       });
       await step(`${vp.name} 結算畫面有種子`, async () => {

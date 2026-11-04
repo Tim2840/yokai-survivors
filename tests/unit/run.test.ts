@@ -58,9 +58,9 @@ describe('連續計時關卡（D22）', () => {
     expect(d.virtualWave(d.duration * 2)).toBe(20);
     expect(d.rate(0)).toBeLessThan(d.rate(d.duration / 2));
     expect(d.rate(d.duration / 2)).toBeLessThan(d.rate(d.duration));
-    // 2.5 倍時開場約 1.6、尾聲約 13.5 點／秒（docs/02 第 8.1 節）
-    expect(d.rate(0)).toBeCloseTo((13 / 20) * 2.5, 5);
-    expect(d.rate(d.duration)).toBeCloseTo((108 / 20) * 2.5, 5);
+    // 倍率 ×countScale 時開場 13/20、尾聲 108/20（再乘倍率） 點／秒（docs/02 第 8.1 節）
+    expect(d.rate(0)).toBeCloseTo((13 / 20) * tuning.countScale, 5);
+    expect(d.rate(d.duration)).toBeCloseTo((108 / 20) * tuning.countScale, 5);
   });
 
   it('定時事件：精英在 25% 出現、小高潮在 50% 速率加倍、頭目在 80% 出現（縮短成 60 秒的關卡）', () => {

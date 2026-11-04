@@ -43,3 +43,22 @@ describe('章節制（D26）：每第 N 張地圖是 3 關的大關、頭目更�
     expect(ratio).toBeCloseTo(STAGE.chapter.bigBossHp);
   });
 });
+
+import { WEAPON_CARDS, WEAPON_LIMITS } from '../../src/data/weaponCards';
+import { CARD_POOL_M1 } from '../../src/data/progression';
+
+describe('武器卡（鬼火增殖、爆裂）', () => {
+  it('在卡池裡；給一張就多發射／濺射變大；有上限', () => {
+    for (const c of WEAPON_CARDS) expect(CARD_POOL_M1).toContain(c.id);
+    const run = new Run({ seed: 5, bus: new EventBus() });
+    expect(run.volleyBonus).toBe(0);
+    run.give('volley', 'epic');
+    expect(run.volleyBonus).toBe(2);
+    for (let i = 0; i < 10; i++) run.give('volley', 'legend');
+    expect(run.volleyBonus).toBe(WEAPON_LIMITS.volley - 1);
+    run.give('splash', 'rare');
+    expect(run.splashBonus).toBeCloseTo(0.9);
+    for (let i = 0; i < 10; i++) run.give('splash', 'legend');
+    expect(run.splashBonus).toBe(WEAPON_LIMITS.splash);
+  });
+});

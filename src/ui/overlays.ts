@@ -1,7 +1,7 @@
 import { t } from '../i18n';
 import type { I18nKey } from '../i18n/zh-TW';
 import { CARD_FORMAT, type StatId } from '../data/stats';
-import { cardById, type CardOffer } from '../systems/cards';
+import { cardById, isWeaponCard, type CardOffer } from '../systems/cards';
 import { PLAYABLE_YOKAI, STARTER_YOKAI } from '../data/yokai';
 
 /** 全螢幕覆蓋層（選妖怪、升級選卡、整備、結算、暫停）。都有 data-screen，給回歸的卡住偵測讀。 */
@@ -62,6 +62,10 @@ const SHAPES: Record<string, string> = { common: 'circle', rare: 'diamond', epic
 export function describeCard(o: CardOffer): { name: string; desc: string } {
   const card = cardById(o.cardId);
   const v = card.values[o.rarity];
+  if (isWeaponCard(card)) {
+    const shown = Number.isInteger(v) ? String(v) : v.toFixed(1);
+    return { name: t(`card.${card.id}` as I18nKey), desc: t(`card.fmt.${card.weapon}` as I18nKey, { v: shown }) };
+  }
   const fmt = CARD_FORMAT[card.stat as StatId];
   const value = Number.isInteger(v) ? String(v) : v.toFixed(1);
   return {

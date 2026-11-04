@@ -41,10 +41,10 @@ function play(seed: number, cfg: Partial<typeof tuning>) {
 run('M1.5 手感探針（第 1 關）', () => {
   it('不同設定下的存活與擊殺（4 個種子）', { timeout: 900000 }, () => {
     const configs: [string, Partial<typeof tuning>][] = [
-      ['預設（×2.5、3 顆、濺射 1.2）', {}],
-      ['數量 ×1.5', { countScale: 1.5 }],
-      ['數量 ×4', { countScale: 4 }],
-      ['4 顆、濺射 1.5、傷害 ×1.5', { volley: 4, splash: 1.5, damageScale: 1.5 }],
+      ['×1.5、起步 2 顆', { volley: 2, splash: 0, damageScale: 1, countScale: 1.5 }],
+      ['×2、起步 2 顆', { volley: 2, splash: 0, damageScale: 1, countScale: 2 }],
+      ['×2、起步 2 顆、濺射 0.8', { volley: 2, splash: 0.8, damageScale: 1, countScale: 2 }],
+      ['×1.5、起步 1 顆（8 個種子外再看）', { volley: 0, splash: 0, damageScale: 1, countScale: 1.5 }],
     ];
     for (const [name, cfg] of configs) {
       const res = [1, 2, 3, 4].map((s) => play(s, cfg));

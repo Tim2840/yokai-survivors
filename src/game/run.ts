@@ -17,11 +17,12 @@ import { Projectiles } from '../systems/projectiles';
 import { Orbs } from '../systems/orbs';
 import { HitFeed } from '../systems/hitFeed';
 import { Stats, armorMult } from '../systems/stats';
-import { CardDealer, cardById, type CardOffer } from '../systems/cards';
+import { CardDealer, cardById, isWeaponCard, type CardOffer } from '../systems/cards';
 import { StageDirector } from '../systems/stageDirector';
 import { Elements, type ElementCarry } from '../systems/elements';
 import { computeMerit } from '../systems/merit';
 import type { StatId } from '../data/stats';
+import { WEAPON_LIMITS } from '../data/weaponCards';
 import { ALTAR_CURSE_IDS, type CurseId } from '../data/altar';
 
 export interface RunOptions {
@@ -125,6 +126,9 @@ export class Run {
   bossesDefeated = 0;
   bossDefeated = false;
   portal = { active: false, x: 0, y: 0, z: 0 };
+  /** 武器卡累積：多發射的顆數、濺射半徑（公尺）。一開始都是 0（領頭只有一顆鬼火、沒有濺射） */
+  volleyBonus = 0;
+  splashBonus = 0;
   private fireCd = 0;
   private readonly near = new Int32Array(COMBAT.queryMax);
   private readonly splashNear = new Int32Array(COMBAT.queryMax);
@@ -464,7 +468,7 @@ export class Run {
     const dx = this.enemies.x[target] - this.px;
     const dz = this.enemies.z[target] - this.pz;
     const d = Math.hypot(dx, dz) || 1;
-    const volley = tuning.volley > 0 ? tuning.volley : w.volley;
+    const volley = (tuning.volley > 0 ? tuning.volley : w.volley) + this.volleyBonus;
     for (let v = 0; v < volley; v++) {
       const crit = this.rngCombat.next() < s.crit;
       const dmg = w.damage * s.power * tuning.damageScale * (crit ? s.critDmg : 1);
@@ -487,7 +491,7 @@ export class Run {
     // 頭目不被擊退
     const knock = this.enemies.variant[e] === 2 ? 0 : w.knockback;
     if (this.enemies.hurt(e, dmg, pr.vx[p] / vl, pr.vz[p] / vl, knock)) this.onKill(e);
-    const splashR = tuning.splash > 0 ? tuning.splash : w.splashRadius;
+    const splashR = (tuning.splash > 0 ? tuning.splash : w.splashRadius) + this.splashBonus;
     if (splashR > 0) {
       const n = this.enemies.within(this.enemies.x[e], this.enemies.z[e], splashR * this.stats.value.area, this.splashNear);
       const sd = dmg * (w.splashRatio > 0 ? w.splashRatio : 0.6);
@@ -562,6 +566,12 @@ export class Run {
 
   private applyCard(o: CardOffer): void {
     const card = cardById(o.cardId);
+    if (isWeaponCard(card)) {
+      if (card.weapon === 'volley') this.volleyBonus = Math.min(WEAPON_LIMITS.volley - 1, this.volleyBonus + card.values[o.rarity]);
+      else this.splashBonus = Math.min(WEAPON_LIMITS.splash, this.splashBonus + card.values[o.rarity]);
+      this.picked.push(o);
+      return;
+    }
     const before = this.maxHp;
     this.stats.addCard(card.stat as StatId, card.values[o.rarity]);
     // 最大生命增加時，現有生命同步增加（不會「變成扣血」）

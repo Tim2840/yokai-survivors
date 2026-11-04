@@ -11,8 +11,12 @@ import { STAGE } from './stage';
  * 數量 ×2.5、3 顆、濺射 1.2、傷害 ×1 → 平均撐 174 秒（死在頭目之前）；
  * 數量 ×2.5、4 顆、濺射 1.5、傷害 ×1.5（採用）→ 平均撐 429 秒、2,562 擊殺，頭目出現 2/4、過關 1/4。
  * 人會比機器人強，所以不再加強。M2 有小妖與 sim 之後移除，改回資料表。
+ *
+ * 2026-11-04（使用者：「太簡單，開局不要打這麼多敵人」）：舊預設機器人 4/4 過關（平均 516 秒、擊殺 3,607）。
+ * 改成數量 ×2、起步 2 顆、濺射 0.8、傷害 ×1（鬼火再多、濺射再大要靠「鬼火增殖」「爆裂」武器卡）→ 機器人 2/4 過關（平均 341 秒、擊殺 1,630）。
+ * 起步 1 顆、無濺射太弱（×1.5 平均 201 秒、×2.5 平均 49 秒，機器人撐不過前幾分鐘）。
  */
-export const M1_PLAYTEST = { countScale: 2.5, hpScale: WAVES.hpScale as number, damageScale: 1.5, volley: 4, splash: 1.5, stageSeconds: STAGE.duration as number };
+export const M1_PLAYTEST = { countScale: 2, hpScale: WAVES.hpScale as number, damageScale: 1, volley: 2, splash: 0.8, stageSeconds: STAGE.duration as number };
 
 export const tuning = {
   /** 敵人數量倍率（見 WAVES.countScale） */
