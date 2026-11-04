@@ -13,12 +13,12 @@ export const WAVES = {
    */
   countScale: 1,
   /** 單隻 HP 的額外倍率（改數量時等比下調用）；?hp= */
-  hpScale: 1,
+  hpScale: 1.5,
   /** 每波分幾批湧入、湧入佔波長的比例（最後一段留給收尾） */
   batches: 5,
   spawnSpan: 0.8,
   /** 敵人強度（第 n 波、夜深度 d） */
-  hpPerWave: 0.12,
+  hpPerWave: 0.25,
   hpPerNight: 0.15,
   damagePerWave: 0.08,
   speedPerNight: 0.03,
