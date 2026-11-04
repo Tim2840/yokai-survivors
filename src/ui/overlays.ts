@@ -1,6 +1,7 @@
 import { t } from '../i18n';
 import type { I18nKey } from '../i18n/zh-TW';
 import { CARD_FORMAT, type StatId } from '../data/stats';
+import type { BuildSummary } from '../game/buildSummary';
 import { synergyHints } from '../data/synergies';
 import { cardById, isWeaponCard, type CardOffer } from '../systems/cards';
 import { PLAYABLE_YOKAI, STARTER_YOKAI } from '../data/yokai';
@@ -142,9 +143,78 @@ export function buildRunEnd(parent: HTMLElement, onAgain: () => void, onMenu: ()
 }
 
 // ── 暫停 ──
+const fix = (v: number, d = 2): string => String(Number(v.toFixed(d)));
+
+/** 屬性在「目前的能力」裡怎麼顯示（數字都來自 BuildSummary，不在這裡算平衡） */
+function statText(id: StatId, v: number, sum: BuildSummary): string {
+  switch (id) {
+    case 'maxHp':
+      return t('sum.hp', { hp: Math.ceil(sum.hp), max: Math.round(sum.maxHp) });
+    case 'regen':
+      return t('sum.perSec', { v: fix(v, 1) });
+    case 'power':
+    case 'atkSpeed':
+    case 'area':
+      return `×${fix(v)}`;
+    case 'pickup':
+      return t('sum.meters', { v: fix(v, 1) });
+    case 'crit':
+    case 'critDmg':
+    case 'dodge':
+      return `${fix(v * 100, 0)}%`;
+    case 'speed':
+      return t('sum.speed', { v: fix(v, 1) });
+    case 'armor':
+      return t('sum.armor', { v: fix(v, 0), mult: fix(sum.damageTaken) });
+    default:
+      return fix(v, 0);
+  }
+}
+
+/** 一張卡累計的效果文字（同一張卡拿幾次、各稀有度加總） */
+function cardEffectText(c: BuildSummary['cards'][number]): string {
+  if (c.weapon) return t(`card.fmt.${c.stat}` as I18nKey, { v: fix(c.total) });
+  const fmt = CARD_FORMAT[c.stat as StatId];
+  return t(`card.fmt.${fmt}` as I18nKey, { name: t(`stat.${c.stat}` as I18nKey), v: fix(c.total, 1) });
+}
+
+// ── 暫停（含「已拿到的卡」與「目前的能力」）──
 export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: () => void) {
-  const o = overlay(parent, 'pause', `<div class="panel"><h2>${t('pause.title')}</h2><div class="row">${btn('btn-pause-quit', 'pause.quit', 'secondary')}${btn('btn-pause-resume', 'pause.resume')}</div></div>`);
+  const o = overlay(
+    parent,
+    'pause',
+    `<div class="panel pause-panel"><h2>${t('pause.title')}</h2><p id="pause-status"></p>
+      <div class="sum"><section class="sum-col"><h3>${t('pause.cards')}</h3><ul class="sum-cards" id="sum-cards"></ul><div id="sum-syn"></div></section>
+      <section class="sum-col"><h3>${t('pause.abilities')}</h3><dl class="sum-stats" id="sum-stats"></dl><div id="sum-curse"></div></section></div>
+      <div class="row">${btn('btn-pause-quit', 'pause.quit', 'secondary')}${btn('btn-pause-resume', 'pause.resume')}</div></div>`,
+  );
   o.el.querySelector('#btn-pause-resume')!.addEventListener('click', onResume);
   o.el.querySelector('#btn-pause-quit')!.addEventListener('click', onQuit);
-  return o;
+  const q = (id: string) => o.el.querySelector<HTMLElement>('#' + id)!;
+  return Object.assign(o, {
+    render(sum: BuildSummary) {
+      q('pause-status').textContent = t('pause.status', { level: sum.level, kills: sum.kills });
+      const cards = q('sum-cards');
+      cards.innerHTML = '';
+      if (sum.cards.length === 0) cards.innerHTML = `<li class="empty">${t('pause.noCards')}</li>`;
+      for (const c of sum.cards) {
+        const li = document.createElement('li');
+        li.dataset.card = c.id;
+        const chips = (['common', 'rare', 'epic', 'legend'] as const).map((r) => `<i class="chip r-${r}"></i>`.repeat(c.byRarity[r])).join('');
+        li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), n: c.count })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}</em>`;
+        cards.appendChild(li);
+      }
+      const syn = q('sum-syn');
+      syn.innerHTML = sum.synergies.length ? `<h3>${t('pause.synergies')}</h3><ul class="sum-syn">${sum.synergies.map((id) => `<li><b>${t(`synergy.${id}` as I18nKey)}</b> <em>${t(`synergy.${id}.desc` as I18nKey)}</em></li>`).join('')}</ul>` : '';
+      const stats = q('sum-stats');
+      const rows = sum.stats.map((s) => `<div data-stat="${s.id}"><dt>${t(`stat.${s.id}` as I18nKey)}</dt><dd>${statText(s.id, s.value, sum)}</dd></div>`);
+      rows.push(`<div class="weapon-head"><dt><b>${t('pause.weapon')}</b></dt><dd></dd></div>`);
+      rows.push(`<div data-stat="volley"><dt>${t('sum.volley')}</dt><dd>${fix(sum.weapon.volley)}</dd></div>`);
+      rows.push(`<div data-stat="splash"><dt>${t('sum.splash')}</dt><dd>${t('sum.meters', { v: fix(sum.weapon.splash, 1) })}</dd></div>`);
+      rows.push(`<div data-stat="pierce"><dt>${t('sum.pierce')}</dt><dd>${fix(sum.weapon.pierce)}</dd></div>`);
+      stats.innerHTML = rows.join('');
+      const curse = q('sum-curse');
+      curse.innerHTML = sum.curses.length ? `<h3>${t('pause.curses')}</h3><ul class="sum-syn">${sum.curses.map((c) => `<li>${t(`curse.${c.id}` as I18nKey)} <b>+${fix(c.v * 100, 0)}%</b></li>`).join('')}</ul>` : '';
+    },
+  });
 }

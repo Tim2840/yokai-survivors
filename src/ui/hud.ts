@@ -17,6 +17,7 @@ export interface Hud {
   stickKnob: HTMLElement;
   jumpButton: HTMLButtonElement;
   pauseButton: HTMLButtonElement;
+  abilitiesButton: HTMLButtonElement;
   /** yaw = 鏡頭的 yaw（傳送門箭頭要相對鏡頭轉） */
   update(run: Run, yaw: number): void;
   show(visible: boolean): void;
@@ -33,7 +34,7 @@ export function buildHud(parent: HTMLElement): Hud {
         <span id="hp-text"></span>
       </div>
       <div class="hud-wave"><b id="wave-text"></b><span id="wave-timer"></span><em id="wave-note"></em></div>
-      <button class="hud-pause" id="btn-pause" type="button" aria-label="${t('pause.button')}">II</button>
+      <div class="hud-btns"><button class="hud-abilities" id="btn-abilities" type="button">${t('hud.abilities')}</button><button class="hud-pause" id="btn-pause" type="button" aria-label="${t('pause.button')}">II</button></div>
     </div>
     <div class="hud-boss hidden" id="boss-bar"><span>${t('hud.boss')}</span><div class="bar"><i id="boss-fill"></i></div></div>
     <div class="hud-element hidden" id="element-box"><b id="element-title"></b><span id="element-desc"></span><div class="bar"><i id="element-fill"></i></div><em id="element-act"></em></div>
@@ -81,6 +82,7 @@ export function buildHud(parent: HTMLElement): Hud {
     stickKnob: q('stick-knob'),
     jumpButton: q<HTMLButtonElement>('btn-jump'),
     pauseButton: q<HTMLButtonElement>('btn-pause'),
+    abilitiesButton: q<HTMLButtonElement>('btn-abilities'),
     show(v) {
       root.classList.toggle('hidden', !v);
     },

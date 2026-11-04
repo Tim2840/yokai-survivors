@@ -92,6 +92,8 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 .hud-wave { display: flex; flex-direction: column; align-items: center; text-shadow: 0 1px 3px #000; }
 .hud-wave b { font-size: clamp(16px, 4vw, 22px); }
 .hud-wave span { font-size: clamp(18px, 4.5vw, 26px); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); }
+.hud-btns { justify-self: end; display: flex; gap: 8px; align-items: center; }
+.hud-abilities { pointer-events: auto !important; height: 44px; padding: 0 14px; border-radius: 22px; border: 2px solid rgba(255,255,255,0.35); background: rgba(0,0,0,0.4); color: var(--text); font-weight: 700; font-size: 14px; cursor: pointer; font-family: inherit; }
 .hud-pause { justify-self: end; pointer-events: auto !important; width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.35); background: rgba(0,0,0,0.4); color: var(--text); font-weight: 700; font-size: 16px; letter-spacing: 2px; cursor: pointer; font-family: inherit; }
 .hud-bottom { display: flex; align-items: center; gap: 10px; }
 .xp { flex: 1; height: 10px; background: rgba(0,0,0,0.45); border-radius: 999px; overflow: hidden; border: 2px solid rgba(255,255,255,0.2); }
@@ -134,3 +136,26 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 .jump { display: none; position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: calc(max(34px, env(safe-area-inset-bottom)) + 12px); width: clamp(76px, 20vmin, 104px); aspect-ratio: 1; border-radius: 50%; border: 3px solid rgba(255,255,255,0.4); background: rgba(255,179,92,0.28); color: var(--text); font-size: 24px; font-weight: 700; font-family: inherit; touch-action: none; }
 @media (pointer: coarse) { .jump { display: block; pointer-events: auto !important; } }
 .jump:active { background: rgba(255,179,92,0.55); }
+
+/* ── 暫停：已拿到的卡與目前的能力 ── */
+.pause-panel { box-sizing: border-box; max-height: calc(100dvh - 24px); overflow: hidden; width: min(94vw, 720px); }
+.pause-panel .sum { overflow-y: auto; flex: 1 1 auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+.pause-panel .row { flex: 0 0 auto; }
+.pause-panel h3 { margin: 0 0 4px; font-size: 15px; color: var(--accent); letter-spacing: 0.1em; }
+.sum { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 22px; width: 100%; text-align: left; }
+.sum-col { min-width: 0; }
+.sum-cards, .sum-syn { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.sum-cards li { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; align-items: baseline; padding: 6px 8px; border-radius: 10px; background: rgba(255,255,255,0.06); }
+.sum-cards li em, .sum-syn em { grid-column: 1 / -1; font-style: normal; font-size: 13px; color: var(--text-dim); }
+.sum-cards li.empty { color: var(--text-dim); background: none; }
+.chips { display: inline-flex; gap: 3px; flex-wrap: wrap; justify-self: end; }
+.chip { width: 9px; height: 9px; border-radius: 50%; background: #e8e6e0; display: inline-block; }
+.chip.r-rare { background: #5ec4e8; } .chip.r-epic { background: #a678e0; } .chip.r-legend { background: #ffb347; }
+.sum-stats { margin: 0; display: grid; gap: 2px; }
+.sum-stats > div { display: flex; justify-content: space-between; gap: 10px; padding: 2px 6px; border-radius: 6px; }
+.sum-stats > div:nth-child(odd) { background: rgba(255,255,255,0.05); }
+.sum-stats dt { color: var(--text-dim); } .sum-stats dd { margin: 0; font-weight: 700; }
+.sum-stats .weapon-head { margin-top: 6px; }
+#sum-syn, #sum-curse { margin-top: 10px; }
+@media (max-width: 640px) { .sum { grid-template-columns: 1fr; } }
+@media (max-height: 520px) { .sum { grid-template-columns: 1fr 1fr; gap: 8px 14px; font-size: 13px; } .pause-panel h3 { font-size: 13px; } }

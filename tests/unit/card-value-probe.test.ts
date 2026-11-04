@@ -9,10 +9,10 @@ import { RARITIES } from '../../src/data/rarity';
 // 結果是相對值（機器人、非 sim、非真人）；用來看「哪張卡明顯強／弱」。`PROBE=1 npx vitest run tests/unit/card-value-probe.test.ts`
 const run = process.env.PROBE ? describe : describe.skip;
 const DT = 1 / 60;
-const SEEDS = [1, 2, 3, 4, 5, 6];
+const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const SECONDS = Number(process.env.PROBE_SECONDS ?? 90);
 
-function play(seed: number, card?: [string, string], copies = 1) {
+function play(seed: number, card?: [string, string], copies = Number(process.env.PROBE_COPIES ?? 1)) {
   resetTuning();
   const r = new Run({ seed, bus: new EventBus() });
   r.devSetTime(Number(process.env.PROBE_START ?? 360));
@@ -46,14 +46,14 @@ run('卡片價值探針', () => {
     const base = SEEDS.map((s) => play(s));
     const bk = avg(base.map((x) => x.kills));
     const bh = avg(base.map((x) => x.hurt));
-    const lines = [`基準：擊殺 ${bk.toFixed(0)}、受傷 ${bh.toFixed(0)}`];
+    const lines = [`基準：擊殺 ${bk.toFixed(0)}、受傷 ${bh.toFixed(0)}、活 ${avg(base.map((x) => x.alive)).toFixed(0)}s`];
     for (const id of CARD_POOL_M1) {
       const row: string[] = [];
-      for (const r of RARITIES) {
+      for (const r of (process.env.PROBE_RARITIES ?? 'common,rare,epic,legend').split(',') as typeof RARITIES[number][]) {
         const res = SEEDS.map((s) => play(s, [id, r]));
         const k = avg(res.map((x) => x.kills));
         const h = avg(res.map((x) => x.hurt));
-        row.push(`${r}: 擊殺 ${(((k / bk) - 1) * 100).toFixed(0)}% 受傷 ${(((h / Math.max(1, bh)) - 1) * 100).toFixed(0)}%`);
+        row.push(`${r}: 擊殺 ${(((k / bk) - 1) * 100).toFixed(0)}% 受傷 ${(((h / Math.max(1, bh)) - 1) * 100).toFixed(0)}% 活 ${avg(res.map((x) => x.alive)).toFixed(0)}s`);
       }
       lines.push(`${id.padEnd(9)} ${row.join(' | ')}`);
     }

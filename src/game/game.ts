@@ -9,6 +9,7 @@ import type { GameStateMachine } from './stateMachine';
 import { RunView } from '../render/runView';
 import { buildHud, type Hud } from '../ui/hud';
 import { buildMenu, toast } from '../ui/menu';
+import { summarizeBuild } from './buildSummary';
 import { buildCardPicker, buildIntermission, buildPause, buildRunEnd, buildSetup } from '../ui/overlays';
 import { t } from '../i18n';
 import { tuning } from '../data/tuning';
@@ -114,11 +115,13 @@ export class Game {
     this.pause = buildPause(ui, () => this.closePause(), () => this.quitRun());
     this.hud = buildHud(ui);
     this.hud.pauseButton.addEventListener('click', () => this.togglePause());
+    this.hud.abilitiesButton.addEventListener('click', () => this.openPause());
     this.input.attachTouch({ stickBase: this.hud.stickBase, stickKnob: this.hud.stickKnob, jumpButton: this.hud.jumpButton });
     this.input.attachLook(this.renderer.pipeline.renderer.domElement);
 
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Escape' && !e.repeat) this.togglePause();
+      else if (e.code === 'KeyC' && !e.repeat && this.fsm.state === 'COMBAT' && !this.picker.visible) this.togglePause();
       if (this.picker.visible && ['Digit1', 'Digit2', 'Digit3'].includes(e.code)) this.pickCard(Number(e.code.slice(5)) - 1);
     });
     document.addEventListener('visibilitychange', () => {
@@ -278,6 +281,7 @@ export class Game {
   private openPause(): void {
     if (this.fsm.state !== 'COMBAT' || this.picker.visible) return;
     this.loop.hold('user');
+    if (this.run) this.pause.render(summarizeBuild(this.run));
     this.pause.show();
   }
 
