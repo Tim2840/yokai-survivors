@@ -39,7 +39,7 @@ export class Projectiles {
     this.aliveCount = 0;
   }
 
-  spawn(x: number, z: number, dirX: number, dirZ: number, w: WeaponDef, damage: number, crit: boolean, target: number): number {
+  spawn(x: number, z: number, dirX: number, dirZ: number, w: WeaponDef, damage: number, crit: boolean, target: number, pierceBonus = 0): number {
     let i = -1;
     for (let k = 0; k < this.high; k++) if (!this.alive[k]) {
       i = k;
@@ -57,7 +57,7 @@ export class Projectiles {
     this.life[i] = w.lifetime;
     this.damage[i] = damage;
     this.crit[i] = crit ? 1 : 0;
-    this.pierceLeft[i] = w.pierce;
+    this.pierceLeft[i] = w.pierce + pierceBonus;
     this.target[i] = target;
     this.lastHit[i] = -1;
     this.aliveCount++;

@@ -62,3 +62,61 @@ describe('武器卡（鬼火增殖、爆裂）', () => {
     expect(run.splashBonus).toBe(WEAPON_LIMITS.splash);
   });
 });
+
+import { SYNERGIES } from '../../src/data/synergies';
+import { cardById } from '../../src/systems/cards';
+
+describe('卡片聯動（D28）', () => {
+  it('聯動需要的卡都存在；全掃：每個聯動只有兩張都有才觸發、只觸發一次、效果疊上去', () => {
+    for (const sy of SYNERGIES) for (const id of sy.requires) expect(() => cardById(id), `${sy.id} 需要 ${id}`).not.toThrow();
+    for (const sy of SYNERGIES) {
+      const run = new Run({ seed: 5, bus: new EventBus() });
+      const events: string[] = [];
+      const bus = (run as unknown as { bus: EventBus }).bus;
+      bus.on('synergy', (e) => events.push(e.id));
+      run.give(sy.requires[0], 'common');
+      expect(run.activeSynergies, `${sy.id} 只有一張不該觸發`).not.toContain(sy.id);
+      run.give(sy.requires[1], 'common');
+      expect(run.activeSynergies).toContain(sy.id);
+      expect(events.filter((x) => x === sy.id)).toHaveLength(1);
+      run.give(sy.requires[1], 'rare');
+      run.give(sy.requires[0], 'rare');
+      expect(events.filter((x) => x === sy.id), '同一個聯動只觸發一次').toHaveLength(1);
+      expect(run.lastSynergy?.id).toBeTruthy();
+    }
+  });
+
+  it('貫穿火：每次多 1 顆、每顆多穿透 2 隻（加成值與投射物的穿透次數）', () => {
+    const count = (withSynergy: boolean) => {
+      const run = new Run({ seed: 9, bus: new EventBus() });
+      run.god = true;
+      if (withSynergy) {
+        run.give('volley', 'common');
+        run.give('pierce', 'common');
+      }
+      return run;
+    };
+    const a = count(true);
+    expect(a.activeSynergies).toContain('piercingFire');
+    expect(a.syn.pierce).toBe(2);
+    expect(a.syn.volley).toBe(1);
+    // 投射物真的帶著額外穿透次數
+    const w = a.yokai.weapon;
+    const i = a.projectiles.spawn(0, 0, 1, 0, w, 1, false, -1, a.pierceBonus + a.syn.pierce);
+    expect(a.projectiles.pierceLeft[i]).toBe(w.pierce + 2 + a.pierceBonus);
+    const b = new Run({ seed: 9, bus: new EventBus() });
+    b.give('volley', 'common');
+    expect(b.activeSynergies).toHaveLength(0);
+    expect(b.syn.pierce).toBe(0);
+  });
+
+  it('連環爆與燈火通明的加成', () => {
+    const run = new Run({ seed: 4, bus: new EventBus() });
+    run.give('splash', 'common');
+    run.give('volley', 'common');
+    expect(run.syn.splashMult).toBeCloseTo(1.3);
+    expect(run.syn.splashRatio).toBeCloseTo(0.4);
+    run.give('area', 'common');
+    expect(run.syn.auraMult).toBeCloseTo(1.5);
+  });
+});

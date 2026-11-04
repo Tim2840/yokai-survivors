@@ -1,4 +1,5 @@
 import { t } from '../i18n';
+import type { I18nKey } from '../i18n/zh-TW';
 import type { Run } from '../game/run';
 import type { CurseId } from '../data/altar';
 import type { StatId } from '../data/stats';
@@ -36,6 +37,7 @@ export function buildHud(parent: HTMLElement): Hud {
     </div>
     <div class="hud-boss hidden" id="boss-bar"><span>${t('hud.boss')}</span><div class="bar"><i id="boss-fill"></i></div></div>
     <div class="hud-element hidden" id="element-box"><b id="element-title"></b><span id="element-desc"></span><div class="bar"><i id="element-fill"></i></div><em id="element-act"></em></div>
+    <div class="hud-synergy hidden" id="synergy-box"></div>
     <div class="hud-portal hidden" id="portal-box"><b id="portal-arrow">▲</b><span id="portal-text"></span></div>
     <div class="hud-bottom">
       <div class="xp"><i id="xp-fill"></i></div>
@@ -60,6 +62,8 @@ export function buildHud(parent: HTMLElement): Hud {
   const elDesc = q('element-desc');
   const elFill = q('element-fill');
   const elAct = q('element-act');
+  const synBox = q('synergy-box');
+  let lastSyn = '';
   let lastEl = '';
   const xpFill = q('xp-fill');
   const lvText = q('lv-text');
@@ -127,6 +131,14 @@ export function buildHud(parent: HTMLElement): Hud {
       } else if (lastPortal !== -1) {
         lastPortal = -1;
         portalBox.classList.add('hidden');
+      }
+      // 卡片聯動：觸發後顯示 4 秒（不是彈窗，不暫停）
+      const sy = run.lastSynergy;
+      const synText = sy && run.clock - sy.at < 4 ? t('hud.synergy', { name: t(`synergy.${sy.id}` as I18nKey), desc: t(`synergy.${sy.id}.desc` as I18nKey) }) : '';
+      if (synText !== lastSyn) {
+        lastSyn = synText;
+        synBox.textContent = synText;
+        synBox.classList.toggle('hidden', synText === '');
       }
       // 地圖要素：走近時顯示名稱、效果與按住進度
       const f = run.elements.focus;

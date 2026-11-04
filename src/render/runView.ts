@@ -169,7 +169,7 @@ export class RunView {
     // 腳下陰影貼著地面，跳得越高越小
     this.playerShadow.position.set(run.px, ground + DECAL_LIFT, run.pz);
     this.playerShadow.scale.setScalar(Math.max(0.4, 1.25 - (run.py - ground) * 0.3));
-    const ar = run.yokai.aura.radius * run.stats.value.area;
+    const ar = run.yokai.aura.radius * run.stats.value.area * run.syn.auraMult;
     const ring = (this.aura.geometry.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
     for (let k = 0; k <= AURA_SEGMENTS; k++) {
       const a = (k / AURA_SEGMENTS) * TWO_PI;

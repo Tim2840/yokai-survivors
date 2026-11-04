@@ -17,7 +17,7 @@ export const PROGRESSION = {
 export const xpNeed = (level: number): number => PROGRESSION.needBase + PROGRESSION.needPerLevel * level;
 
 /** M1 的升級卡池（docs/05：4 張屬性卡就好）；M2 起改成依局外解鎖。每次升級給幾張、可用的稀有度 */
-export const CARD_POOL_M1: readonly string[] = ['hp', 'power', 'atkSpeed', 'speed', 'volley', 'splash'];
+export const CARD_POOL_M1: readonly string[] = ['hp', 'power', 'atkSpeed', 'speed', 'area', 'volley', 'splash', 'pierce'];
 export const CARD_CHOICES = 3;
 /** 沒解鎖「妖」之前只有凡、靈（docs/02 第 4.1 節） */
 export const RARITIES_UNLOCKED_M1 = ['common', 'rare'] as const;

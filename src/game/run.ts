@@ -23,6 +23,7 @@ import { Elements, type ElementCarry } from '../systems/elements';
 import { computeMerit } from '../systems/merit';
 import type { StatId } from '../data/stats';
 import { WEAPON_LIMITS } from '../data/weaponCards';
+import { SYNERGIES } from '../data/synergies';
 import { ALTAR_CURSE_IDS, type CurseId } from '../data/altar';
 
 export interface RunOptions {
@@ -129,6 +130,15 @@ export class Run {
   /** 武器卡累積：多發射的顆數、濺射半徑（公尺）。一開始都是 0（領頭只有一顆鬼火、沒有濺射） */
   volleyBonus = 0;
   splashBonus = 0;
+  pierceBonus = 0;
+  /** 拿過的卡 id、已觸發的聯動，與聯動帶來的加成（D28） */
+  readonly ownedCards = new Set<string>();
+  readonly activeSynergies: string[] = [];
+  readonly syn = { splashRatio: 0, splashMult: 1, pierce: 0, volley: 0, auraMult: 1 };
+  /** 最近一次聯動觸發的時間（模擬累計秒）與 id，HUD 顯示提示用 */
+  lastSynergy: { id: string; at: number } | null = null;
+  /** 這一局累計的模擬秒數（跨關） */
+  clock = 0;
   private fireCd = 0;
   private readonly near = new Int32Array(COMBAT.queryMax);
   private readonly splashNear = new Int32Array(COMBAT.queryMax);
@@ -305,6 +315,7 @@ export class Run {
       return;
     }
     this.time += dt;
+    this.clock += dt;
     this.movePlayer(dt);
     const s = this.stats.value;
     this.hp = Math.min(this.maxHp, this.hp + s.regen * dt);
@@ -312,7 +323,7 @@ export class Run {
 
     this.flow.update(this.px, this.pz);
     const aura = this.yokai.aura;
-    this.enemies.update(dt, this.px, this.pz, this.flow, aura.radius * s.area, aura.slow);
+    this.enemies.update(dt, this.px, this.pz, this.flow, aura.radius * s.area * this.syn.auraMult, aura.slow);
     this.contactDamage();
     this.weapon(dt);
     this.projectiles.update(dt, this.yokai.weapon, this.enemies, s.area, this.onProjectileHit);
@@ -468,7 +479,7 @@ export class Run {
     const dx = this.enemies.x[target] - this.px;
     const dz = this.enemies.z[target] - this.pz;
     const d = Math.hypot(dx, dz) || 1;
-    const volley = (tuning.volley > 0 ? tuning.volley : w.volley) + this.volleyBonus;
+    const volley = (tuning.volley > 0 ? tuning.volley : w.volley) + this.volleyBonus + this.syn.volley;
     for (let v = 0; v < volley; v++) {
       const crit = this.rngCombat.next() < s.crit;
       const dmg = w.damage * s.power * tuning.damageScale * (crit ? s.critDmg : 1);
@@ -477,7 +488,7 @@ export class Run {
       const sn = Math.sin(spread);
       const ux = dx / d;
       const uz = dz / d;
-      this.projectiles.spawn(this.px, this.pz, ux * c - uz * sn, ux * sn + uz * c, w, dmg, crit, target);
+      this.projectiles.spawn(this.px, this.pz, ux * c - uz * sn, ux * sn + uz * c, w, dmg, crit, target, this.pierceBonus + this.syn.pierce);
     }
   }
 
@@ -491,10 +502,10 @@ export class Run {
     // 頭目不被擊退
     const knock = this.enemies.variant[e] === 2 ? 0 : w.knockback;
     if (this.enemies.hurt(e, dmg, pr.vx[p] / vl, pr.vz[p] / vl, knock)) this.onKill(e);
-    const splashR = (tuning.splash > 0 ? tuning.splash : w.splashRadius) + this.splashBonus;
+    const splashR = ((tuning.splash > 0 ? tuning.splash : w.splashRadius) + this.splashBonus) * this.syn.splashMult;
     if (splashR > 0) {
       const n = this.enemies.within(this.enemies.x[e], this.enemies.z[e], splashR * this.stats.value.area, this.splashNear);
-      const sd = dmg * (w.splashRatio > 0 ? w.splashRatio : 0.6);
+      const sd = dmg * ((w.splashRatio > 0 ? w.splashRatio : 0.6) + this.syn.splashRatio);
       for (let k = 0; k < n; k++) {
         const o = this.splashNear[k];
         if (o === e || !this.enemies.alive[o]) continue;
@@ -566,10 +577,13 @@ export class Run {
 
   private applyCard(o: CardOffer): void {
     const card = cardById(o.cardId);
+    this.ownedCards.add(card.id);
     if (isWeaponCard(card)) {
-      if (card.weapon === 'volley') this.volleyBonus = Math.min(WEAPON_LIMITS.volley - 1, this.volleyBonus + card.values[o.rarity]);
+      if (card.weapon === 'pierce') this.pierceBonus = Math.min(WEAPON_LIMITS.pierce, this.pierceBonus + card.values[o.rarity]);
+      else if (card.weapon === 'volley') this.volleyBonus = Math.min(WEAPON_LIMITS.volley - 1, this.volleyBonus + card.values[o.rarity]);
       else this.splashBonus = Math.min(WEAPON_LIMITS.splash, this.splashBonus + card.values[o.rarity]);
       this.picked.push(o);
+      this.checkSynergies();
       return;
     }
     const before = this.maxHp;
@@ -578,6 +592,24 @@ export class Run {
     if (this.maxHp > before) this.hp += this.maxHp - before;
     this.hp = Math.min(this.hp, this.maxHp);
     this.picked.push(o);
+    this.checkSynergies();
+  }
+
+  /** 拿到卡之後檢查聯動：兩張都有、還沒觸發過 → 永久加成並通知 */
+  private checkSynergies(): void {
+    for (const sy of SYNERGIES) {
+      if (this.activeSynergies.includes(sy.id)) continue;
+      if (!sy.requires.every((id) => this.ownedCards.has(id))) continue;
+      this.activeSynergies.push(sy.id);
+      const e = sy.effect;
+      this.syn.splashRatio += e.splashRatio ?? 0;
+      this.syn.splashMult *= e.splashMult ?? 1;
+      this.syn.pierce += e.pierce ?? 0;
+      this.syn.volley += e.volley ?? 0;
+      this.syn.auraMult *= e.auraMult ?? 1;
+      this.lastSynergy = { id: sy.id, at: this.clock };
+      this.bus.emit('synergy', { id: sy.id });
+    }
   }
 
   /** 測試與開發介面：直接給一張卡（不經選卡） */
