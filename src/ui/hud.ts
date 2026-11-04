@@ -4,6 +4,7 @@ import type { Run } from '../game/run';
 import type { CurseId } from '../data/altar';
 import type { StatId } from '../data/stats';
 import type { ElementSlot } from '../systems/elements';
+import { ULT } from '../data/ultimates';
 import { BARRIER, JIZO, JIZO_ARMOR_SECONDS, OFFERING } from '../data/elements';
 
 
@@ -18,6 +19,7 @@ export interface Hud {
   jumpButton: HTMLButtonElement;
   pauseButton: HTMLButtonElement;
   abilitiesButton: HTMLButtonElement;
+  ultButton: HTMLButtonElement;
   /** yaw = 鏡頭的 yaw（傳送門箭頭要相對鏡頭轉） */
   update(run: Run, yaw: number): void;
   show(visible: boolean): void;
@@ -45,6 +47,7 @@ export function buildHud(parent: HTMLElement): Hud {
       <span id="lv-text"></span>
     </div>
     <div class="stick" id="stick-base"><div class="knob" id="stick-knob"></div></div>
+    <button class="ult hidden" id="btn-ult" type="button"><span class="ult-fill" id="ult-fill"></span><b>${t('hud.ult')}</b><em>F</em></button>
     <button class="jump" id="btn-jump" type="button" aria-label="${t('hud.jump')}">${t('hud.jump')}</button>`;
   parent.appendChild(root);
   const q = <T extends HTMLElement>(id: string) => root.querySelector<T>('#' + id)!;
@@ -63,6 +66,9 @@ export function buildHud(parent: HTMLElement): Hud {
   const elDesc = q('element-desc');
   const elFill = q('element-fill');
   const elAct = q('element-act');
+  const ultBtn = q('btn-ult');
+  const ultFill = q('ult-fill');
+  let lastUlt = '';
   const synBox = q('synergy-box');
   let lastSyn = '';
   let lastEl = '';
@@ -83,6 +89,7 @@ export function buildHud(parent: HTMLElement): Hud {
     jumpButton: q<HTMLButtonElement>('btn-jump'),
     pauseButton: q<HTMLButtonElement>('btn-pause'),
     abilitiesButton: q<HTMLButtonElement>('btn-abilities'),
+    ultButton: q<HTMLButtonElement>('btn-ult'),
     show(v) {
       root.classList.toggle('hidden', !v);
     },
@@ -135,11 +142,33 @@ export function buildHud(parent: HTMLElement): Hud {
         portalBox.classList.add('hidden');
       }
       // 卡片聯動：觸發後顯示 4 秒（不是彈窗，不暫停）
+      // 提示框：聯動、神籤、大招融合，誰最近發生就顯示誰（4 秒）
+      let synText = '';
+      let synAt = -1;
       const sy = run.lastSynergy;
+      if (sy && run.clock - sy.at < 4 && sy.at > synAt) {
+        synAt = sy.at;
+        synText = t('hud.synergy', { name: t(`synergy.${sy.id}` as I18nKey), desc: t(`synergy.${sy.id}.desc` as I18nKey) });
+      }
       const om = run.lastOmikuji;
-      let synText = sy && run.clock - sy.at < 4 ? t('hud.synergy', { name: t(`synergy.${sy.id}` as I18nKey), desc: t(`synergy.${sy.id}.desc` as I18nKey) }) : '';
-      // 神籤的結果也用同一個提示框（比較新的優先）
-      if (om && run.clock - om.at < 4 && (!sy || om.at >= sy.at || run.clock - sy.at >= 4)) synText = t(`omikuji.${om.id}` as I18nKey);
+      if (om && run.clock - om.at < 4 && om.at >= synAt) {
+        synAt = om.at;
+        synText = t(`omikuji.${om.id}` as I18nKey);
+      }
+      const fu = run.lastFuse;
+      if (fu && run.clock - fu.at < 6 && fu.at >= synAt) {
+        synAt = fu.at;
+        synText = t('hud.fusion', { name: t(`ult.${fu.id}` as I18nKey) });
+      }
+      // 大招鈕：有融合過才顯示；量表滿了會發亮
+      const hasUlt = run.fused.length > 0;
+      const ultKey = `${hasUlt}|${run.ultReady}`;
+      if (ultKey !== lastUlt) {
+        lastUlt = ultKey;
+        ultBtn.classList.toggle('hidden', !hasUlt);
+        ultBtn.classList.toggle('ready', run.ultReady);
+      }
+      if (hasUlt) ultFill.style.height = `${Math.min(100, (run.ultCharge / ULT.max) * 100).toFixed(0)}%`;
       if (synText !== lastSyn) {
         lastSyn = synText;
         synBox.textContent = synText;

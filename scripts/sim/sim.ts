@@ -11,6 +11,7 @@ import { writeFileSync } from 'node:fs';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { resetTuning, tuning } from '../../src/data/tuning';
+import { ultHints } from '../../src/data/ultimates';
 import { PROGRESSION } from '../../src/data/progression';
 import { WAVES } from '../../src/data/waves';
 
@@ -26,9 +27,11 @@ const RUNS = Number(arg('runs', '24'));
 const SECONDS = Number(arg('seconds', '600'));
 const STAGES = Number(arg('stages', '1'));
 const SEED0 = Number(arg('seeds', '1'));
-const ONLY = arg('only', 'random,dps,survive').split(',');
+const ONLY = arg('only', 'random,dps,survive,ult').split(',');
 const ELEMENTS = arg('elements', 'both'); // on | off | both
 const JSON_OUT = arg('json', '');
+/** --cast on|off：機器人要不要發動大招（比較大招的影響） */
+const CAST = arg('cast', 'on') === 'on';
 /** --tune countScale=3,hpScale=1.2,xp.needPerLevel=4,w.hpPerWave=0.2：臨時改旋鈕比較（不改檔案）；xp. 開頭是 PROGRESSION、w. 開頭是 WAVES */
 const TUNE = arg('tune', '');
 function applyTune(): void {
@@ -51,11 +54,15 @@ const RARITY_SCORE: Record<string, number> = { common: 1, rare: 1.6, epic: 2.4, 
 function choose(run: Run, strategy: string, rnd: () => number): number {
   const offer = run.offer!;
   if (strategy === 'random') return Math.floor(rnd() * offer.length);
-  const sc = SCORES[strategy];
+  const sc = SCORES[strategy === 'ult' ? 'dps' : strategy];
   let best = 0;
   let bestV = -1;
   offer.forEach((o, i) => {
-    const v = (sc[o.cardId] ?? 1) * RARITY_SCORE[o.rarity];
+    let v = (sc[o.cardId] ?? 1) * RARITY_SCORE[o.rarity];
+    // 「ult」策略：追大招配方——這張卡是還沒融合的大招的材料就加分，選了就融合加更多
+    if (strategy === 'ult') {
+      for (const h of ultHints(o.cardId, run.yokai.id, run.cardCounts, run.fused)) v += h.completes ? 12 : h.have < h.need ? 3 : 0;
+    }
     if (v > bestV) {
       bestV = v;
       best = i;
@@ -84,6 +91,8 @@ interface Result {
   elementsUsed: number;
   cards: Record<string, number>;
   curseTotal: number;
+  fused: number;
+  casts: number;
 }
 
 function play(seed: number, strategy: string, useElements: boolean): Result {
@@ -103,6 +112,8 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   const cards: Record<string, number> = {};
   const maxStage = Math.min(STAGES, run.stageCount);
   let guard = 0;
+  let casts = 0;
+  const scratch = new Int32Array(512);
   while (run.phase !== 'ended' && guard++ < 5e7) {
     if (run.awaitingPick) {
       const i = choose(run, strategy, rnd);
@@ -151,6 +162,11 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
       }
     }
     run.setMove(mx, mz);
+    // 大招：量表滿了、附近敵人多（或頭目在場）才發動
+    if (CAST && run.ultReady && (n >= 0 && run.enemies.within(run.px, run.pz, 7, scratch) >= 12 || (run.director.bossIndex >= 0 && run.enemies.alive[run.director.bossIndex] === 1))) {
+      run.castUltimate();
+      casts++;
+    }
     if (run.director.bossIndex >= 0) bossSeen = true;
     run.step(DT);
     t += DT;
@@ -173,6 +189,8 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     level: run.level,
     elementsUsed: used,
     cards,
+    fused: run.fused.length,
+    casts,
     curseTotal: run.curse.enemyHp + run.curse.enemySpeed + run.curse.enemyDamage + run.curse.spawnRate,
   };
 }
@@ -209,6 +227,7 @@ function summarize(rs: Result[]): string {
     `擊殺 ${avg(rs.map((r) => r.kills)).toFixed(0)}`,
     `等級 ${avg(rs.map((r) => r.level)).toFixed(1)}`,
     `用掉要素 ${avg(rs.map((r) => r.elementsUsed)).toFixed(1)}`,
+    `融合大招 ${avg(rs.map((r) => r.fused)).toFixed(1)} 個、發動 ${avg(rs.map((r) => r.casts)).toFixed(1)} 次`,
   ].join('；');
 }
 

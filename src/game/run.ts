@@ -24,6 +24,7 @@ import { computeMerit } from '../systems/merit';
 import type { StatId } from '../data/stats';
 import { WEAPON_LIMITS } from '../data/weaponCards';
 import { SYNERGIES } from '../data/synergies';
+import { ULT, ULT_RECIPES, recipeDone, type UltEffect } from '../data/ultimates';
 import { ALTAR_CURSE_IDS, type CurseId } from '../data/altar';
 
 export interface RunOptions {
@@ -144,6 +145,17 @@ export class Run {
   offerKind: 'levelup' | 'offering' | 'chest' = 'levelup';
   private bonusLeft = 0;
   private bonusRarity: import('../data/rarity').Rarity = 'rare';
+  /** 拿過的卡各幾張（大招配方用）、已融合的大招、大招量表（0～ULT.max）、最近一次發動（給外觀用） */
+  readonly cardCounts = new Map<string, number>();
+  readonly fused: string[] = [];
+  ultCharge = 0;
+  lastFuse: { id: string; at: number } | null = null;
+  lastCast: { ids: string[]; at: number; x: number; z: number; dx: number; dz: number } | null = null;
+  /** 狂亂（暫時強化）與護罩結束的時間（clock）、狂亂額外鬼火 */
+  private frenzyUntil = 0;
+  private frenzyVolley = 0;
+  shieldUntil = 0;
+  private ultNear = new Int32Array(0);
   /** 這一局累計的模擬秒數（跨關） */
   clock = 0;
   private fireCd = 0;
@@ -334,6 +346,12 @@ export class Run {
     }
     this.time += dt;
     this.clock += dt;
+    this.ultCharge = Math.min(ULT.max, this.ultCharge + ULT.perSecond * dt);
+    if (this.frenzyUntil > 0 && this.clock >= this.frenzyUntil) {
+      this.stats.clearMod('ult:frenzy');
+      this.frenzyUntil = 0;
+      this.frenzyVolley = 0;
+    }
     this.movePlayer(dt);
     const s = this.stats.value;
     this.hp = Math.min(this.maxHp, this.hp + s.regen * dt);
@@ -497,7 +515,7 @@ export class Run {
     const dx = this.enemies.x[target] - this.px;
     const dz = this.enemies.z[target] - this.pz;
     const d = Math.hypot(dx, dz) || 1;
-    const volleyExact = (tuning.volley > 0 ? tuning.volley : w.volley) + this.volleyBonus + this.syn.volley;
+    const volleyExact = (tuning.volley > 0 ? tuning.volley : w.volley) + this.volleyBonus + this.syn.volley + this.frenzyVolley;
     // 小數的部分 = 機率多一顆（卡片的數值是小數，這樣每張卡的價值才能細調）
     const volley = Math.floor(volleyExact) + (this.rngCombat.next() < volleyExact - Math.floor(volleyExact) ? 1 : 0);
     for (let v = 0; v < volley; v++) {
@@ -543,6 +561,7 @@ export class Run {
 
   private onKill(e: number): void {
     this.kills++;
+    this.ultCharge = Math.min(ULT.max, this.ultCharge + (this.enemies.variant[e] === 2 ? ULT.perBoss : this.enemies.variant[e] === 1 ? ULT.perElite : ULT.perKill));
     const value = this.enemies.points(e) * PROGRESSION.orbPerPoint;
     const x = this.enemies.x[e];
     const z = this.enemies.z[e];
@@ -634,12 +653,14 @@ export class Run {
   private applyCard(o: CardOffer): void {
     const card = cardById(o.cardId);
     this.ownedCards.add(card.id);
+    this.cardCounts.set(card.id, (this.cardCounts.get(card.id) ?? 0) + 1);
     if (isWeaponCard(card)) {
       if (card.weapon === 'pierce') this.pierceBonus = Math.min(WEAPON_LIMITS.pierce, this.pierceBonus + card.values[o.rarity]);
       else if (card.weapon === 'volley') this.volleyBonus = Math.min(WEAPON_LIMITS.volley - 1, this.volleyBonus + card.values[o.rarity]);
       else this.splashBonus = Math.min(WEAPON_LIMITS.splash, this.splashBonus + card.values[o.rarity]);
       this.picked.push(o);
       this.checkSynergies();
+      this.checkFusion();
       return;
     }
     const before = this.maxHp;
@@ -649,6 +670,7 @@ export class Run {
     this.hp = Math.min(this.hp, this.maxHp);
     this.picked.push(o);
     this.checkSynergies();
+    this.checkFusion();
   }
 
   /** 拿到卡之後檢查聯動：兩張都有、還沒觸發過 → 永久加成並通知 */
@@ -666,6 +688,99 @@ export class Run {
       this.lastSynergy = { id: sy.id, at: this.clock };
       this.bus.emit('synergy', { id: sy.id });
     }
+  }
+
+  /** 拿到卡之後檢查大招配方：湊齊就融合（這隻妖怪的配方、還沒融合過） */
+  private checkFusion(): void {
+    for (const rc of ULT_RECIPES) {
+      if (rc.yokai !== this.yokai.id || this.fused.includes(rc.id)) continue;
+      if (!recipeDone(rc, this.cardCounts)) continue;
+      this.fused.push(rc.id);
+      this.lastFuse = { id: rc.id, at: this.clock };
+      this.bus.emit('fusion', { id: rc.id });
+    }
+  }
+
+  get ultReady(): boolean {
+    return this.fused.length > 0 && this.ultCharge >= ULT.max;
+  }
+
+  /** 玩家按大招：量表滿、有融合過的大招才會發動；全部已融合的大招一起發動，量表歸零 */
+  castUltimate(): boolean {
+    if (this.phase !== 'combat' || this.awaitingPick || this.dead || !this.ultReady) return false;
+    if (this.ultNear.length < this.enemies.capacity) this.ultNear = new Int32Array(this.enemies.capacity);
+    // 瞄準：最近的敵人，沒有就朝面向
+    let dx = Math.sin(this.facing);
+    let dz = Math.cos(this.facing);
+    const n = this.enemies.nearest(this.px, this.pz, 30);
+    if (n >= 0) {
+      const ex = this.enemies.x[n] - this.px;
+      const ez = this.enemies.z[n] - this.pz;
+      const d = Math.hypot(ex, ez) || 1;
+      dx = ex / d;
+      dz = ez / d;
+    }
+    for (const id of this.fused) this.applyUltEffect(ULT_RECIPES.find((x) => x.id === id)!.effect, dx, dz);
+    this.lastCast = { ids: [...this.fused], at: this.clock, x: this.px, z: this.pz, dx, dz };
+    this.ultCharge = 0;
+    this.bus.emit('ultimate', { ids: [...this.fused] });
+    return true;
+  }
+
+  private ultDamage(e: UltEffect & { damageMult: number }): number {
+    return this.yokai.weapon.damage * this.stats.value.power * tuning.damageScale * e.damageMult;
+  }
+
+  private applyUltEffect(e: UltEffect, dx: number, dz: number): void {
+    const s = this.stats.value;
+    if (e.type === 'frenzy') {
+      this.stats.setMod('ult:frenzy', { pct: { power: e.power, atkSpeed: e.atkSpeed } });
+      this.frenzyUntil = this.clock + e.seconds;
+      this.frenzyVolley = e.volley;
+      return;
+    }
+    if (e.type === 'bulwark') {
+      this.invul = Math.max(this.invul, e.seconds);
+      this.shieldUntil = this.clock + e.seconds;
+      this.hp = Math.min(this.maxHp, this.hp + this.maxHp * e.healFrac);
+    }
+    const dmg = e.type === 'beam' || e.type === 'nova' || e.type === 'bulwark' ? this.ultDamage(e) : 0;
+    const en = this.enemies;
+    if (e.type === 'beam') {
+      // 沿射線、寬度內的所有敵人（先用範圍查詢取候選，再用到射線的距離篩）
+      const cx = this.px + dx * (e.length / 2);
+      const cz = this.pz + dz * (e.length / 2);
+      const k = en.within(cx, cz, e.length / 2 + e.width, this.ultNear);
+      for (let i = 0; i < k; i++) {
+        const o = this.ultNear[i];
+        if (!en.alive[o]) continue;
+        const rx = en.x[o] - this.px;
+        const rz = en.z[o] - this.pz;
+        const along = rx * dx + rz * dz;
+        const across = Math.abs(rx * -dz + rz * dx);
+        if (along < 0 || along > e.length || across > e.width / 2 + en.radius(o)) continue;
+        this.feed.push(en.x[o], en.z[o], dmg, false);
+        if (en.hurt(o, dmg, dx, dz, 0)) this.onKill(o);
+      }
+      return;
+    }
+    const radius = e.radius * s.area;
+    const k = en.within(this.px, this.pz, radius, this.ultNear);
+    for (let i = 0; i < k; i++) {
+      const o = this.ultNear[i];
+      if (!en.alive[o]) continue;
+      const rx = en.x[o] - this.px;
+      const rz = en.z[o] - this.pz;
+      const d = Math.hypot(rx, rz) || 1;
+      this.feed.push(en.x[o], en.z[o], dmg, false);
+      const knock = en.variant[o] === 2 ? 0 : e.knockback;
+      if (en.hurt(o, dmg, rx / d, rz / d, knock)) this.onKill(o);
+    }
+  }
+
+  /** 開發與測試：大招量表直接充滿 */
+  devChargeUlt(): void {
+    this.ultCharge = ULT.max;
   }
 
   /** 測試與開發介面：直接給一張卡（不經選卡） */

@@ -3,6 +3,7 @@ import type { I18nKey } from '../i18n/zh-TW';
 import { CARD_FORMAT, type StatId } from '../data/stats';
 import type { BuildSummary } from '../game/buildSummary';
 import { synergyHints } from '../data/synergies';
+import { ultHints } from '../data/ultimates';
 import { cardById, isWeaponCard, type CardOffer } from '../systems/cards';
 import { PLAYABLE_YOKAI, STARTER_YOKAI } from '../data/yokai';
 
@@ -82,7 +83,7 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
   const title = o.el.querySelector<HTMLElement>('#lv-title')!;
   const pending = o.el.querySelector<HTMLElement>('#lv-pending')!;
   return Object.assign(o, {
-    render(offer: CardOffer[], more: number, owned: ReadonlySet<string> = new Set(), active: readonly string[] = [], kind: 'levelup' | 'offering' | 'chest' = 'levelup') {
+    render(offer: CardOffer[], more: number, owned: ReadonlySet<string> = new Set(), active: readonly string[] = [], kind: 'levelup' | 'offering' | 'chest' = 'levelup', ult: { yokai: string; counts: ReadonlyMap<string, number>; fused: readonly string[] } = { yokai: '', counts: new Map(), fused: [] }) {
       title.textContent = t(kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? 'levelup.offering' : 'levelup.chest');
       pending.textContent = more > 1 ? t('levelup.pending', { n: more - 1 }) : '';
       cardsEl.innerHTML = '';
@@ -102,8 +103,12 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
             return `<span class="csyn${h.ready ? ' ready' : ''}">${h.ready ? t('card.syn.ready', { name: syn }) : t('card.syn.need', { card: t(`card.${h.partner}` as I18nKey), name: syn })}</span>`;
           })
           .join('');
+        // 大招配方：這張卡是哪個大招的材料、目前進度；選了就湊齊的特別標出
+        const ultLines = ultHints(c.cardId, ult.yokai, ult.counts, ult.fused)
+          .map((h) => `<span class="csyn ult${h.completes ? ' ready' : ''}">${h.completes ? t('card.ult.completes', { name: t(`ult.${h.id}` as I18nKey) }) : t('card.ult.need', { name: t(`ult.${h.id}` as I18nKey), have: h.have, need: h.need })}</span>`)
+          .join('');
         b.innerHTML = `<span class="shape ${SHAPES[c.rarity]}" aria-hidden="true"></span>
-          <span class="rname">${t(`rarity.${c.rarity}` as I18nKey)}</span><b>${d.name}</b><span class="cdesc">${d.desc}</span>${hints}`;
+          <span class="rname">${t(`rarity.${c.rarity}` as I18nKey)}</span><b>${d.name}</b><span class="cdesc">${d.desc}</span>${hints}${ultLines}`;
         b.addEventListener('click', () => onPick(i));
         cardsEl.appendChild(b);
       });
@@ -184,7 +189,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
     parent,
     'pause',
     `<div class="panel pause-panel"><h2>${t('pause.title')}</h2><p id="pause-status"></p>
-      <div class="sum"><section class="sum-col"><h3>${t('pause.cards')}</h3><ul class="sum-cards" id="sum-cards"></ul><div id="sum-syn"></div></section>
+      <div class="sum"><section class="sum-col"><h3>${t('pause.cards')}</h3><ul class="sum-cards" id="sum-cards"></ul><div id="sum-syn"></div><div id="sum-ult"></div></section>
       <section class="sum-col"><h3>${t('pause.abilities')}</h3><dl class="sum-stats" id="sum-stats"></dl><div id="sum-curse"></div></section></div>
       <div class="row">${btn('btn-pause-quit', 'pause.quit', 'secondary')}${btn('btn-pause-resume', 'pause.resume')}</div></div>`,
   );
@@ -206,6 +211,17 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
       }
       const syn = q('sum-syn');
       syn.innerHTML = sum.synergies.length ? `<h3>${t('pause.synergies')}</h3><ul class="sum-syn">${sum.synergies.map((id) => `<li><b>${t(`synergy.${id}` as I18nKey)}</b> <em>${t(`synergy.${id}.desc` as I18nKey)}</em></li>`).join('')}</ul>` : '';
+      const ult = q('sum-ult');
+      ult.innerHTML = sum.ultimates.length
+        ? `<h3>${t('pause.ultimates')}</h3><ul class="sum-ult">${sum.ultimates
+            .map(
+              (u) =>
+                `<li data-ult="${u.id}" class="${u.fused ? 'fused' : ''}"><b>${t(`ult.${u.id}` as I18nKey)}${u.fused ? ' ✓' : ''}</b><em>${t(`ult.${u.id}.desc` as I18nKey)}</em><span>${u.ingredients
+                  .map((g) => `<i class="${g.have >= g.need ? 'ok' : ''}">${t(`card.${g.card}` as I18nKey)} ${g.have}/${g.need}</i>`)
+                  .join('')}</span></li>`,
+            )
+            .join('')}</ul>`
+        : '';
       const stats = q('sum-stats');
       const rows = sum.stats.map((s) => `<div data-stat="${s.id}"><dt>${t(`stat.${s.id}` as I18nKey)}</dt><dd>${statText(s.id, s.value, sum)}</dd></div>`);
       rows.push(`<div class="weapon-head"><dt><b>${t('pause.weapon')}</b></dt><dd></dd></div>`);

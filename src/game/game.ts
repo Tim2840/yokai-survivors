@@ -116,7 +116,7 @@ export class Game {
     this.hud = buildHud(ui);
     this.hud.pauseButton.addEventListener('click', () => this.togglePause());
     this.hud.abilitiesButton.addEventListener('click', () => this.openPause());
-    this.input.attachTouch({ stickBase: this.hud.stickBase, stickKnob: this.hud.stickKnob, jumpButton: this.hud.jumpButton });
+    this.input.attachTouch({ stickBase: this.hud.stickBase, stickKnob: this.hud.stickKnob, jumpButton: this.hud.jumpButton, commandButton: this.hud.ultButton });
     this.input.attachLook(this.renderer.pipeline.renderer.domElement);
 
     window.addEventListener('keydown', (e) => {
@@ -175,6 +175,7 @@ export class Game {
         worldMove(this.input.moveX, this.input.moveZ, this.renderer.rig.yaw, this.moveOut);
         run.setMove(this.moveOut[0], this.moveOut[1]);
         if (this.input.consumeJump()) run.requestJump();
+        if (this.input.consumeCommand()) run.castUltimate();
         run.step(dt);
       },
       exit: () => {
@@ -233,7 +234,7 @@ export class Game {
       const run = this.run;
       if (!run || !run.offer) return;
       this.loop.hold('levelup');
-      this.picker.render(run.offer, run.picksLeft, run.ownedCards, run.activeSynergies, run.offerKind);
+      this.picker.render(run.offer, run.picksLeft, run.ownedCards, run.activeSynergies, run.offerKind, { yokai: run.yokai.id, counts: run.cardCounts, fused: run.fused });
       this.picker.show();
       this.audio.sfx('levelUp');
     });
@@ -270,7 +271,7 @@ export class Game {
     this.audio.sfx('cardFlip', ['common', 'rare', 'epic', 'legend'].indexOf(run.offer[i]?.rarity ?? 'common'));
     const more = run.chooseCard(i);
     if (more && run.offer) {
-      this.picker.render(run.offer, run.picksLeft, run.ownedCards, run.activeSynergies, run.offerKind);
+      this.picker.render(run.offer, run.picksLeft, run.ownedCards, run.activeSynergies, run.offerKind, { yokai: run.yokai.id, counts: run.cardCounts, fused: run.fused });
     } else {
       this.picker.hide();
       this.loop.release('levelup');

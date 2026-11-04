@@ -27,6 +27,9 @@ export interface GameEvents {
   /** 玩家受傷（低頻事件；每擊殺等高頻事件不走匯流排，見 docs/06） */
   playerHurt: { damage: number; hp: number };
   /** 地圖要素落下／被用掉／消失（低頻） */
+  /** 大招融合成功／發動（低頻） */
+  fusion: { id: string };
+  ultimate: { ids: string[] };
   /** 觸發了一個卡片聯動（低頻） */
   synergy: { id: string };
   elementSpawn: { kind: string; rarity: string };

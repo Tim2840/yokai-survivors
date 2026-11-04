@@ -86,6 +86,7 @@ export function installDevApi(ctx: DevContext): void {
         stats: { ...r.stats.value },
         elements: r.elements.slots.filter((s) => s.active).map((s) => ({ kind: s.kind, rarity: s.rarity, x: s.x, y: s.y, z: s.z, announce: s.announce, progress: s.progress, used: s.usedAge >= 0, effects: s.effects.slice(0, s.effectCount).map((f) => ({ ...f })) })),
         curse: { ...r.curse },
+        ult: { fused: [...r.fused], charge: r.ultCharge, ready: r.ultReady, counts: Object.fromEntries(r.cardCounts), volleyBonus: r.volleyBonus },
         focus: r.elements.focus ? r.elements.focus.kind : null,
         tuning: ctx.game.tuningInfo,
       };
@@ -128,6 +129,8 @@ export function installDevApi(ctx: DevContext): void {
       const s = r.elements.devForce(kind as ElementKind, rarity, r.px, r.pz);
       return s ? { x: s.x, y: s.y, z: s.z } : null;
     },
+    /** 大招量表直接充滿（測試用；發動仍要真的按大招鈕或 F 鍵） */
+    chargeUlt: () => run()?.devChargeUlt(),
     /** 頭目現在就倒下（走正常的擊殺流程，傳送門會開） */
     killBoss: () => run()?.devKillBoss() ?? false,
     give: (cardId: string, rarity: RarityLike) => run()?.give(cardId, rarity),

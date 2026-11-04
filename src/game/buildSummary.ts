@@ -6,6 +6,7 @@ import { type StatId } from '../data/stats';
 import { STAT_IDS } from '../data/stats';
 import { ALTAR_CURSE_IDS, type CurseId } from '../data/altar';
 import { tuning } from '../data/tuning';
+import { ULT, ULT_RECIPES, recipeProgress } from '../data/ultimates';
 
 /** 暫停畫面「能力」面板的資料（純資料，不含文字；文字由介面層用 i18n 組） */
 export interface BuildSummary {
@@ -20,6 +21,10 @@ export interface BuildSummary {
   curses: { id: CurseId; v: number }[];
   /** 護甲換算的承受傷害倍率 */
   damageTaken: number;
+  /** 這隻妖怪的大招配方與進度 */
+  ultimates: { id: string; fused: boolean; ingredients: { card: string; have: number; need: number }[] }[];
+  /** 大招量表 0～1 */
+  ultCharge: number;
   /** 目前生命與等級 */
   hp: number;
   maxHp: number;
@@ -54,6 +59,8 @@ export function summarizeBuild(run: Run): BuildSummary {
     },
     synergies: [...run.activeSynergies],
     curses,
+    ultimates: ULT_RECIPES.filter((r) => r.yokai === run.yokai.id).map((r) => ({ id: r.id, fused: run.fused.includes(r.id), ingredients: recipeProgress(r, run.cardCounts) })),
+    ultCharge: run.ultCharge / ULT.max,
     damageTaken: armorMult(s.armor),
     hp: run.hp,
     maxHp: run.maxHp,
