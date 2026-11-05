@@ -52,7 +52,7 @@ export async function run(browser) {
         await page.waitForFunction(() => window.__game.screens.includes('pause'));
         const row = await page.locator('#sum-cards li[data-card="cursedBlade"]').innerText();
         const lv = had + 1;
-        expect(new RegExp(`妖刀[\\s\\S]*Lv${lv}`).test(row) && new RegExp(`，但最大生命 -${10 * lv}`).test(row), `面板的取捨文字不對：${row}`);
+        expect(new RegExp(`妖刀[\\s\\S]*Lv${lv}`).test(row) && new RegExp(`，但最大生命 -${12 * lv}\\b`).test(row), `面板的取捨文字不對：${row}`);
         files.push(await shot(ctx, 'l1-trade'));
         await page.locator('#btn-pause-resume').click();
         await page.waitForFunction(() => !window.__game.screens.includes('pause'));
@@ -61,7 +61,7 @@ export async function run(browser) {
       await step(`${vp.name} 道具欄裝滿 6 格 → 只出現已有的`, async () => {
         const owned = await page.evaluate(() => {
           const g = window.__game;
-          const pool = ['power', 'atkSpeed', 'area', 'hp', 'speed', 'armor', 'regen', 'dodge', 'volley', 'splash', 'pierce', 'cursedBlade', 'wildLantern', 'diamondBody'];
+          const pool = ['power', 'atkSpeed', 'area', 'hp', 'speed', 'armor', 'regen', 'dodge', 'volley', 'splash', 'pierce'];
           const has = () => pool.filter((id) => (g.run.ult.counts[id] ?? 0) > 0);
           for (const id of pool) if (has().length < 6 && !has().includes(id)) g.give(id, 'common');
           return has();

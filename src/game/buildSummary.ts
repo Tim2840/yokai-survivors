@@ -1,6 +1,6 @@
 import type { Run } from './run';
 import { cardById, slotsUsed } from '../systems/cards';
-import { ITEM_SLOTS, WEAPON_LEVELS, itemValue, type ItemKind } from '../data/items';
+import { ITEM_SLOTS, WEAPON_LEVELS, itemDown, itemValue, type ItemKind } from '../data/items';
 import { armorMult } from '../systems/stats';
 import { type Rarity } from '../data/rarity';
 import { type StatId } from '../data/stats';
@@ -8,6 +8,7 @@ import { STAT_IDS } from '../data/stats';
 import { ALTAR_CURSE_IDS, type CurseId } from '../data/altar';
 import { tuning } from '../data/tuning';
 import { ULT, ULT_RECIPES, recipeProgress } from '../data/ultimates';
+import { SYNERGIES } from '../data/synergies';
 
 /** 暫停畫面「能力」面板的資料（純資料，不含文字；文字由介面層用 i18n 組） */
 export interface BuildSummary {
@@ -22,7 +23,8 @@ export interface BuildSummary {
   /** 武器：鬼火數量、濺射半徑（公尺）、穿透 */
   weapon: { volley: number; splash: number; pierce: number };
   /** 卡片聯動（已觸發的 id） */
-  synergies: string[];
+  /** 已觸發的聯動、段數（1 初、2 極）、下一段還差什麼（已到極 = null） */
+  synergies: { id: string; tier: number; next: { card: string; have: number; need: number }[] | null }[];
   /** 詛咒：讓敵人變強，> 0 才列 */
   curses: { id: CurseId; v: number }[];
   /** 難度 %（關卡、地圖；0.5 = +50%） */
@@ -53,7 +55,7 @@ export function summarizeBuild(run: Run): BuildSummary {
     if (!e) {
       const d = cardById(id);
       e = { id, kind: d.kind, stat: d.kind === 'mod' ? d.mod! : d.stat ?? '', level: run.cardCounts.get(id) ?? 0, maxLevel: d.maxLevel, byRarity: { common: 0, rare: 0, epic: 0, legend: 0 }, total: 0, weaponText: '' };
-      if (d.down) e.down = { stat: d.down.stat, total: d.down.perLevel * e.level };
+      if (d.down) e.down = { stat: d.down.stat, total: 0 };
       map.set(id, e);
     }
     return e;
@@ -65,6 +67,7 @@ export function summarizeBuild(run: Run): BuildSummary {
     const e = ensure(d.id);
     if (d.rarityScales) e.byRarity[o.rarity]++;
     e.total += itemValue(d, o.rarity);
+    if (e.down) e.down.total += itemDown(d, o.rarity);
   }
   // 主武器：列出已經加過的東西
   const wl = run.cardCounts.get(run.weaponItemId) ?? 1;
@@ -95,7 +98,12 @@ export function summarizeBuild(run: Run): BuildSummary {
       splash: ((tuning.splash > 0 ? tuning.splash : w.splashRadius) + run.splashBonus) * run.syn.splashMult,
       pierce: w.pierce + run.pierceBonus + run.syn.pierce,
     },
-    synergies: [...run.activeSynergies],
+    synergies: run.activeSynergies.map((id) => {
+      const sy = SYNERGIES.find((x) => x.id === id)!;
+      const tier = run.synergyTiers.get(id) ?? 1;
+      const nt = sy.tiers[tier];
+      return { id, tier, next: nt ? Object.entries(nt.requires).map(([card, need]) => ({ card, have: Math.min(need, run.cardCounts.get(card) ?? 0), need })) : null };
+    }),
     curses,
     difficulty: run.difficulty,
     ultimates: ULT_RECIPES.filter((r) => r.yokai === run.yokai.id).map((r) => ({ id: r.id, fused: run.fused.includes(r.id), ingredients: recipeProgress(r, run.cardCounts) })),

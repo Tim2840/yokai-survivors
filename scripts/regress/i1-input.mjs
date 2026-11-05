@@ -55,7 +55,7 @@ export async function run(browser) {
             expect(p.x * ex + p.z * ez > 1.2, `搖桿方向不對或太慢（${vp.name}）：${JSON.stringify(p)}`);
             await page.evaluate(() => window.__game.advance(0.2));
             const q = await pos();
-            expect(Math.hypot(q.x - p.x, q.z - p.z) < 1e-6, `放開搖桿後還在動（${vp.name}）`);
+            expect(Math.hypot(q.x - p.x, q.z - p.z) < 1e-6, `放開搖桿後還在動（${vp.name}）：${JSON.stringify({ p, q, d: await page.evaluate(() => ({ s: window.__game.screens, el: window.__game.run.elements.map((e) => [e.kind, +e.x.toFixed(1), +e.z.toFixed(1), e.used]), focus: window.__game.run.focus, py: window.__game.run.py })) })}`);
           }
         });
       }

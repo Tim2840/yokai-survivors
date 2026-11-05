@@ -10,7 +10,7 @@ import { RunView } from '../render/runView';
 import { buildHud, type Hud } from '../ui/hud';
 import { buildMenu, toast } from '../ui/menu';
 import { summarizeBuild } from './buildSummary';
-import { buildCardPicker, buildIntermission, buildPause, buildRunEnd, buildSetup } from '../ui/overlays';
+import { buildCardPicker, buildIntermission, buildPause, buildResultCard, buildRunEnd, buildSetup } from '../ui/overlays';
 import { t } from '../i18n';
 import { tuning } from '../data/tuning';
 import { CAMERA } from '../data/camera';
@@ -54,6 +54,7 @@ export class Game {
   private readonly menuEl: HTMLElement;
   private readonly setup;
   private readonly picker;
+  private readonly resultCard;
   private readonly inter;
   private readonly end;
   private readonly pause;
@@ -98,6 +99,7 @@ export class Game {
       () => this.go('MENU'),
     );
     this.picker = buildCardPicker(ui, (i) => this.pickCard(i));
+    this.resultCard = buildResultCard(ui, () => this.closeResult());
     this.inter = buildIntermission(
       ui,
       () => {
@@ -120,12 +122,17 @@ export class Game {
     this.input.attachLook(this.renderer.pipeline.renderer.domElement);
 
     window.addEventListener('keydown', (e) => {
+      // 結果卡開著：只有 Enter 能關（空白鍵是跳躍、E 是轉視角，不拿來關，免得帶進操作）
+      if (this.resultCard.visible) {
+        if ((e.code === 'Enter' || e.code === 'NumpadEnter') && !e.repeat) this.resultCard.tryClose();
+        return;
+      }
       if (e.code === 'Escape' && !e.repeat) this.togglePause();
       else if (e.code === 'KeyC' && !e.repeat && this.fsm.state === 'COMBAT' && !this.picker.visible) this.togglePause();
       if (this.picker.visible && ['Digit1', 'Digit2', 'Digit3'].includes(e.code)) this.pickCard(Number(e.code.slice(5)) - 1);
     });
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden' && this.fsm.state === 'COMBAT' && !this.pause.visible && !this.picker.visible) this.openPause();
+      if (document.visibilityState === 'hidden' && this.fsm.state === 'COMBAT' && !this.pause.visible && !this.picker.visible && !this.resultCard.visible) this.openPause();
     });
 
     this.registerStates();
@@ -196,6 +203,8 @@ export class Game {
         this.hud.show(false);
         this.view?.freeze();
         this.picker.hide();
+        this.resultCard.hide();
+        this.loop.release('result');
         this.closePause();
         if (this.lastEnd) this.end.render(this.lastEnd, this.d.tuneUi ? this.run?.seed : undefined);
         this.end.show();
@@ -230,11 +239,22 @@ export class Game {
   // ── 事件 ──
   private wireEvents(): void {
     const b = this.b;
+    b.on('elementResult', () => {
+      const run = this.run;
+      if (!run || !run.elementResult) return;
+      this.loop.hold('result');
+      // 同時有待選的升級：先看結果卡，關掉後再選卡（D36）
+      if (this.picker.visible) this.picker.hide();
+      this.resultCard.render(run.elementResult, run.cardCounts);
+      this.resultCard.open();
+      this.audio.sfx('cardFlip', ['common', 'rare', 'epic', 'legend'].indexOf(run.elementResult.rarity));
+    });
     b.on('levelUp', () => {
       const run = this.run;
       if (!run || !run.offer) return;
       this.loop.hold('levelup');
-      this.picker.render(run.offer, run.picksLeft, run.ownedCards, run.activeSynergies, run.offerKind, { yokai: run.yokai.id, counts: run.cardCounts, fused: run.fused });
+      if (this.resultCard.visible) return; // 結果卡關掉後才開選卡
+      this.picker.render(run.offer, run.picksLeft, run.offerKind, { yokai: run.yokai.id, counts: run.cardCounts, fused: run.fused });
       this.picker.show();
       this.audio.sfx('levelUp');
     });
@@ -271,16 +291,27 @@ export class Game {
     this.audio.sfx('cardFlip', ['common', 'rare', 'epic', 'legend'].indexOf(run.offer[i]?.rarity ?? 'common'));
     const more = run.chooseCard(i);
     if (more && run.offer) {
-      this.picker.render(run.offer, run.picksLeft, run.ownedCards, run.activeSynergies, run.offerKind, { yokai: run.yokai.id, counts: run.cardCounts, fused: run.fused });
+      this.picker.render(run.offer, run.picksLeft, run.offerKind, { yokai: run.yokai.id, counts: run.cardCounts, fused: run.fused });
     } else {
       this.picker.hide();
       this.loop.release('levelup');
     }
   }
 
+  private closeResult(): void {
+    const run = this.run;
+    run?.dismissResult();
+    this.resultCard.hide();
+    this.loop.release('result');
+    if (run && run.offer) {
+      this.picker.render(run.offer, run.picksLeft, run.offerKind, { yokai: run.yokai.id, counts: run.cardCounts, fused: run.fused });
+      this.picker.show();
+    }
+  }
+
   // ── 暫停 ──
   private openPause(): void {
-    if (this.fsm.state !== 'COMBAT' || this.picker.visible) return;
+    if (this.fsm.state !== 'COMBAT' || this.picker.visible || this.resultCard.visible) return;
     this.loop.hold('user');
     if (this.run) this.pause.render(summarizeBuild(this.run));
     this.pause.show();
@@ -300,6 +331,8 @@ export class Game {
   private quitRun(): void {
     this.closePause();
     this.picker.hide();
+    this.resultCard.hide();
+    this.loop.release('result');
     this.loop.release('levelup');
     this.run?.abandon();
   }

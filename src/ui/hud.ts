@@ -1,4 +1,5 @@
 import { t } from '../i18n';
+import { describeCard, synergyDesc, synergyName } from './overlays';
 import type { I18nKey } from '../i18n/zh-TW';
 import type { Run } from '../game/run';
 import type { CurseId } from '../data/altar';
@@ -149,19 +150,15 @@ export function buildHud(parent: HTMLElement): Hud {
         portalBox.classList.add('hidden');
       }
       // 卡片聯動：觸發後顯示 4 秒（不是彈窗，不暫停）
-      // 提示框：聯動、神籤、大招融合，誰最近發生就顯示誰（4 秒）
+      // 提示框：聯動、大招材料齊、大招融合，誰最近發生就顯示誰（4 秒）
       let synText = '';
       let synAt = -1;
       const sy = run.lastSynergy;
       if (sy && run.clock - sy.at < 4 && sy.at > synAt) {
         synAt = sy.at;
-        synText = t('hud.synergy', { name: t(`synergy.${sy.id}` as I18nKey), desc: t(`synergy.${sy.id}.desc` as I18nKey) });
+        synText = t('hud.synergy', { name: synergyName(sy.id, sy.tier), desc: synergyDesc(sy.id, sy.tier) });
       }
-      const om = run.lastOmikuji;
-      if (om && run.clock - om.at < 4 && om.at >= synAt) {
-        synAt = om.at;
-        synText = t(`omikuji.${om.id}` as I18nKey);
-      }
+      // 神籤的結果改由結果卡顯示（D36），這裡不再重複
       const rd = run.lastReady;
       if (rd && run.clock - rd.at < 6 && rd.at >= synAt && !run.fused.includes(rd.id)) {
         synAt = rd.at;
@@ -195,14 +192,15 @@ export function buildHud(parent: HTMLElement): Hud {
         }
       } else {
         const mult = f.kind === 'summon' ? summonMultNow(run) : 0;
-        const key = `${f.kind}|${f.rarity}|${f.blocked ? 'x' : ''}|${mult.toFixed(1)}|${f.effects.slice(0, f.effectCount).map((x) => x.id).join(',')}`;
+        const fox = f.kind === 'fox' ? f.offers.map((id, k) => `${id}:${run.cardCounts.get(id) ?? 0}:${f.ringBlocked[k] ? 'x' : ''}`).join(',') : '';
+        const key = `${f.kind}|${f.rarity}|${f.blocked ? 'x' : ''}|${mult.toFixed(1)}|${fox}|${f.effects.slice(0, f.effectCount).map((x) => x.id).join(',')}`;
         if (key !== lastEl) {
           lastEl = key;
           elBox.classList.remove('hidden');
           elBox.dataset.rarity = f.rarity;
           elTitle.textContent = `${t(`rarity.${f.rarity}`)}・${t(`element.${f.kind}`)}`;
-          elDesc.textContent = f.kind === 'summon' ? t('element.summon.desc', { mult: mult.toFixed(1) }) : describeElement(f);
-          elAct.textContent = f.kind === 'barrier' ? t('element.stand') : t('element.hold');
+          elDesc.textContent = f.kind === 'summon' ? t('element.summon.desc', { mult: mult.toFixed(1) }) : f.kind === 'fox' ? describeFox(f, run.cardCounts) : describeElement(f);
+          elAct.textContent = f.kind === 'barrier' ? t('element.stand') : f.kind === 'fox' ? t('element.fox.act') : t('element.hold');
         }
         elFill.style.width = `${f.kind === 'barrier' ? (f.inside ? 100 : 0) : Math.round(f.progress * 100)}%`;
       }
@@ -217,6 +215,16 @@ export function buildHud(parent: HTMLElement): Hud {
       }
     },
   };
+}
+
+/** 狐面商的兩個提案：「紅圈：妖刀 新！：攻擊力 +24%，但最大生命 -12」，收不下的加註 */
+function describeFox(f: ElementSlot, levels: ReadonlyMap<string, number>): string {
+  return f.offers
+    .map((id, k) => {
+      const d = describeCard({ cardId: id, rarity: f.rarity }, levels);
+      return t(`element.fox.ring${k}` as I18nKey, { offer: `${d.name} ${d.level}：${d.desc}` }) + (f.ringBlocked[k] ? t('element.fox.full') : '');
+    })
+    .join('\n');
 }
 
 /** 站到祭壇旁這麼近（公尺）就不顯示箭頭（改看要素提示框） */

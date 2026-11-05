@@ -3,7 +3,7 @@ import { palette } from '../art/palette';
 import { glow, soft } from '../art/materials';
 import { ball, roundedCylinder, teardrop } from '../art/shapes';
 import { RARITIES, type Rarity } from '../data/rarity';
-import { BARRIER_RADIUS, ELEMENT_RULES } from '../data/elements';
+import { BARRIER_RADIUS, ELEMENT_RULES, FOX } from '../data/elements';
 import type { ElementSlot, Elements } from '../systems/elements';
 import type { TerrainMap } from '../world/terrainMap';
 
@@ -22,6 +22,9 @@ interface SlotView {
   chest: THREE.Group;
   summon: THREE.Group;
   orb: THREE.Mesh;
+  fox: THREE.Group;
+  foxRings: THREE.Mesh[];
+  foxFills: THREE.Mesh[];
   beam: THREE.Mesh;
   beamMat: THREE.MeshBasicMaterial;
   ring: THREE.Mesh;
@@ -84,6 +87,22 @@ export class ElementsView {
     const gToriiBeam = roundedCylinder(0.13, 0.13, 2.5, 0.06, 12).translate(0, -1.25, 0).rotateZ(Math.PI / 2);
     const gOrb = ball(0.32, 18, 12);
     this.disposables.push(torii, ember, gPlat, gToriiPost, gToriiBeam, gOrb);
+    // 狐面商（D38）：靛藍長袍＋白色狐狸面具（紅紋）＋兩隻耳朵；面前紅、藍兩個圈
+    const robe = soft(palette.fox.robe);
+    const mask = soft(palette.fox.mask);
+    const mark = soft(palette.fox.mark);
+    const gRobe = teardrop(0.48, 1.15, { bulge: 0.5 });
+    const gFoxHead = ball(0.3, 18, 12);
+    const gMask = ball(0.27, 18, 12).scale(1, 1.05, 0.62);
+    const gEar = teardrop(0.09, 0.3, { bulge: 0.45 });
+    const gMark = ball(0.05, 10, 8).scale(1.6, 0.7, 0.6);
+    const ringMatA = new THREE.MeshBasicMaterial({ color: palette.fox.ringA, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide });
+    const ringMatB = new THREE.MeshBasicMaterial({ color: palette.fox.ringB, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide });
+    const fillMatA = new THREE.MeshBasicMaterial({ color: palette.fox.ringA, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+    const fillMatB = new THREE.MeshBasicMaterial({ color: palette.fox.ringB, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+    const gFoxRing = new THREE.RingGeometry(FOX.ringRadius - 0.14, FOX.ringRadius, 36).rotateX(-Math.PI / 2);
+    const gFoxFill = new THREE.CircleGeometry(FOX.ringRadius - 0.14, 36).rotateX(-Math.PI / 2);
+    this.disposables.push(robe, mask, mark, gRobe, gFoxHead, gMask, gEar, gMark, ringMatA, ringMatB, fillMatA, fillMatB, gFoxRing, gFoxFill);
     const gBeam = new THREE.CylinderGeometry(0.4, 0.4, BEAM_H, 20, 1, true);
     const gRing = new THREE.RingGeometry(R.useRadius - 0.12, R.useRadius, 40).rotateX(-Math.PI / 2);
     const gFill = new THREE.CircleGeometry(R.useRadius - 0.12, 40).rotateX(-Math.PI / 2);
@@ -161,6 +180,34 @@ export class ElementsView {
       const orb = new THREE.Mesh(gOrb, ember);
       orb.position.y = 1.2;
       summon.add(top, mid, orb);
+      const fox = new THREE.Group();
+      const fRobe = new THREE.Mesh(gRobe, robe);
+      const fHead = new THREE.Mesh(gFoxHead, robe);
+      fHead.position.y = 1.32;
+      const fMask = new THREE.Mesh(gMask, mask);
+      fMask.position.set(0, 1.32, 0.14);
+      fox.add(fRobe, fHead, fMask);
+      for (const side of [-1, 1]) {
+        const ear = new THREE.Mesh(gEar, mask);
+        ear.position.set(side * 0.16, 1.5, 0.02);
+        ear.rotation.z = -side * 0.35;
+        const m = new THREE.Mesh(gMark, mark);
+        m.position.set(side * 0.1, 1.38, 0.3);
+        m.rotation.z = side * 0.4;
+        fox.add(ear, m);
+      }
+      const foxRings: THREE.Mesh[] = [];
+      const foxFills: THREE.Mesh[] = [];
+      for (let k = 0; k < FOX.offers; k++) {
+        const rg = new THREE.Mesh(gFoxRing, k === 0 ? ringMatA : ringMatB);
+        const fl = new THREE.Mesh(gFoxFill, k === 0 ? fillMatA : fillMatB);
+        rg.renderOrder = 2;
+        fl.renderOrder = 2;
+        rg.visible = false;
+        fl.visible = false;
+        foxRings.push(rg);
+        foxFills.push(fl);
+      }
       // 稀有度光圈（互動範圍）、進度填色、光柱
       const ringMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });
       const ring = new THREE.Mesh(gRing, ringMat);
@@ -187,10 +234,10 @@ export class ElementsView {
       zone.renderOrder = 2;
       zone.visible = false;
       this.disposables.push(ringMat, fillMat, beamMat, zg, zoneMat);
-      root.add(jizo, barrier, altar, offering, omikuji, chest, summon, ring, fill, beam);
+      root.add(jizo, barrier, altar, offering, omikuji, chest, summon, fox, ...foxRings, ...foxFills, ring, fill, beam);
       root.visible = false;
       this.group.add(root, zone);
-      this.views.push({ root, jizo, barrier, altar, offering, omikuji, chest, summon, orb, beam, beamMat, ring, ringMat, fill, fillMat, zone, zoneMat, flame, zx: NaN, zz: NaN });
+      this.views.push({ root, jizo, barrier, altar, offering, omikuji, chest, summon, orb, fox, foxRings, foxFills, beam, beamMat, ring, ringMat, fill, fillMat, zone, zoneMat, flame, zx: NaN, zz: NaN });
     }
   }
 
@@ -233,6 +280,7 @@ export class ElementsView {
       v.omikuji.visible = s.kind === 'omikuji';
       v.chest.visible = s.kind === 'chest';
       v.summon.visible = s.kind === 'summon';
+      v.fox.visible = s.kind === 'fox';
       v.ringMat.color.copy(c);
       v.fillMat.color.copy(c);
       v.beamMat.color.copy(c);
@@ -249,11 +297,34 @@ export class ElementsView {
       v.omikuji.scale.setScalar(g);
       v.chest.scale.setScalar(g);
       v.summon.scale.setScalar(g);
+      v.fox.scale.setScalar(g);
+      // 狐面商：面向兩個圈的中間；兩個圈貼在各自的地面上，填色 = 站立進度
+      const isFox = s.kind === 'fox' && !ann && !used;
+      for (let k = 0; k < v.foxRings.length; k++) {
+        const on = isFox && k < s.offers.length;
+        v.foxRings[k].visible = on;
+        v.foxFills[k].visible = on;
+        if (!on) continue;
+        const ry = this.map.heightAt(s.ringX[k], s.ringZ[k]) - s.y + LIFT;
+        v.foxRings[k].position.set(s.ringX[k] - s.x, ry, s.ringZ[k] - s.z);
+        v.foxFills[k].position.set(s.ringX[k] - s.x, ry + 0.01, s.ringZ[k] - s.z);
+        v.foxFills[k].scale.setScalar(Math.max(0.001, s.ringProgress[k]));
+      }
+      if (s.kind === 'fox' && s.offers.length > 0) {
+        let mx = 0;
+        let mz = 0;
+        for (let k = 0; k < s.offers.length; k++) {
+          mx += s.ringX[k] - s.x;
+          mz += s.ringZ[k] - s.z;
+        }
+        v.fox.rotation.y = Math.atan2(mx, mz);
+      }
       v.beamMat.opacity = (ann ? 0.26 : 0.08 + 0.03 * Math.sin(t * 2 + i)) * fade;
-      // 結界石的環是範圍；其他兩種是互動圈
+      // 結界石的環是範圍；狐面商用自己的兩個圈；其他是互動圈
       const isBarrier = s.kind === 'barrier';
-      v.ring.visible = !isBarrier && !ann;
-      v.fill.visible = !isBarrier && !ann;
+      const ownRing = !isBarrier && s.kind !== 'fox' && !ann;
+      v.ring.visible = ownRing;
+      v.fill.visible = ownRing;
       v.fill.scale.setScalar(Math.max(0.001, s.progress * g));
       v.zone.visible = isBarrier && !ann;
       if (isBarrier) {

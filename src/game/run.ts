@@ -3,7 +3,7 @@ import { COMBAT } from '../data/combat';
 import { MOVE } from '../data/movement';
 import { PLAYABLE_YOKAI, YOKAI, type YokaiDef } from '../data/yokai';
 import { PROGRESSION, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
-import { ITEM_POOL, WEAPON_LEVELS, itemValue, itemById } from '../data/items';
+import { ITEM_POOL, ITEM_SLOTS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById } from '../data/items';
 import { VARIANT_CARD_PREFIX, VARIANT_LEVEL, variantOfCard, variantsFor, type VariantDef } from '../data/variants';
 import { RARITY_MULT } from '../data/rarity';
 import { STAGE, stagesForMap, bossHpMult, isBigBossStage } from '../data/stage';
@@ -15,17 +15,18 @@ import { makeHighlands } from '../data/maps/highlands';
 import { Rng } from '../lib/random';
 import { TerrainMap, WALL_TAN } from '../world/terrainMap';
 import { PlayerReach } from '../systems/reach';
+import type { ElementResult } from '../systems/elementResult';
 import { FlowField } from '../systems/flowField';
 import { Enemies, kindIndex } from '../systems/enemies';
 import { Projectiles } from '../systems/projectiles';
 import { Orbs } from '../systems/orbs';
 import { HitFeed } from '../systems/hitFeed';
 import { Stats, armorMult } from '../systems/stats';
-import { CardDealer, cardById, type CardOffer } from '../systems/cards';
+import { CardDealer, cardById, slotsUsed, type CardOffer } from '../systems/cards';
 import { StageDirector } from '../systems/stageDirector';
 import { Elements, type ElementCarry } from '../systems/elements';
 import { computeMerit } from '../systems/merit';
-import { SYNERGIES } from '../data/synergies';
+import { SYNERGIES, synergyTierOf } from '../data/synergies';
 import { ULT, ULT_RECIPES, ULT_CARD_PREFIX, isUltCard, ultOfCard, recipeDone, type UltEffect } from '../data/ultimates';
 import { ALTAR_CURSE_IDS, type CurseId } from '../data/altar';
 
@@ -60,6 +61,7 @@ export function subSeed(seed: number, salt: number): number {
  * 關卡（D22）：一關是連續計時，敵人持續湧出；頭目倒下後傳送門開，走進去過關。
  * 玩家有 3D 位置與跳躍（D24）；移動輸入是「世界座標」的向量（鏡頭相對的換算在外面）。
  * 升級選卡：升級當下 awaitingPick = true，step() 直接返回（模擬凍結），直到選完（D15）。
+ * 要素結果卡（D36）：要素集滿後 result 不是 null，同樣凍結，直到 dismissResult()；同時有待選的升級時，介面先顯示結果卡。
  */
 export class Run {
   readonly seed: number;
@@ -161,12 +163,13 @@ export class Run {
   get weaponLevel(): number {
     return this.cardCounts.get(this.weaponItemId) ?? 1;
   }
-  /** 拿過的卡 id、已觸發的聯動，與聯動帶來的加成（D28） */
+  /** 拿過的卡 id、已觸發的聯動（D28）與目前的段數（D37：1 = 初、2 = 極），與聯動帶來的加成 */
   readonly ownedCards = new Set<string>();
   readonly activeSynergies: string[] = [];
+  readonly synergyTiers = new Map<string, number>();
   readonly syn = { splashRatio: 0, splashMult: 1, pierce: 0, volley: 0, auraMult: 1 };
-  /** 最近一次聯動觸發的時間（模擬累計秒）與 id，HUD 顯示提示用 */
-  lastSynergy: { id: string; at: number } | null = null;
+  /** 最近一次聯動觸發或升段的時間（模擬累計秒）、id 與段數，HUD 顯示提示用 */
+  lastSynergy: { id: string; tier: number; at: number } | null = null;
   /** 神籤的功德獎勵累計、最近一次神籤結果（HUD 提示用） */
   bonusMerit = 0;
   lastOmikuji: { id: string; at: number } | null = null;
@@ -226,6 +229,28 @@ export class Run {
   get awaitingPick(): boolean {
     return this.offer !== null;
   }
+  /** 這件道具現在收得下嗎：沒練滿；新道具要有空的道具欄（狐面商用，D38） */
+  canTakeItem(id: string): boolean {
+    const d = itemById(id);
+    const lv = this.cardCounts.get(id) ?? 0;
+    if (lv >= d.maxLevel) return false;
+    return lv > 0 || slotsUsed(this.cardCounts) < ITEM_SLOTS;
+  }
+
+  /** 結果卡開著或要選卡：模擬凍結 */
+  get frozen(): boolean {
+    return this.offer !== null || this.elementResult !== null;
+  }
+
+  /** 要素結果卡（D36）：開著時模擬凍結；介面關掉時呼叫 dismissResult() */
+  elementResult: ElementResult | null = null;
+  private showResult(res: ElementResult): void {
+    this.elementResult = res;
+    this.bus.emit('elementResult', { kind: res.kind });
+  }
+  dismissResult(): void {
+    this.elementResult = null;
+  }
   get maxHp(): number {
     return this.stats.value.maxHp;
   }
@@ -261,7 +286,9 @@ export class Run {
     this.elements = new Elements(this.rngElements, this.map, this.flow, {
       stats: this.stats,
       healFrac: (f) => {
+        const before = this.hp;
         this.hp = Math.min(this.maxHp, this.hp + this.maxHp * f);
+        return this.hp - before;
       },
       canPayHpFrac: (f) => this.hp > this.maxHp * f + 1,
       payHpFrac: (f) => {
@@ -283,7 +310,18 @@ export class Run {
         this.recomputeCurse();
       },
       summonBoss: () => {
-        if (this.director.summonBoss()) this.bus.emit('summonBoss', { stage: this.stageNumber, mult: this.director.summonMult });
+        if (!this.director.summonBoss()) return 0;
+        this.bus.emit('summonBoss', { stage: this.stageNumber, mult: this.director.summonMult });
+        return this.director.summonMult;
+      },
+      showResult: (res) => this.showResult(res),
+      foxCandidates: () => TRADE_ITEMS.filter((id) => this.canTakeItem(id)),
+      canTakeItem: (id) => this.canTakeItem(id),
+      grantItem: (id, rarity) => {
+        const o = { cardId: id, rarity };
+        this.applyCard(o);
+        this.bus.emit('cardChosen', { cardId: id, rarity });
+        return this.cardCounts.get(id) ?? 0;
       },
       emitSpawn: (kind, rarity) => this.bus.emit('elementSpawn', { kind, rarity }),
       emitUsed: (kind, rarity) => this.bus.emit('elementUsed', { kind, rarity }),
@@ -404,7 +442,7 @@ export class Run {
 
   // ── 一個模擬步 ───────────────────────────────────────────────
   step(dt: number): void {
-    if (this.phase !== 'combat' || this.awaitingPick) return;
+    if (this.phase !== 'combat' || this.frozen) return;
     if (this.dead) {
       this.deathTimer -= dt;
       if (this.deathTimer <= 0) this.finish('death');
@@ -859,7 +897,7 @@ export class Run {
     } else if (d.stat) {
       const before = this.maxHp;
       this.stats.addCard(d.stat, itemValue(d, o.rarity));
-      if (d.down) this.stats.addCard(d.down.stat, -d.down.perLevel);
+      if (d.down) this.stats.addCard(d.down.stat, -itemDown(d, o.rarity));
       // 最大生命增加時，現有生命同步增加（不會「變成扣血」）
       if (this.maxHp > before) this.hp += this.maxHp - before;
       this.hp = Math.min(this.hp, this.maxHp);
@@ -868,20 +906,23 @@ export class Run {
     this.checkFusion();
   }
 
-  /** 拿到卡之後檢查聯動：兩張都有、還沒觸發過 → 永久加成並通知 */
+  /** 拿到卡之後檢查聯動（D37）：兩件道具都練到門檻 → 觸發「初」；再練到「極」→ 升段。只補這一段和上一段的差額 */
   private checkSynergies(): void {
     for (const sy of SYNERGIES) {
-      if (this.activeSynergies.includes(sy.id)) continue;
-      if (!sy.requires.every((id) => this.ownedCards.has(id))) continue;
-      this.activeSynergies.push(sy.id);
-      const e = sy.effect;
-      this.syn.splashRatio += e.splashRatio ?? 0;
-      this.syn.splashMult *= e.splashMult ?? 1;
-      this.syn.pierce += e.pierce ?? 0;
-      this.syn.volley += e.volley ?? 0;
-      this.syn.auraMult *= e.auraMult ?? 1;
-      this.lastSynergy = { id: sy.id, at: this.clock };
-      this.bus.emit('synergy', { id: sy.id });
+      const before = this.synergyTiers.get(sy.id) ?? 0;
+      const now = synergyTierOf(sy, this.cardCounts);
+      if (now <= before) continue;
+      const prev = before > 0 ? sy.tiers[before - 1].effect : {};
+      const e = sy.tiers[now - 1].effect;
+      this.syn.splashRatio += (e.splashRatio ?? 0) - (prev.splashRatio ?? 0);
+      this.syn.splashMult *= (e.splashMult ?? 1) / (prev.splashMult ?? 1);
+      this.syn.pierce += (e.pierce ?? 0) - (prev.pierce ?? 0);
+      this.syn.volley += (e.volley ?? 0) - (prev.volley ?? 0);
+      this.syn.auraMult *= (e.auraMult ?? 1) / (prev.auraMult ?? 1);
+      this.synergyTiers.set(sy.id, now);
+      if (before === 0) this.activeSynergies.push(sy.id);
+      this.lastSynergy = { id: sy.id, tier: now, at: this.clock };
+      this.bus.emit('synergy', { id: sy.id, tier: now });
     }
   }
 
@@ -901,7 +942,7 @@ export class Run {
 
   /** 玩家按大招：量表滿、有融合過的大招才會發動；全部已融合的大招一起發動，量表歸零 */
   castUltimate(): boolean {
-    if (this.phase !== 'combat' || this.awaitingPick || this.dead || !this.ultReady) return false;
+    if (this.phase !== 'combat' || this.frozen || this.dead || !this.ultReady) return false;
     if (this.ultNear.length < this.enemies.capacity) this.ultNear = new Int32Array(this.enemies.capacity);
     // 瞄準：最近的敵人，沒有就朝面向
     let dx = Math.sin(this.facing);
@@ -1160,6 +1201,7 @@ export class Run {
     this.pendingPicks = 0;
     this.bonusLeft = 0;
     this.offerKind = 'levelup';
+    this.elementResult = null;
     this.finish('abandon');
   }
 

@@ -28,7 +28,7 @@ export interface ItemDef {
   perLevel?: number;
   /** 這個道具的每級數值會不會乘稀有度倍率 */
   rarityScales: boolean;
-  /** 取捨道具（D30 第二步，參考 Brotato）：每級同時扣的屬性（卡片單位、正數 = 扣多少；不乘稀有度） */
+  /** 取捨道具（D30 第二步，參考 Brotato）：每級同時扣的能力值（卡片單位、正數 = 扣多少）。D38 起也乘稀有度：越高階越極端 */
   down?: { stat: StatId; perLevel: number };
 }
 
@@ -66,7 +66,7 @@ export const ITEMS: readonly ItemDef[] = [
   { id: 'armor', kind: 'stat', stat: 'armor', perLevel: 2, maxLevel: 5, rarityScales: true },
   { id: 'regen', kind: 'stat', stat: 'regen', perLevel: 0.5, maxLevel: 5, rarityScales: true },
   { id: 'dodge', kind: 'stat', stat: 'dodge', perLevel: 4, maxLevel: 5, rarityScales: true },
-  // 取捨道具：好處比一般道具大，但每級都會扣一項（不乘稀有度）
+  // 取捨道具（D38：只在狐面商拿得到，不進升級／賽錢箱／寶箱）：好處比一般道具大，每級都會扣一項；好處與代價都乘稀有度
   { id: 'cursedBlade', kind: 'stat', stat: 'power', perLevel: 20, maxLevel: 5, rarityScales: true, down: { stat: 'maxHp', perLevel: 10 } },
   { id: 'wildLantern', kind: 'stat', stat: 'atkSpeed', perLevel: 16, maxLevel: 5, rarityScales: true, down: { stat: 'armor', perLevel: 1 } },
   { id: 'diamondBody', kind: 'stat', stat: 'armor', perLevel: 4, maxLevel: 5, rarityScales: true, down: { stat: 'speed', perLevel: 3 } },
@@ -80,7 +80,9 @@ export const ITEMS: readonly ItemDef[] = [
 ];
 
 /** 提燈小僧能拿到的道具（之後依局外解鎖與妖怪分開） */
-export const ITEM_POOL: readonly string[] = ['ghostfire', 'power', 'atkSpeed', 'area', 'hp', 'speed', 'armor', 'regen', 'dodge', 'volley', 'splash', 'pierce', 'cursedBlade', 'wildLantern', 'diamondBody'];
+export const ITEM_POOL: readonly string[] = ['ghostfire', 'power', 'atkSpeed', 'area', 'hp', 'speed', 'armor', 'regen', 'dodge', 'volley', 'splash', 'pierce'];
+/** 取捨道具（D38）：只有狐面商會給，已經拿到的下一級也只在狐面商 */
+export const TRADE_ITEMS: readonly string[] = ['cursedBlade', 'wildLantern', 'diamondBody'];
 export const FALLBACK_ITEMS: readonly string[] = ['heal', 'meritBag'];
 
 /** 出現權重：主武器與已有道具比較容易出現（讓「練滿」有機會） */
@@ -100,6 +102,11 @@ export const itemById = (id: string): ItemDef => {
   if (!d) throw new Error(`沒有這個道具：${id}`);
   return d;
 };
+
+/** 取捨道具這一級扣多少（卡片單位，正數；D38 起乘稀有度） */
+export function itemDown(d: ItemDef, rarity: Rarity): number {
+  return d.down ? d.down.perLevel * ITEM_RARITY_MULT[rarity] : 0;
+}
 
 /** 這一級的實際數值（已乘稀有度） */
 export function itemValue(d: ItemDef, rarity: Rarity): number {

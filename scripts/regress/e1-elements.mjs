@@ -1,8 +1,9 @@
 // e1：地圖要素（M2-1）。真的走進去、按住不動：石地藏（護甲）、詛咒祭壇（一升一降）、結界石（圈內加成、走出去消失）。
+// D36：集滿後跳結果卡（模擬停住、列出拿到什麼、防誤觸、真的點「繼續」或按 Enter；同時升級時先結果卡再選卡）。
 // 要素用開發介面放到玩家身邊（隨機落下的位置不固定），其餘（走路、HUD 提示、效果）全用真實輸入與畫面。三種畫面各一次，卡住偵測。
-import { openPage, startRun, step, expect, shot, reportErrors, snapshotOf, VIEWPORTS } from './lib.mjs';
+import { openPage, startRun, step, expect, shot, reportErrors, snapshotOf, walkOnto, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'e1', desc: '地圖要素：走近→提示→按住→效果（石地藏、詛咒祭壇、結界石）三種畫面', max: 600, stall: 60 };
+export const meta = { id: 'e1', desc: '地圖要素：走近→提示→按住→結果卡（停住、列出拿到什麼、防誤觸、點繼續）→效果（石地藏、詛咒祭壇、結界石、賽錢箱、寶箱、神籤、狐面商走進紅圈收下）三種畫面', max: 600, stall: 60 };
 
 const SIDES = [[0, 3, 'KeyW', 0, -1], [0, -3, 'KeyS', 0, 1], [-3, 0, 'KeyD', 1, 0], [3, 0, 'KeyA', -1, 0]];
 
@@ -15,7 +16,7 @@ export async function run(browser) {
       await step(`${vp.name} 開局`, () => startRun(ctx), 40);
       await page.evaluate(() => (window.__game.god = true));
       const dismiss = async () => {
-        for (let i = 0; i < 6 && (await page.evaluate(() => window.__game.screens)).includes('levelup'); i++) {
+        for (let i = 0; i < 40 && (await page.evaluate(() => window.__game.screens)).includes('levelup'); i++) {
           await page.locator('.overlay[data-screen="levelup"] .card').first().click();
         }
       };
@@ -58,6 +59,33 @@ export async function run(browser) {
         else await page.mouse.up();
         return spot;
       };
+      const screens = () => page.evaluate(() => window.__game.screens);
+      /** 等結果卡出現（按住集滿後）：回傳卡上的標題與每一行 */
+      const waitResult = async (label) => {
+        for (let i = 0; i < 16 && !(await screens()).includes('result'); i++) await page.evaluate(() => window.__game.advance(0.25));
+        expect((await screens()).includes('result'), `${label}集滿後沒有結果卡（${vp.name}）`);
+        await page.evaluate(() => window.__game.render());
+        const card = await page.evaluate(() => {
+          const o = document.querySelector('.overlay[data-screen="result"]');
+          const p = o.querySelector('.panel').getBoundingClientRect();
+          return { title: o.querySelector('h2').textContent, lines: [...o.querySelectorAll('li')].map((li) => ({ t: li.dataset.line, text: li.textContent, cls: li.className })), box: { x: p.x, y: p.y, w: p.width, h: p.height } };
+        });
+        const b = card.box;
+        expect(b.x >= 0 && b.y >= 0 && b.x + b.w <= vp.width + 1 && b.y + b.h <= vp.height + 1, `結果卡超出畫面（${vp.name}）：${JSON.stringify(b)}`);
+        // 模擬停住：時間不走
+        const t0 = await page.evaluate(() => window.__game.run.time);
+        await page.evaluate(() => window.__game.advance(1));
+        expect((await page.evaluate(() => window.__game.run.time)) === t0, `結果卡開著時模擬沒停（${vp.name}）`);
+        return card;
+      };
+      /** 真的關掉結果卡：桌面按 Enter，觸控點「繼續」 */
+      const closeResult = async () => {
+        await page.waitForFunction(() => !document.querySelector('#btn-result-ok').disabled, null, { timeout: 5000 });
+        if (!vp.hasTouch) await page.keyboard.press('Enter');
+        else await page.locator('#btn-result-ok').click();
+        await page.waitForFunction(() => !window.__game.screens.includes('result'), null, { timeout: 5000 });
+      };
+
       const leave = async (spot) => {
         await page.evaluate(([x, z]) => window.__game.teleport(x + 14, z), [spot.x, spot.z]);
         await page.evaluate(() => window.__game.advance(0.3));
@@ -73,7 +101,16 @@ export async function run(browser) {
         const fill = await page.locator('#element-fill').evaluate((n) => parseFloat(n.style.width));
         expect(fill > 5 && fill < 100, `按住途中進度條應該在中間：${fill}`);
         files.push(await shot(ctx, 'e1-jizo'));
-        await play(1);
+        const card = await waitResult('石地藏');
+        expect(card.title === '良・石地藏', `結果卡標題不對：${card.title}`);
+        expect(card.lines.some((l) => /^回復 \d+ 生命$/.test(l.text)) && card.lines.some((l) => l.text === '護甲 +3（60 秒）'), `結果卡內容不對：${JSON.stringify(card.lines)}`);
+        files.push(await shot(ctx, 'e1-result'));
+        // 同時升級：結果卡開著時加魂火 → 不能蓋上選卡面板；關掉結果卡後才出現選卡
+        await page.evaluate(() => window.__game.addXp(20));
+        expect(!(await screens()).includes('levelup'), `結果卡還開著就跳出選卡面板（${vp.name}）`);
+        await closeResult();
+        expect((await screens()).includes('levelup'), `關掉結果卡後沒有接著選卡（${vp.name}）`);
+        await dismiss();
         const s1 = await stats();
         expect(Math.abs(s1.armor - s0.armor - 3) < 1e-6, `石地藏護甲沒加 3：${s0.armor} → ${s1.armor}`);
         await leave(spot);
@@ -92,7 +129,12 @@ export async function run(browser) {
         expect(shown === 3, `祭壇說明應該列出 3 個效果：${desc}`);
         expect(/敵人/.test(desc), `說明裡沒有詛咒（敵人變強）：${desc}`);
         files.push(await shot(ctx, 'e1-altar'));
-        await play(2);
+        const card = await waitResult('詛咒祭壇');
+        expect(card.lines.length === 3, `結果卡應列出 3 個效果：${JSON.stringify(card.lines)}`);
+        expect(card.lines.some((l) => l.t === 'curse' && /bad/.test(l.cls) && /敵人/.test(l.text)), `結果卡沒標出詛咒：${JSON.stringify(card.lines)}`);
+        expect(card.lines.some((l) => l.t === 'stat' && /good/.test(l.cls)), `結果卡沒標出好處：${JSON.stringify(card.lines)}`);
+        await closeResult();
+        await dismiss();
         const s1 = await stats();
         const curse = await page.evaluate(() => window.__game.run.curse);
         for (const f of info.effects) {
@@ -123,8 +165,10 @@ export async function run(browser) {
         expect((await page.evaluate(() => window.__game.screens)).includes('levelup'), `按住賽錢箱後沒有開選卡面板（${vp.name}）`);
         const title = await page.locator('.overlay[data-screen="levelup"] h2').innerText();
         expect(/賽錢箱/.test(title), `面板標題不對：${title}`);
-        const rar = await page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card')].map((c) => c.dataset.rarity));
-        expect(rar.length === 3 && rar.every((x) => x === 'epic'), `良階賽錢箱應給三張珍階卡：${rar}`);
+        // 會吃稀有度的卡都是珍階；不吃稀有度的（主武器、鬼火增殖、穿透、備用獎勵）標成凡
+        const NO_SCALE = ['ghostfire', 'volley', 'pierce', 'heal', 'meritBag'];
+        const rar = await page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card')].map((c) => [c.dataset.card, c.dataset.rarity]));
+        expect(rar.length === 3 && rar.every(([id, r]) => r === 'epic' || NO_SCALE.includes(id)), `良階賽錢箱應給三張珍階卡：${JSON.stringify(rar)}`);
         const r1 = await page.evaluate(() => window.__game.run);
         expect(r1.hp < hp0, `賽錢箱沒扣生命：${hp0} → ${r1.hp}`);
         await page.locator('.overlay[data-screen="levelup"] .card').first().click();
@@ -146,15 +190,65 @@ export async function run(browser) {
         await leave(spot);
       });
 
-      await step(`${vp.name} 神籤：按住 → HUD 顯示抽到的結果`, async () => {
+      await step(`${vp.name} 神籤：按住 → 結果卡寫出籤名與效果`, async () => {
         const spot = await approach('omikuji', 'epic');
-        await play(1.5);
-        await page.evaluate(() => window.__game.render());
-        const box = page.locator('#synergy-box');
-        expect(await box.isVisible(), `抽完神籤沒有結果提示（${vp.name}）`);
-        const txt = await box.innerText();
-        expect(/大吉|中吉|小吉|末吉|凶/.test(txt), `神籤結果文字不對：${txt}`);
+        const card = await waitResult('神籤');
+        expect(card.title === '珍・神籤', `結果卡標題不對：${card.title}`);
+        expect(card.lines[0].t === 'omikuji' && /大吉|中吉|小吉|末吉|凶/.test(card.lines[0].text), `神籤結果文字不對：${JSON.stringify(card.lines)}`);
         files.push(await shot(ctx, 'e1-omikuji'));
+        await closeResult();
+        await dismiss();
+        await leave(spot);
+      });
+
+      await step(`${vp.name} 狐面商：走近 → 提示寫出紅圈、藍圈兩個提案 → 真的走進紅圈站 1 秒 → 結果卡寫出拿到的取捨道具`, async () => {
+        const spot = await page.evaluate(() => window.__game.forceElement('fox', 'rare'));
+        expect(spot, `放不下狐面商（${vp.name}）`);
+        const fox = (await el()).find((e) => e.kind === 'fox');
+        expect(fox && fox.offers.length === 2 && fox.rings.length === 2, `狐面商的提案或圈不對：${JSON.stringify(fox)}`);
+        // 先站到商人旁邊看提示
+        await page.evaluate(([x, z]) => { window.__game.teleport(x + 0.5, z); window.__game.advance(0.2); window.__game.render(); }, [spot.x, spot.z]);
+        expect(await page.locator('#element-box').isVisible(), `走近狐面商沒有提示（${vp.name}）`);
+        const title = await page.locator('#element-title').innerText();
+        expect(title === '良・狐面商', `提示標題不對：${title}`);
+        const desc = await page.locator('#element-desc').innerText();
+        expect(/紅圈：.+，但.+/.test(desc) && /藍圈：.+，但.+/.test(desc), `提示沒寫出兩個提案與代價：${desc}`);
+        files.push(await shot(ctx, 'e1-fox'));
+        // 用真實輸入走進紅圈
+        const r0 = fox.rings[0];
+        const before = await page.evaluate((id) => window.__game.run.ult.counts[id] ?? 0, fox.offers[0]);
+        let arrived = false;
+        for (let tries = 0; tries < 3 && !arrived; tries++) {
+          arrived = await walkOnto(ctx, r0.x, r0.z);
+          await dismiss();
+        }
+        expect(arrived, `走不進紅圈（${vp.name}）`);
+        const card = await waitResult('狐面商');
+        expect(card.title === '良・狐面商', `結果卡標題不對：${card.title}`);
+        expect(card.lines.length === 1 && card.lines[0].t === 'item' && /Lv\d：.+，但.+/.test(card.lines[0].text), `結果卡沒寫出拿到的道具：${JSON.stringify(card.lines)}`);
+        files.push(await shot(ctx, 'e1-fox-result'));
+        await closeResult();
+        await dismiss();
+        const after = await page.evaluate((id) => window.__game.run.ult.counts[id] ?? 0, fox.offers[0]);
+        expect(after === before + 1, `紅圈的道具沒有升一級：${before} → ${after}`);
+        await leave(spot);
+      }, 60);
+
+      await step(`${vp.name} 結果卡防誤觸：剛出現的 0.4 秒內點「繼續」不會關`, async () => {
+        const spot = await page.evaluate(() => window.__game.forceElement('jizo', 'common'));
+        await page.evaluate(([x, z]) => window.__game.teleport(x, z), [spot.x, spot.z]);
+        // 同一個 evaluate 裡：快進到結果卡出現，馬上點（不經過頁面的空檔）
+        const r = await page.evaluate(() => {
+          const g = window.__game;
+          for (let i = 0; i < 80 && !g.screens.includes('result'); i++) g.advance(0.05);
+          const opened = g.screens.includes('result');
+          document.querySelector('#btn-result-ok').click();
+          return { opened, still: g.screens.includes('result') };
+        });
+        expect(r.opened, `站上石地藏沒有結果卡（${vp.name}）`);
+        expect(r.still, `剛出現就被點掉了（防誤觸沒作用，${vp.name}）`);
+        await closeResult();
+        await dismiss();
         await leave(spot);
       });
 

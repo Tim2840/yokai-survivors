@@ -63,6 +63,7 @@ export async function run(browser) {
 
       await step(`${vp.name} 走上祭壇站著按住 → 頭目出現：血條顯示、祭壇收掉`, async () => {
         const a = await page.evaluate(() => window.__game.run.summon.altar);
+        let sawResult = false;
         await walkOnto(a.x, a.z);
         if ((await page.evaluate(() => window.__game.screens)).includes('levelup')) {
           await dismissLevelUps();
@@ -74,14 +75,30 @@ export async function run(browser) {
         expect(title === '極・召喚祭壇', `提示標題不對：${title}`);
         const desc = await page.locator('#element-desc').innerText();
         expect(/越晚召喚越強（生命 ×[\d.]+）/.test(desc), `祭壇說明不對：${desc}`);
+        // 召喚成功會跳結果卡（D36）：寫出小頭目的生命倍率，真的點「繼續」（頭目和結果卡在同一步出現）
+        const handleResult = async () => {
+          if (!(await page.evaluate(() => window.__game.screens)).includes('result')) return false;
+          const txt = await page.locator('.overlay[data-screen="result"] .result-lines').innerText();
+          expect(/小頭目出現了！生命 ×[\d.]+/.test(txt), `召喚的結果卡文字不對：${txt}`);
+          sawResult = true;
+          files.push(await shot(ctx, 'r1-summon-result'));
+          await page.waitForFunction(() => !document.querySelector('#btn-result-ok').disabled, null, { timeout: 5000 });
+          await press(ctx, '#btn-result-ok');
+          await page.waitForFunction(() => !window.__game.screens.includes('result'), null, { timeout: 5000 });
+          return true;
+        };
         for (let i = 0; i < 20; i++) {
-          if ((await page.evaluate(() => window.__game.screens)).includes('levelup')) {
+          const sc = await page.evaluate(() => window.__game.screens);
+          if (await handleResult()) continue;
+          if (sc.includes('levelup')) {
             await dismissLevelUps();
             await walkOnto(a.x, a.z);
           }
           await page.evaluate(() => window.__game.advance(0.25));
           if (await page.evaluate(() => window.__game.run.bossAlive)) break;
         }
+        await handleResult();
+        expect(sawResult, `召喚後沒有結果卡（${vp.name}）`);
         expect(await page.evaluate(() => window.__game.run.bossAlive), `按住了但頭目沒出現（${vp.name}）`);
         expect((await page.evaluate(() => window.__game.run.summon.altar)) === null, `召喚後祭壇還在（${vp.name}）`);
         await page.evaluate(() => window.__game.render());

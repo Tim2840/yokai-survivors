@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { Run } from '../../src/game/run';
 import { EventBus } from '../../src/core/bus';
 import { STAGE } from '../../src/data/stage';
-import { itemById } from '../../src/data/items';
+import { itemById, TRADE_ITEMS } from '../../src/data/items';
 import { tuning } from '../../src/data/tuning';
 import { RARITIES, type Rarity } from '../../src/data/rarity';
 import { ALTAR_BOON_PCT, ALTAR_CURSE, ALTAR_EFFECT_COUNT, ALTAR_BOONS, ALTAR_CURSE_IDS } from '../../src/data/altar';
-import { ELEMENT_KINDS, ELEMENT_PER_KIND, OFFERING, OFFERING_HOLD_SECONDS, OMIKUJI_EFFECT, OMIKUJI_RESULTS, OMIKUJI_WEIGHTS, CHEST_HOLD_SECONDS, OMIKUJI_HOLD_SECONDS, ELEMENT_RULES, JIZO, JIZO_ARMOR_SECONDS, JIZO_HOLD_SECONDS, ALTAR_HOLD_SECONDS, BARRIER, BARRIER_SPAWN_MULT, BARRIER_RADIUS } from '../../src/data/elements';
+import { FOX, ELEMENT_KINDS, ELEMENT_PER_KIND, OFFERING, OFFERING_HOLD_SECONDS, OMIKUJI_EFFECT, OMIKUJI_RESULTS, OMIKUJI_WEIGHTS, CHEST_HOLD_SECONDS, OMIKUJI_HOLD_SECONDS, ELEMENT_RULES, JIZO, JIZO_ARMOR_SECONDS, JIZO_HOLD_SECONDS, ALTAR_HOLD_SECONDS, BARRIER, BARRIER_SPAWN_MULT, BARRIER_RADIUS } from '../../src/data/elements';
 import { STAT_LIMITS, STAT_IDS } from '../../src/data/stats';
 import { Elements, elementRarityWeights } from '../../src/systems/elements';
 import { TerrainMap } from '../../src/world/terrainMap';
@@ -33,6 +33,7 @@ function make(seed = 3) {
 }
 function advance(run: Run, sec: number) {
   for (let i = 0; i < Math.round(sec / DT); i++) {
+    if (run.elementResult) run.dismissResult();
     if (run.awaitingPick) pickSafe(run);
     run.step(DT);
   }
@@ -42,6 +43,7 @@ function stand(run: Run, x: number, z: number, sec: number) {
   run.devTeleport(x, z);
   run.setMove(0, 0);
   for (let i = 0; i < Math.round(sec / DT); i++) {
+    if (run.elementResult) run.dismissResult();
     if (run.awaitingPick) pickSafe(run);
     run.step(DT);
   }
@@ -53,12 +55,13 @@ function stubElements(seed: number) {
   const stats = new Stats();
   const start = map.def.playerStart;
   flow.update(start.x, start.z, true);
-  const el = new Elements(new Rng(seed), map, flow, { stats, healFrac: () => {}, canPayHpFrac: () => true, payHpFrac: () => {}, openPick: () => {}, addMerit: () => {}, notifyOmikuji: () => {}, setCurse: () => {}, clearCurse: () => {}, emitSpawn: () => {}, emitUsed: () => {} });
+  const el = new Elements(new Rng(seed), map, flow, { stats, healFrac: () => 0, canPayHpFrac: () => true, payHpFrac: () => {}, openPick: () => {}, addMerit: () => {}, notifyOmikuji: () => {}, setCurse: () => {}, clearCurse: () => {}, emitSpawn: () => {}, emitUsed: () => {}, summonBoss: () => 0, showResult: () => {}, foxCandidates: () => TRADE_ITEMS, canTakeItem: () => true, grantItem: () => 1 });
   return { map, flow, stats, el, start };
 }
 
 describe('地圖要素：落下規則（種子全掃）', () => {
-  it('20 個種子、整關 600 秒：每個落下的要素都平坦、不擋路、離出生點與邊界夠遠、彼此夠遠、數量不超過上限', () => {
+  it('20 個種子、整關 600 秒：每個落下的要素都平坦、不擋路、離出生點與邊界夠遠、彼此夠遠、數量不超過上限（狐面商的兩個圈也是）', () => {
+    let foxes = 0;
     for (let seed = 1; seed <= 20; seed++) {
       const { map: m, el, start } = stubElements(seed);
       const R = ELEMENT_RULES;
@@ -82,10 +85,23 @@ describe('地圖要素：落下規則（種子全掃）', () => {
           const h = m.heightAt(s.x, s.z);
           for (const [ox, oz] of [[1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]]) expect(Math.abs(m.heightAt(s.x + ox, s.z + oz) - h), `種子 ${seed} ${key} 平坦`).toBeLessThanOrEqual(R.flatTolerance + 1e-6);
           for (const o of live) if (o !== s) expect(Math.hypot(o.x - s.x, o.z - s.z), `種子 ${seed} 彼此距離`).toBeGreaterThanOrEqual(R.minApart - 1e-6);
+          if (s.kind === 'fox') {
+            foxes++;
+            // 狐面商（D38）：兩個不同的提案；兩個圈都在平地、不擋路，彼此不重疊
+            expect(s.offers.length, `種子 ${seed} ${key}`).toBe(FOX.offers);
+            expect(new Set(s.offers).size).toBe(s.offers.length);
+            for (let k = 0; k < s.offers.length; k++) {
+              expect(TRADE_ITEMS).toContain(s.offers[k]);
+              expect(m.isBlocked(s.ringX[k], s.ringZ[k]), `種子 ${seed} ${key} 圈 ${k} 擋路`).toBe(false);
+              expect(Math.abs(m.heightAt(s.ringX[k], s.ringZ[k]) - h), `種子 ${seed} ${key} 圈 ${k} 高低差`).toBeLessThanOrEqual(R.flatTolerance * 2 + 1e-6);
+            }
+            expect(Math.hypot(s.ringX[0] - s.ringX[1], s.ringZ[0] - s.ringZ[1])).toBeGreaterThan(FOX.ringRadius * 2);
+          }
         }
       }
       expect(seen.size, `種子 ${seed} 一整關至少落下 5 個要素`).toBeGreaterThanOrEqual(5);
     }
+    expect(foxes, '20 個種子都沒有狐面商').toBeGreaterThan(0);
   }, 60000);
 
   it('同種子同走位 → 同樣的要素（可重現）', () => {

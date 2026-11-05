@@ -2,13 +2,15 @@ import { t } from '../i18n';
 import type { I18nKey } from '../i18n/zh-TW';
 import { CARD_FORMAT, type StatId } from '../data/stats';
 import { setWeaponTextFormatter, type BuildSummary } from '../game/buildSummary';
-import { synergyHints } from '../data/synergies';
+import { SYNERGIES, synergyHints } from '../data/synergies';
 import { isUltCard, ultHints, ultOfCard } from '../data/ultimates';
 import { DIFFICULTY } from '../data/difficulty';
 import { isVariantCard, variantOfCard } from '../data/variants';
 import { cardById, type CardOffer } from '../systems/cards';
-import { WEAPON_LEVELS, itemValue, type WeaponLevel } from '../data/items';
+import { WEAPON_LEVELS, itemDown, itemValue, type WeaponLevel } from '../data/items';
 import { PLAYABLE_YOKAI, STARTER_YOKAI } from '../data/yokai';
+import { CARD_EFFECT } from '../data/stats';
+import { lineIsGood, type ElementResult, type ResultLine } from '../systems/elementResult';
 
 /** 全螢幕覆蓋層（選妖怪、升級選卡、整備、結算、暫停）。都有 data-screen，給回歸的卡住偵測讀。 */
 export interface Overlay {
@@ -80,6 +82,25 @@ export function weaponLevelText(step: WeaponLevel): string {
 
 setWeaponTextFormatter((s) => weaponLevelText(s) || t('item.w.none'));
 
+/** 聯動某一段的效果文字（從資料組出來，數字不寫死在文字裡） */
+export function synergyDesc(id: string, tier: number): string {
+  const sy = SYNERGIES.find((x) => x.id === id);
+  if (!sy || tier < 1) return '';
+  const e = sy.tiers[tier - 1].effect;
+  const parts: string[] = [];
+  if (e.splashRatio) parts.push(t('syn.fx.splashRatio', { v: num(e.splashRatio * 100, 0) }));
+  if (e.splashMult) parts.push(t('syn.fx.splashMult', { v: num(e.splashMult, 2) }));
+  if (e.pierce) parts.push(t('syn.fx.pierce', { v: num(e.pierce) }));
+  if (e.volley) parts.push(t('syn.fx.volley', { v: num(e.volley) }));
+  if (e.auraMult) parts.push(t('syn.fx.auraMult', { v: num(e.auraMult, 2) }));
+  return parts.join('、');
+}
+
+/** 聯動名稱加段數：「連環爆・初」 */
+export function synergyName(id: string, tier: number): string {
+  return t('synergy.withTier', { name: t(`synergy.${id}` as I18nKey), tier: t(`synergy.tier${tier}` as I18nKey) });
+}
+
 /** 一張卡的名稱、等級變化與「這一級加多少」（levels = 目前的法具等級） */
 export function describeCard(o: CardOffer, levels: ReadonlyMap<string, number> = new Map()): { name: string; desc: string; level: string; isNew: boolean } {
   const d = cardById(o.cardId);
@@ -95,7 +116,7 @@ export function describeCard(o: CardOffer, levels: ReadonlyMap<string, number> =
   if (d.kind === 'mod') return { name, desc: t(`card.fmt.${d.mod}` as I18nKey, { v: num(v) }), level, isNew: lv === 0 };
   const fmt = CARD_FORMAT[d.stat as StatId];
   const up = t(`card.fmt.${fmt}` as I18nKey, { name: t(`stat.${d.stat}` as I18nKey), v: num(v, 1) });
-  return { name, desc: d.down ? `${up}${t('card.down', { text: downText(d.down.stat, d.down.perLevel) })}` : up, level, isNew: lv === 0 };
+  return { name, desc: d.down ? `${up}${t('card.down', { text: downText(d.down.stat, itemDown(d, o.rarity)) })}` : up, level, isNew: lv === 0 };
 }
 
 /** 取捨道具扣的東西：「最大生命 -15」「移動速度 -4%」 */
@@ -109,7 +130,7 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
   const title = o.el.querySelector<HTMLElement>('#lv-title')!;
   const pending = o.el.querySelector<HTMLElement>('#lv-pending')!;
   return Object.assign(o, {
-    render(offer: CardOffer[], more: number, owned: ReadonlySet<string> = new Set(), active: readonly string[] = [], kind: 'levelup' | 'offering' | 'chest' | 'variant' = 'levelup', ult: { yokai: string; counts: ReadonlyMap<string, number>; fused: readonly string[] } = { yokai: '', counts: new Map(), fused: [] }) {
+    render(offer: CardOffer[], more: number, kind: 'levelup' | 'offering' | 'chest' | 'variant' = 'levelup', ult: { yokai: string; counts: ReadonlyMap<string, number>; fused: readonly string[] } = { yokai: '', counts: new Map(), fused: [] }) {
       title.textContent = t(kind === 'variant' ? 'levelup.variant' : kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? 'levelup.offering' : 'levelup.chest');
       pending.textContent = more > 1 ? t('levelup.pending', { n: more - 1 }) : '';
       cardsEl.innerHTML = '';
@@ -149,12 +170,12 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
         b.dataset.card = c.cardId;
         b.dataset.rarity = c.rarity;
         b.dataset.index = String(i);
-        // 這張卡能湊成哪些聯動：已經有另一張 → 「選了就觸發」；還沒有 → 「再湊 X 就會 Y」；已觸發過的不顯示
-        const hints = synergyHints(c.cardId, owned, active)
-          .filter((h) => !h.done)
+        // 這張卡能把哪個聯動推到下一段（D37）：選了就到 → 「選了就觸發」；還差 → 列出下一段每件道具的等級進度
+        const hints = synergyHints(c.cardId, ult.counts)
           .map((h) => {
-            const syn = t(`synergy.${h.id}` as I18nKey);
-            return `<span class="csyn${h.ready ? ' ready' : ''}">${h.ready ? t('card.syn.ready', { name: syn }) : t('card.syn.need', { card: t(`card.${h.partner}` as I18nKey), name: syn })}</span>`;
+            const name = synergyName(h.id, h.nextTier);
+            const items = h.progress.map((p) => t('card.syn.item', { card: t(`card.${p.card}` as I18nKey), have: p.have, need: p.need })).join('、');
+            return `<span class="csyn${h.completes ? ' ready' : ''}">${h.completes ? t('card.syn.ready', { name }) : t('card.syn.need', { name, items })}</span>`;
           })
           .join('');
         // 大招配方：這張卡是哪個大招的材料、目前進度；選了就湊齊的特別標出
@@ -166,6 +187,80 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
         b.addEventListener('click', () => onPick(i));
         cardsEl.appendChild(b);
       });
+    },
+  });
+}
+
+// ── 要素結果卡（D36）──
+/** 出現後這麼久（毫秒）才接受關閉：避免玩家正在按的鍵或點擊把它直接關掉 */
+export const RESULT_GUARD_MS = 400;
+
+/** 一行結果的文字（數字全部來自結果資料） */
+export function resultLineText(l: ResultLine, levels: ReadonlyMap<string, number> = new Map()): string {
+  const sec = (s?: number) => (s ? t('result.seconds', { s }) : '');
+  switch (l.t) {
+    case 'heal':
+      return t('result.heal', { v: Math.round(l.v) });
+    case 'stat': {
+      const name = t(`stat.${l.stat}` as I18nKey);
+      if (l.pct !== undefined) return t('card.fmt.pct', { name, v: num(l.pct * 100, 0) }) + sec(l.seconds);
+      const fmt = CARD_FORMAT[l.stat];
+      return t(`card.fmt.${fmt}` as I18nKey, { name, v: num((l.flat ?? 0) / CARD_EFFECT[l.stat].scale, 1) }) + sec(l.seconds);
+    }
+    case 'curse':
+      return t('element.altar.effect', { name: t(`curse.${l.id}` as I18nKey), pct: Math.round(l.v * 100) }) + sec(l.seconds);
+    case 'uncurse':
+      return t('result.uncurse', { name: t(`curse.${l.id}` as I18nKey) });
+    case 'omikuji':
+      return t(`omikuji.${l.id}` as I18nKey);
+    case 'merit':
+      return t('result.merit', { v: l.v });
+    case 'summon':
+      return t('result.summon', { mult: num(l.mult, 1) });
+    case 'item': {
+      const d = describeCard({ cardId: l.cardId, rarity: l.rarity }, new Map([...levels, [l.cardId, l.level - 1]]));
+      return t('result.item', { name: d.name, lv: l.level, desc: d.desc });
+    }
+  }
+}
+
+export function buildResultCard(parent: HTMLElement, onClose: () => void) {
+  const o = overlay(parent, 'result', `<div class="panel result-panel"><p class="result-head">${t('result.head')}</p><h2 id="result-title"></h2><ul class="result-lines" id="result-lines"></ul>${btn('btn-result-ok', 'result.ok')}</div>`);
+  const title = o.el.querySelector<HTMLElement>('#result-title')!;
+  const head = o.el.querySelector<HTMLElement>('.result-head')!;
+  const list = o.el.querySelector<HTMLElement>('#result-lines')!;
+  const ok = o.el.querySelector<HTMLButtonElement>('#btn-result-ok')!;
+  let shownAt = 0;
+  const ready = () => performance.now() - shownAt >= RESULT_GUARD_MS;
+  ok.addEventListener('click', () => {
+    if (ready()) onClose();
+  });
+  return Object.assign(o, {
+    render(r: ElementResult, levels: ReadonlyMap<string, number> = new Map()) {
+      o.el.dataset.kind = r.kind;
+      o.el.dataset.rarity = r.rarity;
+      head.textContent = t(r.kind === 'summon' ? 'result.headSummon' : 'result.head');
+      title.textContent = `${t(`rarity.${r.rarity}`)}・${t(`element.${r.kind}` as I18nKey)}`;
+      list.innerHTML = '';
+      for (const l of r.lines) {
+        const li = document.createElement('li');
+        li.className = `${lineIsGood(l) ? 'good' : 'bad'}${l.t === 'omikuji' || l.t === 'summon' ? ' big' : ''}`;
+        li.dataset.line = l.t;
+        li.textContent = resultLineText(l, levels);
+        list.appendChild(li);
+      }
+    },
+    open() {
+      shownAt = performance.now();
+      ok.disabled = true;
+      window.setTimeout(() => (ok.disabled = false), RESULT_GUARD_MS);
+      o.show();
+    },
+    /** 鍵盤（Enter）關閉：過了防誤觸時間才算 */
+    tryClose(): boolean {
+      if (!o.visible || !ready()) return false;
+      onClose();
+      return true;
     },
   });
 }
@@ -267,7 +362,14 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
         cards.appendChild(li);
       }
       const syn = q('sum-syn');
-      syn.innerHTML = sum.synergies.length ? `<h3>${t('pause.synergies')}</h3><ul class="sum-syn">${sum.synergies.map((id) => `<li><b>${t(`synergy.${id}` as I18nKey)}</b> <em>${t(`synergy.${id}.desc` as I18nKey)}</em></li>`).join('')}</ul>` : '';
+      syn.innerHTML = sum.synergies.length
+        ? `<h3>${t('pause.synergies')}</h3><ul class="sum-syn">${sum.synergies
+            .map((s) => {
+              const next = s.next ? `<br><span class="sum-next">${t('pause.synNext', { tier: t(`synergy.tier${s.tier + 1}` as I18nKey), items: s.next.map((p) => t('card.syn.item', { card: t(`card.${p.card}` as I18nKey), have: p.have, need: p.need })).join('、') })}</span>` : '';
+              return `<li data-syn="${s.id}" data-tier="${s.tier}"><b>${synergyName(s.id, s.tier)}</b> <em>${synergyDesc(s.id, s.tier)}</em>${next}</li>`;
+            })
+            .join('')}</ul>`
+        : '';
       const ult = q('sum-ult');
       ult.innerHTML = sum.ultimates.length
         ? `<h3>${t('pause.ultimates')}</h3><ul class="sum-ult">${sum.ultimates

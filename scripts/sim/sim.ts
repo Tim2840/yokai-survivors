@@ -15,7 +15,7 @@ import { ultHints } from '../../src/data/ultimates';
 import { PROGRESSION } from '../../src/data/progression';
 import { WAVES } from '../../src/data/waves';
 import { STAGE } from '../../src/data/stage';
-import { ITEM_POOL } from '../../src/data/items';
+import { ELEMENT_WEIGHTS } from '../../src/data/elements';
 import type { TerrainMap } from '../../src/world/terrainMap';
 
 const DT = 1 / 60;
@@ -43,14 +43,8 @@ const VARIANT_BY_STRATEGY: Record<string, string> = { dps: 'kitsunebi', survive:
 /** --tune countScale=3,hpScale=1.2,xp.needPerLevel=4,w.hpPerWave=0.2：臨時改旋鈕比較（不改檔案）；xp. 開頭是 PROGRESSION、w. 開頭是 WAVES */
 const TUNE = arg('tune', '');
 function applyTune(): void {
-  // --noTrade：拿掉取捨道具（對照組）
-  if (process.argv.includes('--noTrade')) {
-    const pool = ITEM_POOL as string[];
-    for (const id of ['cursedBlade', 'wildLantern', 'diamondBody']) {
-      const k = pool.indexOf(id);
-      if (k >= 0) pool.splice(k, 1);
-    }
-  }
+  // --noTrade：不出狐面商（取捨道具只在狐面商拿得到，D38；對照組）
+  if (process.argv.includes('--noTrade')) (ELEMENT_WEIGHTS as Record<string, number>).fox = 0;
   for (const kv of TUNE.split(',').filter(Boolean)) {
     const [k, v] = kv.split('=');
     if (k.startsWith('summon.')) (STAGE.summon as unknown as Record<string, number>)[k.slice(7)] = Number(v);
@@ -121,6 +115,9 @@ interface Result {
   casts: number;
   variant: string;
   summonedAt: number;
+  /** 第一個聯動到「初」「極」的時間（秒；沒到 = -1） */
+  synT1: number;
+  synT2: number;
   /** 死在召喚之後幾秒（沒死或沒召喚 = -1） */
   diedAfterSummon: number;
 }
@@ -144,9 +141,20 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   let guard = 0;
   let casts = 0;
   let summonedAt = -1;
+  let synT1 = -1;
+  let synT2 = -1;
+  bus.on('synergy', (e) => {
+    if (e.tier >= 1 && synT1 < 0) synT1 = totalTime + run.time;
+    if (e.tier >= 2 && synT2 < 0) synT2 = totalTime + run.time;
+  });
   bus.on('summonBoss', () => { if (summonedAt < 0) summonedAt = run.time; });
   const scratch = new Int32Array(512);
   while (run.phase !== 'ended' && guard++ < 5e7) {
+    // 結果卡（D36）：機器人看完就關
+    if (run.elementResult) {
+      run.dismissResult();
+      continue;
+    }
     if (run.awaitingPick) {
       const i = choose(run, strategy, rnd);
       const c = run.offer![i].cardId;
@@ -184,7 +192,7 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
       mz = dz / d + Math.sin(t) * 0.4;
     } else {
       // 附近沒有敵人：想用要素就走過去（站著按住），否則繞圈
-      const target = useElements ? nearestElement(run) : null;
+      const target = useElements ? nearestElement(run, strategy) : null;
       if (target) {
         [mx, mz] = steer(run, target.x, target.z);
       } else {
@@ -224,6 +232,8 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     variant: run.variant?.id ?? '-',
     casts,
     summonedAt,
+    synT1,
+    synT2,
     diedAfterSummon: run.phase === 'ended' && run.result === 'death' && summonedAt >= 0 && run.director.bossSpawned ? run.time - summonedAt : -1,
     curseTotal: run.curse.enemyHp + run.curse.enemySpeed + run.curse.enemyDamage + run.curse.spawnRate,
   };
@@ -298,19 +308,47 @@ function nearestChest(run: Run): { x: number; z: number } | null {
   return best;
 }
 
-function nearestElement(run: Run): { x: number; z: number } | null {
+function nearestElement(run: Run, strategy: string): { x: number; z: number } | null {
   let best: { x: number; z: number } | null = null;
   let bd = 40;
   for (const s of run.elements.slots) {
     if (!s.active || s.usedAge >= 0 || s.announce > 0 || s.blocked) continue;
     if (s.kind === 'summon') continue; // 召喚祭壇由 --summonAt 控制什麼時候去
     if (s.kind === 'barrier') continue; // 結界石要站在圈內戰鬥，機器人不會這樣玩；單獨看
-    const d = Math.hypot(s.x - run.px, s.z - run.pz);
+    let tx = s.x;
+    let tz = s.z;
+    if (s.kind === 'fox') {
+      // 狐面商（D38）：依策略挑一個圈（亂選：看位置決定），收不下或不想要就不去
+      const k = foxChoice(run, s.offers, s.ringBlocked, strategy, s.x + s.z);
+      if (k < 0) continue;
+      tx = s.ringX[k];
+      tz = s.ringZ[k];
+    }
+    const d = Math.hypot(tx - run.px, tz - run.pz);
     if (d < bd) {
       bd = d;
-      best = s;
+      best = { x: tx, z: tz };
     }
   }
+  return best;
+}
+
+/** 機器人在狐面商選哪個圈：分數表裡最想要的；分數太低（不合策略）就不拿；-1 = 不去 */
+function foxChoice(run: Run, offers: readonly string[], blocked: readonly boolean[], strategy: string, salt: number): number {
+  const ok = offers.map((_, k) => k).filter((k) => !blocked[k]);
+  if (ok.length === 0) return -1;
+  if (strategy === 'random') return ok[Math.abs(Math.floor(salt * 7)) % ok.length];
+  const sc = SCORES[strategy === 'ult' ? 'dps' : strategy];
+  let best = -1;
+  let bv = 1.5;
+  for (const k of ok) {
+    const v = sc[offers[k]] ?? 1;
+    if (v > bv) {
+      bv = v;
+      best = k;
+    }
+  }
+  void run;
   return best;
 }
 
@@ -333,6 +371,7 @@ function summarize(rs: Result[]): string {
     `用掉要素 ${avg(rs.map((r) => r.elementsUsed)).toFixed(1)}`,
     `融合大招 ${avg(rs.map((r) => r.fused)).toFixed(1)} 個、發動 ${avg(rs.map((r) => r.casts)).toFixed(1)} 次`,
     `變化 ${[...new Set(rs.map((r) => r.variant))].join('/')}`,
+    `聯動初 ${((rs.filter((r) => r.synT1 >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.synT1 >= 0).map((r) => r.synT1), 50)?.toFixed(0) ?? '-'} 秒）、極 ${((rs.filter((r) => r.synT2 >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.synT2 >= 0).map((r) => r.synT2), 50)?.toFixed(0) ?? '-'} 秒）`,
     `死在召喚後 ${rs.filter((r) => r.diedAfterSummon >= 0).length} 局（中位 ${pct(rs.filter((r) => r.diedAfterSummon >= 0).map((r) => r.diedAfterSummon), 50)?.toFixed(0) ?? '-'} 秒）`,
     `召喚頭目 ${((rs.filter((r) => r.summonedAt >= 0).length / rs.length) * 100).toFixed(0)}%（平均第 ${avg(rs.filter((r) => r.summonedAt >= 0).map((r) => r.summonedAt)).toFixed(0)} 秒）`,
   ].join('；');

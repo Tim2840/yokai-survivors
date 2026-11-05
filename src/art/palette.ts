@@ -10,6 +10,8 @@ export const palette = {
   },
   human: { earth: '#a58563', slate: '#6b7a8f', robe: '#2b2b30', robeAccent: '#d88a3a' },
   rarity: { common: '#e8e6e0', rare: '#5ec4e8', epic: '#a678e0', legend: '#ffb347' },
+  /** 狐面商的兩個圈（紅圈、藍圈；HUD 文字也叫紅圈／藍圈）與面具 */
+  fox: { ringA: '#ff6f5a', ringB: '#5aaeff', mask: '#f6f1e6', mark: '#d8453a', robe: '#3d3f72' },
   /** 地形頂點色（docs/03 第 2 節各地形的外觀） */
   terrain: { grass: '#4f7a55', shallow: '#4c7f8f', deep: '#25506b', mud: '#5b4a3a', rock: '#7b7d82', bamboo: '#5d8a58', stone: '#9a9488', spring: '#7fb6b0' },
   water: { shallow: '#7cc4d8', deep: '#1c4e78' },

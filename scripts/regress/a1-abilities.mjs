@@ -35,7 +35,7 @@ export async function run(browser) {
       await step(`${vp.name} 拿幾張卡 → 清單與屬性對得上`, async () => {
         await page.evaluate(() => {
           const g = window.__game;
-          g.give('power', 'common'); g.give('power', 'rare'); g.give('hp', 'epic'); g.give('volley', 'common'); g.give('splash', 'rare'); g.give('armor', 'common');
+          g.give('power', 'common'); g.give('power', 'rare'); g.give('hp', 'epic'); g.give('volley', 'common'); g.give('volley', 'common'); g.give('splash', 'rare'); g.give('splash', 'common'); g.give('splash', 'common'); g.give('armor', 'common');
           g.advance(0.2); g.render();
         });
         await press(ctx, '#btn-abilities');
@@ -51,7 +51,8 @@ export async function run(browser) {
         const slots = await page.locator('#sum-slots').innerText();
         expect(/5\/6/.test(slots), `道具欄應該是 5/6：${slots}`);
         expect(info.rows.volley && info.rows.splash && info.rows.armor, `少了卡片：${Object.keys(info.rows)}`);
-        expect(/連環爆/.test(info.syn), `已觸發的聯動沒列出：${info.syn}`);
+        // D37：鬼火增殖 2、爆裂 3 → 連環爆・初
+        expect(/連環爆・初/.test(info.syn), `已觸發的聯動沒列出：${info.syn}`);
         const p = info.run.stats.power;
         expect(info.stats.power === `×${Number(p.toFixed(2))}`, `攻擊力顯示和實際不符：${info.stats.power} vs ${p}`);
         expect(info.stats.maxHp.includes(`/ ${Math.round(info.run.maxHp)}`), `最大生命顯示不符：${info.stats.maxHp}`);

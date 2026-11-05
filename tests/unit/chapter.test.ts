@@ -98,60 +98,87 @@ describe('法具：武器改造與主武器（D30）', () => {
   });
 });
 
-import { SYNERGIES } from '../../src/data/synergies';
+import { SYNERGIES, synergyTierOf } from '../../src/data/synergies';
 import { cardById } from '../../src/systems/cards';
 
-describe('卡片聯動（D28）', () => {
-  it('聯動需要的卡都存在；全掃：每個聯動只有兩張都有才觸發、只觸發一次、效果疊上去', () => {
-    for (const sy of SYNERGIES) for (const id of sy.requires) expect(() => cardById(id), `${sy.id} 需要 ${id}`).not.toThrow();
+/** 把道具升到指定等級（主武器 Lv4 的招式變化選第一個） */
+function levelTo(run: Run, id: string, lv: number) {
+  for (let g = 0; g < 12 && (run.cardCounts.get(id) ?? 0) < lv; g++) {
+    run.give(id, 'common');
+    while (run.awaitingPick) run.chooseCard(0);
+  }
+}
+
+describe('卡片聯動（D28；D37 分初／極兩段）', () => {
+  it('資料全掃：兩件道具都存在；每段的門檻 ≤ 道具最高等級；極的門檻 ≥ 初；極的效果 ≥ 初', () => {
+    for (const sy of SYNERGIES) {
+      for (const id of sy.items) expect(() => cardById(id), `${sy.id} 需要 ${id}`).not.toThrow();
+      const [t1, t2] = sy.tiers;
+      for (const tier of sy.tiers) {
+        expect(Object.keys(tier.requires).sort(), sy.id).toEqual([...sy.items].sort());
+        for (const [id, n] of Object.entries(tier.requires)) expect(n, `${sy.id} ${id}`).toBeLessThanOrEqual(cardById(id).maxLevel);
+      }
+      for (const id of sy.items) expect(t2.requires[id]).toBeGreaterThanOrEqual(t1.requires[id]);
+      expect(Object.entries(t2.requires).some(([id, n]) => n > t1.requires[id]), `${sy.id} 極和初的門檻一樣`).toBe(true);
+      for (const [k, v] of Object.entries(t1.effect)) expect((t2.effect as Record<string, number>)[k], `${sy.id} ${k}`).toBeGreaterThanOrEqual(v as number);
+    }
+  });
+
+  it('全掃：每個聯動——兩件都 1 級不觸發（舊版會紅）、到初的門檻觸發「初」、到極升段；每段只觸發一次；效果 = 該段的總效果', () => {
     for (const sy of SYNERGIES) {
       const run = new Run({ seed: 5, bus: new EventBus() });
       const events: string[] = [];
       const bus = (run as unknown as { bus: EventBus }).bus;
-      bus.on('synergy', (e) => events.push(e.id));
-      run.give(sy.requires[0], 'common');
-      expect(run.activeSynergies, `${sy.id} 只有一張不該觸發`).not.toContain(sy.id);
-      run.give(sy.requires[1], 'common');
+      bus.on('synergy', (e) => events.push(`${e.id}:${e.tier}`));
+      for (const id of sy.items) levelTo(run, id, 1);
+      expect(run.activeSynergies, `${sy.id} 兩件都 1 級就觸發了`).not.toContain(sy.id);
+      // 初：除了最後一件，其他都到門檻；最後一件差一級
+      const req1 = Object.entries(sy.tiers[0].requires);
+      for (const [id, n] of req1.slice(0, -1)) levelTo(run, id, n);
+      const [lastId, lastN] = req1[req1.length - 1];
+      levelTo(run, lastId, lastN - 1);
+      expect(run.synergyTiers.get(sy.id) ?? 0, `${sy.id} 差一級`).toBe(synergyTierOf(sy, run.cardCounts));
+      if (synergyTierOf(sy, run.cardCounts) === 0) {
+        levelTo(run, lastId, lastN);
+      }
+      expect(run.synergyTiers.get(sy.id)).toBe(1);
       expect(run.activeSynergies).toContain(sy.id);
-      expect(events.filter((x) => x === sy.id)).toHaveLength(1);
-      run.give(sy.requires[1], 'rare');
-      run.give(sy.requires[0], 'rare');
-      expect(events.filter((x) => x === sy.id), '同一個聯動只觸發一次').toHaveLength(1);
-      expect(run.lastSynergy?.id).toBeTruthy();
+      for (const [id, n] of Object.entries(sy.tiers[1].requires)) levelTo(run, id, n);
+      expect(run.synergyTiers.get(sy.id)).toBe(2);
+      expect(events.filter((x) => x === `${sy.id}:1`), '初只觸發一次').toHaveLength(1);
+      expect(events.filter((x) => x === `${sy.id}:2`), '極只觸發一次').toHaveLength(1);
+      expect(run.lastSynergy?.tier).toBe(2);
     }
   });
 
-  it('貫穿火：鬼火數量 +0.5、穿透 +1（加成值與投射物的穿透次數）', () => {
-    const count = (withSynergy: boolean) => {
-      const run = new Run({ seed: 9, bus: new EventBus() });
-      run.god = true;
-      if (withSynergy) {
-        run.give('volley', 'common');
-        run.give('pierce', 'common');
-      }
-      return run;
-    };
-    const a = count(true);
-    expect(a.activeSynergies).toContain('piercingFire');
+  it('升段只補差額：連環爆到極時的總加成 = 極的效果（不是初＋極）', () => {
+    const run = new Run({ seed: 4, bus: new EventBus() });
+    const sy = SYNERGIES.find((x) => x.id === 'chainBlast')!;
+    levelTo(run, 'volley', 2);
+    levelTo(run, 'splash', 3);
+    expect(run.syn.splashMult).toBeCloseTo(sy.tiers[0].effect.splashMult!);
+    expect(run.syn.splashRatio).toBeCloseTo(sy.tiers[0].effect.splashRatio!);
+    levelTo(run, 'splash', 5);
+    expect(run.syn.splashMult).toBeCloseTo(sy.tiers[1].effect.splashMult!);
+    expect(run.syn.splashRatio).toBeCloseTo(sy.tiers[1].effect.splashRatio!);
+    // 燈火通明（爆裂已 5 級）：廣域到 3 → 初、到 5 → 極
+    const lg = SYNERGIES.find((x) => x.id === 'lanternGlow')!;
+    levelTo(run, 'area', 3);
+    expect(run.syn.auraMult).toBeCloseTo(lg.tiers[0].effect.auraMult!);
+    levelTo(run, 'area', 5);
+    expect(run.syn.auraMult).toBeCloseTo(lg.tiers[1].effect.auraMult!);
+  });
+
+  it('貫穿火：極時穿透 +1、鬼火 +0.5；投射物真的帶著額外穿透', () => {
+    const a = new Run({ seed: 9, bus: new EventBus() });
+    a.god = true;
+    levelTo(a, 'volley', 2);
+    levelTo(a, 'pierce', 3);
+    expect(a.synergyTiers.get('piercingFire')).toBe(2);
     expect(a.syn.pierce).toBe(1);
     expect(a.syn.volley).toBe(0.5);
-    // 投射物真的帶著額外穿透次數
     const w = a.yokai.weapon;
     const i = a.projectiles.spawn(0, 0, 1, 0, w, 1, false, -1, Math.floor(a.pierceBonus + a.syn.pierce));
     expect(a.projectiles.pierceLeft[i]).toBe(w.pierce + Math.floor(a.pierceBonus + a.syn.pierce));
-    const b = new Run({ seed: 9, bus: new EventBus() });
-    b.give('volley', 'common');
-    expect(b.activeSynergies).toHaveLength(0);
-    expect(b.syn.pierce).toBe(0);
-  });
-
-  it('連環爆與燈火通明的加成', () => {
-    const run = new Run({ seed: 4, bus: new EventBus() });
-    run.give('splash', 'common');
-    run.give('volley', 'common');
-    expect(run.syn.splashMult).toBeCloseTo(1.3);
-    expect(run.syn.splashRatio).toBeCloseTo(0.4);
-    run.give('area', 'common');
-    expect(run.syn.auraMult).toBeCloseTo(1.5);
   });
 });

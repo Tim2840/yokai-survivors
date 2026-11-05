@@ -36,9 +36,11 @@ export interface GameEvents {
   fusionReady: { id: string };
   ultimate: { ids: string[] };
   /** 觸發了一個卡片聯動（低頻） */
-  synergy: { id: string };
+  synergy: { id: string; tier: number };
   elementSpawn: { kind: string; rarity: string };
   elementUsed: { kind: string; rarity: string };
+  /** 要素結果卡要顯示（D36） */
+  elementResult: { kind: string };
   runEnd: { result: 'death' | 'victory' | 'abandon'; stage: number; kills: number; level: number; time: number; merit: number };
   /** 存檔寫入失敗（隱私模式、容量不足）；只在第一次失敗時發 */
   saveFailed: { error: string };

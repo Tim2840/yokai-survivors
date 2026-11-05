@@ -4,7 +4,7 @@ import { Run } from '../../src/game/run';
 import { tuning, resetTuning } from '../../src/data/tuning';
 import { STAGE, isBigBossStage } from '../../src/data/stage';
 import { DIFFICULTY } from '../../src/data/difficulty';
-import { ITEMS, itemById, itemValue } from '../../src/data/items';
+import { ITEMS, ITEM_RARITY_MULT, itemById, itemValue } from '../../src/data/items';
 import { kindIndex } from '../../src/systems/enemies';
 import { PlayerReach } from '../../src/systems/reach';
 
@@ -26,6 +26,12 @@ function step(run: Run, sec: number) {
 }
 /** 走正常的擊殺流程（測掉落用） */
 const killNow = (run: Run, i: number) => (run as unknown as { onKill(i: number): void }).onKill(i);
+/** 打倒頭目那一刻新出現的寶箱（地圖上本來就可能有隨機寶箱） */
+function killBossNewChest(run: Run) {
+  const before = new Set(run.elements.slots.filter((s) => s.active && s.kind === 'chest'));
+  run.devKillBoss();
+  return run.elements.slots.find((s) => s.active && s.kind === 'chest' && !before.has(s))!;
+}
 
 describe('召喚祭壇（D34）', () => {
   it('一般關在 appearAt 顯現、離玩家 ringMin 以上；站上去按住 holdSeconds → 小頭目出現、祭壇收掉；發事件', () => {
@@ -111,11 +117,14 @@ describe('寶箱掉落（D30 第二步）', () => {
     const b = run.director.bossIndex;
     const x = run.enemies.x[b];
     const z = run.enemies.z[b];
-    run.devKillBoss();
-    const c = run.elements.slots.find((s) => s.active && s.kind === 'chest')!;
+    const c = killBossNewChest(run);
     expect(c).toBeTruthy();
     expect(c.rarity).toBe(STAGE.drops.bossChest);
-    expect(Math.hypot(c.x - x, c.z - z)).toBeLessThan(9);
+    // 倒下處玩家走得到時就放在附近；走不到時改放在走得到的地方（見下一個測試）
+    const reach = new PlayerReach(run.map);
+    reach.compute(run.px, run.pz);
+    expect(reach.ok(c.x, c.z)).toBe(true);
+    if (reach.ok(x, z)) expect(Math.hypot(c.x - x, c.z - z)).toBeLessThan(9);
   });
 
   it('全掃 10 個種子：小頭目倒在玩家走不到的地方（岩石圍住的小島等）→ 傳送門與寶箱都放在走得到的地方，寶箱離傳送門夠遠（舊版會紅：放在倒下處）', () => {
@@ -135,10 +144,9 @@ describe('寶箱掉落（D30 第二步）', () => {
       const b = run.director.bossIndex;
       run.enemies.x[b] = hole[0];
       run.enemies.z[b] = hole[1];
-      run.devKillBoss();
+      const c = killBossNewChest(run);
       reach.compute(run.px, run.pz);
       expect(reach.ok(run.portal.x, run.portal.z), `種子 ${seed} 傳送門`).toBe(true);
-      const c = run.elements.slots.find((s) => s.active && s.kind === 'chest')!;
       expect(reach.ok(c.x, c.z), `種子 ${seed} 寶箱`).toBe(true);
       expect(Math.hypot(c.x - run.portal.x, c.z - run.portal.z), `種子 ${seed} 寶箱離傳送門`).toBeGreaterThanOrEqual(STAGE.portalRadius + 1.8);
     }
@@ -204,7 +212,7 @@ describe('難度 %（D30 第二步）', () => {
 });
 
 describe('取捨道具（D30 第二步）', () => {
-  it('全掃每個取捨道具：每級好處吃稀有度、壞處固定；滿級後不再加', () => {
+  it('全掃每個取捨道具：每級好處與壞處都吃稀有度（D38：越高階越極端）；滿級後不再加', () => {
     const trade = ITEMS.filter((d) => d.down);
     expect(trade.length).toBeGreaterThanOrEqual(3);
     for (const d of trade) {
@@ -216,10 +224,10 @@ describe('取捨道具（D30 第二步）', () => {
       const dn1 = run.stats.value[d.down!.stat];
       expect(up1, `${d.id} 好處`).toBeGreaterThan(up0);
       expect(dn1, `${d.id} 壞處`).toBeLessThan(dn0);
-      // 壞處不吃稀有度：極階一級扣的和凡階一樣
+      // D38：壞處也吃稀有度（越高階越極端）：珍階一級扣的 = 凡階 × 珍階倍率
       const { run: r2 } = make(27);
       r2.give(d.id, 'common');
-      expect(dn0 - r2.stats.value[d.down!.stat], `${d.id} 壞處固定`).toBeCloseTo(dn0 - dn1, 5);
+      expect((dn0 - dn1) / (dn0 - r2.stats.value[d.down!.stat]), `${d.id} 壞處乘稀有度`).toBeCloseTo(ITEM_RARITY_MULT.epic, 5);
       expect(itemValue(itemById(d.id), 'epic')).toBeGreaterThan(itemValue(itemById(d.id), 'common'));
       for (let k = 0; k < d.maxLevel + 2; k++) run.give(d.id, 'common');
       expect(run.cardCounts.get(d.id)).toBe(d.maxLevel);
@@ -230,12 +238,12 @@ describe('取捨道具（D30 第二步）', () => {
 import { describeCard } from '../../src/ui/overlays';
 
 describe('取捨道具的卡片文字', () => {
-  it('全掃：每個取捨道具的卡片寫出好處（吃稀有度）與「，但」代價（固定）', () => {
+  it('全掃：每個取捨道具的卡片寫出好處與「，但」代價（都吃稀有度）', () => {
     for (const d of ITEMS.filter((x) => x.down)) {
       const c = describeCard({ cardId: d.id, rarity: 'rare' });
       expect(c.desc, d.id).toMatch(/^.+ \+[\d.]+%?.*，但.+ -[\d.]+%?/);
-      expect(c.desc, d.id).toContain(`-${d.down!.perLevel}`);
+      expect(c.desc, d.id).toContain(`-${Number((d.down!.perLevel * ITEM_RARITY_MULT.rare).toFixed(1))}`);
     }
-    expect(describeCard({ cardId: 'cursedBlade', rarity: 'rare' }).desc).toBe('攻擊力 +24%，但最大生命 -10');
+    expect(describeCard({ cardId: 'cursedBlade', rarity: 'rare' }).desc).toBe('攻擊力 +24%，但最大生命 -12');
   });
 });

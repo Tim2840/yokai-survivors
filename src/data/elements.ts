@@ -1,7 +1,7 @@
 import type { Rarity } from './rarity';
 
 /** 地圖要素（docs/02 第 6 節）。M2 先做石地藏、結界石、詛咒祭壇；其餘隨後加入。 */
-export const ELEMENT_KINDS = ['jizo', 'barrier', 'altar', 'offering', 'omikuji', 'chest', 'summon'] as const;
+export const ELEMENT_KINDS = ['jizo', 'barrier', 'altar', 'offering', 'omikuji', 'chest', 'summon', 'fox'] as const;
 export type ElementKind = (typeof ELEMENT_KINDS)[number];
 
 /** 出現規則（docs/02 第 6.3 節，改成連續關卡：用「關卡經過比例」取代「整備」） */
@@ -30,9 +30,9 @@ export const ELEMENT_RULES = {
 } as const;
 
 /** 要素種類權重（地圖可覆寫） */
-export const ELEMENT_WEIGHTS: Record<ElementKind, number> = { jizo: 1, barrier: 1, altar: 1, offering: 1, omikuji: 1, chest: 0.6, summon: 0 };
+export const ELEMENT_WEIGHTS: Record<ElementKind, number> = { jizo: 1, barrier: 1, altar: 1, offering: 1, omikuji: 1, chest: 0.6, summon: 0, fox: 0.8 };
 /** 同種同時最多幾個（沒寫的用 ELEMENT_RULES.perKind） */
-export const ELEMENT_PER_KIND: Partial<Record<ElementKind, number>> = { chest: 1, omikuji: 1, summon: 1 };
+export const ELEMENT_PER_KIND: Partial<Record<ElementKind, number>> = { chest: 1, omikuji: 1, summon: 1, fox: 1 };
 
 /** 稀有度權重（依虛擬波數；docs/02 第 6.3 節）。波數落在哪一列取最後一個 from <= n */
 export const ELEMENT_RARITY_BY_WAVE: readonly { from: number; w: Record<Rarity, number> }[] = [
@@ -98,3 +98,18 @@ export const OMIKUJI_EFFECT: Record<OmikujiResult, { seconds: number; pct?: Part
   kyo: { seconds: 45, curse: { enemySpeed: 0.15 } },
   daikyo: { seconds: 45, curse: { enemyDamage: 0.3 } },
 };
+
+/**
+ * 狐面商（D38，docs/02 第 6.2 節④）：取捨道具只在這裡拿得到。商人前面兩個發光圈，各放一個提案（一件取捨道具的下一級），
+ * 站進其中一圈 acceptSeconds 秒＝收下；不要就走開。提案的稀有度 = 狐面商的稀有度（好處與代價都乘稀有度倍率：越高階越極端）。
+ * 不能收的提案（道具欄滿了、已練滿）不會出現；一個都沒有時這一處不放狐面商。
+ */
+export const FOX = {
+  /** 幾個提案（幾個圈） */
+  offers: 2,
+  /** 圈離商人多遠（公尺）、圈的半徑 */
+  ringOffset: 2.4,
+  ringRadius: 1.0,
+  /** 站在圈內幾秒算收下 */
+  acceptSeconds: 1.0,
+} as const;

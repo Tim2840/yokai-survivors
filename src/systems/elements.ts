@@ -6,6 +6,7 @@ import type { Stats } from './stats';
 import { pickRarity } from './cards';
 import { RARITIES, type Rarity } from '../data/rarity';
 import type { StatId } from '../data/stats';
+import type { ElementResult, ResultLine } from './elementResult';
 import { ALTAR_BOONS, ALTAR_BOON_PCT, ALTAR_CURSE, ALTAR_CURSE_IDS, ALTAR_EFFECT_COUNT, ALTAR_MAX_EFFECTS, type CurseId } from '../data/altar';
 import {
   ALTAR_HOLD_SECONDS,
@@ -22,6 +23,7 @@ import {
   JIZO_HOLD_SECONDS,
   CHEST_HOLD_SECONDS,
   ELEMENT_PER_KIND,
+  FOX,
   OFFERING,
   OFFERING_HOLD_SECONDS,
   OMIKUJI_EFFECT,
@@ -35,8 +37,8 @@ import {
 /** 給要素系統用的「玩家端」介面：只做它需要的事，不讓它碰整個 Run */
 export interface ElementHost {
   stats: Stats;
-  /** 立刻回復最大生命的 frac 倍 */
-  healFrac(frac: number): void;
+  /** 立刻回復最大生命的 frac 倍；回傳實際回了多少 */
+  healFrac(frac: number): number;
   /** 加一項整局有效的詛咒（讓敵人變強），key 用來之後單獨解除 */
   setCurse(key: string, id: CurseId, v: number): void;
   clearCurse(key: string): void;
@@ -46,8 +48,14 @@ export interface ElementHost {
   openPick(rarity: Rarity, picks: number, kind: 'offering' | 'chest'): void;
   addMerit(n: number): void;
   notifyOmikuji(result: OmikujiResult): void;
-  /** 召喚祭壇開了：召喚小頭目（D34） */
-  summonBoss(): void;
+  /** 召喚祭壇開了：召喚小頭目（D34）；回傳小頭目的生命倍率（沒召喚成功 = 0） */
+  summonBoss(): number;
+  /** 要素結果卡（D36）：暫停並顯示拿到了什麼 */
+  showResult(r: ElementResult): void;
+  /** 狐面商（D38）：現在能收的取捨道具（沒練滿；新的要有空欄位）、能不能收某一件、收下（回傳新等級） */
+  foxCandidates(): readonly string[];
+  canTakeItem(cardId: string): boolean;
+  grantItem(cardId: string, rarity: Rarity): number;
   emitSpawn(kind: ElementKind, rarity: Rarity): void;
   emitUsed(kind: ElementKind, rarity: Rarity): void;
 }
@@ -82,6 +90,13 @@ export interface ElementSlot {
   /** 詛咒祭壇：抽到的效果（前 effectCount 個有效）。curse = true 是讓敵人變強的詛咒，否則是玩家屬性的好處（v 為相對比例） */
   effects: AltarEffect[];
   effectCount: number;
+  /** 狐面商（D38）：兩個提案（取捨道具 id）、兩個圈的位置、各自的站立進度、玩家站在哪個圈（-1 = 都沒有）、哪個圈收不了 */
+  offers: string[];
+  ringX: number[];
+  ringZ: number[];
+  ringProgress: number[];
+  ringBlocked: boolean[];
+  ring: number;
 }
 
 export interface AltarEffect {
@@ -95,7 +110,12 @@ const USED_FADE = 0.7;
 const HOLD: Partial<Record<ElementKind, number>> = { jizo: JIZO_HOLD_SECONDS, altar: ALTAR_HOLD_SECONDS, offering: OFFERING_HOLD_SECONDS, omikuji: OMIKUJI_HOLD_SECONDS, chest: CHEST_HOLD_SECONDS, summon: STAGE.summon.holdSeconds };
 
 function blankSlot(): ElementSlot {
-  return { active: false, kind: 'jizo', rarity: 'common', x: 0, y: 0, z: 0, age: 0, life: 0, announce: 0, progress: 0, inside: false, blocked: false, usedAge: -1, effects: Array.from({ length: ALTAR_MAX_EFFECTS }, () => ({ id: 'power' as StatId | CurseId, v: 0, curse: false })), effectCount: 0 };
+  const n = FOX.offers;
+  return {
+    active: false, kind: 'jizo', rarity: 'common', x: 0, y: 0, z: 0, age: 0, life: 0, announce: 0, progress: 0, inside: false, blocked: false, usedAge: -1,
+    effects: Array.from({ length: ALTAR_MAX_EFFECTS }, () => ({ id: 'power' as StatId | CurseId, v: 0, curse: false })), effectCount: 0,
+    offers: [], ringX: new Array<number>(n).fill(0), ringZ: new Array<number>(n).fill(0), ringProgress: new Array<number>(n).fill(0), ringBlocked: new Array<boolean>(n).fill(false), ring: -1,
+  };
 }
 
 /** 依虛擬波數取稀有度權重（幸運乘在非凡權重上） */
@@ -233,6 +253,15 @@ export class Elements {
         }
         continue;
       }
+      if (s.kind === 'fox') {
+        this.updateFox(i, dt, px, py, pz);
+        if (!s.active || s.usedAge >= 0) continue;
+        if (dist < focusD && (dist <= ELEMENT_RULES.useRadius + FOX.ringOffset + 4 || s.ring >= 0)) {
+          focusD = Math.min(dist, s.ring >= 0 ? 0 : dist);
+          focusSlot = s;
+        }
+        continue;
+      }
       const near = dist <= ELEMENT_RULES.useRadius && vertical;
       s.inside = near;
       s.blocked = s.kind === 'offering' && !this.host.canPayHpFrac(OFFERING[s.rarity].costFrac);
@@ -253,6 +282,74 @@ export class Elements {
     this.spawnMult = mult;
   }
 
+  /** 狐面商：玩家站在哪個圈、累積進度；滿了就收下那一個提案 */
+  private updateFox(i: number, dt: number, px: number, py: number, pz: number): void {
+    const s = this.slots[i];
+    s.ring = -1;
+    for (let k = 0; k < s.offers.length; k++) {
+      s.ringBlocked[k] = !this.host.canTakeItem(s.offers[k]);
+      const inRing = Math.hypot(px - s.ringX[k], pz - s.ringZ[k]) <= FOX.ringRadius && Math.abs(py - this.map.heightAt(s.ringX[k], s.ringZ[k])) <= ELEMENT_RULES.useHeight;
+      if (inRing) s.ring = k;
+      if (inRing && !s.ringBlocked[k]) {
+        s.ringProgress[k] = Math.min(1, s.ringProgress[k] + dt / FOX.acceptSeconds);
+        if (s.ringProgress[k] >= 1) {
+          this.acceptFox(i, k);
+          return;
+        }
+      } else s.ringProgress[k] = Math.max(0, s.ringProgress[k] - dt * 3);
+    }
+    s.inside = s.ring >= 0;
+    let best = 0;
+    for (let k = 0; k < s.offers.length; k++) if (s.ringProgress[k] > best) best = s.ringProgress[k];
+    s.progress = best;
+  }
+
+  private acceptFox(i: number, k: number): void {
+    const s = this.slots[i];
+    const cardId = s.offers[k];
+    const level = this.host.grantItem(cardId, s.rarity);
+    s.usedAge = 0;
+    s.progress = 1;
+    this.host.emitUsed(s.kind, s.rarity);
+    this.host.showResult({ kind: 'fox', rarity: s.rarity, lines: [{ t: 'item', cardId, rarity: s.rarity, level }] });
+  }
+
+  /** 狐面商兩個圈的位置：在商人面向玩家那一側，左右各一個 */
+  private placeRings(s: ElementSlot, px: number, pz: number): void {
+    const f = Math.atan2(pz - s.z, px - s.x);
+    const fx = Math.cos(f);
+    const fz = Math.sin(f);
+    const n = s.offers.length;
+    for (let k = 0; k < n; k++) {
+      const side = n === 1 ? 0 : k === 0 ? -1 : 1;
+      s.ringX[k] = s.x + fx * FOX.ringOffset * 0.75 - fz * side * FOX.ringOffset * 0.6;
+      s.ringZ[k] = s.z + fz * FOX.ringOffset * 0.75 + fx * side * FOX.ringOffset * 0.6;
+      s.ringProgress[k] = 0;
+      s.ringBlocked[k] = false;
+    }
+  }
+
+  /** 狐面商放在 (x,z)、面向 (px,pz) 時，兩個圈都在平地、不擋路、走得到嗎 */
+  private foxRingsOk(x: number, z: number, px: number, pz: number): boolean {
+    const m = this.map;
+    const h = m.heightAt(x, z);
+    const f = Math.atan2(pz - z, px - x);
+    for (const side of [-1, 1]) {
+      const rx = x + Math.cos(f) * FOX.ringOffset * 0.75 - Math.sin(f) * side * FOX.ringOffset * 0.6;
+      const rz = z + Math.sin(f) * FOX.ringOffset * 0.75 + Math.cos(f) * side * FOX.ringOffset * 0.6;
+      if (m.isBlocked(rx, rz) || Math.abs(m.heightAt(rx, rz) - h) > ELEMENT_RULES.flatTolerance * 2) return false;
+      if (!this.flow.isolated && !this.flow.reachable(rx, rz)) return false;
+    }
+    return true;
+  }
+
+  /** 狐面商的提案：從現在能收的取捨道具裡不重複抽 FOX.offers 個 */
+  private rollFox(s: ElementSlot): void {
+    const pool = [...this.host.foxCandidates()];
+    s.offers = [];
+    while (s.offers.length < FOX.offers && pool.length > 0) s.offers.push(pool.splice(Math.floor(this.rng.next() * pool.length), 1)[0]);
+  }
+
   private free(i: number): void {
     const s = this.slots[i];
     if (s.kind === 'barrier') this.host.stats.clearMod(`barrier:${i}`);
@@ -263,13 +360,20 @@ export class Elements {
   private use(i: number): void {
     const s = this.slots[i];
     const st = this.host.stats;
+    // 結果卡要列的東西（D36）；賽錢箱、寶箱本來就開三選一面板，不另外跳
+    const lines: ResultLine[] = [];
     if (s.kind === 'jizo') {
       const j = JIZO[s.rarity];
-      this.host.healFrac(j.healFrac);
+      lines.push({ t: 'heal', v: this.host.healFrac(j.healFrac) });
       const key = `jizo:${this.carry.serial++}`;
       st.setMod(key, { flat: { armor: j.armor } });
       this.timed.push({ key, until: this.clock + JIZO_ARMOR_SECONDS });
-      if (s.rarity === 'legend' && this.carry.downKeys.length > 0) this.host.clearCurse(this.carry.downKeys.shift()!);
+      lines.push({ t: 'stat', stat: 'armor', flat: j.armor, seconds: JIZO_ARMOR_SECONDS });
+      if (s.rarity === 'legend' && this.carry.downKeys.length > 0) {
+        const k = this.carry.downKeys.shift()!;
+        this.host.clearCurse(k);
+        lines.push({ t: 'uncurse', id: k.slice(k.lastIndexOf(':') + 1) as CurseId });
+      }
     } else if (s.kind === 'altar') {
       const n = this.carry.serial++;
       const pct: Partial<Record<StatId, number>> = {};
@@ -279,7 +383,11 @@ export class Elements {
           const key = `altar:${n}:${f.id}`;
           this.host.setCurse(key, f.id as CurseId, f.v);
           this.carry.downKeys.push(key);
-        } else pct[f.id as StatId] = f.v;
+          lines.push({ t: 'curse', id: f.id as CurseId, v: f.v });
+        } else {
+          pct[f.id as StatId] = f.v;
+          lines.push({ t: 'stat', stat: f.id as StatId, pct: f.v });
+        }
       }
       st.setMod(`altar:${n}:boons`, { pct });
     }
@@ -289,15 +397,19 @@ export class Elements {
       this.host.openPick(o.reward, o.picks, 'offering');
     } else if (s.kind === 'chest') {
       this.host.openPick(s.rarity, 1, 'chest');
-    } else if (s.kind === 'omikuji') this.drawOmikuji(s);
-    else if (s.kind === 'summon') this.host.summonBoss();
+    } else if (s.kind === 'omikuji') lines.push(...this.drawOmikuji(s));
+    else if (s.kind === 'summon') {
+      const mult = this.host.summonBoss();
+      if (mult > 0) lines.push({ t: 'summon', mult });
+    }
     s.usedAge = 0;
     s.progress = 1;
     this.host.emitUsed(s.kind, s.rarity);
+    if (lines.length > 0) this.host.showResult({ kind: s.kind, rarity: s.rarity, lines });
   }
 
   /** 神籤：依稀有度與幸運抽結果（幸運把凶類權重乘以 1/(1+luck/100)），套用限時效果 */
-  private drawOmikuji(s: ElementSlot): void {
+  private drawOmikuji(s: ElementSlot): ResultLine[] {
     const w = OMIKUJI_WEIGHTS[s.rarity];
     const dampen = 1 / (1 + Math.max(0, this.luck) / 100);
     let total = 0;
@@ -315,12 +427,17 @@ export class Elements {
         break;
       }
     }
-    this.applyOmikuji(result);
+    return this.applyOmikuji(result);
   }
 
-  /** 套用神籤結果（測試也直接呼叫） */
-  applyOmikuji(result: OmikujiResult): void {
+  /** 套用神籤結果（測試也直接呼叫）；回傳結果卡的內容 */
+  applyOmikuji(result: OmikujiResult): ResultLine[] {
     const f = OMIKUJI_EFFECT[result];
+    const lines: ResultLine[] = [{ t: 'omikuji', id: result }];
+    for (const [id, v] of Object.entries(f.pct ?? {})) lines.push({ t: 'stat', stat: id as StatId, pct: v, seconds: f.seconds });
+    for (const [id, v] of Object.entries(f.flat ?? {})) lines.push({ t: 'stat', stat: id as StatId, flat: v, seconds: f.seconds });
+    for (const [id, v] of Object.entries(f.curse ?? {})) lines.push({ t: 'curse', id: id as CurseId, v, seconds: f.seconds });
+    if (f.merit) lines.push({ t: 'merit', v: f.merit });
     const key = `omikuji:${this.carry.serial++}`;
     if (f.pct || f.flat) {
       this.host.stats.setMod(key, { pct: f.pct, flat: f.flat });
@@ -335,6 +452,7 @@ export class Elements {
     }
     if (f.merit) this.host.addMerit(f.merit);
     this.host.notifyOmikuji(result);
+    return lines;
   }
 
   // ── 落下 ─────────────────────────────────────────────────────
@@ -342,7 +460,7 @@ export class Elements {
     let total = 0;
     const w: number[] = [];
     for (const k of ELEMENT_KINDS) {
-      const ok = this.countKind(k) < (ELEMENT_PER_KIND[k] ?? ELEMENT_RULES.perKind);
+      const ok = this.countKind(k) < (ELEMENT_PER_KIND[k] ?? ELEMENT_RULES.perKind) && (k !== 'fox' || this.host.foxCandidates().length > 0);
       const v = ok ? ELEMENT_WEIGHTS[k] : 0;
       w.push(v);
       total += v;
@@ -356,7 +474,7 @@ export class Elements {
     return ELEMENT_KINDS[0];
   }
 
-  private findSpot(px: number, pz: number, out: { x: number; z: number }): boolean {
+  private findSpot(px: number, pz: number, out: { x: number; z: number }, kind: ElementKind = 'jizo'): boolean {
     const m = this.map;
     const R = ELEMENT_RULES;
     const start = m.def.playerStart;
@@ -368,6 +486,7 @@ export class Elements {
       if (x < m.minX + R.edgeMargin || x > m.maxX - R.edgeMargin || z < m.minZ + R.edgeMargin || z > m.maxZ - R.edgeMargin) continue;
       if (Math.hypot(x - start.x, z - start.z) < R.minFromStart) continue;
       if (!this.spotOk(x, z)) continue;
+      if (kind === 'fox' && !this.foxRingsOk(x, z, px, pz)) continue;
       out.x = x;
       out.z = z;
       return true;
@@ -400,13 +519,13 @@ export class Elements {
     const kind = this.pickKind();
     if (!kind) return false;
     const spot = { x: 0, z: 0 };
-    if (!this.findSpot(px, pz, spot)) return false;
+    if (!this.findSpot(px, pz, spot, kind)) return false;
     const rarity = pickRarity(this.rng, elementRarityWeights(virtualWave, luck));
-    this.place(i, kind, rarity, spot.x, spot.z, announce);
+    this.place(i, kind, rarity, spot.x, spot.z, announce, px, pz);
     return true;
   }
 
-  private place(i: number, kind: ElementKind, rarity: Rarity, x: number, z: number, announce: number): void {
+  private place(i: number, kind: ElementKind, rarity: Rarity, x: number, z: number, announce: number, px = x + 1, pz = z): void {
     const s = this.slots[i];
     s.active = true;
     s.kind = kind;
@@ -421,7 +540,12 @@ export class Elements {
     s.inside = false;
     s.blocked = false;
     s.usedAge = -1;
+    s.ring = -1;
     if (kind === 'altar') this.rollAltar(s);
+    if (kind === 'fox') {
+      this.rollFox(s);
+      this.placeRings(s, px, pz);
+    }
     this.host.emitSpawn(kind, rarity);
   }
 
@@ -535,7 +659,8 @@ export class Elements {
         let flat = true;
         for (const [ox, oz] of [[1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]] as const) if (m.isBlocked(x + ox, z + oz) || Math.abs(m.heightAt(x + ox, z + oz) - h) > ELEMENT_RULES.flatTolerance) flat = false;
         if (!flat) continue;
-        this.place(i, kind, rarity, x, z, 0);
+        if (kind === 'fox' && !this.foxRingsOk(x, z, px, pz)) continue;
+        this.place(i, kind, rarity, x, z, 0, px, pz);
         return this.slots[i];
       }
     }
