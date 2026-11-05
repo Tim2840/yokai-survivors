@@ -90,6 +90,8 @@ export function synergyDesc(id: string, tier: number): string {
   const parts: string[] = [];
   if (e.splashRatio) parts.push(t('syn.fx.splashRatio', { v: num(e.splashRatio * 100, 0) }));
   if (e.splashMult) parts.push(t('syn.fx.splashMult', { v: num(e.splashMult, 2) }));
+  if (e.shardCount) parts.push(t('syn.fx.shardCount', { v: num(e.shardCount) }));
+  if (e.shardDamage) parts.push(t('syn.fx.shardDamage', { v: num(e.shardDamage * 100, 0) }));
   if (e.pierce) parts.push(t('syn.fx.pierce', { v: num(e.pierce) }));
   if (e.volley) parts.push(t('syn.fx.volley', { v: num(e.volley) }));
   if (e.auraMult) parts.push(t('syn.fx.auraMult', { v: num(e.auraMult, 2) }));
@@ -386,6 +388,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
       rows.push(`<div class="weapon-head"><dt><b>${t('pause.weapon')}</b></dt><dd></dd></div>`);
       rows.push(`<div data-stat="volley"><dt>${t('sum.volley')}</dt><dd>${fix(sum.weapon.volley)}</dd></div>`);
       rows.push(`<div data-stat="splash"><dt>${t('sum.splash')}</dt><dd>${t('sum.meters', { v: fix(sum.weapon.splash, 1) })}</dd></div>`);
+      rows.push(`<div data-stat="shards"><dt>${t('sum.shards')}</dt><dd>${t('sum.shardsVal', { v: fix(sum.weapon.shards, 1), d: fix(sum.weapon.shardDamage * 100, 0) })}</dd></div>`);
       rows.push(`<div data-stat="pierce"><dt>${t('sum.pierce')}</dt><dd>${fix(sum.weapon.pierce)}</dd></div>`);
       stats.innerHTML = rows.join('');
       const curse = q('sum-curse');

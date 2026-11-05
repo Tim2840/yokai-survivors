@@ -377,8 +377,14 @@ describe('一局的模擬（無頭）', () => {
     const total = run.pendingPicks;
     expect(total).toBeGreaterThan(3);
     expect(n).toBe(1);
-    for (let k = 0; k < total - 1; k++) expect(run.chooseCard(0), `第 ${k + 1} 次`).toBe(true);
-    expect(run.chooseCard(0)).toBe(false);
+    // 主武器到 4 級會插一次招式變化三選一（不算升級的次數）
+    let picks = 0;
+    for (let g = 0; g < total + 5 && run.awaitingPick; g++) {
+      if (run.offerKind !== 'variant') picks++;
+      run.chooseCard(0);
+    }
+    expect(run.awaitingPick).toBe(false);
+    expect(picks).toBe(total);
     expect(run.picked).toHaveLength(total);
   });
 

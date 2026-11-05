@@ -51,10 +51,10 @@ describe('章節制（D26）：每第 N 張地圖是 3 關的大關、頭目更�
   });
 });
 
-import { ITEM_POOL, itemById, ITEM_SLOTS } from '../../src/data/items';
+import { ITEM_POOL, itemById, ITEM_SLOTS, GHOSTFIRE_LEVELS } from '../../src/data/items';
 
 describe('法具：武器改造與主武器（D30）', () => {
-  it('鬼火增殖 +1 顆、最多 2 級；爆裂吃稀有度；穿透最多 3 級；主武器 8 級後不再升', () => {
+  it('鬼火增殖 +1 顆、最多 2 級；碎火吃稀有度；穿透最多 3 級；主武器 8 級後不再升', () => {
     for (const id of ['volley', 'splash', 'pierce', 'ghostfire']) expect(ITEM_POOL).toContain(id);
     const run = new Run({ seed: 5, bus: new EventBus() });
     expect(run.volleyBonus).toBe(0);
@@ -63,14 +63,16 @@ describe('法具：武器改造與主武器（D30）', () => {
     run.give('volley', 'legend');
     run.give('volley', 'legend');
     expect(run.volleyBonus).toBe(itemById('volley').maxLevel);
+    // 碎火（D43）：每級平均多飛出 0.6 片 × 稀有度
     run.give('splash', 'rare');
-    expect(run.splashBonus).toBeCloseTo(0.3 * 1.2);
+    expect(run.shardBonus).toBeCloseTo(0.6 * 1.2);
+    expect(run.splashBonus).toBe(0);
     for (let i = 0; i < 5; i++) run.give('pierce', 'common');
     expect(run.pierceBonus).toBe(itemById('pierce').maxLevel);
     expect(run.weaponLevel).toBe(1);
     for (let i = 0; i < 12; i++) run.give('ghostfire', 'common');
     expect(run.weaponLevel).toBe(itemById('ghostfire').maxLevel);
-    expect(run.weaponDamageBonus).toBe(12);
+    expect(run.weaponDamageBonus).toBe(GHOSTFIRE_LEVELS.reduce((a, s) => a + (s.damage ?? 0), 0));
     expect(run.cooldownMult).toBeCloseTo(0.81);
   });
   it('道具欄位上限：裝滿以後升級只出現已有道具（與主武器、備用獎勵）', () => {
@@ -156,11 +158,11 @@ describe('卡片聯動（D28；D37 分初／極兩段）', () => {
     const sy = SYNERGIES.find((x) => x.id === 'chainBlast')!;
     levelTo(run, 'volley', 2);
     levelTo(run, 'splash', 3);
-    expect(run.syn.splashMult).toBeCloseTo(sy.tiers[0].effect.splashMult!);
-    expect(run.syn.splashRatio).toBeCloseTo(sy.tiers[0].effect.splashRatio!);
+    expect(run.syn.shardCount).toBeCloseTo(sy.tiers[0].effect.shardCount!);
+    expect(run.syn.shardDamage).toBeCloseTo(sy.tiers[0].effect.shardDamage ?? 0);
     levelTo(run, 'splash', 5);
-    expect(run.syn.splashMult).toBeCloseTo(sy.tiers[1].effect.splashMult!);
-    expect(run.syn.splashRatio).toBeCloseTo(sy.tiers[1].effect.splashRatio!);
+    expect(run.syn.shardCount).toBeCloseTo(sy.tiers[1].effect.shardCount!);
+    expect(run.syn.shardDamage).toBeCloseTo(sy.tiers[1].effect.shardDamage!);
     // 燈火通明（爆裂已 5 級）：廣域到 3 → 初、到 5 → 極
     const lg = SYNERGIES.find((x) => x.id === 'lanternGlow')!;
     levelTo(run, 'area', 3);

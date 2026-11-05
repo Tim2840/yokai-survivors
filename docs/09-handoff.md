@@ -28,6 +28,7 @@
 - **D28 卡片聯動已加入**：`src/data/synergies.ts`、`Run.checkSynergies`、HUD 提示、回歸 `s1`。河童、赤鬼的專屬武器卡與聯動等做到這兩隻時加。
 - **工作方式（D33）**：使用者提的新項目先評估、寫文件、排程；明確說「開始」才做。
 - **大招冷卻＋合魂祠（D41，2026-11-05）**：`ULT.cooldown`、`Run.ultCooling`／`ultCooldownLeft`；合魂祠是要素種類 `fuse`（`FUSE`、`Elements.placeFuse`／`fuseSlot`／`removeKind`，`Run.refreshFusable` 在材料齊時記時間、沒得融合時收掉），面板種類 `offerKind = 'fusion'`。HUD 頂端：長提示改成浮在頂端列下方、難度另起一行（`#wave-diff`），回歸 `hudTopOk` 檢查「能力」鈕不換行、血條夠長。
+- **碎火（D43）＋鬼火增殖變難拿（D45）（2026-11-05）**：道具 `splash` 的改造種類是 `shards`（`SHARDS`、`Run.shardsExact`／`emitShards`，投射物 `gen` 0 主彈／1 碎火或分裂／2 再分裂，畫面縮到 0.55）；狐火分裂 `split.shardBonus`／`reSplit`；聯動欄位 `shardCount`／`shardDamage`。`ItemDef.weight`／`minLevel`（`CardDealer.playerLevel` 由 Run 在發牌前設定）。單元 `shards.test.ts`、`volley.test.ts`。
 - **補給品（D39）已加入（2026-11-05）**：`src/data/pickups.ts`、`src/systems/pickups.ts`（池）、`Run.dropPickups`／`applyPickup`／`frozenEnemies`、`Orbs.vacuum`、`src/render/pickupsView.ts`、HUD 提示；開發介面 `forcePickup(kind)`、`setHp(v)`；單元 `pickups.test.ts`、回歸 `k1`；sim 機器人會撿。
 - **G1b 第二輪回饋第一批已完成（2026-11-05）**：要素結果卡（`src/systems/elementResult.ts`、`Run.elementResult`／`dismissResult`／`frozen`、`buildResultCard`，回歸 e1）、聯動初／極（`synergies.ts` 的 `tiers`、`Run.synergyTiers`，回歸 s1）、狐面商（要素種類 `fox`、`TRADE_ITEMS`、`Run.canTakeItem`／ElementHost 的 `grantItem`，模型與紅藍圈在 `elementsView.ts`，單元 `fox.test.ts`、回歸 e1）。sim 會輸出聯動到初／極的時間、會去狐面商。
 - **G1b 第二輪回饋（2026-11-05）其餘只評估、排程**：要素結果卡、聯動門檻、圖示、化身、各妖怪基礎能力值、屬性系統；評估在 docs/15 第 5 節，待決定在 docs/14 Q22～Q26，排程在 docs/05 M1.5 段落。**使用者說「開始」才做**（D33）。

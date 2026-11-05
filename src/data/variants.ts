@@ -16,7 +16,7 @@ export interface VariantDef {
   /** 適合搭配的道具（選卡畫面提示用） */
   likes: readonly string[];
   /** split：命中時分裂出幾顆小火、小火傷害比例、找下一個目標的範圍（公尺）；atMax：滿級多分裂 */
-  split?: { children: number; damage: number; range: number; atMaxChildren: number };
+  split?: { children: number; damage: number; range: number; atMaxChildren: number; shardBonus: number; reSplit: number };
   /** orbit：不再發射，改成繞身的鬼火（數量 = 鬼火數量）；半徑（× 範圍）、角速度（弧度/秒）、命中半徑、
    *  每隔幾秒判定一次（÷ 攻速、× 冷卻）、傷害比例、擊退；atMax：多一顆、半徑倍率 */
   orbit?: { radius: number; spin: number; hitRadius: number; tick: number; damage: number; knockback: number; baseOrbs: number; atMaxOrbs: number; atMaxRadius: number };
@@ -29,8 +29,9 @@ export const VARIANTS: readonly VariantDef[] = [
     id: 'kitsunebi',
     weapon: 'ghostfire',
     type: 'split',
-    likes: ['volley', 'atkSpeed', 'power'],
-    split: { children: 2, damage: 0.55, range: 7, atMaxChildren: 3 },
+    likes: ['volley', 'splash', 'atkSpeed', 'power'],
+    /** shardBonus：有碎火時每次多 1 片；碎片打中後再分裂 reSplit 片（D43：狐火分裂放大碎火） */
+    split: { children: 2, damage: 0.55, range: 7, atMaxChildren: 3, shardBonus: 1, reSplit: 1 },
   },
   {
     id: 'lanternRing',
@@ -43,7 +44,7 @@ export const VARIANTS: readonly VariantDef[] = [
     id: 'hellfire',
     weapon: 'ghostfire',
     type: 'burn',
-    likes: ['area', 'splash', 'power'],
+    likes: ['area', 'power', 'atkSpeed'],
     burn: { radius: 1.6, seconds: 2.5, tick: 0.5, damage: 0.35, shotDamage: 1.2, interval: 1.25, atMaxScale: 1.3, maxZones: 24 },
   },
 ];

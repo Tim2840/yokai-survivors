@@ -4,7 +4,7 @@ import { MOVE } from '../data/movement';
 import { PLAYABLE_YOKAI, YOKAI, type YokaiDef } from '../data/yokai';
 import { CARD_CHOICES, PROGRESSION, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
 import { FUSE } from '../data/elements';
-import { ITEM_POOL, ITEM_SLOTS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById } from '../data/items';
+import { ITEM_POOL, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById } from '../data/items';
 import { VARIANT_CARD_PREFIX, VARIANT_LEVEL, variantOfCard, variantsFor, type VariantDef } from '../data/variants';
 import { RARITY_MULT } from '../data/rarity';
 import { STAGE, stagesForMap, bossHpMult, isBigBossStage } from '../data/stage';
@@ -145,6 +145,8 @@ export class Run {
   /** 武器卡累積：多發射的顆數、濺射半徑（公尺）。一開始都是 0（領頭只有一顆鬼火、沒有濺射） */
   volleyBonus = 0;
   splashBonus = 0;
+  /** 碎火（D43）：平均每次命中多飛出幾片（道具＋聯動） */
+  shardBonus = 0;
   pierceBonus = 0;
   /** 主武器升級帶來的：基礎傷害加值、冷卻倍率（< 1 = 變快） */
   weaponDamageBonus = 0;
@@ -177,7 +179,7 @@ export class Run {
   readonly ownedCards = new Set<string>();
   readonly activeSynergies: string[] = [];
   readonly synergyTiers = new Map<string, number>();
-  readonly syn = { splashRatio: 0, splashMult: 1, pierce: 0, volley: 0, auraMult: 1 };
+  readonly syn = { splashRatio: 0, splashMult: 1, pierce: 0, volley: 0, auraMult: 1, shardCount: 0, shardDamage: 0 };
   /** 最近一次聯動觸發或升段的時間（模擬累計秒）、id 與段數，HUD 顯示提示用 */
   lastSynergy: { id: string; tier: number; at: number } | null = null;
   /** 神籤的功德獎勵累計、最近一次神籤結果（HUD 提示用） */
@@ -707,6 +709,16 @@ export class Run {
     const v = this.variant;
     if (v?.burn && parent) this.addZone(hx, hz, dmg * v.burn.damage);
     if (v?.split && parent) this.splitFromPos(hx, hz, e, dmg);
+    // 碎火（D43）：主鬼火命中 → 飛出幾片；狐火分裂時碎片打中後再分裂一次
+    if (parent) {
+      const exact = this.shardsExact;
+      if (exact > 0) {
+        const n = Math.min(SHARDS.max, Math.floor(exact) + (this.rngCombat.next() < exact - Math.floor(exact) ? 1 : 0));
+        this.emitShards(hx, hz, e, dmg * (SHARDS.damage + this.syn.shardDamage), n, 1);
+      }
+    } else if (pr.gen[p] === 1 && v?.split && this.shardsExact > 0) {
+      this.emitShards(hx, hz, e, dmg, v.split.reSplit, 2);
+    }
     const splashR = ((tuning.splash > 0 ? tuning.splash : w.splashRadius) + this.splashBonus) * this.syn.splashMult;
     if (splashR > 0) {
       const n = this.enemies.within(hx, hz, splashR * this.stats.value.area, this.splashNear);
@@ -875,6 +887,7 @@ export class Run {
   }
 
   private makeOffer(): void {
+    this.dealer.playerLevel = this.level;
     this.offer = this.dealer.deal(this.level, this.stats.value.luck, this.cardCounts);
   }
 
@@ -893,6 +906,7 @@ export class Run {
   private dealBonus(): CardOffer[] {
     // 合魂祠：只有湊齊的大招（選一個融合）
     if (this.offerKind === 'fusion') return this.fusable.slice(0, CARD_CHOICES).map((id) => ({ cardId: ULT_CARD_PREFIX + id, rarity: 'legend' as const }));
+    this.dealer.playerLevel = this.level;
     const cards = this.dealer.dealRarity(this.bonusRarity, this.cardCounts);
     if (this.offerKind !== 'chest') return cards;
     const ult = this.fusable.slice(0, cards.length).map((id) => ({ cardId: ULT_CARD_PREFIX + id, rarity: 'legend' as const }));
@@ -1005,7 +1019,7 @@ export class Run {
       const v = itemValue(d, o.rarity);
       if (d.mod === 'volley') this.volleyBonus += v;
       else if (d.mod === 'pierce') this.pierceBonus += v;
-      else this.splashBonus += v;
+      else this.shardBonus += v;
     } else if (d.stat) {
       const before = this.maxHp;
       this.stats.addCard(d.stat, itemValue(d, o.rarity));
@@ -1031,6 +1045,8 @@ export class Run {
       this.syn.pierce += (e.pierce ?? 0) - (prev.pierce ?? 0);
       this.syn.volley += (e.volley ?? 0) - (prev.volley ?? 0);
       this.syn.auraMult *= (e.auraMult ?? 1) / (prev.auraMult ?? 1);
+      this.syn.shardCount += (e.shardCount ?? 0) - (prev.shardCount ?? 0);
+      this.syn.shardDamage += (e.shardDamage ?? 0) - (prev.shardDamage ?? 0);
       this.synergyTiers.set(sy.id, now);
       if (before === 0) this.activeSynergies.push(sy.id);
       this.lastSynergy = { id: sy.id, tier: now, at: this.clock };
@@ -1249,6 +1265,40 @@ export class Run {
         this.feed.push(en.x[e], en.z[e], this.zoneDmg[i], false);
         if (en.hurt(e, this.zoneDmg[i], 0, 0, 0)) this.onKill(e);
       }
+    }
+  }
+
+  /** 平均每次命中的碎火片數（道具＋聯動；狐火分裂時有碎火就 +shardBonus） */
+  get shardsExact(): number {
+    const base = this.shardBonus + this.syn.shardCount;
+    if (base <= 0) return 0;
+    return base + (this.variant?.split?.shardBonus ?? 0);
+  }
+
+  /** 碎火：從 (x,z) 朝 range 內最近的 n 隻其他人類各飛一片（不同的人類；第 gen 代） */
+  private emitShards(x: number, z: number, e: number, dmg: number, n: number, gen: number): void {
+    if (n <= 0) return;
+    const en = this.enemies;
+    const m = en.within(x, z, SHARDS.range, this.splitNear);
+    const w = this.yokai.weapon;
+    for (let made = 0; made < n; made++) {
+      let best = -1;
+      let bd = Infinity;
+      for (let j = 0; j < m; j++) {
+        const o = this.splitNear[j];
+        if (o === e || o < 0 || !en.alive[o]) continue;
+        const d = (en.x[o] - x) ** 2 + (en.z[o] - z) ** 2;
+        if (d < bd) {
+          bd = d;
+          best = j;
+        }
+      }
+      if (best < 0) return;
+      const t = this.splitNear[best];
+      this.splitNear[best] = -1;
+      const d = Math.sqrt(bd) || 1;
+      const ci = this.projectiles.spawn(x, z, (en.x[t] - x) / d, (en.z[t] - z) / d, w, dmg, false, t, 0, gen);
+      if (ci >= 0) this.projectiles.lastHit[ci] = e;
     }
   }
 

@@ -21,7 +21,8 @@ function pickSafe(run: Run): void {
   const o = run.offer!;
   // 只選不影響要素測試量的卡（主武器、改造、備用；或不碰護甲與最大生命的屬性道具）
   let i = o.findIndex((c) => ['weapon', 'mod', 'fallback'].includes(itemById(c.cardId).kind));
-  if (i < 0) i = o.findIndex((c) => { const d = itemById(c.cardId); return !['armor', 'maxHp'].includes(d.stat ?? '') && !['armor', 'maxHp'].includes(d.down?.stat ?? ''); });
+  const TESTED = ['armor', 'maxHp', 'regen', 'power', 'atkSpeed', 'area', 'speed'];
+  if (i < 0) i = o.findIndex((c) => { const d = itemById(c.cardId); return !TESTED.includes(d.stat ?? '') && !TESTED.includes(d.down?.stat ?? ''); });
   run.chooseCard(Math.max(0, i));
 }
 function make(seed = 3) {

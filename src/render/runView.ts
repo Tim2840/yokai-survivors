@@ -28,6 +28,9 @@ const AURA_WIDTH = 0.1;
  * 一局的 3D 外觀：地形、玩家模型、敵人（InstancedMesh）、鬼火、魂火、腳下陰影、傷害數字。
  * 只讀 Run 的陣列與數值（模擬完全不依賴這裡）；每幀 update 不配置記憶體。
  */
+/** 碎片（gen > 0 的投射物）的外觀縮放 */
+const SHARD_VIEW_SCALE = 0.55;
+
 export class RunView {
   private readonly world: WorldView;
   private readonly player: Character;
@@ -253,7 +256,9 @@ export class RunView {
     let b = 0;
     for (let i = 0; i < pr.high; i++) {
       if (!pr.alive[i]) continue;
-      writeMatrix(bm, b++, pr.x[i], map.heightAt(pr.x[i], pr.z[i]) + 0.8, pr.z[i], 0, 1, 1, 1);
+      // 碎火、分裂出來的小火畫小一點（看得出是碎片）
+      const sc = pr.gen[i] === 0 ? 1 : SHARD_VIEW_SCALE;
+      writeMatrix(bm, b++, pr.x[i], map.heightAt(pr.x[i], pr.z[i]) + 0.8, pr.z[i], 0, sc, sc, sc);
     }
     this.bulletMesh.count = b;
     this.bulletMesh.instanceMatrix.needsUpdate = true;

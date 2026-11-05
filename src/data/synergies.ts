@@ -9,6 +9,9 @@ export interface SynergyEffect {
   splashRatio?: number;
   /** 濺射半徑倍率 */
   splashMult?: number;
+  /** 碎火：每次命中多幾片（D43）、每片傷害比例增加 */
+  shardCount?: number;
+  shardDamage?: number;
   /** 每顆鬼火額外穿透 */
   pierce?: number;
   /** 額外多發射 */
@@ -38,8 +41,8 @@ export const SYNERGIES: readonly Synergy[] = [
     id: 'chainBlast',
     items: ['volley', 'splash'],
     tiers: [
-      { requires: { volley: 2, splash: 3 }, effect: { splashRatio: 0.2, splashMult: 1.15 } },
-      { requires: { volley: 2, splash: 5 }, effect: { splashRatio: 0.4, splashMult: 1.3 } },
+      { requires: { volley: 2, splash: 3 }, effect: { shardCount: 1 } },
+      { requires: { volley: 2, splash: 5 }, effect: { shardCount: 1, shardDamage: 0.15 } },
     ],
   },
   {

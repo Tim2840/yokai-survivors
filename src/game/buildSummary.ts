@@ -1,6 +1,6 @@
 import type { Run } from './run';
 import { cardById, slotsUsed } from '../systems/cards';
-import { ITEM_SLOTS, WEAPON_LEVELS, itemDown, itemValue, type ItemKind } from '../data/items';
+import { ITEM_SLOTS, SHARDS, WEAPON_LEVELS, itemDown, itemValue, type ItemKind } from '../data/items';
 import { armorMult } from '../systems/stats';
 import { type Rarity } from '../data/rarity';
 import { type StatId } from '../data/stats';
@@ -21,7 +21,7 @@ export interface BuildSummary {
   /** 屬性：id、目前值（內部單位）、基礎值 */
   stats: { id: StatId; value: number; base: number }[];
   /** 武器：鬼火數量、濺射半徑（公尺）、穿透 */
-  weapon: { volley: number; splash: number; pierce: number };
+  weapon: { volley: number; splash: number; pierce: number; shards: number; shardDamage: number };
   /** 卡片聯動（已觸發的 id） */
   /** 已觸發的聯動、段數（1 初、2 極）、下一段還差什麼（已到極 = null） */
   synergies: { id: string; tier: number; next: { card: string; have: number; need: number }[] | null }[];
@@ -97,6 +97,8 @@ export function summarizeBuild(run: Run): BuildSummary {
       volley: (tuning.volley > 0 ? tuning.volley : w.volley) + run.volleyBonus + run.syn.volley,
       splash: ((tuning.splash > 0 ? tuning.splash : w.splashRadius) + run.splashBonus) * run.syn.splashMult,
       pierce: w.pierce + run.pierceBonus + run.syn.pierce,
+      shards: run.shardsExact,
+      shardDamage: SHARDS.damage + run.syn.shardDamage,
     },
     synergies: run.activeSynergies.map((id) => {
       const sy = SYNERGIES.find((x) => x.id === id)!;

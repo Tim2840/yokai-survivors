@@ -51,6 +51,9 @@ export class CardDealer {
     private readonly unlocked: readonly Rarity[],
   ) {}
 
+  /** 玩家目前等級（道具的 minLevel 用；Run 發牌前設定，沒設 = 不限制） */
+  playerLevel = Infinity;
+
   /** 現在能出現的法具（不含備用） */
   candidates(levels: ReadonlyMap<string, number>): string[] {
     const free = slotsUsed(levels) < ITEM_SLOTS;
@@ -58,6 +61,7 @@ export class CardDealer {
       const d = itemById(id);
       const lv = levels.get(id) ?? 0;
       if (lv >= d.maxLevel) return false;
+      if (d.minLevel !== undefined && this.playerLevel < d.minLevel) return false;
       if (lv > 0 || d.kind === 'weapon') return true;
       return free;
     });
@@ -69,7 +73,7 @@ export class CardDealer {
     while (out.length < n && ids.length > 0) {
       const w = ids.map((id) => {
         const d = itemById(id);
-        return d.kind === 'weapon' ? ITEM_WEIGHT.weapon : (levels.get(id) ?? 0) > 0 ? ITEM_WEIGHT.owned : ITEM_WEIGHT.fresh;
+        return (d.kind === 'weapon' ? ITEM_WEIGHT.weapon : (levels.get(id) ?? 0) > 0 ? ITEM_WEIGHT.owned : ITEM_WEIGHT.fresh) * (d.weight ?? 1);
       });
       let t = this.rng.next() * w.reduce((a, b) => a + b, 0);
       let k = 0;

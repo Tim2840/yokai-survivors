@@ -15,7 +15,7 @@ export const ITEM_SLOTS = 6;
 export const ITEM_RARITY_MULT: Record<Rarity, number> = { common: 1.0, rare: 1.2, epic: 1.5, legend: 2.0 };
 
 export type ItemKind = 'weapon' | 'stat' | 'mod' | 'fallback';
-export type WeaponMod = 'volley' | 'splash' | 'pierce';
+export type WeaponMod = 'volley' | 'shards' | 'pierce';
 
 export interface ItemDef {
   id: string;
@@ -28,6 +28,9 @@ export interface ItemDef {
   perLevel?: number;
   /** 這個道具的每級數值會不會乘稀有度倍率 */
   rarityScales: boolean;
+  /** 出現權重倍率（沒寫 = 1）、玩家幾級以後才會出現（沒寫 = 一開始就會）：讓太強的道具晚一點、少一點出現 */
+  weight?: number;
+  minLevel?: number;
   /** 取捨道具（D30 第二步，參考 Brotato）：每級同時扣的能力值（卡片單位、正數 = 扣多少）。D38 起也乘稀有度：越高階越極端 */
   down?: { stat: StatId; perLevel: number };
 }
@@ -41,13 +44,13 @@ export interface WeaponLevel {
   splash?: number;
 }
 
-/** 鬼火（提燈小僧）8 級表：Lv1 是起始。顆數、傷害、冷卻、穿透、濺射輪流加，滿級 ≈ 傷害 ×2.5、+3 顆 */
+/** 鬼火（提燈小僧）8 級表：Lv1 是起始。顆數、傷害、冷卻、穿透、濺射輪流加，滿級 ≈ 傷害 ×2.9、+2 顆（Lv6 的 +1 顆改成傷害 +3：鬼火分打不同目標後每顆都很值錢） */
 export const GHOSTFIRE_LEVELS: readonly WeaponLevel[] = [
   { damage: 3 },
   { volley: 1 },
   { cooldownPct: 10 },
   { damage: 4, pierce: 1 },
-  { volley: 1 },
+  { damage: 3 },
   { cooldownPct: 10, splash: 0.5 },
   { damage: 5, volley: 1 },
 ];
@@ -71,8 +74,10 @@ export const ITEMS: readonly ItemDef[] = [
   { id: 'wildLantern', kind: 'stat', stat: 'atkSpeed', perLevel: 16, maxLevel: 5, rarityScales: true, down: { stat: 'armor', perLevel: 1 } },
   { id: 'diamondBody', kind: 'stat', stat: 'armor', perLevel: 4, maxLevel: 5, rarityScales: true, down: { stat: 'speed', perLevel: 3 } },
   // 武器改造
-  { id: 'volley', kind: 'mod', mod: 'volley', perLevel: 1, maxLevel: 2, rarityScales: false },
-  { id: 'splash', kind: 'mod', mod: 'splash', perLevel: 0.3, maxLevel: 5, rarityScales: true },
+  // 鬼火增殖：每顆鬼火打不同的敵人之後（修正疊成一顆）變得很強 → 6 級以後才出現、出現機率 ×0.35（使用者：太容易拿到、遊戲太簡單）
+  { id: 'volley', kind: 'mod', mod: 'volley', perLevel: 1, maxLevel: 2, rarityScales: false, weight: 0.35, minLevel: 6 },
+  // 碎火（道具 id 沿用 splash；D43 取代原本的範圍濺射）：每級平均多飛出 perLevel 片（小數 = 機率多一片），吃稀有度
+  { id: 'splash', kind: 'mod', mod: 'shards', perLevel: 0.6, maxLevel: 5, rarityScales: true },
   { id: 'pierce', kind: 'mod', mod: 'pierce', perLevel: 1, maxLevel: 3, rarityScales: false },
   // 備用獎勵（全部滿級、欄位也滿了才會出現；不佔欄位、沒有等級上限）
   { id: 'heal', kind: 'fallback', perLevel: 30, maxLevel: Infinity, rarityScales: false },
@@ -112,3 +117,10 @@ export function itemDown(d: ItemDef, rarity: Rarity): number {
 export function itemValue(d: ItemDef, rarity: Rarity): number {
   return (d.perLevel ?? 0) * (d.rarityScales ? ITEM_RARITY_MULT[rarity] : 1);
 }
+
+/**
+ * 碎火（D43，使用者：「濺射的選項想要是比較細碎的鬼火數個碎片飛去打敵人，傷害更低」）：
+ * 主鬼火命中時，從被打中的人類身上飛出幾片小鬼火，各自追向 range 公尺內其他（不同的）人類，每片傷害 = 那一發 × damage。
+ * 一次最多 max 片。碎片本身不再飛出碎片（招式變化「狐火分裂」例外：碎片打中後再分裂 1 次，片數 +1）。
+ */
+export const SHARDS = { damage: 0.35, range: 6, max: 5 } as const;

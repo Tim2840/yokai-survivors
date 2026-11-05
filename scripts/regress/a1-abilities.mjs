@@ -51,7 +51,7 @@ export async function run(browser) {
         const slots = await page.locator('#sum-slots').innerText();
         expect(/5\/6/.test(slots), `道具欄應該是 5/6：${slots}`);
         expect(info.rows.volley && info.rows.splash && info.rows.armor, `少了卡片：${Object.keys(info.rows)}`);
-        // D37：鬼火增殖 2、爆裂 3 → 連環爆・初
+        // D37：鬼火增殖 2、碎火 3 → 連環爆・初
         expect(/連環爆・初/.test(info.syn), `已觸發的聯動沒列出：${info.syn}`);
         const p = info.run.stats.power;
         expect(info.stats.power === `×${Number(p.toFixed(2))}`, `攻擊力顯示和實際不符：${info.stats.power} vs ${p}`);

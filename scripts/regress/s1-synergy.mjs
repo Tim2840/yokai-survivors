@@ -24,7 +24,7 @@ export async function run(browser) {
         await give('splash', 2);
         expect(await page.locator('#synergy-box').isVisible(), `到門檻沒有聯動提示（${vp.name}）`);
         const txt = await page.locator('#synergy-box').innerText();
-        expect(/連環爆・初/.test(txt) && /濺射傷害 \+20%/.test(txt), `提示文字不對：${txt}`);
+        expect(/連環爆・初/.test(txt) && /碎火 \+1 片/.test(txt), `提示文字不對：${txt}`);
         const box = await page.locator('#synergy-box').boundingBox();
         for (const sel of ['.hud-wave', '#btn-pause', '.hud-hp', '#element-box', '#portal-box', '#btn-jump', '#stick-base']) {
           const o = await page.locator(sel).first().boundingBox();
@@ -38,13 +38,13 @@ export async function run(browser) {
         await page.locator('#btn-abilities').click();
         await page.waitForFunction(() => window.__game.screens.includes('pause'));
         const row = await page.locator('#sum-syn li[data-syn="chainBlast"]').innerText();
-        expect(/連環爆・初/.test(row) && /下一段（極）/.test(row) && /爆裂 3\/5/.test(row), `能力面板的聯動不對：${row}`);
+        expect(/連環爆・初/.test(row) && /下一段（極）/.test(row) && /碎火 3\/5/.test(row), `能力面板的聯動不對：${row}`);
         await page.locator('#btn-pause-resume').click();
         await page.waitForFunction(() => !window.__game.screens.includes('pause'));
         await page.evaluate(() => window.__game.advance(4.5));
         await give('splash', 2);
         const txt = await page.locator('#synergy-box').innerText();
-        expect(/連環爆・極/.test(txt) && /濺射傷害 \+40%/.test(txt), `升極的提示不對：${txt}`);
+        expect(/連環爆・極/.test(txt) && /碎火傷害 \+15%/.test(txt), `升極的提示不對：${txt}`);
       });
       await step(`${vp.name} 選卡畫面：卡片上寫出能湊成什麼聯動（版面不破）`, async () => {
         // 重開一局，先給一張「鬼火增殖」，再連續升級；卡池很小，幾次內一定會出現和聯動有關的卡

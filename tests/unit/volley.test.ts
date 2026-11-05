@@ -75,3 +75,33 @@ describe('鬼火 +N（使用者回報：加了還是看起來只有一顆）', (
     expect(angles.size).toBe(shots.length);
   });
 });
+
+describe('鬼火增殖不能太早、太常拿到（使用者 2026-11-05：「太容易拿到，遊戲變得太簡單」）', () => {
+  it('玩家等級 < minLevel 時一張都不會出現；之後出現的比例明顯低於一般新道具', async () => {
+    const { CardDealer } = await import('../../src/systems/cards');
+    const { ITEM_POOL, itemById } = await import('../../src/data/items');
+    const { Rng } = await import('../../src/lib/random');
+    const v = itemById('volley');
+    expect(v.minLevel).toBeGreaterThan(1);
+    expect(v.weight).toBeLessThan(1);
+    const d = new CardDealer(new Rng(5), ITEM_POOL, ['common']);
+    const count = (lv: number) => {
+      d.playerLevel = lv;
+      const cnt: Record<string, number> = {};
+      for (let i = 0; i < 6000; i++) for (const o of d.deal(lv, 0)) cnt[o.cardId] = (cnt[o.cardId] ?? 0) + 1;
+      return cnt;
+    };
+    expect(count(v.minLevel! - 1).volley ?? 0).toBe(0);
+    const c = count(v.minLevel!);
+    // 和同樣是新道具、權重 1 的穿透比
+    expect(c.volley).toBeGreaterThan(0);
+    expect(c.volley / c.pierce).toBeLessThan(0.6);
+  });
+
+  it('主武器升級路線上 Lv6 不再給 +1 顆（以前 Lv3、Lv6、Lv8 都給）', async () => {
+    const { GHOSTFIRE_LEVELS } = await import('../../src/data/items');
+    const at = GHOSTFIRE_LEVELS.map((s, i) => (s.volley ? i + 2 : 0)).filter(Boolean);
+    expect(at.length).toBeLessThanOrEqual(2);
+    expect(at).not.toContain(6);
+  });
+});
