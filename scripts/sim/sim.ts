@@ -39,6 +39,8 @@ const JSON_OUT = arg('json', '');
 const CAST = arg('cast', 'on') === 'on';
 /** --variant kitsunebi|lanternRing|hellfire|auto：主武器到變化等級時選哪一種（auto = 依策略：dps 分裂、survive 燈籠環、ult 業火、random 亂選） */
 const VARIANT = arg('variant', 'auto');
+/** --switchTo kitsunebi：選了別的變化之後，去道祖神（D47）換成這一種（不給 = 不去） */
+const SWITCH_TO = arg('switchTo', '');
 const VARIANT_BY_STRATEGY: Record<string, string> = { dps: 'kitsunebi', survive: 'lanternRing', ult: 'hellfire' };
 /** --tune countScale=3,hpScale=1.2,xp.needPerLevel=4,w.hpPerWave=0.2：臨時改旋鈕比較（不改檔案）；xp. 開頭是 PROGRESSION、w. 開頭是 WAVES */
 const TUNE = arg('tune', '');
@@ -66,7 +68,7 @@ const RARITY_SCORE: Record<string, number> = { common: 1, rare: 1.6, epic: 2.4, 
 function choose(run: Run, strategy: string, rnd: () => number): number {
   const offer = run.offer!;
   if (run.offerKind === 'variant') {
-    const want = VARIANT === 'auto' ? VARIANT_BY_STRATEGY[strategy] : VARIANT;
+    const want = run.variantRechoose && SWITCH_TO ? SWITCH_TO : VARIANT === 'auto' ? VARIANT_BY_STRATEGY[strategy] : VARIANT;
     const i = offer.findIndex((o) => o.cardId === 'variant:' + want);
     return i >= 0 ? i : Math.floor(rnd() * offer.length);
   }
@@ -186,6 +188,10 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
       // 合魂祠：大招材料齊了就去融合（亂選的機器人不特別去）
       const f = run.elements.fuseSlot;
       [mx, mz] = steer(run, f.x, f.z);
+    } else if (SWITCH_TO && run.variant && run.variant.id !== SWITCH_TO && run.elements.dosojinSlot && run.elements.dosojinSlot.announce <= 0) {
+      // 道祖神：換成想要的變化
+      const d = run.elements.dosojinSlot;
+      [mx, mz] = steer(run, d.x, d.z);
     } else if (run.portal.active) {
       [mx, mz] = steer(run, run.portal.x, run.portal.z);
     } else if (altar && altar.announce <= 0 && run.time >= SUMMON_AT * run.director.duration) {

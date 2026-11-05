@@ -18,8 +18,9 @@ export interface VariantDef {
   /** split：命中時分裂出幾顆小火、小火傷害比例、找下一個目標的範圍（公尺）；atMax：滿級多分裂 */
   split?: { children: number; damage: number; range: number; atMaxChildren: number; shardBonus: number; reSplit: number };
   /** orbit：不再發射，改成繞身的鬼火（數量 = 鬼火數量）；半徑（× 範圍）、角速度（弧度/秒）、命中半徑、
-   *  每隔幾秒判定一次（÷ 攻速、× 冷卻）、傷害比例、擊退；atMax：多一顆、半徑倍率 */
-  orbit?: { radius: number; spin: number; hitRadius: number; tick: number; damage: number; knockback: number; baseOrbs: number; atMaxOrbs: number; atMaxRadius: number };
+   *  每隔幾秒判定一次（÷ 攻速、× 冷卻）、傷害比例、擊退；atMax：多一顆、半徑倍率；
+   *  innerDamage／innerKnockback：環內護身（D46）：鑽進環內（離身體 < 半徑 − 命中半徑）的人類每次判定受「傷害比例 × innerDamage」並被推出去 */
+  orbit?: { radius: number; spin: number; hitRadius: number; tick: number; damage: number; knockback: number; baseOrbs: number; atMaxOrbs: number; atMaxRadius: number; innerDamage: number; innerKnockback: number };
   /** burn：命中處留下燃燒地（半徑 × 範圍、秒數、每隔幾秒燒一次、每次傷害比例），鬼火本身傷害與冷卻倍率；atMax：燃燒地大小倍率 */
   burn?: { radius: number; seconds: number; tick: number; damage: number; shotDamage: number; interval: number; atMaxScale: number; maxZones: number };
 }
@@ -38,7 +39,8 @@ export const VARIANTS: readonly VariantDef[] = [
     weapon: 'ghostfire',
     type: 'orbit',
     likes: ['area', 'hp', 'armor', 'atkSpeed'],
-    orbit: { radius: 3.0, spin: 2.6, hitRadius: 1.0, tick: 0.25, damage: 1.3, knockback: 3, baseOrbs: 1, atMaxOrbs: 1, atMaxRadius: 1.25 },
+    /** innerDamage／innerKnockback（D46，使用者：「環太爛，幾乎必死」）：以前貼身的人類打不到，sim 貪輸出過關 20%（另外兩種 65～70%）；加了 75%／70% */
+    orbit: { radius: 3.0, spin: 2.6, hitRadius: 1.0, tick: 0.25, damage: 1.3, knockback: 3, baseOrbs: 1, atMaxOrbs: 1, atMaxRadius: 1.25, innerDamage: 0.5, innerKnockback: 6 },
   },
   {
     id: 'hellfire',

@@ -254,7 +254,7 @@ export class Game {
       if (!run || !run.offer) return;
       this.loop.hold('levelup');
       if (this.resultCard.visible) return; // 結果卡關掉後才開選卡
-      this.picker.render(run.offer, run.picksLeft, run.offerKind, { yokai: run.yokai.id, counts: run.cardCounts, fused: run.fused });
+      this.picker.render(run.offer, run.picksLeft, run.offerKind, { yokai: run.yokai.id, counts: run.cardCounts, fused: run.fused, current: run.variantRechoose ? (run.variant?.id ?? null) : null });
       this.picker.show();
       this.audio.sfx('levelUp');
     });
@@ -291,7 +291,7 @@ export class Game {
     this.audio.sfx('cardFlip', ['common', 'rare', 'epic', 'legend'].indexOf(run.offer[i]?.rarity ?? 'common'));
     const more = run.chooseCard(i);
     if (more && run.offer) {
-      this.picker.render(run.offer, run.picksLeft, run.offerKind, { yokai: run.yokai.id, counts: run.cardCounts, fused: run.fused });
+      this.picker.render(run.offer, run.picksLeft, run.offerKind, { yokai: run.yokai.id, counts: run.cardCounts, fused: run.fused, current: run.variantRechoose ? (run.variant?.id ?? null) : null });
     } else {
       this.picker.hide();
       this.loop.release('levelup');
@@ -304,7 +304,7 @@ export class Game {
     this.resultCard.hide();
     this.loop.release('result');
     if (run && run.offer) {
-      this.picker.render(run.offer, run.picksLeft, run.offerKind, { yokai: run.yokai.id, counts: run.cardCounts, fused: run.fused });
+      this.picker.render(run.offer, run.picksLeft, run.offerKind, { yokai: run.yokai.id, counts: run.cardCounts, fused: run.fused, current: run.variantRechoose ? (run.variant?.id ?? null) : null });
       this.picker.show();
     }
   }

@@ -23,6 +23,8 @@ interface SlotView {
   summon: THREE.Group;
   fuse: THREE.Group;
   fuseOrbs: THREE.Mesh[];
+  dosojin: THREE.Group;
+  dosojinLight: THREE.Mesh;
   orb: THREE.Mesh;
   fox: THREE.Group;
   foxRings: THREE.Mesh[];
@@ -97,6 +99,18 @@ export class ElementsView {
     const gSoulFlame = teardrop(0.28, 0.75, { bulge: 0.4 });
     const gSoulOrb = ball(0.13, 12, 8);
     this.disposables.push(soul, bowlGold, gFuseBase, gBowl, gSoulFlame, gSoulOrb);
+    // 道祖神（D47）：苔綠的圓頂石碑（正面浮雕兩尊並肩的小石像）＋往兩邊指的木牌（岔路、換方向）＋上方一顆紫光
+    const stele = soft(palette.dosojin.stele);
+    const moss = soft(palette.dosojin.moss);
+    const dLight = glow(palette.dosojin.light, 2.2);
+    const gStele = roundedCylinder(0.55, 0.62, 1.5, 0.28, 24).scale(1, 1, 0.5);
+    const gSteleBase = roundedCylinder(0.8, 0.9, 0.3, 0.1, 24);
+    const gRelief = teardrop(0.17, 0.5, { bulge: 0.45 });
+    const gReliefHead = ball(0.13, 14, 10);
+    const gSignPost = roundedCylinder(0.06, 0.07, 1.6, 0.03, 10);
+    const gSignArm = roundedCylinder(0.09, 0.09, 0.7, 0.04, 10).rotateZ(Math.PI / 2);
+    const gDLight = ball(0.22, 14, 10);
+    this.disposables.push(stele, moss, dLight, gStele, gSteleBase, gRelief, gReliefHead, gSignPost, gSignArm, gDLight);
     // 狐面商（D38）：靛藍長袍＋白色狐狸面具（紅紋）＋兩隻耳朵；面前紅、藍兩個圈
     const robe = soft(palette.fox.robe);
     const mask = soft(palette.fox.mask);
@@ -203,6 +217,30 @@ export class ElementsView {
         fuse.add(o);
         fuseOrbs.push(o);
       }
+      const dosojin = new THREE.Group();
+      const dBase = new THREE.Mesh(gSteleBase, moss);
+      const dStele = new THREE.Mesh(gStele, stele);
+      dStele.position.y = 0.25;
+      dosojin.add(dBase, dStele);
+      for (const side of [-1, 1]) {
+        const body = new THREE.Mesh(gRelief, stele);
+        body.position.set(side * 0.2, 0.62, 0.24);
+        const head = new THREE.Mesh(gReliefHead, stele);
+        head.position.set(side * 0.2, 1.2, 0.26);
+        dosojin.add(body, head);
+      }
+      const dPost = new THREE.Mesh(gSignPost, woodDark);
+      dPost.position.set(0.95, 0.05, 0.1);
+      dosojin.add(dPost);
+      for (const [y, ang] of [[1.45, 0.5], [1.15, -0.6]] as const) {
+        const arm = new THREE.Mesh(gSignArm, wood);
+        arm.position.set(0.95, y, 0.1);
+        arm.rotation.y = ang;
+        dosojin.add(arm);
+      }
+      const dosojinLight = new THREE.Mesh(gDLight, dLight);
+      dosojinLight.position.y = 2.1;
+      dosojin.add(dosojinLight);
       const fox = new THREE.Group();
       const fRobe = new THREE.Mesh(gRobe, robe);
       const fHead = new THREE.Mesh(gFoxHead, robe);
@@ -257,10 +295,10 @@ export class ElementsView {
       zone.renderOrder = 2;
       zone.visible = false;
       this.disposables.push(ringMat, fillMat, beamMat, zg, zoneMat);
-      root.add(jizo, barrier, altar, offering, omikuji, chest, summon, fuse, fox, ...foxRings, ...foxFills, ring, fill, beam);
+      root.add(jizo, barrier, altar, offering, omikuji, chest, summon, fuse, dosojin, fox, ...foxRings, ...foxFills, ring, fill, beam);
       root.visible = false;
       this.group.add(root, zone);
-      this.views.push({ root, jizo, barrier, altar, offering, omikuji, chest, summon, orb, fuse, fuseOrbs, fox, foxRings, foxFills, beam, beamMat, ring, ringMat, fill, fillMat, zone, zoneMat, flame, zx: NaN, zz: NaN });
+      this.views.push({ root, jizo, barrier, altar, offering, omikuji, chest, summon, orb, fuse, fuseOrbs, dosojin, dosojinLight, fox, foxRings, foxFills, beam, beamMat, ring, ringMat, fill, fillMat, zone, zoneMat, flame, zx: NaN, zz: NaN });
     }
   }
 
@@ -304,6 +342,7 @@ export class ElementsView {
       v.chest.visible = s.kind === 'chest';
       v.summon.visible = s.kind === 'summon';
       v.fuse.visible = s.kind === 'fuse';
+      v.dosojin.visible = s.kind === 'dosojin';
       v.fox.visible = s.kind === 'fox';
       v.ringMat.color.copy(c);
       v.fillMat.color.copy(c);
@@ -322,6 +361,8 @@ export class ElementsView {
       v.chest.scale.setScalar(g);
       v.summon.scale.setScalar(g);
       v.fuse.scale.setScalar(g);
+      v.dosojin.scale.setScalar(g);
+      if (s.kind === 'dosojin') v.dosojinLight.position.y = 2.1 + Math.sin(t * 1.8) * 0.1 + s.progress * 0.3;
       if (s.kind === 'fuse') {
         for (let k = 0; k < v.fuseOrbs.length; k++) {
           const a = t * 1.6 + (k / v.fuseOrbs.length) * Math.PI * 2;

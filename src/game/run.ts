@@ -3,7 +3,7 @@ import { COMBAT } from '../data/combat';
 import { MOVE } from '../data/movement';
 import { PLAYABLE_YOKAI, YOKAI, type YokaiDef } from '../data/yokai';
 import { CARD_CHOICES, PROGRESSION, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
-import { FUSE } from '../data/elements';
+import { FUSE, DOSOJIN } from '../data/elements';
 import { ITEM_POOL, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById } from '../data/items';
 import { VARIANT_CARD_PREFIX, VARIANT_LEVEL, variantOfCard, variantsFor, type VariantDef } from '../data/variants';
 import { RARITY_MULT } from '../data/rarity';
@@ -154,9 +154,16 @@ export class Run {
   /** 招式變化（主武器 VARIANT_LEVEL 級時三選一，整局固定）；null = 還沒選 */
   variant: VariantDef | null = null;
   private variantPending = false;
+  /** 道祖神（D47）：這一關什麼時候放（clock；Infinity = 還沒選變化或這一關放過了）；這次的變化三選一是不是從道祖神來的（面板標「目前」） */
+  private dosojinAt = Infinity;
+  variantRechoose = false;
+  /** 最近一次在道祖神換了變化（HUD 提示用） */
+  lastVariantChange: { from: string; to: string; at: number } | null = null;
   private resumeKind: 'levelup' | 'offering' | 'chest' | 'fusion' = 'levelup';
   /** 燈籠環：繞身鬼火的角度與下次判定倒數 */
   orbitAngle = 0;
+  /** 環內護身打到的累計次數（畫面閃一下、測試用） */
+  innerHits = 0;
   private orbitTimer = 0;
   /** 業火：燃燒地（固定數量的池；外觀直接讀） */
   readonly zoneX = new Float32Array(32);
@@ -338,6 +345,7 @@ export class Run {
         this.recomputeCurse();
       },
       canFuse: () => this.hasFusable,
+      rechooseVariant: () => this.openRechoose(),
       summonBoss: () => {
         if (!this.director.summonBoss()) return 0;
         this.bus.emit('summonBoss', { stage: this.stageNumber, mult: this.director.summonMult });
@@ -398,6 +406,7 @@ export class Run {
       hpMult: 1 + this.difficulty * DIFFICULTY.hp,
     });
     this.summonPlaced = false;
+    this.dosojinAt = this.variant ? this.clock + DOSOJIN.appearDelay : Infinity;
     this.elements.start(this.px, this.pz, this.director.duration, this.director.virtualWave(), this.stats.value.luck);
     this.fireCd = 0.3;
     this.bus.emit('stageStart', { stage: this.stageNumber });
@@ -509,6 +518,11 @@ export class Run {
     // 合魂祠：大招材料湊齊後 appearDelay 秒出現在地圖上（一次一座）
     if (this.hasFusable && !this.elements.fuseSlot && this.clock >= this.fusableSince + FUSE.appearDelay) {
       if (this.elements.placeFuse(this.px, this.pz)) this.bus.emit('fuseShrine', { stage: this.stageNumber });
+    }
+    // 道祖神：選了變化之後每關一座（D47）
+    if (this.clock >= this.dosojinAt && this.phase === 'combat') {
+      this.dosojinAt = Infinity;
+      if (this.elements.placeDosojin(this.px, this.pz)) this.bus.emit('dosojin', { stage: this.stageNumber });
     }
     if (!this.summonPlaced && this.summonStage && !this.director.bossSpawned && this.time >= STAGE.summon.appearAt * this.director.duration) {
       if (this.elements.placeSummon(this.px, this.pz)) {
@@ -944,8 +958,14 @@ export class Run {
     if (!this.offer || index < 0 || index >= this.offer.length) return this.offer !== null;
     const o = this.offer[index];
     if (this.offerKind === 'variant') {
-      this.variant = variantOfCard(o.cardId);
-      this.variantPending = false;
+      const prev = this.variant;
+      this.setVariant(variantOfCard(o.cardId));
+      if (prev === null) this.dosojinAt = this.clock + DOSOJIN.appearDelay;
+      else if (prev.id !== this.variant!.id) {
+        this.lastVariantChange = { from: prev.id, to: this.variant!.id, at: this.clock };
+        this.bus.emit('variantChanged', { from: prev.id, to: this.variant!.id });
+      }
+      this.variantRechoose = false;
       this.bus.emit('cardChosen', { cardId: o.cardId, rarity: o.rarity });
       this.offerKind = this.resumeKind;
       return this.continueOffers();
@@ -966,6 +986,25 @@ export class Run {
       return true;
     }
     return this.continueOffers();
+  }
+
+  /** 換上一種變化：上一種留下的東西（燃燒地、繞身計時）清掉 */
+  private setVariant(v: VariantDef): void {
+    if (this.variant && this.variant.id !== v.id) {
+      this.zoneLife.fill(0);
+      this.orbitTimer = 0;
+    }
+    this.variant = v;
+    this.variantPending = false;
+  }
+
+  /** 道祖神（D47）：重新跳一次變化三選一（目前的那張也在裡面，可以選回去） */
+  private openRechoose(): void {
+    if (this.offer !== null || !this.variant) return;
+    this.resumeKind = 'levelup';
+    this.variantRechoose = true;
+    this.openVariantOffer();
+    this.bus.emit('levelUp', { level: this.level, pending: 1 });
   }
 
   /** 主武器到了變化等級：三選一（同一個面板） */
@@ -1162,8 +1201,9 @@ export class Run {
 
   /** 開發與測試：直接設定招式變化（不經面板） */
   devSetVariant(id: string): void {
-    this.variant = variantOfCard(VARIANT_CARD_PREFIX + id);
-    this.variantPending = false;
+    const first = this.variant === null;
+    this.setVariant(variantOfCard(VARIANT_CARD_PREFIX + id));
+    if (first) this.dosojinAt = this.clock + DOSOJIN.appearDelay;
   }
 
   /** 主武器滿級了嗎（變化的 atMax 加強） */
@@ -1205,6 +1245,24 @@ export class Run {
     const n = this.orbitCount;
     const R = this.orbitRadius;
     const en = this.enemies;
+    // 環內護身（D46）：鑽進環內的人類受傷並被推出去（以前貼身的打不到，被包圍就只能挨打）
+    const inner = R - o.hitRadius;
+    if (inner > 0) {
+      const m0 = en.within(this.px, this.pz, inner, this.near);
+      for (let j = 0; j < m0; j++) {
+        const e = this.near[j];
+        if (!en.alive[e]) continue;
+        const ex = en.x[e] - this.px;
+        const ez = en.z[e] - this.pz;
+        if (ex * ex + ez * ez > inner * inner) continue;
+        const d = Math.hypot(ex, ez) || 1;
+        const crit = this.rngCombat.next() < s.crit;
+        const dmg = this.baseShotDamage(crit) * o.damage * o.innerDamage;
+        this.feed.push(en.x[e], en.z[e], dmg, crit);
+        this.innerHits++;
+        if (en.hurt(e, dmg, ex / d, ez / d, en.variant[e] === 2 ? 0 : o.innerKnockback)) this.onKill(e);
+      }
+    }
     for (let k = 0; k < n; k++) {
       const a = this.orbitAngle + (k / n) * Math.PI * 2;
       const ox = this.px + Math.cos(a) * R;

@@ -25,6 +25,7 @@ import {
   ELEMENT_PER_KIND,
   FOX,
   FUSE,
+  DOSOJIN,
   OFFERING,
   OFFERING_HOLD_SECONDS,
   OMIKUJI_EFFECT,
@@ -34,6 +35,9 @@ import {
   type ElementKind,
   type OmikujiResult,
 } from '../data/elements';
+
+/** 一定要放得下、不會被擠掉的特殊要素 */
+const SPECIAL: ReadonlySet<ElementKind> = new Set<ElementKind>(['summon', 'fuse', 'dosojin']);
 
 /** 給要素系統用的「玩家端」介面：只做它需要的事，不讓它碰整個 Run */
 export interface ElementHost {
@@ -49,6 +53,8 @@ export interface ElementHost {
   openPick(rarity: Rarity, picks: number, kind: 'offering' | 'chest' | 'fusion'): void;
   /** 合魂祠：現在有沒有湊齊、還沒融合的大招 */
   canFuse(): boolean;
+  /** 道祖神（D47）：重新跳一次招式變化三選一 */
+  rechooseVariant(): void;
   addMerit(n: number): void;
   notifyOmikuji(result: OmikujiResult): void;
   /** 召喚祭壇開了：召喚小頭目（D34）；回傳小頭目的生命倍率（沒召喚成功 = 0） */
@@ -110,7 +116,7 @@ export interface AltarEffect {
 
 const USED_FADE = 0.7;
 /** 各要素按住幾秒（結界石不用按住） */
-const HOLD: Partial<Record<ElementKind, number>> = { jizo: JIZO_HOLD_SECONDS, altar: ALTAR_HOLD_SECONDS, offering: OFFERING_HOLD_SECONDS, omikuji: OMIKUJI_HOLD_SECONDS, chest: CHEST_HOLD_SECONDS, summon: STAGE.summon.holdSeconds, fuse: FUSE.holdSeconds };
+const HOLD: Partial<Record<ElementKind, number>> = { jizo: JIZO_HOLD_SECONDS, altar: ALTAR_HOLD_SECONDS, offering: OFFERING_HOLD_SECONDS, omikuji: OMIKUJI_HOLD_SECONDS, chest: CHEST_HOLD_SECONDS, summon: STAGE.summon.holdSeconds, fuse: FUSE.holdSeconds, dosojin: DOSOJIN.holdSeconds };
 
 function blankSlot(): ElementSlot {
   const n = FOX.offers;
@@ -402,6 +408,8 @@ export class Elements {
       this.host.openPick(s.rarity, 1, 'chest');
     } else if (s.kind === 'fuse') {
       this.host.openPick(s.rarity, 1, 'fusion');
+    } else if (s.kind === 'dosojin') {
+      this.host.rechooseVariant();
     } else if (s.kind === 'omikuji') lines.push(...this.drawOmikuji(s));
     else if (s.kind === 'summon') {
       const mult = this.host.summonBoss();
@@ -594,12 +602,17 @@ export class Elements {
     return this.placeSpecial('fuse', px, pz, FUSE.ringMin, FUSE.ringMax);
   }
 
-  /** 特殊要素（召喚祭壇、合魂祠）：一定要放得下（池滿了擠掉最舊的一般要素），找不到位置就放寬距離 */
-  private placeSpecial(kind: 'summon' | 'fuse', px: number, pz: number, ringMin: number, ringMax: number): ElementSlot | null {
+  /** 道祖神（D47，選了招式變化之後每關一座）：離玩家 ringMin～ringMax 公尺；不會過期 */
+  placeDosojin(px: number, pz: number): ElementSlot | null {
+    return this.placeSpecial('dosojin', px, pz, DOSOJIN.ringMin, DOSOJIN.ringMax);
+  }
+
+  /** 特殊要素（召喚祭壇、合魂祠、道祖神）：一定要放得下（池滿了擠掉最舊的一般要素），找不到位置就放寬距離 */
+  private placeSpecial(kind: 'summon' | 'fuse' | 'dosojin', px: number, pz: number, ringMin: number, ringMax: number): ElementSlot | null {
     let i = this.freeSlot();
     if (i < 0) {
       let oldest = -1;
-      for (let k = 0; k < this.slots.length; k++) if (this.slots[k].kind !== 'summon' && this.slots[k].kind !== 'fuse' && (oldest < 0 || this.slots[k].age > this.slots[oldest].age)) oldest = k;
+      for (let k = 0; k < this.slots.length; k++) if (!SPECIAL.has(this.slots[k].kind) && (oldest < 0 || this.slots[k].age > this.slots[oldest].age)) oldest = k;
       if (oldest < 0) return null;
       this.free(oldest);
       i = oldest;
@@ -626,6 +639,12 @@ export class Elements {
     for (let i = 0; i < this.slots.length; i++) if (this.slots[i].active && this.slots[i].kind === kind && this.slots[i].usedAge < 0) this.free(i);
   }
 
+  /** 道祖神還在、還沒用（HUD 箭頭用） */
+  get dosojinSlot(): ElementSlot | null {
+    for (const s of this.slots) if (s.active && s.kind === 'dosojin' && s.usedAge < 0) return s;
+    return null;
+  }
+
   /** 合魂祠還在、還沒用（HUD 箭頭用） */
   get fuseSlot(): ElementSlot | null {
     for (const s of this.slots) if (s.active && s.kind === 'fuse' && s.usedAge < 0) return s;
@@ -637,7 +656,7 @@ export class Elements {
     let i = this.freeSlot();
     if (i < 0) {
       let oldest = -1;
-      for (let k = 0; k < this.slots.length; k++) if (this.slots[k].kind !== 'summon' && this.slots[k].kind !== 'fuse' && (oldest < 0 || this.slots[k].age > this.slots[oldest].age)) oldest = k;
+      for (let k = 0; k < this.slots.length; k++) if (!SPECIAL.has(this.slots[k].kind) && (oldest < 0 || this.slots[k].age > this.slots[oldest].age)) oldest = k;
       if (oldest < 0) return null;
       this.free(oldest);
       i = oldest;

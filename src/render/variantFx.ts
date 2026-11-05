@@ -17,6 +17,12 @@ export class VariantFx {
   private readonly c = new THREE.Color();
   private readonly base = new THREE.Color(palette.fire.torch);
   private readonly disposables: { dispose(): void }[] = [];
+  /** 燈籠環的環內護身（D46）：腳下一片淡光，推開人類時亮一下 */
+  private readonly guard: THREE.Mesh;
+  private readonly guardMat: THREE.MeshBasicMaterial;
+  private lastInner = 0;
+  private flash = 0;
+  private lastT = 0;
 
   constructor(private readonly run: Run) {
     const og = ball(0.32, 14, 10);
@@ -34,8 +40,12 @@ export class VariantFx {
     this.zones.count = 0;
     this.zones.renderOrder = 2;
     setHugeBounds(this.zones, 200);
-    this.group.add(this.orbs, this.zones);
-    this.disposables.push(og, om, zg, zm);
+    this.guardMat = new THREE.MeshBasicMaterial({ color: palette.fire.ghost, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+    this.guard = new THREE.Mesh(zg, this.guardMat);
+    this.guard.renderOrder = 2;
+    this.guard.visible = false;
+    this.group.add(this.orbs, this.zones, this.guard);
+    this.disposables.push(og, om, zg, zm, this.guardMat);
   }
 
   update(t: number): void {
@@ -53,6 +63,22 @@ export class VariantFx {
     }
     this.orbs.count = n;
     this.orbs.instanceMatrix.needsUpdate = true;
+    // 環內護身：平常很淡；這一幀有推開人類就亮一下再退
+    const o = run.variant?.orbit;
+    const inner = o ? R - o.hitRadius : 0;
+    this.guard.visible = inner > 0;
+    const dt = Math.min(0.1, Math.max(0, t - this.lastT));
+    this.lastT = t;
+    if (run.innerHits !== this.lastInner) {
+      this.lastInner = run.innerHits;
+      this.flash = 1;
+    }
+    this.flash = Math.max(0, this.flash - dt * 4);
+    if (inner > 0) {
+      this.guard.scale.set(inner, 1, inner);
+      this.guard.position.set(run.px, run.map.heightAt(run.px, run.pz) + DECAL_LIFT, run.pz);
+      this.guardMat.opacity = 0.07 + 0.25 * this.flash;
+    }
     // 業火：燃燒地（越快熄滅越暗）
     let zc = 0;
     for (let i = 0; i < run.zoneX.length; i++) {

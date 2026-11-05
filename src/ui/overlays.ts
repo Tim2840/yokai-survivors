@@ -132,8 +132,8 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
   const title = o.el.querySelector<HTMLElement>('#lv-title')!;
   const pending = o.el.querySelector<HTMLElement>('#lv-pending')!;
   return Object.assign(o, {
-    render(offer: CardOffer[], more: number, kind: 'levelup' | 'offering' | 'chest' | 'variant' | 'fusion' = 'levelup', ult: { yokai: string; counts: ReadonlyMap<string, number>; fused: readonly string[] } = { yokai: '', counts: new Map(), fused: [] }) {
-      title.textContent = t(kind === 'variant' ? 'levelup.variant' : kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? 'levelup.offering' : kind === 'fusion' ? 'levelup.fusion' : 'levelup.chest');
+    render(offer: CardOffer[], more: number, kind: 'levelup' | 'offering' | 'chest' | 'variant' | 'fusion' = 'levelup', ult: { yokai: string; counts: ReadonlyMap<string, number>; fused: readonly string[]; current?: string | null } = { yokai: '', counts: new Map(), fused: [] }) {
+      title.textContent = t(kind === 'variant' ? (ult.current ? 'levelup.dosojin' : 'levelup.variant') : kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? 'levelup.offering' : kind === 'fusion' ? 'levelup.fusion' : 'levelup.chest');
       pending.textContent = more > 1 ? t('levelup.pending', { n: more - 1 }) : '';
       cardsEl.innerHTML = '';
       offer.forEach((c, i) => {
@@ -155,11 +155,13 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
           const v = variantOfCard(c.cardId);
           const b = document.createElement('button');
           b.type = 'button';
-          b.className = 'card r-variant';
+          const cur = ult.current === v.id;
+          b.className = `card r-variant${cur ? ' is-current' : ''}`;
           b.dataset.card = c.cardId;
           b.dataset.index = String(i);
+          if (cur) b.dataset.current = '1';
           const likes = v.likes.map((id) => t(`card.${id}` as I18nKey)).join('、');
-          b.innerHTML = `<span class="rname">${t('card.variantTag')}</span><b>${t(`variant.${v.id}` as I18nKey)}</b><span class="cdesc">${t(`variant.${v.id}.desc` as I18nKey)}</span><span class="csyn">${t('variant.likes', { items: likes })}</span>`;
+          b.innerHTML = `<span class="rname">${t('card.variantTag')}${cur ? `<em class="cur-tag">${t('variant.current')}</em>` : ''}</span><b>${t(`variant.${v.id}` as I18nKey)}</b><span class="cdesc">${t(`variant.${v.id}.desc` as I18nKey)}</span><span class="csyn">${t('variant.likes', { items: likes })}</span>`;
           b.addEventListener('click', () => onPick(i));
           cardsEl.appendChild(b);
           return;

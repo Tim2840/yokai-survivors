@@ -110,6 +110,20 @@ describe('三種變化的效果', () => {
     expect(run.enemies.hp[far]).toBe(1e6);
     expect(run.orbitCount).toBeGreaterThanOrEqual(1);
   });
+  it('燈籠環的環內護身（D46）：貼身的人類會受傷、被推到外面；環外遠處的不受影響（舊版貼身的打不到）', () => {
+    const run = make(18);
+    run.devSetVariant('lanternRing');
+    const o = run.variant!.orbit!;
+    const inner = run.orbitRadius - o.hitRadius;
+    expect(inner).toBeGreaterThan(0.8);
+    const hug = placeEnemy(run, 0.8, 0);
+    const far = placeEnemy(run, 9, 0);
+    stepN(run, 20);
+    expect(run.enemies.hp[hug], '貼身的人類沒受傷').toBeLessThan(1e6);
+    expect(Math.hypot(run.enemies.x[hug] - run.px, run.enemies.z[hug] - run.pz), '沒有被推開').toBeGreaterThan(0.8 + 0.5);
+    expect(run.innerHits).toBeGreaterThan(0);
+    expect(run.enemies.hp[far]).toBe(1e6);
+  });
   it('業火：命中處留下燃燒地，持續燒、時間到消失；鬼火變慢變重', () => {
     const run = make(9);
     run.devSetVariant('hellfire');

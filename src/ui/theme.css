@@ -207,3 +207,5 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 .card.r-ult { --rc: #ffb347; background: rgba(255,179,71,0.16); }
 .card.r-ult b { font-size: 22px; }
 .card.r-variant b { font-size: 22px; }
+.card.r-variant.is-current { box-shadow: 0 0 0 2px var(--rc) inset; }
+.card .cur-tag { margin-left: 0.5em; padding: 0 0.4em; border-radius: 0.6em; background: var(--rc); color: var(--bg); font-style: normal; font-size: 0.85em; }
