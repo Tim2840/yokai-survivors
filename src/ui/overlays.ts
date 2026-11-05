@@ -4,6 +4,7 @@ import { CARD_FORMAT, type StatId } from '../data/stats';
 import { setWeaponTextFormatter, type BuildSummary } from '../game/buildSummary';
 import { synergyHints } from '../data/synergies';
 import { ultHints } from '../data/ultimates';
+import { isVariantCard, variantOfCard } from '../data/variants';
 import { cardById, type CardOffer } from '../systems/cards';
 import { WEAPON_LEVELS, itemValue, type WeaponLevel } from '../data/items';
 import { PLAYABLE_YOKAI, STARTER_YOKAI } from '../data/yokai';
@@ -101,11 +102,25 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
   const title = o.el.querySelector<HTMLElement>('#lv-title')!;
   const pending = o.el.querySelector<HTMLElement>('#lv-pending')!;
   return Object.assign(o, {
-    render(offer: CardOffer[], more: number, owned: ReadonlySet<string> = new Set(), active: readonly string[] = [], kind: 'levelup' | 'offering' | 'chest' = 'levelup', ult: { yokai: string; counts: ReadonlyMap<string, number>; fused: readonly string[] } = { yokai: '', counts: new Map(), fused: [] }) {
-      title.textContent = t(kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? 'levelup.offering' : 'levelup.chest');
+    render(offer: CardOffer[], more: number, owned: ReadonlySet<string> = new Set(), active: readonly string[] = [], kind: 'levelup' | 'offering' | 'chest' | 'variant' = 'levelup', ult: { yokai: string; counts: ReadonlyMap<string, number>; fused: readonly string[] } = { yokai: '', counts: new Map(), fused: [] }) {
+      title.textContent = t(kind === 'variant' ? 'levelup.variant' : kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? 'levelup.offering' : 'levelup.chest');
       pending.textContent = more > 1 ? t('levelup.pending', { n: more - 1 }) : '';
       cardsEl.innerHTML = '';
       offer.forEach((c, i) => {
+        if (isVariantCard(c.cardId)) {
+          // 招式變化：名稱、玩法說明、適合搭配的道具
+          const v = variantOfCard(c.cardId);
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'card r-variant';
+          b.dataset.card = c.cardId;
+          b.dataset.index = String(i);
+          const likes = v.likes.map((id) => t(`card.${id}` as I18nKey)).join('、');
+          b.innerHTML = `<span class="rname">${t('card.variantTag')}</span><b>${t(`variant.${v.id}` as I18nKey)}</b><span class="cdesc">${t(`variant.${v.id}.desc` as I18nKey)}</span><span class="csyn">${t('variant.likes', { items: likes })}</span>`;
+          b.addEventListener('click', () => onPick(i));
+          cardsEl.appendChild(b);
+          return;
+        }
         const d = describeCard(c, ult.counts);
         const kind = cardById(c.cardId).kind;
         const b = document.createElement('button');
@@ -227,7 +242,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
         const li = document.createElement('li');
         li.dataset.card = c.id;
         const chips = (['common', 'rare', 'epic', 'legend'] as const).map((r) => `<i class="chip r-${r}"></i>`.repeat(c.byRarity[r])).join('');
-        li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), lv: c.level, max: c.maxLevel })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}</em>`;
+        li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), lv: c.level, max: c.maxLevel })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}${c.kind === 'weapon' && sum.variant ? `<br>${t('pause.variant', { name: t(`variant.${sum.variant}` as I18nKey) })}` : ''}</em>`;
         cards.appendChild(li);
       }
       const syn = q('sum-syn');

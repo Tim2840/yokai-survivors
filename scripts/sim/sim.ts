@@ -32,6 +32,9 @@ const ELEMENTS = arg('elements', 'both'); // on | off | both
 const JSON_OUT = arg('json', '');
 /** --cast on|off：機器人要不要發動大招（比較大招的影響） */
 const CAST = arg('cast', 'on') === 'on';
+/** --variant kitsunebi|lanternRing|hellfire|auto：主武器到變化等級時選哪一種（auto = 依策略：dps 分裂、survive 燈籠環、ult 業火、random 亂選） */
+const VARIANT = arg('variant', 'auto');
+const VARIANT_BY_STRATEGY: Record<string, string> = { dps: 'kitsunebi', survive: 'lanternRing', ult: 'hellfire' };
 /** --tune countScale=3,hpScale=1.2,xp.needPerLevel=4,w.hpPerWave=0.2：臨時改旋鈕比較（不改檔案）；xp. 開頭是 PROGRESSION、w. 開頭是 WAVES */
 const TUNE = arg('tune', '');
 function applyTune(): void {
@@ -53,6 +56,11 @@ const RARITY_SCORE: Record<string, number> = { common: 1, rare: 1.6, epic: 2.4, 
 
 function choose(run: Run, strategy: string, rnd: () => number): number {
   const offer = run.offer!;
+  if (run.offerKind === 'variant') {
+    const want = VARIANT === 'auto' ? VARIANT_BY_STRATEGY[strategy] : VARIANT;
+    const i = offer.findIndex((o) => o.cardId === 'variant:' + want);
+    return i >= 0 ? i : Math.floor(rnd() * offer.length);
+  }
   if (strategy === 'random') return Math.floor(rnd() * offer.length);
   const sc = SCORES[strategy === 'ult' ? 'dps' : strategy];
   let best = 0;
@@ -93,6 +101,7 @@ interface Result {
   curseTotal: number;
   fused: number;
   casts: number;
+  variant: string;
 }
 
 function play(seed: number, strategy: string, useElements: boolean): Result {
@@ -190,6 +199,7 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     elementsUsed: used,
     cards,
     fused: run.fused.length,
+    variant: run.variant?.id ?? '-',
     casts,
     curseTotal: run.curse.enemyHp + run.curse.enemySpeed + run.curse.enemyDamage + run.curse.spawnRate,
   };
@@ -228,6 +238,7 @@ function summarize(rs: Result[]): string {
     `等級 ${avg(rs.map((r) => r.level)).toFixed(1)}`,
     `用掉要素 ${avg(rs.map((r) => r.elementsUsed)).toFixed(1)}`,
     `融合大招 ${avg(rs.map((r) => r.fused)).toFixed(1)} 個、發動 ${avg(rs.map((r) => r.casts)).toFixed(1)} 次`,
+    `變化 ${[...new Set(rs.map((r) => r.variant))].join('/')}`,
   ].join('；');
 }
 

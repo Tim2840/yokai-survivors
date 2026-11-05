@@ -15,6 +15,8 @@ export class Projectiles {
   readonly target: Int32Array;
   readonly lastHit: Int32Array;
   readonly alive: Uint8Array;
+  /** 0 = 主武器射出的、1 = 分裂出來的小火（不會再分裂） */
+  readonly gen: Uint8Array;
   high = 0;
   aliveCount = 0;
   private readonly near = new Int32Array(COMBAT.queryMax);
@@ -31,6 +33,7 @@ export class Projectiles {
     this.target = new Int32Array(capacity);
     this.lastHit = new Int32Array(capacity);
     this.alive = new Uint8Array(capacity);
+    this.gen = new Uint8Array(capacity);
   }
 
   reset(): void {
@@ -39,7 +42,7 @@ export class Projectiles {
     this.aliveCount = 0;
   }
 
-  spawn(x: number, z: number, dirX: number, dirZ: number, w: WeaponDef, damage: number, crit: boolean, target: number, pierceBonus = 0): number {
+  spawn(x: number, z: number, dirX: number, dirZ: number, w: WeaponDef, damage: number, crit: boolean, target: number, pierceBonus = 0, gen = 0): number {
     let i = -1;
     for (let k = 0; k < this.high; k++) if (!this.alive[k]) {
       i = k;
@@ -60,6 +63,7 @@ export class Projectiles {
     this.pierceLeft[i] = w.pierce + pierceBonus;
     this.target[i] = target;
     this.lastHit[i] = -1;
+    this.gen[i] = gen;
     this.aliveCount++;
     return i;
   }

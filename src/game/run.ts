@@ -3,7 +3,8 @@ import { COMBAT } from '../data/combat';
 import { MOVE } from '../data/movement';
 import { PLAYABLE_YOKAI, YOKAI, type YokaiDef } from '../data/yokai';
 import { PROGRESSION, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
-import { ITEM_POOL, WEAPON_LEVELS, itemValue } from '../data/items';
+import { ITEM_POOL, WEAPON_LEVELS, itemValue, itemById } from '../data/items';
+import { VARIANT_CARD_PREFIX, VARIANT_LEVEL, variantOfCard, variantsFor, type VariantDef } from '../data/variants';
 import { RARITY_MULT } from '../data/rarity';
 import { STAGE, stagesForMap, bossHpMult } from '../data/stage';
 import { WAVES } from '../data/waves';
@@ -134,6 +135,22 @@ export class Run {
   /** 主武器升級帶來的：基礎傷害加值、冷卻倍率（< 1 = 變快） */
   weaponDamageBonus = 0;
   cooldownMult = 1;
+  /** 招式變化（主武器 VARIANT_LEVEL 級時三選一，整局固定）；null = 還沒選 */
+  variant: VariantDef | null = null;
+  private variantPending = false;
+  private resumeKind: 'levelup' | 'offering' | 'chest' = 'levelup';
+  /** 燈籠環：繞身鬼火的角度與下次判定倒數 */
+  orbitAngle = 0;
+  private orbitTimer = 0;
+  /** 業火：燃燒地（固定數量的池；外觀直接讀） */
+  readonly zoneX = new Float32Array(32);
+  readonly zoneZ = new Float32Array(32);
+  readonly zoneR = new Float32Array(32);
+  readonly zoneLife = new Float32Array(32);
+  readonly zoneMaxLife = new Float32Array(32);
+  private readonly zoneDmg = new Float32Array(32);
+  private readonly zoneTick = new Float32Array(32);
+  private zoneNext = 0;
   /** 主武器的道具 id（鬼火） */
   get weaponItemId(): string {
     return this.yokai.weapon.id;
@@ -152,7 +169,7 @@ export class Run {
   bonusMerit = 0;
   lastOmikuji: { id: string; at: number } | null = null;
   /** 目前這個選卡面板的來源：升級／賽錢箱／寶箱；賽錢箱、寶箱的剩餘選卡次數與稀有度 */
-  offerKind: 'levelup' | 'offering' | 'chest' = 'levelup';
+  offerKind: 'levelup' | 'offering' | 'chest' | 'variant' = 'levelup';
   private bonusLeft = 0;
   private bonusRarity: import('../data/rarity').Rarity = 'rare';
   /** 法具等級（id → 等級；大招配方用的「張數」就是等級）、已融合的大招、大招量表（0～ULT.max）、最近一次發動（給外觀用） */
@@ -171,6 +188,7 @@ export class Run {
   private fireCd = 0;
   private readonly near = new Int32Array(COMBAT.queryMax);
   private readonly splashNear = new Int32Array(COMBAT.queryMax);
+  private readonly splitNear = new Int32Array(COMBAT.queryMax);
 
   constructor(opts: RunOptions) {
     this.opts = opts;
@@ -375,6 +393,8 @@ export class Run {
     this.enemies.update(dt, this.px, this.pz, this.flow, aura.radius * s.area * this.syn.auraMult, aura.slow);
     this.contactDamage();
     this.weapon(dt);
+    if (this.variant?.type === 'orbit') this.orbitStep(dt);
+    this.zonesStep(dt);
     this.projectiles.update(dt, this.yokai.weapon, this.enemies, s.area, this.onProjectileHit);
     const gained = this.orbs.update(dt, this.px, this.pz, s.pickup);
     if (gained > 0) this.addXp(gained);
@@ -517,6 +537,8 @@ export class Run {
   private weapon(dt: number): void {
     const w = this.yokai.weapon;
     const s = this.stats.value;
+    if (this.variant?.type === 'orbit') return; // 燈籠環：不發射，改由 orbitStep 繞身攻擊
+    const burn = this.variant?.burn;
     this.fireCd -= dt;
     if (this.fireCd > 0) return;
     const target = this.enemies.nearest(this.px, this.pz, w.range * s.area);
@@ -524,16 +546,16 @@ export class Run {
       this.fireCd = 0;
       return;
     }
-    this.fireCd += (w.interval * this.cooldownMult) / s.atkSpeed;
+    this.fireCd += (w.interval * this.cooldownMult * (burn ? burn.interval : 1)) / s.atkSpeed;
     const dx = this.enemies.x[target] - this.px;
     const dz = this.enemies.z[target] - this.pz;
     const d = Math.hypot(dx, dz) || 1;
-    const volleyExact = (tuning.volley > 0 ? tuning.volley : w.volley) + this.volleyBonus + this.syn.volley + this.frenzyVolley;
+    const volleyExact = this.volleyExact;
     // 小數的部分 = 機率多一顆（卡片的數值是小數，這樣每張卡的價值才能細調）
     const volley = Math.floor(volleyExact) + (this.rngCombat.next() < volleyExact - Math.floor(volleyExact) ? 1 : 0);
     for (let v = 0; v < volley; v++) {
       const crit = this.rngCombat.next() < s.crit;
-      const dmg = (w.damage + this.weaponDamageBonus) * s.power * tuning.damageScale * (crit ? s.critDmg : 1);
+      const dmg = this.baseShotDamage(crit) * (burn ? burn.shotDamage : 1);
       const spread = (v - (volley - 1) / 2) * 0.18;
       const c = Math.cos(spread);
       const sn = Math.sin(spread);
@@ -559,10 +581,17 @@ export class Run {
     this.feed.push(this.enemies.x[e], this.enemies.z[e], dmg, pr.crit[p] === 1);
     // 頭目不被擊退
     const knock = this.enemies.variant[e] === 2 ? 0 : w.knockback;
+    const hx = this.enemies.x[e];
+    const hz = this.enemies.z[e];
+    const parent = pr.gen[p] === 0;
     if (this.enemies.hurt(e, dmg, pr.vx[p] / vl, pr.vz[p] / vl, knock)) this.onKill(e);
+    // 招式變化：業火在命中處留下燃燒地；狐火分裂朝其他敵人分裂（小火不會再分裂）
+    const v = this.variant;
+    if (v?.burn && parent) this.addZone(hx, hz, dmg * v.burn.damage);
+    if (v?.split && parent) this.splitFromPos(hx, hz, e, dmg);
     const splashR = ((tuning.splash > 0 ? tuning.splash : w.splashRadius) + this.splashBonus) * this.syn.splashMult;
     if (splashR > 0) {
-      const n = this.enemies.within(this.enemies.x[e], this.enemies.z[e], splashR * this.stats.value.area, this.splashNear);
+      const n = this.enemies.within(hx, hz, splashR * this.stats.value.area, this.splashNear);
       const sd = dmg * ((w.splashRatio > 0 ? w.splashRatio : 0.6) + this.syn.splashRatio);
       for (let k = 0; k < n; k++) {
         const o = this.splashNear[k];
@@ -632,29 +661,47 @@ export class Run {
 
   /** 面板上「還有幾次」：賽錢箱／寶箱看剩下的連選次數，升級看待選的升級數 */
   get picksLeft(): number {
+    if (this.offerKind === 'variant') return 1;
     return this.offerKind === 'levelup' ? this.pendingPicks : this.bonusLeft;
   }
 
   chooseCard(index: number): boolean {
     if (!this.offer || index < 0 || index >= this.offer.length) return this.offer !== null;
     const o = this.offer[index];
+    if (this.offerKind === 'variant') {
+      this.variant = variantOfCard(o.cardId);
+      this.variantPending = false;
+      this.bus.emit('cardChosen', { cardId: o.cardId, rarity: o.rarity });
+      this.offerKind = this.resumeKind;
+      return this.continueOffers();
+    }
     this.applyCard(o);
     this.bus.emit('cardChosen', { cardId: o.cardId, rarity: o.rarity });
+    if (this.offerKind !== 'levelup') this.bonusLeft--;
+    else this.pendingPicks--;
+    if (this.variantPending) {
+      this.resumeKind = this.offerKind;
+      this.openVariantOffer();
+      return true;
+    }
+    return this.continueOffers();
+  }
+
+  /** 主武器到了變化等級：三選一（同一個面板） */
+  private openVariantOffer(): void {
+    this.offer = variantsFor(this.weaponItemId).map((v) => ({ cardId: VARIANT_CARD_PREFIX + v.id, rarity: 'common' as const }));
+    this.offerKind = 'variant';
+  }
+
+  /** 選完一張之後：賽錢箱／寶箱還有次數就繼續，否則看還有沒有待選的升級 */
+  private continueOffers(): boolean {
     if (this.offerKind !== 'levelup') {
-      this.bonusLeft--;
       if (this.bonusLeft > 0) {
         this.offer = this.dealer.dealRarity(this.bonusRarity, this.cardCounts);
         return true;
       }
       this.offerKind = 'levelup';
-      this.offer = null;
-      if (this.pendingPicks > 0) {
-        this.makeOffer();
-        return true;
-      }
-      return false;
     }
-    this.pendingPicks--;
     if (this.pendingPicks > 0) {
       this.makeOffer();
       return true;
@@ -662,6 +709,7 @@ export class Run {
     this.offer = null;
     return false;
   }
+
 
   /** 套用一張卡（法具升一級；D30） */
   private applyCard(o: CardOffer): void {
@@ -677,6 +725,7 @@ export class Run {
     this.ownedCards.add(d.id);
     this.cardCounts.set(d.id, lv + 1);
     if (d.kind === 'weapon') {
+      if (lv + 1 === VARIANT_LEVEL && !this.variant && variantsFor(d.id).length > 0) this.variantPending = true;
       const step = WEAPON_LEVELS[d.id]?.[lv - 1];
       if (step) {
         this.weaponDamageBonus += step.damage ?? 0;
@@ -814,6 +863,155 @@ export class Run {
   /** 測試與開發介面：直接給一張卡（不經選卡） */
   give(cardId: string, rarity: keyof typeof RARITY_MULT): void {
     this.applyCard({ cardId, rarity });
+    // 主武器到了變化等級：開三選一面板（和真的升級一樣）
+    if (this.variantPending && this.offer === null && this.phase === 'combat') {
+      this.resumeKind = 'levelup';
+      this.openVariantOffer();
+      this.bus.emit('levelUp', { level: this.level, pending: 1 });
+    }
+  }
+
+  /** 開發與測試：直接設定招式變化（不經面板） */
+  devSetVariant(id: string): void {
+    this.variant = variantOfCard(VARIANT_CARD_PREFIX + id);
+    this.variantPending = false;
+  }
+
+  /** 主武器滿級了嗎（變化的 atMax 加強） */
+  get weaponMaxed(): boolean {
+    return this.weaponLevel >= itemById(this.weaponItemId).maxLevel;
+  }
+
+  /** 現在一次發射幾顆（含小數：小數 = 機率多一顆） */
+  get volleyExact(): number {
+    const w = this.yokai.weapon;
+    return (tuning.volley > 0 ? tuning.volley : w.volley) + this.volleyBonus + this.syn.volley + this.frenzyVolley;
+  }
+
+  /** 燈籠環：繞身鬼火幾顆、半徑（公尺） */
+  get orbitCount(): number {
+    const o = this.variant?.orbit;
+    if (!o) return 0;
+    return Math.max(1, Math.floor(this.volleyExact) + o.baseOrbs + (this.weaponMaxed ? o.atMaxOrbs : 0));
+  }
+  get orbitRadius(): number {
+    const o = this.variant?.orbit;
+    if (!o) return 0;
+    return o.radius * this.stats.value.area * (this.weaponMaxed ? o.atMaxRadius : 1);
+  }
+
+  private baseShotDamage(crit: boolean): number {
+    const s = this.stats.value;
+    return (this.yokai.weapon.damage + this.weaponDamageBonus) * s.power * tuning.damageScale * (crit ? s.critDmg : 1);
+  }
+
+  /** 燈籠環：轉動並每隔一段時間判定碰到的敵人 */
+  private orbitStep(dt: number): void {
+    const o = this.variant!.orbit!;
+    const s = this.stats.value;
+    this.orbitAngle = (this.orbitAngle + o.spin * dt) % (Math.PI * 2);
+    this.orbitTimer -= dt;
+    if (this.orbitTimer > 0) return;
+    this.orbitTimer += (o.tick * this.cooldownMult) / s.atkSpeed;
+    const n = this.orbitCount;
+    const R = this.orbitRadius;
+    const en = this.enemies;
+    for (let k = 0; k < n; k++) {
+      const a = this.orbitAngle + (k / n) * Math.PI * 2;
+      const ox = this.px + Math.cos(a) * R;
+      const oz = this.pz + Math.sin(a) * R;
+      const m = en.within(ox, oz, o.hitRadius + 0.5, this.near);
+      for (let j = 0; j < m; j++) {
+        const e = this.near[j];
+        if (!en.alive[e]) continue;
+        const dx = en.x[e] - ox;
+        const dz = en.z[e] - oz;
+        const rr = o.hitRadius + en.radius(e);
+        if (dx * dx + dz * dz > rr * rr) continue;
+        const crit = this.rngCombat.next() < s.crit;
+        const dmg = this.baseShotDamage(crit) * o.damage;
+        this.feed.push(en.x[e], en.z[e], dmg, crit);
+        const ex = en.x[e] - this.px;
+        const ez = en.z[e] - this.pz;
+        const d = Math.hypot(ex, ez) || 1;
+        if (en.hurt(e, dmg, ex / d, ez / d, en.variant[e] === 2 ? 0 : o.knockback)) this.onKill(e);
+      }
+    }
+  }
+
+  /** 業火：在 (x,z) 留下一塊燃燒地（池滿了就蓋掉最舊的） */
+  private addZone(x: number, z: number, tickDamage: number): void {
+    const b = this.variant!.burn!;
+    const i = this.zoneNext;
+    this.zoneNext = (this.zoneNext + 1) % Math.min(b.maxZones, this.zoneX.length);
+    this.zoneX[i] = x;
+    this.zoneZ[i] = z;
+    this.zoneR[i] = b.radius * this.stats.value.area * (this.weaponMaxed ? b.atMaxScale : 1);
+    this.zoneLife[i] = b.seconds;
+    this.zoneMaxLife[i] = b.seconds;
+    this.zoneDmg[i] = tickDamage;
+    this.zoneTick[i] = 0;
+  }
+
+  get zoneCount(): number {
+    let n = 0;
+    for (let i = 0; i < this.zoneLife.length; i++) if (this.zoneLife[i] > 0) n++;
+    return n;
+  }
+
+  private zonesStep(dt: number): void {
+    const b = this.variant?.burn;
+    if (!b) return;
+    const en = this.enemies;
+    for (let i = 0; i < this.zoneLife.length; i++) {
+      if (this.zoneLife[i] <= 0) continue;
+      this.zoneLife[i] -= dt;
+      this.zoneTick[i] -= dt;
+      if (this.zoneTick[i] > 0) continue;
+      this.zoneTick[i] += b.tick;
+      const m = en.within(this.zoneX[i], this.zoneZ[i], this.zoneR[i], this.near);
+      for (let j = 0; j < m; j++) {
+        const e = this.near[j];
+        if (!en.alive[e]) continue;
+        this.feed.push(en.x[e], en.z[e], this.zoneDmg[i], false);
+        if (en.hurt(e, this.zoneDmg[i], 0, 0, 0)) this.onKill(e);
+      }
+    }
+  }
+
+  /** 狐火分裂：從命中處朝其他敵人分裂出小火 */
+  private splitFromPos(x: number, z: number, e: number, dmg: number): void {
+    const sp = this.variant!.split!;
+    const en = this.enemies;
+    const want = this.weaponMaxed ? sp.atMaxChildren : sp.children;
+    const m = en.within(x, z, sp.range, this.splitNear);
+    const w = this.yokai.weapon;
+    let made = 0;
+    let lastPick = -1;
+    while (made < want) {
+      // 找還沒選過的最近敵人（n 很小，重複掃描即可，不配置記憶體）
+      let best = -1;
+      let bd = Infinity;
+      for (let j = 0; j < m; j++) {
+        const o = this.splitNear[j];
+        if (o === e || o < 0 || !en.alive[o]) continue;
+        const d = (en.x[o] - x) ** 2 + (en.z[o] - z) ** 2;
+        if (d < bd) {
+          bd = d;
+          best = j;
+        }
+      }
+      if (best < 0) break;
+      const t = this.splitNear[best];
+      this.splitNear[best] = -1;
+      const d = Math.sqrt(bd) || 1;
+      const ci = this.projectiles.spawn(x, z, (en.x[t] - x) / d, (en.z[t] - z) / d, w, dmg * sp.damage, false, t, 0, 1);
+      // 小火從被打中的那隻身上出發：不要馬上又打回同一隻
+      if (ci >= 0) this.projectiles.lastHit[ci] = e;
+      made++;
+      lastPick = t;
+    }
+    void lastPick;
   }
 
   // ── 過關與結束 ───────────────────────────────────────────────
@@ -827,6 +1025,7 @@ export class Run {
     this.director.active = false;
     this.portal.active = false;
     this.elements.endStage();
+    this.zoneLife.fill(0);
     const last = this.stageNumber >= this.stageCount;
     if (rest > 0) this.addXp(rest);
     this.bus.emit('stageClear', { stage: this.stageNumber, last });

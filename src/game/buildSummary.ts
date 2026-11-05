@@ -15,6 +15,8 @@ export interface BuildSummary {
   cards: { id: string; kind: ItemKind; stat: string; level: number; maxLevel: number; byRarity: Record<Rarity, number>; total: number; weaponText: string }[];
   slotsUsed: number;
   slots: number;
+  /** 招式變化 id（還沒選是 null） */
+  variant: string | null;
   /** 屬性：id、目前值（內部單位）、基礎值 */
   stats: { id: StatId; value: number; base: number }[];
   /** 武器：鬼火數量、濺射半徑（公尺）、穿透 */
@@ -82,6 +84,7 @@ export function summarizeBuild(run: Run): BuildSummary {
   return {
     cards: [...map.values()].sort((a, b) => (a.kind === 'weapon' ? -1 : b.kind === 'weapon' ? 1 : b.level - a.level || a.id.localeCompare(b.id))),
     slotsUsed: slotsUsed(run.cardCounts),
+    variant: run.variant?.id ?? null,
     slots: ITEM_SLOTS,
     stats: STAT_IDS.filter((id) => id !== 'merit').map((id) => ({ id, value: s[id], base: run.stats.baseOf(id) })),
     weapon: {

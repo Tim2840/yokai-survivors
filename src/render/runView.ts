@@ -11,6 +11,7 @@ import { writeMatrix, setHugeBounds } from './instancedLayer';
 import { DamageNumbers } from './damageNumbers';
 import { ElementsView } from './elementsView';
 import { UltFx } from './ultFx';
+import { VariantFx } from './variantFx';
 import type { Renderer } from '../core/renderer';
 
 const TWO_PI = Math.PI * 2;
@@ -38,6 +39,7 @@ export class RunView {
   private readonly numbers: DamageNumbers;
   private readonly elementsView: ElementsView;
   private readonly ultFx: UltFx;
+  private readonly variantFx: VariantFx;
   private readonly portal: THREE.Group;
   private readonly portalRing: THREE.Mesh;
   private readonly portalBeam: THREE.Mesh;
@@ -139,6 +141,8 @@ export class RunView {
     this.group.add(this.elementsView.group);
     this.ultFx = new UltFx(run);
     this.group.add(this.ultFx.group);
+    this.variantFx = new VariantFx(run);
+    this.group.add(this.variantFx.group);
     this.numbers = new DamageNumbers(renderer.camera, run.feed);
     this.group.add(this.numbers.mesh);
 
@@ -204,6 +208,7 @@ export class RunView {
 
     this.elementsView.update(t);
     this.ultFx.update();
+    this.variantFx.update(t);
     this.timeUniform.value = t % TWO_PI;
 
     // 敵人
@@ -272,6 +277,7 @@ export class RunView {
     this.numbers.dispose();
     this.elementsView.dispose();
     this.ultFx.dispose();
+    this.variantFx.dispose();
     this.player.dispose();
     this.world.dispose();
     for (const d of this.disposables) d.dispose();

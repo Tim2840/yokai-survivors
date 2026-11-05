@@ -87,6 +87,10 @@ export function installDevApi(ctx: DevContext): void {
         elements: r.elements.slots.filter((s) => s.active).map((s) => ({ kind: s.kind, rarity: s.rarity, x: s.x, y: s.y, z: s.z, announce: s.announce, progress: s.progress, used: s.usedAge >= 0, effects: s.effects.slice(0, s.effectCount).map((f) => ({ ...f })) })),
         curse: { ...r.curse },
         ult: { fused: [...r.fused], charge: r.ultCharge, ready: r.ultReady, counts: Object.fromEntries(r.cardCounts), volleyBonus: r.volleyBonus },
+        variant: r.variant?.id ?? null,
+        weaponLevel: r.weaponLevel,
+        zones: r.zoneCount,
+        orbit: r.orbitCount,
         focus: r.elements.focus ? r.elements.focus.kind : null,
         tuning: ctx.game.tuningInfo,
       };
