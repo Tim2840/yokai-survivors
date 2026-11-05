@@ -114,6 +114,8 @@ export async function run(browser) {
         expect(covered, `技法面板沒有擋住「出發」（${vp.name}）`);
         files.push(await shot(ctx, 'v1-clear-pick'));
         await press(ctx, `.overlay[data-screen="levelup"] .card[data-card="${cards[0].id}"]`);
+        // 過關時收進來的魂火如果連升好幾級：技法面板選完，剩下的一般升級卡還要選（面板一張接一張，不會卡住）
+        await dismiss();
         await page.waitForFunction(() => !window.__game.screens.includes('levelup'), null, { timeout: 5000 });
         expect((await techs()).length === 3, `過關畫面選的技法沒有生效：${JSON.stringify(await techs())}`);
         await press(ctx, '#btn-inter-next');

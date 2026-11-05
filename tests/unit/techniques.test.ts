@@ -176,6 +176,26 @@ describe('技法怎麼拿', () => {
     run.continueFromIntermission();
     expect(run.phase).toBe('combat');
   });
+  it('過關時收進來的魂火連升好幾級：一般升級卡和技法面板一張接一張出現，全部選完才能出發，沒有卡住（回歸 v1 曾因此偶爾超時）', () => {
+    const run = make(31);
+    run.orbs.spawn(run.px + 3, run.pz, 5000); // 過關時會收進來
+    run.devClearStage();
+    expect(run.phase).toBe('intermission');
+    const kinds: string[] = [];
+    let guard = 0;
+    while (run.offer && guard++ < 100) {
+      kinds.push(run.offerKind);
+      // 主武器升級會多出 4／7 級的技法選擇；這裡只測過關那一次，所以避開主武器
+      const i = run.offer.findIndex((c) => c.cardId !== 'ghostfire');
+      run.chooseCard(Math.max(0, i));
+    }
+    expect(kinds.filter((k) => k === 'levelup').length, '應該有好幾次一般升級').toBeGreaterThan(1);
+    expect(kinds.filter((k) => k === 'tech'), '技法面板只出現一次').toHaveLength(1);
+    expect(run.tech.owned).toHaveLength(1);
+    expect(run.awaitingPick).toBe(false);
+    run.continueFromIntermission();
+    expect(run.phase).toBe('combat');
+  });
   it('互斥：拿了燈籠環就不會再抽到彈跳／歸巢；拿了彈跳就不會抽到燈籠環', () => {
     const rng = new Rng(1);
     const a = make(9);
