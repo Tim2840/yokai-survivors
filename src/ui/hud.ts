@@ -5,6 +5,7 @@ import type { CurseId } from '../data/altar';
 import type { StatId } from '../data/stats';
 import type { ElementSlot } from '../systems/elements';
 import { ULT } from '../data/ultimates';
+import { STAGE } from '../data/stage';
 import { BARRIER, JIZO, JIZO_ARMOR_SECONDS, OFFERING } from '../data/elements';
 
 
@@ -101,16 +102,19 @@ export function buildHud(parent: HTMLElement): Hud {
         hpText.textContent = key;
         hpFill.style.width = `${Math.max(0, Math.min(1, run.hp / run.maxHp)) * 100}%`;
       }
-      if (run.stageNumber !== lastWave) {
-        lastWave = run.stageNumber;
-        waveText.textContent = t('hud.stage', { n: run.stageNumber });
+      const diff = Math.round(run.difficulty * 100);
+      const waveKey = run.stageNumber * 10000 + diff;
+      if (waveKey !== lastWave) {
+        lastWave = waveKey;
+        waveText.textContent = diff > 0 ? t('hud.stageDiff', { n: run.stageNumber, d: diff }) : t('hud.stage', { n: run.stageNumber });
       }
       const left = Math.ceil(run.timeLeft);
       if (left !== lastTimer) {
         lastTimer = left;
         timer.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
       }
-      const noteText = run.director.swarm ? t('hud.swarm') : run.portal.active ? t('hud.bossDown') : '';
+      const altar = run.elements.summonSlot;
+      const noteText = run.director.swarm ? t('hud.swarm') : run.portal.active ? t('hud.bossDown') : altar ? t('hud.summonNote') : '';
       if (noteText !== lastNote) {
         lastNote = noteText;
         note.textContent = noteText;
@@ -125,17 +129,20 @@ export function buildHud(parent: HTMLElement): Hud {
       }
       if (bossAlive) bossFill.style.width = `${Math.max(0, run.enemies.hp[bi] / run.enemies.maxHp[bi]) * 100}%`;
       // 傳送門箭頭：相對鏡頭的方向與距離
-      if (run.portal.active) {
+      // 傳送門優先；還沒開的召喚祭壇也用同一個箭頭（D34）
+      const target = run.portal.active ? run.portal : altar && altar.announce <= 0 && Math.hypot(altar.x - run.px, altar.z - run.pz) > ALTAR_ARROW_HIDE ? altar : null;
+      if (target) {
         portalBox.classList.remove('hidden');
-        const dx = run.portal.x - run.px;
-        const dz = run.portal.z - run.pz;
+        portalBox.dataset.kind = run.portal.active ? 'portal' : 'summon';
+        const dx = target.x - run.px;
+        const dz = target.z - run.pz;
         const right = Math.cos(yaw) * dx - Math.sin(yaw) * dz;
         const fwd = -Math.sin(yaw) * dx - Math.cos(yaw) * dz;
         portalArrow.style.transform = `rotate(${Math.round((Math.atan2(right, fwd) * 180) / Math.PI)}deg)`;
-        const m = Math.round(Math.hypot(dx, dz));
+        const m = Math.round(Math.hypot(dx, dz)) * 2 + (run.portal.active ? 0 : 1);
         if (m !== lastPortal) {
           lastPortal = m;
-          portalText.textContent = t('hud.portal', { m });
+          portalText.textContent = t(run.portal.active ? 'hud.portal' : 'hud.summon', { m: m >> 1 });
         }
       } else if (lastPortal !== -1) {
         lastPortal = -1;
@@ -154,6 +161,11 @@ export function buildHud(parent: HTMLElement): Hud {
       if (om && run.clock - om.at < 4 && om.at >= synAt) {
         synAt = om.at;
         synText = t(`omikuji.${om.id}` as I18nKey);
+      }
+      const rd = run.lastReady;
+      if (rd && run.clock - rd.at < 6 && rd.at >= synAt && !run.fused.includes(rd.id)) {
+        synAt = rd.at;
+        synText = t('hud.fusionReady', { name: t(`ult.${rd.id}` as I18nKey) });
       }
       const fu = run.lastFuse;
       if (fu && run.clock - fu.at < 6 && fu.at >= synAt) {
@@ -182,13 +194,14 @@ export function buildHud(parent: HTMLElement): Hud {
           elBox.classList.add('hidden');
         }
       } else {
-        const key = `${f.kind}|${f.rarity}|${f.blocked ? 'x' : ''}|${f.effects.slice(0, f.effectCount).map((x) => x.id).join(',')}`;
+        const mult = f.kind === 'summon' ? summonMultNow(run) : 0;
+        const key = `${f.kind}|${f.rarity}|${f.blocked ? 'x' : ''}|${mult.toFixed(1)}|${f.effects.slice(0, f.effectCount).map((x) => x.id).join(',')}`;
         if (key !== lastEl) {
           lastEl = key;
           elBox.classList.remove('hidden');
           elBox.dataset.rarity = f.rarity;
           elTitle.textContent = `${t(`rarity.${f.rarity}`)}・${t(`element.${f.kind}`)}`;
-          elDesc.textContent = describeElement(f);
+          elDesc.textContent = f.kind === 'summon' ? t('element.summon.desc', { mult: mult.toFixed(1) }) : describeElement(f);
           elAct.textContent = f.kind === 'barrier' ? t('element.stand') : t('element.hold');
         }
         elFill.style.width = `${f.kind === 'barrier' ? (f.inside ? 100 : 0) : Math.round(f.progress * 100)}%`;
@@ -204,6 +217,14 @@ export function buildHud(parent: HTMLElement): Hud {
       }
     },
   };
+}
+
+/** 站到祭壇旁這麼近（公尺）就不顯示箭頭（改看要素提示框） */
+const ALTAR_ARROW_HIDE = 3;
+
+/** 現在召喚的話，小頭目的生命倍率（D34：越晚越強） */
+function summonMultNow(run: Run): number {
+  return 1 + STAGE.summon.hpGrowth * Math.min(1, run.time / run.director.duration);
 }
 
 /** 要素的效果說明（數字全部來自資料表） */

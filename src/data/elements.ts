@@ -1,7 +1,7 @@
 import type { Rarity } from './rarity';
 
 /** 地圖要素（docs/02 第 6 節）。M2 先做石地藏、結界石、詛咒祭壇；其餘隨後加入。 */
-export const ELEMENT_KINDS = ['jizo', 'barrier', 'altar', 'offering', 'omikuji', 'chest'] as const;
+export const ELEMENT_KINDS = ['jizo', 'barrier', 'altar', 'offering', 'omikuji', 'chest', 'summon'] as const;
 export type ElementKind = (typeof ELEMENT_KINDS)[number];
 
 /** 出現規則（docs/02 第 6.3 節，改成連續關卡：用「關卡經過比例」取代「整備」） */
@@ -30,9 +30,9 @@ export const ELEMENT_RULES = {
 } as const;
 
 /** 要素種類權重（地圖可覆寫） */
-export const ELEMENT_WEIGHTS: Record<ElementKind, number> = { jizo: 1, barrier: 1, altar: 1, offering: 1, omikuji: 1, chest: 0.6 };
+export const ELEMENT_WEIGHTS: Record<ElementKind, number> = { jizo: 1, barrier: 1, altar: 1, offering: 1, omikuji: 1, chest: 0.6, summon: 0 };
 /** 同種同時最多幾個（沒寫的用 ELEMENT_RULES.perKind） */
-export const ELEMENT_PER_KIND: Partial<Record<ElementKind, number>> = { chest: 1, omikuji: 1 };
+export const ELEMENT_PER_KIND: Partial<Record<ElementKind, number>> = { chest: 1, omikuji: 1, summon: 1 };
 
 /** 稀有度權重（依虛擬波數；docs/02 第 6.3 節）。波數落在哪一列取最後一個 from <= n */
 export const ELEMENT_RARITY_BY_WAVE: readonly { from: number; w: Record<Rarity, number> }[] = [

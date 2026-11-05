@@ -3,7 +3,8 @@ import type { I18nKey } from '../i18n/zh-TW';
 import { CARD_FORMAT, type StatId } from '../data/stats';
 import { setWeaponTextFormatter, type BuildSummary } from '../game/buildSummary';
 import { synergyHints } from '../data/synergies';
-import { ultHints } from '../data/ultimates';
+import { isUltCard, ultHints, ultOfCard } from '../data/ultimates';
+import { DIFFICULTY } from '../data/difficulty';
 import { isVariantCard, variantOfCard } from '../data/variants';
 import { cardById, type CardOffer } from '../systems/cards';
 import { WEAPON_LEVELS, itemValue, type WeaponLevel } from '../data/items';
@@ -93,7 +94,13 @@ export function describeCard(o: CardOffer, levels: ReadonlyMap<string, number> =
   const v = itemValue(d, o.rarity);
   if (d.kind === 'mod') return { name, desc: t(`card.fmt.${d.mod}` as I18nKey, { v: num(v) }), level, isNew: lv === 0 };
   const fmt = CARD_FORMAT[d.stat as StatId];
-  return { name, desc: t(`card.fmt.${fmt}` as I18nKey, { name: t(`stat.${d.stat}` as I18nKey), v: num(v, 1) }), level, isNew: lv === 0 };
+  const up = t(`card.fmt.${fmt}` as I18nKey, { name: t(`stat.${d.stat}` as I18nKey), v: num(v, 1) });
+  return { name, desc: d.down ? `${up}${t('card.down', { text: downText(d.down.stat, d.down.perLevel) })}` : up, level, isNew: lv === 0 };
+}
+
+/** 取捨道具扣的東西：「最大生命 -15」「移動速度 -4%」 */
+export function downText(stat: StatId, v: number): string {
+  return t(`card.fmtDown.${CARD_FORMAT[stat]}` as I18nKey, { name: t(`stat.${stat}` as I18nKey), v: num(v, 1) });
 }
 
 export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => void) {
@@ -107,6 +114,19 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
       pending.textContent = more > 1 ? t('levelup.pending', { n: more - 1 }) : '';
       cardsEl.innerHTML = '';
       offer.forEach((c, i) => {
+        if (isUltCard(c.cardId)) {
+          // 寶箱裡的融合卡（D30 第二步：進化式）
+          const u = ultOfCard(c.cardId);
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'card r-ult';
+          b.dataset.card = c.cardId;
+          b.dataset.index = String(i);
+          b.innerHTML = `<span class="rname">${t('card.ultTag')}</span><b>${t(`ult.${u.id}` as I18nKey)}</b><span class="cdesc">${t(`ult.${u.id}.desc` as I18nKey)}</span>`;
+          b.addEventListener('click', () => onPick(i));
+          cardsEl.appendChild(b);
+          return;
+        }
         if (isVariantCard(c.cardId)) {
           // 招式變化：名稱、玩法說明、適合搭配的道具
           const v = variantOfCard(c.cardId);
@@ -215,7 +235,8 @@ function cardEffectText(c: BuildSummary['cards'][number]): string {
   if (c.kind === 'weapon') return c.weaponText;
   if (c.kind === 'mod') return t(`card.fmt.${c.stat}` as I18nKey, { v: fix(c.total) });
   const fmt = CARD_FORMAT[c.stat as StatId];
-  return t(`card.fmt.${fmt}` as I18nKey, { name: t(`stat.${c.stat}` as I18nKey), v: fix(c.total, 1) });
+  const up = t(`card.fmt.${fmt}` as I18nKey, { name: t(`stat.${c.stat}` as I18nKey), v: fix(c.total, 1) });
+  return c.down ? `${up}${t('card.down', { text: downText(c.down.stat, c.down.total) })}` : up;
 }
 
 // ── 暫停（含「已拿到的卡」與「目前的能力」）──
@@ -266,7 +287,8 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
       rows.push(`<div data-stat="pierce"><dt>${t('sum.pierce')}</dt><dd>${fix(sum.weapon.pierce)}</dd></div>`);
       stats.innerHTML = rows.join('');
       const curse = q('sum-curse');
-      curse.innerHTML = sum.curses.length ? `<h3>${t('pause.curses')}</h3><ul class="sum-syn">${sum.curses.map((c) => `<li>${t(`curse.${c.id}` as I18nKey)} <b>+${fix(c.v * 100, 0)}%</b></li>`).join('')}</ul>` : '';
+      const diff = sum.difficulty > 0 ? `<h3>${t('pause.difficulty', { d: fix(sum.difficulty * 100, 0) })}</h3><p class="sum-diff">${t('pause.difficultyDesc', { hp: fix(sum.difficulty * DIFFICULTY.hp * 100, 0), dmg: fix(sum.difficulty * DIFFICULTY.damage * 100, 0), n: fix(sum.difficulty * DIFFICULTY.spawn * 100, 0) })}</p>` : '';
+      curse.innerHTML = diff + (sum.curses.length ? `<h3>${t('pause.curses')}</h3><ul class="sum-syn">${sum.curses.map((c) => `<li>${t(`curse.${c.id}` as I18nKey)} <b>+${fix(c.v * 100, 0)}%</b></li>`).join('')}</ul>` : '');
     },
   });
 }

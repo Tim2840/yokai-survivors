@@ -19,7 +19,9 @@ const DT = 1 / 60;
 /** 測要素時升級選卡只挑「不改屬性」的卡（主武器、武器改造、備用），免得選到護甲／再生把比較搞亂 */
 function pickSafe(run: Run): void {
   const o = run.offer!;
-  const i = o.findIndex((c) => ['weapon', 'mod', 'fallback'].includes(itemById(c.cardId).kind));
+  // 只選不影響要素測試量的卡（主武器、改造、備用；或不碰護甲與最大生命的屬性道具）
+  let i = o.findIndex((c) => ['weapon', 'mod', 'fallback'].includes(itemById(c.cardId).kind));
+  if (i < 0) i = o.findIndex((c) => { const d = itemById(c.cardId); return !['armor', 'maxHp'].includes(d.stat ?? '') && !['armor', 'maxHp'].includes(d.down?.stat ?? ''); });
   run.chooseCard(Math.max(0, i));
 }
 function make(seed = 3) {
@@ -183,7 +185,7 @@ describe('詛咒祭壇（D27：隨機抽數個不同效果，含詛咒）', () =
       else expect(run.stats.value[f.id as 'power']).toBeGreaterThan(before[f.id as 'power']);
     }
     const afterCurse = { ...run.curse };
-    run.devSetTime(STAGE.bossAt * 600 + 2);
+    run.devSummonBoss();
     for (let i = 0; i < 30; i++) run.step(DT);
     run.devKillBoss();
     run.devTeleport(run.portal.x - 2, run.portal.z);

@@ -18,7 +18,7 @@ export const WAVES = {
   batches: 5,
   spawnSpan: 0.8,
   /** 敵人強度（第 n 波、夜深度 d） */
-  hpPerWave: 0.35,
+  hpPerWave: 0.3,
   hpPerNight: 0.15,
   damagePerWave: 0.08,
   speedPerNight: 0.03,
@@ -37,7 +37,8 @@ export const WAVES = {
 export function threat(n: number): number {
   return WAVES.threatBase + WAVES.threatPerWave * n;
 }
-export const enemyHpMult = (n: number, night = 0) => (1 + WAVES.hpPerWave * (n - 1)) * (1 + WAVES.hpPerNight * night);
+/** 一般敵人的 HP 倍率：每種敵人可以有自己的每波成長（perWave），沒寫就用 WAVES.hpPerWave（D30 第二步） */
+export const enemyHpMult = (n: number, night = 0, perWave?: number) => (1 + (perWave ?? WAVES.hpPerWave) * (n - 1)) * (1 + WAVES.hpPerNight * night);
 export const enemyDamageMult = (n: number) => 1 + WAVES.damagePerWave * (n - 1);
 export const enemySpeedMult = (night = 0) => 1 + WAVES.speedPerNight * night;
 

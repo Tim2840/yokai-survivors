@@ -1,9 +1,11 @@
-// r1：整局流程（M1.5 Exit，D22）。主選單 → 選妖怪 → 戰鬥（升級就點卡）→ 跳到頭目時間 → 頭目出現（血條）→ 頭目倒下 → 傳送門（箭頭）
+// r1：整局流程（M1.5 Exit，D22；D34 起頭目由召喚祭壇叫出來）。主選單 → 選妖怪 → 戰鬥（升級就點卡）→ 跳到 30% → 召喚祭壇顯現（箭頭）
+// → 真的走過去站著按住 → 頭目出現（血條）→ 頭目倒下 → 傳送門（箭頭）＋寶箱
 // → 真的走進去（鍵盤或搖桿）→ 過關畫面 → 點「出發」→ 第 2 關 → 暫停放棄 → 結算 → 重載後存檔還在 → 再來一局會重置。
-// 頭目的「出現」與「倒下」用開發介面跳時間與擊殺（頭目 HP 太高、等 8 分鐘沒意義），其餘全用真實點擊與按鍵。三種畫面各一次，卡住偵測。
-import { openPage, startRun, press, step, expect, shot, reportErrors, untilDone, snapshotOf, VIEWPORTS } from './lib.mjs';
+// 跳時間、傳送到祭壇旁、頭目「倒下」用開發介面（頭目 HP 太高、等 3 分鐘沒意義），其餘（走過去、按住、點卡、走進傳送門）全用真實輸入。三種畫面各一次，卡住偵測。
+import { openPage, startRun, press, step, expect, shot, reportErrors, untilDone, snapshotOf, walkOnto as walkOntoLib, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'r1', desc: '整局流程：開局→升級選卡→頭目→傳送門→過關畫面→第 2 關→放棄→結算→重載後存檔還在（三種畫面）', max: 600, stall: 60 };
+export const meta = { id: 'r1', desc: '整局流程：開局→升級選卡→召喚祭壇（箭頭→走過去按住）→頭目→傳送門＋寶箱→過關畫面→第 2 關（難度 %）→放棄→結算→重載後存檔還在（三種畫面）', max: 600, stall: 60 };
+
 
 export async function run(browser) {
   const files = [];
@@ -35,15 +37,53 @@ export async function run(browser) {
         expect(st === '第 1 關', `HUD 關卡名稱不對：${st}`);
       });
 
-      await step(`${vp.name} 頭目出現：血條顯示`, async () => {
+      const walkOnto = (x, z) => walkOntoLib(ctx, x, z);
+
+      await step(`${vp.name} 召喚祭壇：30% 之前沒有、之後顯現，HUD 箭頭指過去`, async () => {
         const dur = await page.evaluate(() => window.__game.run.time + window.__game.run.timeLeft);
-        await page.evaluate((d) => window.__game.setTime(0.79 * d), dur);
-        for (let i = 0; i < 20; i++) {
+        await page.evaluate((d) => window.__game.setTime(0.28 * d), dur);
+        await page.evaluate(() => window.__game.advance(0.5));
+        if ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await dismissLevelUps();
+        expect((await page.evaluate(() => window.__game.run.summon.altar)) === null, `30% 之前就有召喚祭壇（${vp.name}）`);
+        await page.evaluate((d) => window.__game.setTime(0.31 * d), dur);
+        for (let i = 0; i < 8; i++) {
+          await page.evaluate(() => window.__game.advance(0.5));
           if ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await dismissLevelUps();
-          await page.evaluate(() => window.__game.advance(1));
+        }
+        const sm = await page.evaluate(() => window.__game.run.summon);
+        expect(sm.stage && sm.altar && !sm.bossSpawned, `召喚祭壇沒顯現：${JSON.stringify(sm)}`);
+        await page.evaluate(() => window.__game.render());
+        expect(await page.locator('#portal-box').isVisible(), `召喚祭壇的箭頭沒顯示（${vp.name}）`);
+        const txt = await page.locator('#portal-text').innerText();
+        expect(/召喚祭壇 \d+ 公尺/.test(txt), `箭頭文字不對：${txt}`);
+        const note = await page.locator('#wave-note').innerText();
+        expect(note === '召喚祭壇出現了', `提示文字不對：${note}`);
+        files.push(await shot(ctx, 'r1-altar'));
+      });
+
+      await step(`${vp.name} 走上祭壇站著按住 → 頭目出現：血條顯示、祭壇收掉`, async () => {
+        const a = await page.evaluate(() => window.__game.run.summon.altar);
+        await walkOnto(a.x, a.z);
+        if ((await page.evaluate(() => window.__game.screens)).includes('levelup')) {
+          await dismissLevelUps();
+          await walkOnto(a.x, a.z);
+        }
+        await page.evaluate(() => { window.__game.advance(0.4); window.__game.render(); });
+        expect(await page.locator('#element-box').isVisible(), `站上祭壇但沒有提示（${vp.name}）`);
+        const title = await page.locator('#element-title').innerText();
+        expect(title === '神・召喚祭壇', `提示標題不對：${title}`);
+        const desc = await page.locator('#element-desc').innerText();
+        expect(/越晚召喚越強（生命 ×[\d.]+）/.test(desc), `祭壇說明不對：${desc}`);
+        for (let i = 0; i < 20; i++) {
+          if ((await page.evaluate(() => window.__game.screens)).includes('levelup')) {
+            await dismissLevelUps();
+            await walkOnto(a.x, a.z);
+          }
+          await page.evaluate(() => window.__game.advance(0.25));
           if (await page.evaluate(() => window.__game.run.bossAlive)) break;
         }
-        expect(await page.evaluate(() => window.__game.run.bossAlive), `頭目時間到了但頭目沒出現（${vp.name}）`);
+        expect(await page.evaluate(() => window.__game.run.bossAlive), `按住了但頭目沒出現（${vp.name}）`);
+        expect((await page.evaluate(() => window.__game.run.summon.altar)) === null, `召喚後祭壇還在（${vp.name}）`);
         await page.evaluate(() => window.__game.render());
       });
       expect(await page.locator('#boss-bar').isVisible(), `頭目出現了但血條沒顯示（${vp.name}）`);
@@ -59,6 +99,10 @@ export async function run(browser) {
         expect(!(await page.locator('#boss-bar').isVisible()), `頭目死了血條還在（${vp.name}）`);
         const txt = await page.locator('#portal-text').innerText();
         expect(/傳送門 \d+ 公尺/.test(txt), `箭頭距離文字不對：${txt}`);
+        const chest = await page.evaluate(() => window.__game.run.elements.find((e) => e.kind === 'chest'));
+        expect(chest && chest.rarity === 'rare', `小頭目沒掉靈階寶箱：${JSON.stringify(chest)}`);
+        const pt = await page.evaluate(() => window.__game.run.portal);
+        expect(Math.hypot(chest.x - pt.x, chest.z - pt.z) > 3.3, `寶箱壓在傳送門上（${vp.name}）`);
         files.push(await shot(ctx, 'r1-portal'));
       });
 
@@ -106,7 +150,8 @@ export async function run(browser) {
         expect(r.portal.active === false, '第 2 關傳送門還開著');
         const m2 = await page.evaluate(() => window.__game.map);
         expect(JSON.stringify(m2.plateaus) !== JSON.stringify(before.plateaus), `第 2 關的地圖沒換（${vp.name}）`);
-        expect((await page.locator('.hud-wave b').innerText()) === '第 2 關', 'HUD 沒更新成第 2 關');
+        const st2 = await page.locator('.hud-wave b').innerText();
+        expect(st2 === '第 2 關・難度 +50%', `HUD 沒更新成第 2 關（含難度）：${st2}`);
         void after;
         await page.evaluate(() => { window.__game.advance(1); window.__game.render(); });
         files.push(await shot(ctx, 'r1-stage2'));

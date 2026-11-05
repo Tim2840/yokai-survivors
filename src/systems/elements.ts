@@ -1,4 +1,5 @@
 import type { Rng } from '../lib/random';
+import { STAGE } from '../data/stage';
 import type { TerrainMap } from '../world/terrainMap';
 import type { FlowField } from './flowField';
 import type { Stats } from './stats';
@@ -45,6 +46,8 @@ export interface ElementHost {
   openPick(rarity: Rarity, picks: number, kind: 'offering' | 'chest'): void;
   addMerit(n: number): void;
   notifyOmikuji(result: OmikujiResult): void;
+  /** 召喚祭壇開了：召喚小頭目（D34） */
+  summonBoss(): void;
   emitSpawn(kind: ElementKind, rarity: Rarity): void;
   emitUsed(kind: ElementKind, rarity: Rarity): void;
 }
@@ -89,7 +92,7 @@ export interface AltarEffect {
 
 const USED_FADE = 0.7;
 /** 各要素按住幾秒（結界石不用按住） */
-const HOLD: Partial<Record<ElementKind, number>> = { jizo: JIZO_HOLD_SECONDS, altar: ALTAR_HOLD_SECONDS, offering: OFFERING_HOLD_SECONDS, omikuji: OMIKUJI_HOLD_SECONDS, chest: CHEST_HOLD_SECONDS };
+const HOLD: Partial<Record<ElementKind, number>> = { jizo: JIZO_HOLD_SECONDS, altar: ALTAR_HOLD_SECONDS, offering: OFFERING_HOLD_SECONDS, omikuji: OMIKUJI_HOLD_SECONDS, chest: CHEST_HOLD_SECONDS, summon: STAGE.summon.holdSeconds };
 
 function blankSlot(): ElementSlot {
   return { active: false, kind: 'jizo', rarity: 'common', x: 0, y: 0, z: 0, age: 0, life: 0, announce: 0, progress: 0, inside: false, blocked: false, usedAge: -1, effects: Array.from({ length: ALTAR_MAX_EFFECTS }, () => ({ id: 'power' as StatId | CurseId, v: 0, curse: false })), effectCount: 0 };
@@ -287,6 +290,7 @@ export class Elements {
     } else if (s.kind === 'chest') {
       this.host.openPick(s.rarity, 1, 'chest');
     } else if (s.kind === 'omikuji') this.drawOmikuji(s);
+    else if (s.kind === 'summon') this.host.summonBoss();
     s.usedAge = 0;
     s.progress = 1;
     this.host.emitUsed(s.kind, s.rarity);
@@ -449,6 +453,64 @@ export class Elements {
     }
     s.effectCount = picked.length;
     for (let i = 0; i < picked.length; i++) Object.assign(s.effects[i], picked[i]);
+  }
+
+  /** 召喚祭壇（D34）：離玩家 ringMin～ringMax 公尺、平地、走得到；找不到就放寬距離。不會過期 */
+  placeSummon(px: number, pz: number): ElementSlot | null {
+    let i = this.freeSlot();
+    if (i < 0) {
+      // 一定要放得下：擠掉最舊的一般要素
+      let oldest = -1;
+      for (let k = 0; k < this.slots.length; k++) if (this.slots[k].kind !== 'summon' && (oldest < 0 || this.slots[k].age > this.slots[oldest].age)) oldest = k;
+      if (oldest < 0) return null;
+      this.free(oldest);
+      i = oldest;
+    }
+    const S = STAGE.summon;
+    for (const [lo, hi] of [[S.ringMin, S.ringMax], [S.ringMin * 0.6, S.ringMax * 1.4], [6, 60]] as const) {
+      for (let tr = 0; tr < ELEMENT_RULES.tries; tr++) {
+        const a = this.rng.range(0, Math.PI * 2);
+        const d = this.rng.range(lo, hi);
+        const x = px + Math.cos(a) * d;
+        const z = pz + Math.sin(a) * d;
+        const m = this.map;
+        if (x < m.minX + ELEMENT_RULES.edgeMargin || x > m.maxX - ELEMENT_RULES.edgeMargin || z < m.minZ + ELEMENT_RULES.edgeMargin || z > m.maxZ - ELEMENT_RULES.edgeMargin) continue;
+        if (!this.spotOk(x, z)) continue;
+        this.place(i, 'summon', 'legend', x, z, ELEMENT_RULES.announce);
+        this.slots[i].life = Infinity;
+        return this.slots[i];
+      }
+    }
+    return null;
+  }
+
+  /** 打倒小頭目／精英掉寶箱：放在 (x,z)（呼叫端挑好走得到的位置；擋路就往外找），池滿了擠掉最舊的一般要素 */
+  dropChest(x: number, z: number, rarity: Rarity): ElementSlot | null {
+    let i = this.freeSlot();
+    if (i < 0) {
+      let oldest = -1;
+      for (let k = 0; k < this.slots.length; k++) if (this.slots[k].kind !== 'summon' && (oldest < 0 || this.slots[k].age > this.slots[oldest].age)) oldest = k;
+      if (oldest < 0) return null;
+      this.free(oldest);
+      i = oldest;
+    }
+    for (const r of [0, 1.5, 3, 5, 8]) {
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        const cx = x + Math.cos(a) * r;
+        const cz = z + Math.sin(a) * r;
+        if (this.map.isBlocked(cx, cz)) continue; // 呼叫端（Run.reachableNear）已挑好玩家走得到的位置
+        this.place(i, 'chest', rarity, cx, cz, 0);
+        return this.slots[i];
+      }
+    }
+    return null;
+  }
+
+  /** 召喚祭壇還在、還沒開（HUD 箭頭用） */
+  get summonSlot(): ElementSlot | null {
+    for (const s of this.slots) if (s.active && s.kind === 'summon' && s.usedAge < 0) return s;
+    return null;
   }
 
   /** 開發與測試：在 (x,z) 或玩家身邊 3 公尺的平地，立刻放一個（可選指定稀有度） */

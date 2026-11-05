@@ -5,6 +5,7 @@ import { itemValue } from '../../src/data/items';
 import { Run } from '../../src/game/run';
 import { tuning, resetTuning } from '../../src/data/tuning';
 import { STAGE } from '../../src/data/stage';
+import { DIFFICULTY } from '../../src/data/difficulty';
 import { MOVE } from '../../src/data/movement';
 import { xpNeed } from '../../src/data/progression';
 import type { MapDef } from '../../src/data/maps/prototype';
@@ -65,12 +66,12 @@ describe('連續計時關卡（D22）', () => {
     expect(d.rate(d.duration)).toBeCloseTo((108 / 20) * tuning.countScale, 5);
   });
 
-  it('定時事件：精英在 25% 出現、小高潮在 50% 速率加倍、頭目在 80% 出現（縮短成 60 秒的關卡）', () => {
+  it('定時事件：精英在 25% 出現、召喚祭壇在 30% 顯現、小高潮在 50% 速率加倍；一般關的頭目不會自己出來（D34，縮短成 60 秒的關卡）', () => {
     tuning.stageSeconds = 60;
     tuning.countScale = 1;
     const { run } = make(2, { map: flatMap() });
     run.god = true;
-    const seen = { elite: 0, boss: 0 };
+    const seen = { elite: 0, boss: 0, altar: 0 };
     let surgeRate = 0;
     let beforeRate = 0;
     for (let i = 0; i < 60 * 60; i++) {
@@ -81,11 +82,16 @@ describe('連續計時關卡（D22）', () => {
       if (Math.abs(run.time - 30.5) < DT / 2) surgeRate = run.director.rate();
       if (Math.abs(run.time - 14) < DT / 2) expect([...run.enemies.variant].some((v, k) => v === 1 && run.enemies.alive[k])).toBe(false);
       if (Math.abs(run.time - 16) < DT / 2) seen.elite = [...run.enemies.variant].filter((v, k) => v === 1 && run.enemies.alive[k]).length;
-      if (Math.abs(run.time - 47) < DT / 2) expect(run.director.bossSpawned).toBe(false);
+      if (Math.abs(run.time - 17.5) < DT / 2) expect(run.elements.summonSlot).toBeNull();
+      if (Math.abs(run.time - 18.5) < DT / 2) seen.altar = run.elements.summonSlot ? 1 : 0;
       if (Math.abs(run.time - 49) < DT / 2) seen.boss = [...run.enemies.variant].filter((v, k) => v === 2 && run.enemies.alive[k]).length;
     }
     expect(seen.elite).toBeGreaterThanOrEqual(1);
-    expect(seen.boss).toBe(1);
+    expect(seen.altar).toBe(1);
+    expect(seen.boss).toBe(0);
+    expect(run.director.bossSpawned).toBe(false);
+    // 祭壇不會過期（一直等玩家來開）
+    expect(run.elements.summonSlot).not.toBeNull();
     expect(surgeRate / beforeRate).toBeGreaterThan(1.9);
   });
 
@@ -116,7 +122,7 @@ describe('連續計時關卡（D22）', () => {
       run.step(DT);
     }
     expect(run.enemies.aliveCount).toBe(run.enemies.capacity);
-    run.devSetTime(48);
+    expect(run.devSummonBoss()).toBe(true);
     for (let i = 0; i < 120; i++) {
       if (run.awaitingPick) run.chooseCard(0);
       run.step(DT);
@@ -134,13 +140,15 @@ describe('連續計時關卡（D22）', () => {
     bus.on('stageClear', (e) => log.push(`clear${e.stage}${e.last ? 'L' : ''}`));
     bus.on('stageStart', (e) => log.push(`start${e.stage}`));
     run.god = true;
-    run.devSetTime(48);
+    expect(run.devSummonBoss()).toBe(true);
     for (let i = 0; i < 30; i++) run.step(DT);
     expect(run.director.bossIndex).toBeGreaterThanOrEqual(0);
     expect(run.portal.active).toBe(false);
     expect(run.devKillBoss()).toBe(true);
     expect(run.portal.active).toBe(true);
     expect(run.bossesDefeated).toBe(1);
+    // 小頭目掉寶箱（D34）
+    expect(run.elements.slots.some((x) => x.active && x.kind === 'chest' && x.rarity === STAGE.drops.bossChest)).toBe(true);
     const map1 = run.map.def.id + JSON.stringify(run.map.def.hills[0]);
     // 玩家傳送到傳送門旁，真的走進去
     run.devTeleport(run.portal.x - 3, run.portal.z);
@@ -157,7 +165,9 @@ describe('連續計時關卡（D22）', () => {
     expect(run.map.def.id + JSON.stringify(run.map.def.hills[0])).not.toBe(map1);
     expect(run.portal.active).toBe(false);
     expect(run.enemies.aliveCount).toBe(0);
-    const i = run.enemies.spawn(0, 30, 0, 1, 0, 0, 0, 1 + STAGE.hpPerStage * 1);
+    // 第 2 關：難度 +50%（DIFFICULTY.perStage），一般敵人生命 ×1.5
+    expect(run.difficulty).toBeCloseTo(DIFFICULTY.perStage);
+    const i = run.enemies.spawn(0, 30, 0, 1, 0, 0, 0, 1 + run.difficulty * DIFFICULTY.hp);
     expect(run.enemies.maxHp[i]).toBeCloseTo(10 * 1.5 * tuning.hpScale);
     expect(log.slice(2)).toEqual(['start2']);
   });
@@ -170,7 +180,7 @@ describe('連續計時關卡（D22）', () => {
     run.god = true;
     for (let s = 0; s < run.stageCount; s++) {
       while (run.awaitingPick) run.chooseCard(0); // 過關清場收進的魂火可能升級，模擬在選卡前是凍結的（D15）
-      run.devSetTime(48);
+      run.devSummonBoss();
       for (let i = 0; i < 30; i++) run.step(DT);
       run.devKillBoss();
       run.devTeleport(run.portal.x - 3, run.portal.z);

@@ -42,10 +42,26 @@ export async function run(browser) {
         void sawWeapon;
       }, 120);
 
+      await step(`${vp.name} 取捨道具：拿了妖刀 → 力量變高、最大生命變低；「能力」面板寫出好處與代價`, async () => {
+        const s0 = await page.evaluate(() => window.__game.run.stats);
+        const had = await page.evaluate(() => window.__game.run.ult.counts.cursedBlade ?? 0);
+        await page.evaluate(() => { window.__game.give('cursedBlade', 'rare'); window.__game.advance(0.1); });
+        const s1 = await page.evaluate(() => window.__game.run.stats);
+        expect(s1.power > s0.power && s1.maxHp < s0.maxHp, `妖刀的好處／代價沒套上：${JSON.stringify({ s0: [s0.power, s0.maxHp], s1: [s1.power, s1.maxHp] })}`);
+        await page.locator('#btn-abilities').click();
+        await page.waitForFunction(() => window.__game.screens.includes('pause'));
+        const row = await page.locator('#sum-cards li[data-card="cursedBlade"]').innerText();
+        const lv = had + 1;
+        expect(new RegExp(`妖刀[\\s\\S]*Lv${lv}`).test(row) && new RegExp(`，但最大生命 -${10 * lv}`).test(row), `面板的取捨文字不對：${row}`);
+        files.push(await shot(ctx, 'l1-trade'));
+        await page.locator('#btn-pause-resume').click();
+        await page.waitForFunction(() => !window.__game.screens.includes('pause'));
+      });
+
       await step(`${vp.name} 道具欄裝滿 6 格 → 只出現已有的`, async () => {
         const owned = await page.evaluate(() => {
           const g = window.__game;
-          const pool = ['power', 'atkSpeed', 'area', 'hp', 'speed', 'armor', 'regen', 'dodge', 'volley', 'splash', 'pierce'];
+          const pool = ['power', 'atkSpeed', 'area', 'hp', 'speed', 'armor', 'regen', 'dodge', 'volley', 'splash', 'pierce', 'cursedBlade', 'wildLantern', 'diamondBody'];
           const has = () => pool.filter((id) => (g.run.ult.counts[id] ?? 0) > 0);
           for (const id of pool) if (has().length < 6 && !has().includes(id)) g.give(id, 'common');
           return has();

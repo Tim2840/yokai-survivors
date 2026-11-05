@@ -1,6 +1,7 @@
 /**
  * 終極技（大招，D29）：每隻妖怪有數個「特色大招」，各有一張配方（要同時擁有指定數量的指定卡片，任何稀有度算 1 張）；
- * 配方湊齊就「融合」成功，大招解鎖。一局可以融合多個，按大招時全部一起發動。
+ * D30 第二步改成「進化式」（吸血鬼倖存者）：配方含主武器滿級（鬼火 Lv8），湊齊之後**開寶箱**（小頭目、精英掉的）才融合。
+ * 一局可以融合多個，按大招時全部一起發動。
  * 發動需要大招量表集滿（殺敵、時間充能）；發動後歸零。數字為佔位，M2 sim 校準。
  */
 export const ULT = {
@@ -33,11 +34,16 @@ export interface UltRecipe {
 }
 
 export const ULT_RECIPES: readonly UltRecipe[] = [
-  { id: 'infernoLantern', yokai: 'chochin-kozo', requires: { splash: 2, area: 2, power: 1 }, effect: { type: 'nova', radius: 9, damageMult: 12, knockback: 8 } },
-  { id: 'ghostfireDance', yokai: 'chochin-kozo', requires: { volley: 2, atkSpeed: 2 }, effect: { type: 'frenzy', seconds: 6, power: 0.3, atkSpeed: 0.8, volley: 3 } },
-  { id: 'bulwarkLantern', yokai: 'chochin-kozo', requires: { hp: 2, armor: 2, regen: 1 }, effect: { type: 'bulwark', seconds: 4, healFrac: 0.4, radius: 7, damageMult: 3, knockback: 10 } },
-  { id: 'thunderSpear', yokai: 'chochin-kozo', requires: { pierce: 2, power: 2 }, effect: { type: 'beam', length: 22, width: 2.4, damageMult: 25 } },
+  { id: 'infernoLantern', yokai: 'chochin-kozo', requires: { ghostfire: 8, splash: 2, area: 2, power: 1 }, effect: { type: 'nova', radius: 9, damageMult: 12, knockback: 8 } },
+  { id: 'ghostfireDance', yokai: 'chochin-kozo', requires: { ghostfire: 8, volley: 2, atkSpeed: 2 }, effect: { type: 'frenzy', seconds: 6, power: 0.3, atkSpeed: 0.8, volley: 3 } },
+  { id: 'bulwarkLantern', yokai: 'chochin-kozo', requires: { ghostfire: 8, hp: 2, armor: 2, regen: 1 }, effect: { type: 'bulwark', seconds: 4, healFrac: 0.4, radius: 7, damageMult: 3, knockback: 10 } },
+  { id: 'thunderSpear', yokai: 'chochin-kozo', requires: { ghostfire: 8, pierce: 2, power: 2 }, effect: { type: 'beam', length: 22, width: 2.4, damageMult: 25 } },
 ];
+
+/** 寶箱裡的融合卡：'ult:<大招 id>' */
+export const ULT_CARD_PREFIX = 'ult:';
+export const isUltCard = (cardId: string): boolean => cardId.startsWith(ULT_CARD_PREFIX);
+export const ultOfCard = (cardId: string): UltRecipe => ultById(cardId.slice(ULT_CARD_PREFIX.length));
 
 export const ultById = (id: string): UltRecipe => {
   const r = ULT_RECIPES.find((x) => x.id === id);
@@ -51,7 +57,7 @@ export function recipeProgress(r: UltRecipe, counts: ReadonlyMap<string, number>
 }
 export const recipeDone = (r: UltRecipe, counts: ReadonlyMap<string, number>): boolean => recipeProgress(r, counts).every((p) => p.have >= p.need);
 
-/** 一張卡跟哪些還沒融合的大招有關（選卡提示用）：completes = 選了這張就湊齊配方 */
+/** 一張卡跟哪些還沒融合的大招有關（選卡提示用）：completes = 選了這張就湊齊配方（之後開寶箱融合） */
 export interface UltHint {
   id: string;
   have: number;
@@ -65,6 +71,8 @@ export function ultHints(cardId: string, yokai: string, counts: ReadonlyMap<stri
     if (r.yokai !== yokai || fused.includes(r.id) || !(cardId in r.requires)) continue;
     const need = r.requires[cardId];
     const have = counts.get(cardId) ?? 0;
+    // 這個材料已經夠了（配方可能已經湊齊、等著開寶箱）：這張卡對這個大招沒有幫助，不提示
+    if (have >= need) continue;
     // 選了這張之後，這個材料夠了、其他材料也都夠 → 融合
     const othersDone = Object.entries(r.requires).every(([c, n]) => c === cardId || (counts.get(c) ?? 0) >= n);
     out.push({ id: r.id, have: Math.min(need, have), need, completes: othersDone && have + 1 >= need });

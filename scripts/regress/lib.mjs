@@ -153,3 +153,37 @@ export async function mouseDrag(page, from, to, steps = 6) {
   await page.mouse.move(to.x, to.y, { steps });
   await page.mouse.up();
 }
+
+const WALK_SIDES = [[-3, 0, 'KeyD', 1, 0], [3, 0, 'KeyA', -1, 0], [0, -3, 'KeyS', 0, 1], [0, 3, 'KeyW', 0, -1]];
+/**
+ * 傳送到 (x,z) 旁 3 公尺（挑沒被擋的一邊；鏡頭沒轉時螢幕方向 = 世界方向），再用真實輸入（鍵盤／搖桿）走到 0.8 公尺內放開。
+ * 升級選卡跳出來（模擬暫停）就先停下來，回傳 false 讓呼叫端選完卡再走一次。
+ */
+export async function walkOnto(ctx, x, z) {
+  const { page, vp } = ctx;
+  let side = null;
+  for (const sd of WALK_SIDES) {
+    const ok = await page.evaluate(([tx, tz]) => window.__game.teleport(tx, tz), [x + sd[0], z + sd[1]]);
+    if (ok) { side = sd; break; }
+  }
+  expect(side, `目標四周都被擋住（${vp.name}）`);
+  await page.evaluate(() => window.__game.advance(0.1));
+  if (!vp.hasTouch) await page.keyboard.down(side[2]);
+  else {
+    const box = await page.locator('#stick-base').boundingBox();
+    const sx = box.x + box.width / 2, sy = box.y + box.height / 2;
+    await page.mouse.move(sx, sy);
+    await page.mouse.down();
+    await page.mouse.move(sx + side[3] * 40, sy + side[4] * 40, { steps: 4 });
+  }
+  let arrived = false;
+  for (let i = 0; i < 20; i++) {
+    await page.evaluate(() => window.__game.advance(0.1));
+    if ((await page.evaluate(() => window.__game.screens)).includes('levelup')) break;
+    const d = await page.evaluate(([tx, tz]) => { const r = window.__game.run; return Math.hypot(r.px - tx, r.pz - tz); }, [x, z]);
+    if (d < 0.8) { arrived = true; break; }
+  }
+  if (!vp.hasTouch) await page.keyboard.up(side[2]);
+  else await page.mouse.up();
+  return arrived;
+}

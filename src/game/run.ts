@@ -6,13 +6,15 @@ import { PROGRESSION, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
 import { ITEM_POOL, WEAPON_LEVELS, itemValue, itemById } from '../data/items';
 import { VARIANT_CARD_PREFIX, VARIANT_LEVEL, variantOfCard, variantsFor, type VariantDef } from '../data/variants';
 import { RARITY_MULT } from '../data/rarity';
-import { STAGE, stagesForMap, bossHpMult } from '../data/stage';
+import { STAGE, stagesForMap, bossHpMult, isBigBossStage } from '../data/stage';
+import { DIFFICULTY } from '../data/difficulty';
 import { WAVES } from '../data/waves';
 import { tuning } from '../data/tuning';
 import type { MapDef } from '../data/maps/prototype';
 import { makeHighlands } from '../data/maps/highlands';
 import { Rng } from '../lib/random';
 import { TerrainMap, WALL_TAN } from '../world/terrainMap';
+import { PlayerReach } from '../systems/reach';
 import { FlowField } from '../systems/flowField';
 import { Enemies, kindIndex } from '../systems/enemies';
 import { Projectiles } from '../systems/projectiles';
@@ -24,7 +26,7 @@ import { StageDirector } from '../systems/stageDirector';
 import { Elements, type ElementCarry } from '../systems/elements';
 import { computeMerit } from '../systems/merit';
 import { SYNERGIES } from '../data/synergies';
-import { ULT, ULT_RECIPES, recipeDone, type UltEffect } from '../data/ultimates';
+import { ULT, ULT_RECIPES, ULT_CARD_PREFIX, isUltCard, ultOfCard, recipeDone, type UltEffect } from '../data/ultimates';
 import { ALTAR_CURSE_IDS, type CurseId } from '../data/altar';
 
 export interface RunOptions {
@@ -177,6 +179,11 @@ export class Run {
   readonly fused: string[] = [];
   ultCharge = 0;
   lastFuse: { id: string; at: number } | null = null;
+  /** 配方湊齊、等著開寶箱融合的大招（D30 第二步：進化式）；lastReady 給 HUD 提示用 */
+  private readonly readyNotified: string[] = [];
+  lastReady: { id: string; at: number } | null = null;
+  /** 這一關的召喚祭壇放了沒（D34） */
+  private summonPlaced = false;
   lastCast: { ids: string[]; at: number; x: number; z: number; dx: number; dz: number } | null = null;
   /** 狂亂（暫時強化）與護罩結束的時間（clock）、狂亂額外鬼火 */
   private frenzyUntil = 0;
@@ -275,6 +282,9 @@ export class Run {
         this.curseSources.delete(key);
         this.recomputeCurse();
       },
+      summonBoss: () => {
+        if (this.director.summonBoss()) this.bus.emit('summonBoss', { stage: this.stageNumber, mult: this.director.summonMult });
+      },
       emitSpawn: (kind, rarity) => this.bus.emit('elementSpawn', { kind, rarity }),
       emitUsed: (kind, rarity) => this.bus.emit('elementUsed', { kind, rarity }),
     }, this.elementCarry);
@@ -296,6 +306,16 @@ export class Run {
     for (const c of this.curseSources.values()) this.curse[c.id] += c.v;
   }
 
+  /** 難度 %（D30 第二步）：關卡與地圖帶來的難度（0.5 = +50%）。詛咒另外算（this.curse） */
+  get difficulty(): number {
+    return DIFFICULTY.perStage * this.stageIndex + DIFFICULTY.perMap * (this.mapNumber - 1);
+  }
+
+  /** 這一關頭目要不要玩家去召喚（不是大頭目那一關） */
+  get summonStage(): boolean {
+    return !this.director.autoBoss;
+  }
+
   startNextStage(): void {
     if (this.phase === 'ended') return;
     this.stageIndex++;
@@ -304,7 +324,11 @@ export class Run {
     this.bossDefeated = false;
     this.portal.active = false;
     this.buildWorld();
-    this.director.start(this.stageIndex, bossHpMult(this.mapNumber, this.stageIndex));
+    this.director.start(this.stageIndex, bossHpMult(this.mapNumber, this.stageIndex), {
+      autoBoss: isBigBossStage(this.mapNumber, this.stageIndex),
+      hpMult: 1 + this.difficulty * DIFFICULTY.hp,
+    });
+    this.summonPlaced = false;
     this.elements.start(this.px, this.pz, this.director.duration, this.director.virtualWave(), this.stats.value.luck);
     this.fireCd = 0.3;
     this.bus.emit('stageStart', { stage: this.stageNumber });
@@ -331,6 +355,17 @@ export class Run {
     this.enemies.hp[i] = 0;
     this.onKill(i);
     return true;
+  }
+
+  /** 開發與測試：直接召喚小頭目（像開了召喚祭壇；祭壇還在就一起收掉）。大頭目那一關沒有祭壇，回傳 false */
+  devSummonBoss(): boolean {
+    if (!this.summonStage) return false;
+    const s = this.elements.summonSlot;
+    if (s) s.usedAge = 0;
+    this.summonPlaced = true;
+    const ok = this.director.summonBoss();
+    if (ok) this.bus.emit('summonBoss', { stage: this.stageNumber, mult: this.director.summonMult });
+    return ok;
   }
 
   /** 開發與測試：不管在哪，現在就過關（走正常的過關流程） */
@@ -400,7 +435,13 @@ export class Run {
     if (gained > 0) this.addXp(gained);
 
     this.elements.update(dt, this.time, this.director.duration, this.director.virtualWave(), s.luck, this.px, this.py, this.pz);
-    this.director.extraMult = this.elements.spawnMult * (1 + this.curse.spawnRate);
+    if (!this.summonPlaced && this.summonStage && !this.director.bossSpawned && this.time >= STAGE.summon.appearAt * this.director.duration) {
+      if (this.elements.placeSummon(this.px, this.pz)) {
+        this.summonPlaced = true;
+        this.bus.emit('summonAltar', { stage: this.stageNumber });
+      }
+    }
+    this.director.extraMult = this.elements.spawnMult * (1 + this.curse.spawnRate) * (1 + this.difficulty * DIFFICULTY.spawn);
     this.director.hpCurse = 1 + this.curse.enemyHp;
     this.enemies.speedMult = 1 + this.curse.enemySpeed;
     this.director.update(dt, this.px, this.pz, this.night, this.bossDefeated);
@@ -526,7 +567,7 @@ export class Run {
       if (this.invul > 0 || this.god) continue;
       e.contactCd[i] = COMBAT.contactCooldown;
       if (this.rngCombat.next() < this.stats.value.dodge) continue;
-      const dmg = e.damage[i] * (1 + this.curse.enemyDamage) * armorMult(this.stats.value.armor);
+      const dmg = e.damage[i] * (1 + this.curse.enemyDamage) * (1 + this.difficulty * DIFFICULTY.damage) * armorMult(this.stats.value.armor);
       this.hp -= dmg;
       this.invul = COMBAT.invulnerable;
       this.bus.emit('playerHurt', { damage: dmg, hp: this.hp });
@@ -608,15 +649,65 @@ export class Run {
     const x = this.enemies.x[e];
     const z = this.enemies.z[e];
     const isBoss = this.enemies.variant[e] === 2;
+    const isElite = this.enemies.variant[e] === 1;
     if (!this.orbs.spawn(x, z, value)) this.addXp(value);
     this.enemies.kill(e);
-    if (isBoss) this.openPortal(x, z);
+    if (isBoss) {
+      // 寶箱與傳送門放在玩家走得到的地方（敵人會擠進玩家去不了的凹地；D34 試算時發現）
+      this.reachableNear(x, z);
+      const sx = this.spot[0];
+      const sz = this.spot[1];
+      this.openPortal(sx, sz);
+      // 寶箱離傳送門夠遠：走去開寶箱時不會先踩進傳送門過關
+      this.reachableNear(sx, sz, sx, sz, STAGE.chestFromPortal);
+      this.elements.dropChest(this.spot[0], this.spot[1], STAGE.drops.bossChest);
+    } else if (isElite && this.rngCombat.next() < STAGE.drops.eliteChestChance) {
+      this.reachableNear(x, z);
+      this.elements.dropChest(this.spot[0], this.spot[1], STAGE.drops.eliteChest);
+    }
+  }
+
+  private readonly spot = new Float32Array(2);
+  private reach: PlayerReach | null = null;
+  private reachMap: TerrainMap | null = null;
+  /** (x,z) 附近玩家走得到、不擋路的位置（由近到遠找；可要求離 avoid 至少 minDist），寫進 this.spot；都找不到就放在玩家旁邊 */
+  private reachableNear(x: number, z: number, avoidX = 0, avoidZ = 0, minDist = 0): void {
+    const m = this.map;
+    const R = STAGE.dropClearance;
+    // 用細格 BFS 看玩家走不走得到（流場的粗格會判錯）；四周 R 公尺也要不擋路，不放在擠死的角落
+    if (!this.reach || this.reachMap !== m) {
+      this.reach = new PlayerReach(m);
+      this.reachMap = m;
+    }
+    this.reach.compute(this.px, this.pz);
+    const rc = this.reach;
+    const ok = (cx: number, cz: number) =>
+      rc.ok(cx, cz) &&
+      !m.isBlocked(cx + R, cz) &&
+      !m.isBlocked(cx - R, cz) &&
+      !m.isBlocked(cx, cz + R) &&
+      !m.isBlocked(cx, cz - R) &&
+      (minDist <= 0 || Math.hypot(cx - avoidX, cz - avoidZ) >= minDist);
+    for (const r of STAGE.dropSearchRadii) {
+      for (let k = 0; k < 12; k++) {
+        const a = (k / 12) * Math.PI * 2;
+        const cx = x + Math.cos(a) * r;
+        const cz = z + Math.sin(a) * r;
+        if (ok(cx, cz)) {
+          this.spot[0] = cx;
+          this.spot[1] = cz;
+          return;
+        }
+      }
+    }
+    this.spot[0] = this.px;
+    this.spot[1] = this.pz;
   }
 
   private openPortal(x: number, z: number): void {
     this.bossDefeated = true;
     this.bossesDefeated++;
-    // 頭目倒在擋路格（深水、岩石）時，改開在離玩家近的地方
+    // 呼叫端已經挑好走得到的位置（reachableNear）；保險：還是擋路就開在玩家身邊
     let px = x;
     let pz = z;
     if (this.map.isBlocked(px, pz) || !this.map.inBounds(px, pz)) {
@@ -655,8 +746,28 @@ export class Run {
     this.bonusLeft = picks;
     this.bonusRarity = rarity;
     this.offerKind = kind;
-    this.offer = this.dealer.dealRarity(rarity, this.cardCounts);
+    this.offer = this.dealBonus();
     this.bus.emit('levelUp', { level: this.level, pending: this.bonusLeft });
+  }
+
+  /** 賽錢箱／寶箱的三張卡；寶箱且有湊齊的配方時，融合卡排在最前面（D30 第二步） */
+  private dealBonus(): CardOffer[] {
+    const cards = this.dealer.dealRarity(this.bonusRarity, this.cardCounts);
+    if (this.offerKind !== 'chest') return cards;
+    const ult = this.fusable.slice(0, cards.length).map((id) => ({ cardId: ULT_CARD_PREFIX + id, rarity: 'legend' as const }));
+    return [...ult, ...cards.slice(0, Math.max(0, cards.length - ult.length))];
+  }
+
+  /** 配方湊齊、還沒融合的大招（這隻妖怪的） */
+  get fusable(): string[] {
+    return ULT_RECIPES.filter((rc) => rc.yokai === this.yokai.id && !this.fused.includes(rc.id) && recipeDone(rc, this.cardCounts)).map((rc) => rc.id);
+  }
+
+  private fuse(id: string): void {
+    if (this.fused.includes(id)) return;
+    this.fused.push(id);
+    this.lastFuse = { id, at: this.clock };
+    this.bus.emit('fusion', { id });
   }
 
   /** 面板上「還有幾次」：賽錢箱／寶箱看剩下的連選次數，升級看待選的升級數 */
@@ -673,6 +784,12 @@ export class Run {
       this.variantPending = false;
       this.bus.emit('cardChosen', { cardId: o.cardId, rarity: o.rarity });
       this.offerKind = this.resumeKind;
+      return this.continueOffers();
+    }
+    if (isUltCard(o.cardId)) {
+      this.fuse(ultOfCard(o.cardId).id);
+      this.bus.emit('cardChosen', { cardId: o.cardId, rarity: o.rarity });
+      this.bonusLeft--;
       return this.continueOffers();
     }
     this.applyCard(o);
@@ -697,7 +814,7 @@ export class Run {
   private continueOffers(): boolean {
     if (this.offerKind !== 'levelup') {
       if (this.bonusLeft > 0) {
-        this.offer = this.dealer.dealRarity(this.bonusRarity, this.cardCounts);
+        this.offer = this.dealBonus();
         return true;
       }
       this.offerKind = 'levelup';
@@ -742,6 +859,7 @@ export class Run {
     } else if (d.stat) {
       const before = this.maxHp;
       this.stats.addCard(d.stat, itemValue(d, o.rarity));
+      if (d.down) this.stats.addCard(d.down.stat, -d.down.perLevel);
       // 最大生命增加時，現有生命同步增加（不會「變成扣血」）
       if (this.maxHp > before) this.hp += this.maxHp - before;
       this.hp = Math.min(this.hp, this.maxHp);
@@ -767,14 +885,13 @@ export class Run {
     }
   }
 
-  /** 拿到卡之後檢查大招配方：湊齊就融合（這隻妖怪的配方、還沒融合過） */
+  /** 拿到卡之後檢查大招配方：湊齊了就提示「開寶箱融合」（進化式，D30 第二步；不再自動融合） */
   private checkFusion(): void {
-    for (const rc of ULT_RECIPES) {
-      if (rc.yokai !== this.yokai.id || this.fused.includes(rc.id)) continue;
-      if (!recipeDone(rc, this.cardCounts)) continue;
-      this.fused.push(rc.id);
-      this.lastFuse = { id: rc.id, at: this.clock };
-      this.bus.emit('fusion', { id: rc.id });
+    for (const id of this.fusable) {
+      if (this.readyNotified.includes(id)) continue;
+      this.readyNotified.push(id);
+      this.lastReady = { id, at: this.clock };
+      this.bus.emit('fusionReady', { id });
     }
   }
 

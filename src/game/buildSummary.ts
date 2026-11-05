@@ -12,7 +12,7 @@ import { ULT, ULT_RECIPES, recipeProgress } from '../data/ultimates';
 /** 暫停畫面「能力」面板的資料（純資料，不含文字；文字由介面層用 i18n 組） */
 export interface BuildSummary {
   /** 已有的法具（主武器在最前面）：等級、各稀有度拿了幾次、累計效果 */
-  cards: { id: string; kind: ItemKind; stat: string; level: number; maxLevel: number; byRarity: Record<Rarity, number>; total: number; weaponText: string }[];
+  cards: { id: string; kind: ItemKind; stat: string; level: number; maxLevel: number; byRarity: Record<Rarity, number>; total: number; weaponText: string; down?: { stat: StatId; total: number } }[];
   slotsUsed: number;
   slots: number;
   /** 招式變化 id（還沒選是 null） */
@@ -25,6 +25,8 @@ export interface BuildSummary {
   synergies: string[];
   /** 詛咒：讓敵人變強，> 0 才列 */
   curses: { id: CurseId; v: number }[];
+  /** 難度 %（關卡、地圖；0.5 = +50%） */
+  difficulty: number;
   /** 護甲換算的承受傷害倍率 */
   damageTaken: number;
   /** 這隻妖怪的大招配方與進度 */
@@ -51,6 +53,7 @@ export function summarizeBuild(run: Run): BuildSummary {
     if (!e) {
       const d = cardById(id);
       e = { id, kind: d.kind, stat: d.kind === 'mod' ? d.mod! : d.stat ?? '', level: run.cardCounts.get(id) ?? 0, maxLevel: d.maxLevel, byRarity: { common: 0, rare: 0, epic: 0, legend: 0 }, total: 0, weaponText: '' };
+      if (d.down) e.down = { stat: d.down.stat, total: d.down.perLevel * e.level };
       map.set(id, e);
     }
     return e;
@@ -94,6 +97,7 @@ export function summarizeBuild(run: Run): BuildSummary {
     },
     synergies: [...run.activeSynergies],
     curses,
+    difficulty: run.difficulty,
     ultimates: ULT_RECIPES.filter((r) => r.yokai === run.yokai.id).map((r) => ({ id: r.id, fused: run.fused.includes(r.id), ingredients: recipeProgress(r, run.cardCounts) })),
     ultCharge: run.ultCharge / ULT.max,
     damageTaken: armorMult(s.armor),

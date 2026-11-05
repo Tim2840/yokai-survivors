@@ -8,7 +8,7 @@ import type { RarityLike } from './rarityLike';
 
 /**
  * 開發模式介面 window.__game（CLAUDE.md「開發模式介面」）。主網址（build:single:main）與正式 build 不含這個檔。
- * 已有：state／seed／paused／simTime／quality／audio／perf／screens／run／camera／offer／advance／render／spawn／setTime／killBoss／give／addXp／god／teleport。
+ * 已有：state／seed／paused／simTime／quality／audio／perf／screens／run／camera／offer／advance／render／spawn／setTime／killBoss／summonBoss／give／addXp／god／teleport。
  * 還沒有（隨系統加入）：forceElement。
  */
 export interface DevContext {
@@ -86,7 +86,12 @@ export function installDevApi(ctx: DevContext): void {
         stats: { ...r.stats.value },
         elements: r.elements.slots.filter((s) => s.active).map((s) => ({ kind: s.kind, rarity: s.rarity, x: s.x, y: s.y, z: s.z, announce: s.announce, progress: s.progress, used: s.usedAge >= 0, effects: s.effects.slice(0, s.effectCount).map((f) => ({ ...f })) })),
         curse: { ...r.curse },
-        ult: { fused: [...r.fused], charge: r.ultCharge, ready: r.ultReady, counts: Object.fromEntries(r.cardCounts), volleyBonus: r.volleyBonus },
+        ult: { fused: [...r.fused], fusable: r.fusable, charge: r.ultCharge, ready: r.ultReady, counts: Object.fromEntries(r.cardCounts), volleyBonus: r.volleyBonus },
+        difficulty: r.difficulty,
+        summon: (() => {
+          const s = r.elements.summonSlot;
+          return { stage: r.summonStage, bossSpawned: r.director.bossSpawned, altar: s ? { x: s.x, z: s.z, announce: s.announce } : null };
+        })(),
         variant: r.variant?.id ?? null,
         weaponLevel: r.weaponLevel,
         zones: r.zoneCount,
@@ -137,6 +142,7 @@ export function installDevApi(ctx: DevContext): void {
     chargeUlt: () => run()?.devChargeUlt(),
     /** 頭目現在就倒下（走正常的擊殺流程，傳送門會開） */
     killBoss: () => run()?.devKillBoss() ?? false,
+    summonBoss: () => run()?.devSummonBoss() ?? false,
     give: (cardId: string, rarity: RarityLike) => run()?.give(cardId, rarity),
     set god(v: boolean) {
       const r = run();

@@ -20,6 +20,8 @@ interface SlotView {
   offering: THREE.Group;
   omikuji: THREE.Group;
   chest: THREE.Group;
+  summon: THREE.Group;
+  orb: THREE.Mesh;
   beam: THREE.Mesh;
   beamMat: THREE.MeshBasicMaterial;
   ring: THREE.Mesh;
@@ -74,6 +76,14 @@ export class ElementsView {
     const gDome = new THREE.SphereGeometry(0.66, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2);
     const gBand = new THREE.TorusGeometry(0.66, 0.05, 8, 24).rotateX(Math.PI / 2);
     this.disposables.push(wood, woodDark, redLid, gold, gBox, gLid, gCoin, gPost, gStick, gTag, gDome, gBand);
+    // 召喚祭壇（D34）：圓石台＋朱紅鳥居＋中間浮著的赤色魂火
+    const torii = soft('#d8453a');
+    const ember = glow(palette.fire.torch, 2.4);
+    const gPlat = roundedCylinder(1.15, 1.3, 0.35, 0.14, 28);
+    const gToriiPost = roundedCylinder(0.13, 0.15, 2.3, 0.06, 12);
+    const gToriiBeam = roundedCylinder(0.13, 0.13, 2.5, 0.06, 12).translate(0, -1.25, 0).rotateZ(Math.PI / 2);
+    const gOrb = ball(0.32, 18, 12);
+    this.disposables.push(torii, ember, gPlat, gToriiPost, gToriiBeam, gOrb);
     const gBeam = new THREE.CylinderGeometry(0.4, 0.4, BEAM_H, 20, 1, true);
     const gRing = new THREE.RingGeometry(R.useRadius - 0.12, R.useRadius, 40).rotateX(-Math.PI / 2);
     const gFill = new THREE.CircleGeometry(R.useRadius - 0.12, 40).rotateX(-Math.PI / 2);
@@ -135,6 +145,22 @@ export class ElementsView {
       const cg = new THREE.Mesh(gBand, gold);
       cg.position.y = 0.64;
       chest.add(cb, cd, cg);
+      const summon = new THREE.Group();
+      const sp = new THREE.Mesh(gPlat, stoneDark);
+      summon.add(sp);
+      for (const side of [-1, 1]) {
+        const post = new THREE.Mesh(gToriiPost, torii);
+        post.position.set(side * 0.95, 0.3, 0);
+        summon.add(post);
+      }
+      const top = new THREE.Mesh(gToriiBeam, torii);
+      top.position.y = 2.55;
+      const mid = new THREE.Mesh(gToriiBeam, woodDark);
+      mid.position.y = 2.05;
+      mid.scale.set(0.8, 0.8, 0.8);
+      const orb = new THREE.Mesh(gOrb, ember);
+      orb.position.y = 1.2;
+      summon.add(top, mid, orb);
       // 稀有度光圈（互動範圍）、進度填色、光柱
       const ringMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });
       const ring = new THREE.Mesh(gRing, ringMat);
@@ -161,10 +187,10 @@ export class ElementsView {
       zone.renderOrder = 2;
       zone.visible = false;
       this.disposables.push(ringMat, fillMat, beamMat, zg, zoneMat);
-      root.add(jizo, barrier, altar, offering, omikuji, chest, ring, fill, beam);
+      root.add(jizo, barrier, altar, offering, omikuji, chest, summon, ring, fill, beam);
       root.visible = false;
       this.group.add(root, zone);
-      this.views.push({ root, jizo, barrier, altar, offering, omikuji, chest, beam, beamMat, ring, ringMat, fill, fillMat, zone, zoneMat, flame, zx: NaN, zz: NaN });
+      this.views.push({ root, jizo, barrier, altar, offering, omikuji, chest, summon, orb, beam, beamMat, ring, ringMat, fill, fillMat, zone, zoneMat, flame, zx: NaN, zz: NaN });
     }
   }
 
@@ -206,6 +232,7 @@ export class ElementsView {
       v.offering.visible = s.kind === 'offering';
       v.omikuji.visible = s.kind === 'omikuji';
       v.chest.visible = s.kind === 'chest';
+      v.summon.visible = s.kind === 'summon';
       v.ringMat.color.copy(c);
       v.fillMat.color.copy(c);
       v.beamMat.color.copy(c);
@@ -221,6 +248,7 @@ export class ElementsView {
       v.offering.scale.setScalar(g);
       v.omikuji.scale.setScalar(g);
       v.chest.scale.setScalar(g);
+      v.summon.scale.setScalar(g);
       v.beamMat.opacity = (ann ? 0.26 : 0.08 + 0.03 * Math.sin(t * 2 + i)) * fade;
       // 結界石的環是範圍；其他兩種是互動圈
       const isBarrier = s.kind === 'barrier';
@@ -232,6 +260,10 @@ export class ElementsView {
         if (v.zx !== s.x || v.zz !== s.z) this.buildZone(v, s);
         v.zoneMat.color.copy(c);
         v.zoneMat.opacity = (s.inside ? 0.6 : 0.34) * fade;
+      }
+      if (s.kind === 'summon') {
+        v.orb.position.y = 1.2 + Math.sin(t * 2.2) * 0.12;
+        v.orb.scale.setScalar(1 + s.progress * 0.6);
       }
       if (s.kind === 'altar') v.flame.scale.set(1, 0.85 + Math.sin(t * 7 + i) * 0.15, 1);
     }

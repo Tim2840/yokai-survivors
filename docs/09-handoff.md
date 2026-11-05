@@ -27,10 +27,16 @@
 - **2026-11-04 手感調整（使用者：太簡單）**：試玩預設改成數量 ×2、起步 2 顆、濺射 0.8、傷害 ×1；新增武器卡「鬼火增殖」「爆裂」（`src/data/weaponCards.ts`）。依據與數字在 docs/02 變更紀錄。
 - **D28 卡片聯動已加入**：`src/data/synergies.ts`、`Run.checkSynergies`、HUD 提示、回歸 `s1`。河童、赤鬼的專屬武器卡與聯動等做到這兩隻時加。
 - **工作方式（D33）**：使用者提的新項目先評估、寫文件、排程；明確說「開始」才做。
-- **召喚小頭目的祭壇（D34）已定案、排在 D30 第二步**：細節提案在 docs/02 第 8.1.1 節。
+- **D30 第二步＋召喚祭壇（D34）已完成（2026-11-05）**：
+  - 召喚祭壇：地圖要素種類 `summon`（`Elements.placeSummon`／`summonSlot`），`Run` 在 30% 放、`StageDirector.summonBoss()`（越晚越強 `summonMult`）、`autoBoss` 只在大頭目那一關（`isBigBossStage`）；HUD 共用傳送門箭頭（`data-kind`）。
+  - 寶箱掉落：`Run.onKill` → `reachableNear`（細格 BFS `src/systems/reach.ts`，玩家走得到才放）→ `Elements.dropChest`；寶箱離傳送門 ≥ 4.5 公尺。
+  - 大招進化式：配方含 `ghostfire: 8`；`Run.fusable`／`lastReady`（「材料齊了」提示）、寶箱面板 `dealBonus()` 把 `ult:<id>` 卡排最前面、`chooseCard` 選了才 `fuse()`。
+  - 取捨道具：`ItemDef.down`（不吃稀有度）；卡片與能力面板「，但…」。難度 %：`Run.difficulty`（`src/data/difficulty.ts`），HUD「第 2 關・難度 +50%」、能力面板列分配；`STAGE.hpPerStage` 已刪。
+  - 開發介面：`summonBoss()`、`run.summon`、`run.difficulty`、`run.ult.fusable`。sim：`--summonAt`、`--tune summon.*／drops.*`、`--noTrade`、機器人會尋路與開寶箱。
+  - **下一個平衡項目**：亂選與貪生存的中位存活約 2 分鐘（開場太硬或防禦卡太弱，改版前就有）。
 - **收集與活動（D32）已定案、排程在 M3／M4／M6／M8**：百鬼帖、降伏儀式、御朱印帳為主體；抽卡（百鬼御籤）只放外觀、永遠不賣錢；活動上線前後加。研究與細節在 docs/16。
 - **招式變化（D31）已加入**：`src/data/variants.ts`、`Run`（`orbitStep`、`zonesStep`、`splitFromPos`、變化三選一面板）、`src/render/variantFx.ts`；回歸 `v1`；sim `--variant`。
-- **D30 第一步已完成（2026-11-05）**：法具（`src/data/items.ts`：主武器 8 級表、屬性道具 5 級、道具欄 6 格、備用獎勵）、稀有度倍率 1.0／1.2／1.5／2.0＋里程碑、經驗曲線 round(0.35×(L+3)²)；`CardDealer` 依等級與欄位發牌；選卡顯示「新！／Lv a→b」；能力面板顯示等級與道具欄；回歸 `l1`。**下一步：D30 第二步**（大招改進化式、道具代價、敵人每分鐘成長與難度 %、主武器分支）。
+- **D30 第一步已完成（2026-11-05）**：法具（`src/data/items.ts`：主武器 8 級表、屬性道具 5 級、道具欄 6 格、備用獎勵）、稀有度倍率 1.0／1.2／1.5／2.0＋里程碑、經驗曲線 round(0.35×(L+3)²)；`CardDealer` 依等級與欄位發牌；選卡顯示「新！／Lv a→b」；能力面板顯示等級與道具欄；回歸 `l1`。D30 第二步也已完成（見上）。
 - **終極技（大招，D29）已加入**：`src/data/ultimates.ts`（4 個提燈小僧大招）、`Run.castUltimate`／`checkFusion`、`src/render/ultFx.ts`、HUD 大招鈕（暫用號令鈕的位置：F 鍵）、能力面板的配方進度、選卡提示；回歸 `u1`；sim 有 `--only ult`、`--cast on|off`。河童／赤鬼大招草案在 docs/04 第 1.4 節。
 - **能力面板**：暫停畫面（或 HUD「能力」鈕、C 鍵）顯示已拿到的卡、累計效果、已觸發聯動、目前所有屬性與鬼火數值、詛咒；資料來自 `summarizeBuild`（src/game/buildSummary.ts）；回歸 `a1`。
 - **`npm run sim` v1 已建立**（docs/07 第 4 節）；改數字前後都要跑。第一輪發現與目標見 docs/02 變更紀錄（防禦流派 0% 過關、要素強度、敵人強度已調）。M2-3（小妖、號令、更多卡）要在 sim 上比較前後。

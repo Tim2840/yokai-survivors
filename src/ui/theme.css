@@ -186,4 +186,6 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 .shape.weapon { border-radius: 4px; }
 
 .card.r-variant { --rc: #c08cff; background: rgba(192,140,255,0.12); }
+.card.r-ult { --rc: #ffb347; background: rgba(255,179,71,0.16); }
+.card.r-ult b { font-size: 22px; }
 .card.r-variant b { font-size: 22px; }

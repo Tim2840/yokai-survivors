@@ -24,11 +24,16 @@ export interface GameEvents {
   stageClear: { stage: number; last: boolean };
   /** 頭目倒下（傳送門已開） */
   bossDown: { stage: number };
+  /** 召喚祭壇顯現／被開啟、小頭目被召喚出來（D34；mult = 召喚當下的生命倍率） */
+  summonAltar: { stage: number };
+  summonBoss: { stage: number; mult: number };
   /** 玩家受傷（低頻事件；每擊殺等高頻事件不走匯流排，見 docs/06） */
   playerHurt: { damage: number; hp: number };
   /** 地圖要素落下／被用掉／消失（低頻） */
   /** 大招融合成功／發動（低頻） */
   fusion: { id: string };
+  /** 大招配方湊齊（等著開寶箱融合） */
+  fusionReady: { id: string };
   ultimate: { ids: string[] };
   /** 觸發了一個卡片聯動（低頻） */
   synergy: { id: string };

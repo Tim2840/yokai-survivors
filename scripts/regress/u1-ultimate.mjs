@@ -1,8 +1,8 @@
-// u1：終極技（大招，D29）。湊齊配方 → 融合提示 → 大招鈕出現、量表沒滿按了沒反應 → 量表滿了鈕發亮 → 真的點鈕（桌面也試 F 鍵）→ 範圍內的敵人被打倒、量表歸零。
+// u1：終極技（大招，D29；D30 第二步改進化式）。湊齊配方（含鬼火滿級）→「材料齊了」提示、還沒有大招鈕 → 走去開寶箱 → 寶箱裡的融合卡（真的點）→ 融合提示 → 大招鈕出現、量表沒滿按了沒反應 → 量表滿了鈕發亮 → 真的點鈕（桌面也試 F 鍵）→ 範圍內的敵人被打倒、量表歸零。
 // 「能力」面板列出配方進度；選卡畫面的卡片寫出大招材料進度。三種畫面，卡住偵測。量表用開發介面 chargeUlt 充滿（等殺敵充能太久），其餘全是真實操作。
-import { openPage, startRun, press, step, expect, shot, reportErrors, VIEWPORTS } from './lib.mjs';
+import { openPage, startRun, press, step, expect, shot, reportErrors, walkOnto, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'u1', desc: '大招：湊齊配方→融合提示→大招鈕→量表滿了才能放→真的按鈕／F 鍵→打倒周圍敵人→能力面板與選卡提示（三種畫面）', max: 300, stall: 50 };
+export const meta = { id: 'u1', desc: '大招：湊齊配方（鬼火滿級）→材料齊提示→走去開寶箱→點融合卡→融合提示→大招鈕→量表滿了才能放→真的按鈕／F 鍵→打倒周圍敵人→能力面板與選卡提示（三種畫面）', max: 300, stall: 50 };
 
 const overlap = (a, b) => a && b && a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
@@ -50,17 +50,63 @@ export async function run(browser) {
         void sawComplete;
       }, 60);
 
-      await step(`${vp.name} 湊齊「鬼火亂舞」「炎獄燈」配方 → 融合提示、大招鈕`, async () => {
+      await step(`${vp.name} 湊齊「鬼火亂舞」「炎獄燈」配方（鬼火升到 8 級，Lv4 時點選招式變化）→「材料齊了」提示，但還沒融合`, async () => {
+        await dismiss();
+        for (let k = 0; k < 12; k++) {
+          const lv = (await ult()).counts.ghostfire ?? 1;
+          if (lv >= 8) break;
+          await page.evaluate(() => window.__game.give('ghostfire', 'common'));
+          // 主武器到 Lv4：同一個面板跳出招式變化三選一，真的點「狐火分裂」
+          if ((await page.evaluate(() => window.__game.screens)).includes('levelup')) {
+            const v = page.locator('.overlay[data-screen="levelup"] .card.r-variant[data-card="variant:kitsunebi"]');
+            if (await v.count()) await v.click();
+            else await dismiss();
+          }
+        }
+        expect(((await ult()).counts.ghostfire ?? 0) === 8, `鬼火沒升到 8 級：${JSON.stringify((await ult()).counts)}`);
         await page.evaluate(() => {
           const g = window.__game;
-          for (const c of ['volley', 'atkSpeed', 'atkSpeed', 'splash', 'splash', 'area', 'area', 'power']) g.give(c, 'common');
+          const c = g.run.ult.counts;
+          const want = { volley: 2, atkSpeed: 2, splash: 2, area: 2, power: 1 };
+          for (const [id, n] of Object.entries(want)) for (let i = c[id] ?? 0; i < n; i++) g.give(id, 'common');
           g.advance(0.2); g.render();
         });
         const u = await ult();
-        expect(u.fused.includes('ghostfireDance') && u.fused.includes('infernoLantern'), `沒有融合：${JSON.stringify(u)}`);
-        expect(await page.locator('#synergy-box').isVisible(), `融合後沒有提示（${vp.name}）`);
+        expect(u.fused.length === 0, `湊齊就自動融合了（應該要開寶箱）：${JSON.stringify(u)}`);
+        expect(u.fusable.includes('ghostfireDance') && u.fusable.includes('infernoLantern'), `配方沒湊齊：${JSON.stringify(u)}`);
+        expect(!(await page.locator('#btn-ult').isVisible()), `還沒融合就有大招鈕（${vp.name}）`);
         const txt = await page.locator('#synergy-box').innerText();
-        expect(/融合成功/.test(txt), `融合提示文字不對：${txt}`);
+        expect(/材料齊了，開寶箱融合/.test(txt), `材料齊的提示不對：${txt}`);
+      }, 60);
+
+      await step(`${vp.name} 走去開寶箱 → 面板最前面是融合卡 → 真的點 → 融合成功、大招鈕`, async () => {
+        for (let round = 0; round < 2; round++) {
+          const spot = await page.evaluate(() => window.__game.forceElement('chest', 'common'));
+          expect(spot, `放不下寶箱（${vp.name}）`);
+          for (let tries = 0; tries < 3 && !(await walkOnto(ctx, spot.x, spot.z)); tries++) await dismiss();
+          for (let i = 0; i < 12 && !(await page.evaluate(() => window.__game.screens)).includes('levelup'); i++) await page.evaluate(() => window.__game.advance(0.25));
+          await page.evaluate(() => window.__game.render());
+          const title = await page.locator('#lv-title').innerText();
+          expect(/寶箱/.test(title), `開出來的不是寶箱面板：${title}`);
+          const cards = await page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card')].map((c) => {
+            const r = c.getBoundingClientRect();
+            return { id: c.dataset.card, ult: c.classList.contains('r-ult'), t: c.innerText.replace(/\s+/g, ' '), r: { x: r.x, y: r.y, w: r.width, h: r.height } };
+          }));
+          expect(cards[0] && cards[0].ult, `寶箱第一張不是融合卡：${JSON.stringify(cards)}`);
+          expect(/融合大招/.test(cards[0].t), `融合卡沒有標示：${cards[0].t}`);
+          for (const c of cards) expect(c.r.x >= 0 && c.r.y >= 0 && c.r.x + c.r.w <= vp.width + 1 && c.r.y + c.r.h <= vp.height + 1, `卡片超出畫面（${vp.name}）：${JSON.stringify(c)}`);
+          if (round === 0) files.push(await shot(ctx, 'u1-chest'));
+          await page.locator('.overlay[data-screen="levelup"] .card.r-ult').first().click();
+          await dismiss();
+          await page.evaluate(() => { window.__game.advance(0.2); window.__game.render(); });
+          if (round === 0) {
+            expect(await page.locator('#synergy-box').isVisible(), `融合後沒有提示（${vp.name}）`);
+            const txt = await page.locator('#synergy-box').innerText();
+            expect(/融合成功/.test(txt), `融合提示文字不對：${txt}`);
+          }
+        }
+        const u = await ult();
+        expect(u.fused.includes('ghostfireDance') && u.fused.includes('infernoLantern'), `沒有融合：${JSON.stringify(u)}`);
         expect(await page.locator('#btn-ult').isVisible(), `融合後沒有大招鈕（${vp.name}）`);
         const b = await page.locator('#btn-ult').boundingBox();
         for (const sel of ['#btn-jump', '#stick-base', '#btn-pause', '#btn-abilities']) {
@@ -119,6 +165,7 @@ export async function run(browser) {
         expect(info.find((x) => x.id === 'infernoLantern').fused, `炎獄燈沒標示已融合`);
         const th = info.find((x) => x.id === 'thunderSpear');
         const cn = (await ult()).counts;
+        expect(/鬼火 8\/8/.test(th.t), `雷火槍的配方沒列出鬼火滿級：${th.t}`);
         expect(new RegExp(`穿透 ${Math.min(2, cn.pierce ?? 0)}/2`).test(th.t) && new RegExp(`力量 ${Math.min(2, cn.power ?? 0)}/2`).test(th.t), `雷火槍的進度和實際拿到的卡對不上：${th.t} vs ${JSON.stringify(cn)}`);
         files.push(await shot(ctx, 'u1-recipes'));
         await press(ctx, '#btn-pause-resume');

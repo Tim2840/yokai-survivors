@@ -50,9 +50,18 @@ export class StageDirector {
     private readonly maxEnemies: number,
   ) {}
 
-  start(stage: number, bossMult = 1): void {
-    this.stageMult = 1 + STAGE.hpPerStage * stage;
+  /** 這一關的頭目是自動出現（大頭目那一關）還是要玩家去開召喚祭壇（D34） */
+  autoBoss = true;
+  /** 召喚越晚越強：召喚當下決定的倍率 */
+  summonMult = 1;
+
+  /** stage = 第幾關（0 起）；hpMult = 難度帶來的敵人生命倍率（含關卡）；bossMult = 大頭目倍率 */
+  start(stage: number, bossMult = 1, opts: { autoBoss?: boolean; hpMult?: number } = {}): void {
+    void stage;
+    this.stageMult = opts.hpMult ?? 1;
     this.bossMult = bossMult;
+    this.autoBoss = opts.autoBoss ?? true;
+    this.summonMult = 1;
     this.time = 0;
     this.active = true;
     this.pending = 0;
@@ -65,6 +74,15 @@ export class StageDirector {
     this.swarm = false;
     this.pendingElites = 0;
     this.nextSwarmElite = 0;
+  }
+
+  /** 召喚祭壇開了：召喚小頭目（越晚越強；時間到後召喚 = 最強） */
+  summonBoss(): boolean {
+    if (this.bossSpawned) return false;
+    this.bossSpawned = true;
+    this.bossPending = true;
+    this.summonMult = 1 + STAGE.summon.hpGrowth * Math.min(1, this.time / this.duration);
+    return true;
   }
 
   get duration(): number {
@@ -106,7 +124,7 @@ export class StageDirector {
 
   private spawnOne(kind: number, variant: number, px: number, pz: number, night: number): number {
     if (!this.findSpot(px, pz)) return -1;
-    return this.enemies.spawn(kind, this.spot[0], this.spot[1], this.virtualWave(), night, this.rng.range(0, Math.PI * 2), variant, (variant === 2 ? this.stageMult * this.bossMult : this.stageMult) * this.hpCurse);
+    return this.enemies.spawn(kind, this.spot[0], this.spot[1], this.virtualWave(), night, this.rng.range(0, Math.PI * 2), variant, (variant === 2 ? this.stageMult * this.bossMult * this.summonMult : this.stageMult) * this.hpCurse);
   }
 
   update(dt: number, px: number, pz: number, night: number, bossDefeated: boolean): void {
@@ -122,7 +140,7 @@ export class StageDirector {
         this.surgeMult = ev.surgeMult ?? 1;
       }
     }
-    if (!this.bossSpawned && this.time >= STAGE.bossAt * dur) {
+    if (this.autoBoss && !this.bossSpawned && this.time >= STAGE.bossAt * dur) {
       this.bossSpawned = true;
       this.bossPending = true;
     }

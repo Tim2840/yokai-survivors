@@ -8,6 +8,8 @@ import type { TerrainMap } from '../world/terrainMap';
 import type { FlowField } from './flowField';
 
 const KIND_HP = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].hp));
+/** 每種敵人的每波 HP 成長（NaN = 用 WAVES.hpPerWave，讓 sim 的 --tune w.hpPerWave 還能用） */
+const KIND_GROWTH = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].hpPerWave ?? NaN));
 const KIND_SPEED = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].speed));
 const KIND_CONTACT = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].contact));
 const KIND_RADIUS = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].radius));
@@ -113,7 +115,7 @@ export class Enemies {
     this.kz[i] = 0;
     const elite = variant === 1;
     const boss = variant === 2;
-    const hp = KIND_HP[kind] * (boss ? 1 : enemyHpMult(virtualWave, night)) * stageMult * tuning.hpScale * (elite ? STAGE.elite.hp : 1);
+    const hp = KIND_HP[kind] * (boss ? 1 : enemyHpMult(virtualWave, night, Number.isNaN(KIND_GROWTH[kind]) ? undefined : KIND_GROWTH[kind])) * stageMult * tuning.hpScale * (elite ? STAGE.elite.hp : 1);
     this.hp[i] = hp;
     this.maxHp[i] = hp;
     this.damage[i] = KIND_CONTACT[kind] * (boss ? 1 : enemyDamageMult(virtualWave)) * (elite ? STAGE.elite.damage : 1);

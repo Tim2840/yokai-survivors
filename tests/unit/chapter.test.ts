@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { STAGE, isBigMap, stagesForMap, bossHpMult } from '../../src/data/stage';
+import { STAGE, isBigMap, stagesForMap, bossHpMult, isBigBossStage } from '../../src/data/stage';
+import { DIFFICULTY } from '../../src/data/difficulty';
 import { Run } from '../../src/game/run';
 import { EventBus } from '../../src/core/bus';
 import { tuning } from '../../src/data/tuning';
@@ -22,7 +23,7 @@ describe('章節制（D26）：每第 N 張地圖是 3 關的大關、頭目更�
     expect(STAGE.chapter.bigBossHp).toBeGreaterThan(1);
   });
 
-  it('Run：大關有 bigStages 關，最後一關頭目 HP = 同關一般地圖的 bigBossHp 倍', () => {
+  it('Run：大關有 bigStages 關，最後一關頭目自動出現、沒有召喚祭壇，HP = 一般小頭目（同難度、剛顯現就召喚）的 bigBossHp 倍', () => {
     tuning.stageSeconds = 60;
     const e = STAGE.chapter.everyMaps;
     const bossHp = (mapNumber: number, stages: number) => {
@@ -30,17 +31,23 @@ describe('章節制（D26）：每第 N 張地圖是 3 關的大關、頭目更�
       expect(run.stageCount).toBe(stages);
       // 建構時已開始第 1 關
       for (let s = 1; s < stages; s++) run.startNextStage();
-      run.devSetTime(48);
+      const big = isBigBossStage(mapNumber, stages - 1);
+      expect(run.summonStage).toBe(!big);
+      if (big) run.devSetTime(48);
+      else expect(run.devSummonBoss()).toBe(true); // t = 0 召喚：越晚越強的倍率 = 1
       for (let i = 0; i < 30; i++) run.step(1 / 60);
-      return run.enemies.maxHp[run.director.bossIndex];
+      if (big) {
+        // 大頭目那一關：過了祭壇顯現的時間也不會有祭壇
+        run.devSetTime(STAGE.summon.appearAt * 60 + 1);
+        run.step(1 / 60);
+        expect(run.elements.summonSlot).toBeNull();
+      }
+      return run.enemies.maxHp[run.director.bossIndex] / (1 + run.difficulty * DIFFICULTY.hp);
     };
     const normal = bossHp(1, STAGE.chapter.normalStages);
     const bigRun = bossHp(e, STAGE.chapter.bigStages);
     expect(normal).toBeGreaterThan(0);
-    // 大關多一關，stageMult 也多一級；先扣掉它再比較
-    const stageMult = (k: number) => 1 + STAGE.hpPerStage * k;
-    const ratio = bigRun / stageMult(STAGE.chapter.bigStages - 1) / (normal / stageMult(STAGE.chapter.normalStages - 1));
-    expect(ratio).toBeCloseTo(STAGE.chapter.bigBossHp);
+    expect(bigRun / normal).toBeCloseTo(STAGE.chapter.bigBossHp);
   });
 });
 

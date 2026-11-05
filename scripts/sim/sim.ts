@@ -14,6 +14,9 @@ import { resetTuning, tuning } from '../../src/data/tuning';
 import { ultHints } from '../../src/data/ultimates';
 import { PROGRESSION } from '../../src/data/progression';
 import { WAVES } from '../../src/data/waves';
+import { STAGE } from '../../src/data/stage';
+import { ITEM_POOL } from '../../src/data/items';
+import type { TerrainMap } from '../../src/world/terrainMap';
 
 const DT = 1 / 60;
 
@@ -28,6 +31,8 @@ const SECONDS = Number(arg('seconds', '600'));
 const STAGES = Number(arg('stages', '1'));
 const SEED0 = Number(arg('seeds', '1'));
 const ONLY = arg('only', 'random,dps,survive,ult').split(',');
+/** --summonAt 0.5：機器人在關卡進行到這個比例之後才去開召喚祭壇（D34；越晚頭目越強） */
+const SUMMON_AT = Number(arg('summonAt', '0.5'));
 const ELEMENTS = arg('elements', 'both'); // on | off | both
 const JSON_OUT = arg('json', '');
 /** --cast on|off：機器人要不要發動大招（比較大招的影響） */
@@ -38,9 +43,19 @@ const VARIANT_BY_STRATEGY: Record<string, string> = { dps: 'kitsunebi', survive:
 /** --tune countScale=3,hpScale=1.2,xp.needPerLevel=4,w.hpPerWave=0.2：臨時改旋鈕比較（不改檔案）；xp. 開頭是 PROGRESSION、w. 開頭是 WAVES */
 const TUNE = arg('tune', '');
 function applyTune(): void {
+  // --noTrade：拿掉取捨道具（對照組）
+  if (process.argv.includes('--noTrade')) {
+    const pool = ITEM_POOL as string[];
+    for (const id of ['cursedBlade', 'wildLantern', 'diamondBody']) {
+      const k = pool.indexOf(id);
+      if (k >= 0) pool.splice(k, 1);
+    }
+  }
   for (const kv of TUNE.split(',').filter(Boolean)) {
     const [k, v] = kv.split('=');
-    if (k.startsWith('w.')) (WAVES as unknown as Record<string, number>)[k.slice(2)] = Number(v);
+    if (k.startsWith('summon.')) (STAGE.summon as unknown as Record<string, number>)[k.slice(7)] = Number(v);
+    else if (k.startsWith('drops.')) (STAGE.drops as unknown as Record<string, number>)[k.slice(6)] = Number(v);
+    else if (k.startsWith('w.')) (WAVES as unknown as Record<string, number>)[k.slice(2)] = Number(v);
     else if (k.startsWith('xp.')) (PROGRESSION as unknown as Record<string, number>)[k.slice(3)] = Number(v);
     else (tuning as unknown as Record<string, number>)[k] = Number(v);
   }
@@ -48,9 +63,9 @@ function applyTune(): void {
 
 // ── 選卡策略：每張卡的分數（越高越想拿）；random 不看分數 ──
 const SCORES: Record<string, Record<string, number>> = {
-  dps: { ghostfire: 3.4, heal: 0.2, meritBag: 0.1, volley: 3, splash: 2.6, pierce: 2.2, power: 2.4, atkSpeed: 2.4, area: 1.6, hp: 1, speed: 0.6, armor: 0.8, regen: 0.6, dodge: 0.6 },
+  dps: { ghostfire: 3.4, heal: 0.2, meritBag: 0.1, cursedBlade: 2.6, wildLantern: 2.6, diamondBody: 0.6, volley: 3, splash: 2.6, pierce: 2.2, power: 2.4, atkSpeed: 2.4, area: 1.6, hp: 1, speed: 0.6, armor: 0.8, regen: 0.6, dodge: 0.6 },
   // 防禦優先但不放棄輸出（純防禦沒有輸出就殺不掉敵人、升級也慢，哪個類型的遊戲都玩不下去）
-  survive: { ghostfire: 2.8, heal: 0.4, meritBag: 0.1, hp: 3, armor: 3, regen: 2.8, dodge: 2.4, volley: 2.6, splash: 2.4, pierce: 1.6, speed: 1.5, area: 1.4, atkSpeed: 1, power: 1 },
+  survive: { ghostfire: 2.8, heal: 0.4, meritBag: 0.1, diamondBody: 2.6, cursedBlade: 0.5, wildLantern: 0.8, hp: 3, armor: 3, regen: 2.8, dodge: 2.4, volley: 2.6, splash: 2.4, pierce: 1.6, speed: 1.5, area: 1.4, atkSpeed: 1, power: 1 },
 };
 const RARITY_SCORE: Record<string, number> = { common: 1, rare: 1.6, epic: 2.4, legend: 3.5 };
 
@@ -62,6 +77,9 @@ function choose(run: Run, strategy: string, rnd: () => number): number {
     return i >= 0 ? i : Math.floor(rnd() * offer.length);
   }
   if (strategy === 'random') return Math.floor(rnd() * offer.length);
+  // 寶箱裡的融合卡（D30 第二步）：會玩的人一定拿
+  const fuse = offer.findIndex((o) => o.cardId.startsWith('ult:'));
+  if (fuse >= 0) return fuse;
   const sc = SCORES[strategy === 'ult' ? 'dps' : strategy];
   let best = 0;
   let bestV = -1;
@@ -102,6 +120,9 @@ interface Result {
   fused: number;
   casts: number;
   variant: string;
+  summonedAt: number;
+  /** 死在召喚之後幾秒（沒死或沒召喚 = -1） */
+  diedAfterSummon: number;
 }
 
 function play(seed: number, strategy: string, useElements: boolean): Result {
@@ -122,6 +143,8 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   const maxStage = Math.min(STAGES, run.stageCount);
   let guard = 0;
   let casts = 0;
+  let summonedAt = -1;
+  bus.on('summonBoss', () => { if (summonedAt < 0) summonedAt = run.time; });
   const scratch = new Int32Array(512);
   while (run.phase !== 'ended' && guard++ < 5e7) {
     if (run.awaitingPick) {
@@ -142,9 +165,17 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     const n = e.nearest(run.px, run.pz, 5);
     let mx: number;
     let mz: number;
-    if (run.portal.active) {
-      mx = run.portal.x - run.px;
-      mz = run.portal.z - run.pz;
+    const altar = run.elements.summonSlot;
+    const chest = nearestChest(run);
+    if (chest) {
+      // 寶箱（小頭目、精英掉的，或地圖上的）：先開再走
+      [mx, mz] = steer(run, chest.x, chest.z);
+    } else if (run.portal.active) {
+      [mx, mz] = steer(run, run.portal.x, run.portal.z);
+    } else if (altar && altar.announce <= 0 && run.time >= SUMMON_AT * run.director.duration) {
+      // 召喚祭壇：時間到了就去開（站上去按住）
+      [mx, mz] = steer(run, altar.x, altar.z);
+      if (summonedAt < 0 && run.director.bossSpawned) summonedAt = run.time;
     } else if (n >= 0) {
       const dx = run.px - e.x[n];
       const dz = run.pz - e.z[n];
@@ -155,16 +186,7 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
       // 附近沒有敵人：想用要素就走過去（站著按住），否則繞圈
       const target = useElements ? nearestElement(run) : null;
       if (target) {
-        const dx = target.x - run.px;
-        const dz = target.z - run.pz;
-        const d = Math.hypot(dx, dz);
-        if (d < 0.6) {
-          mx = 0;
-          mz = 0;
-        } else {
-          mx = dx;
-          mz = dz;
-        }
+        [mx, mz] = steer(run, target.x, target.z);
       } else {
         mx = Math.cos(t * 0.5);
         mz = Math.sin(t * 0.5);
@@ -201,8 +223,79 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     fused: run.fused.length,
     variant: run.variant?.id ?? '-',
     casts,
+    summonedAt,
+    diedAfterSummon: run.phase === 'ended' && run.result === 'death' && summonedAt >= 0 && run.director.bossSpawned ? run.time - summonedAt : -1,
     curseTotal: run.curse.enemyHp + run.curse.enemySpeed + run.curse.enemyDamage + run.curse.spawnRate,
   };
+}
+
+/** 40 公尺內還沒開的寶箱 */
+// ── 尋路：目標不在直線上走得到時（岩石、深水擋住），用細格 BFS 找路（真人會繞過去，機器人以前只會直走而卡住） ──
+let pathMap: TerrainMap | null = null;
+let par: Int32Array = new Int32Array(0);
+let que: Int32Array = new Int32Array(0);
+const pathCache = { at: -1, tx: NaN, tz: NaN, dx: 0, dz: 0 };
+function steer(run: Run, tx: number, tz: number): [number, number] {
+  const dx0 = tx - run.px;
+  const dz0 = tz - run.pz;
+  const d0 = Math.hypot(dx0, dz0);
+  if (d0 < 0.6) return [0, 0];
+  if (pathCache.at >= 0 && run.clock - pathCache.at < 0.25 && pathCache.tx === tx && pathCache.tz === tz) return [pathCache.dx, pathCache.dz];
+  const m = run.map;
+  if (pathMap !== m) {
+    pathMap = m;
+    par = new Int32Array(m.cols * m.rows);
+    que = new Int32Array(m.cols * m.rows);
+  }
+  par.fill(-2);
+  const start = m.cellIndex(run.px, run.pz);
+  const goal = m.cellIndex(tx, tz);
+  const cx = (i: number) => m.minX + ((i % m.cols) + 0.5) * m.cell;
+  const cz = (i: number) => m.minZ + (Math.floor(i / m.cols) + 0.5) * m.cell;
+  let h = 0;
+  let tl = 0;
+  par[start] = -1;
+  que[tl++] = start;
+  while (h < tl && par[goal] === -2) {
+    const i = que[h++];
+    const x = i % m.cols;
+    const z = (i - x) / m.cols;
+    for (let k = 0; k < 8; k++) {
+      const nx = x + [1, -1, 0, 0, 1, 1, -1, -1][k];
+      const nz = z + [0, 0, 1, -1, 1, -1, 1, -1][k];
+      if (nx < 0 || nz < 0 || nx >= m.cols || nz >= m.rows) continue;
+      const j = nz * m.cols + nx;
+      if (par[j] !== -2 || m.stepBlocked(cx(i), cz(i), cx(j), cz(j))) continue;
+      par[j] = i;
+      que[tl++] = j;
+    }
+  }
+  let dx = dx0;
+  let dz = dz0;
+  if (par[goal] !== -2) {
+    // 往回追到「從起點看出去 3 格」的那一格當方向
+    const chain: number[] = [];
+    for (let c = goal; c !== -1 && c !== start; c = par[c]) chain.push(c);
+    const nxt = chain[Math.max(0, chain.length - 3)] ?? goal;
+    dx = cx(nxt) - run.px;
+    dz = cz(nxt) - run.pz;
+  }
+  Object.assign(pathCache, { at: run.clock, tx, tz, dx, dz });
+  return [dx, dz];
+}
+
+function nearestChest(run: Run): { x: number; z: number } | null {
+  let best: { x: number; z: number } | null = null;
+  let bd = 40;
+  for (const s of run.elements.slots) {
+    if (!s.active || s.kind !== 'chest' || s.usedAge >= 0 || s.announce > 0) continue;
+    const d = Math.hypot(s.x - run.px, s.z - run.pz);
+    if (d < bd) {
+      bd = d;
+      best = s;
+    }
+  }
+  return best;
 }
 
 function nearestElement(run: Run): { x: number; z: number } | null {
@@ -210,6 +303,7 @@ function nearestElement(run: Run): { x: number; z: number } | null {
   let bd = 40;
   for (const s of run.elements.slots) {
     if (!s.active || s.usedAge >= 0 || s.announce > 0 || s.blocked) continue;
+    if (s.kind === 'summon') continue; // 召喚祭壇由 --summonAt 控制什麼時候去
     if (s.kind === 'barrier') continue; // 結界石要站在圈內戰鬥，機器人不會這樣玩；單獨看
     const d = Math.hypot(s.x - run.px, s.z - run.pz);
     if (d < bd) {
@@ -239,6 +333,8 @@ function summarize(rs: Result[]): string {
     `用掉要素 ${avg(rs.map((r) => r.elementsUsed)).toFixed(1)}`,
     `融合大招 ${avg(rs.map((r) => r.fused)).toFixed(1)} 個、發動 ${avg(rs.map((r) => r.casts)).toFixed(1)} 次`,
     `變化 ${[...new Set(rs.map((r) => r.variant))].join('/')}`,
+    `死在召喚後 ${rs.filter((r) => r.diedAfterSummon >= 0).length} 局（中位 ${pct(rs.filter((r) => r.diedAfterSummon >= 0).map((r) => r.diedAfterSummon), 50)?.toFixed(0) ?? '-'} 秒）`,
+    `召喚頭目 ${((rs.filter((r) => r.summonedAt >= 0).length / rs.length) * 100).toFixed(0)}%（平均第 ${avg(rs.filter((r) => r.summonedAt >= 0).map((r) => r.summonedAt)).toFixed(0)} 秒）`,
   ].join('；');
 }
 
@@ -246,7 +342,7 @@ function summarize(rs: Result[]): string {
 const all: Result[] = [];
 const modes = ELEMENTS === 'both' ? [false, true] : [ELEMENTS === 'on'];
 const t0 = Date.now();
-console.log(`# 平衡模擬 v1\n\n參數：${RUNS} 局／組合、關卡 ${SECONDS} 秒、${STAGES} 關、種子 ${SEED0}…${SEED0 + RUNS - 1}；機器人（風箏＋選卡策略＋可選去用要素）。數量×${tuning.countScale}、鬼火起步 ${tuning.volley} 顆。${TUNE ? ' 臨時旋鈕：' + TUNE : ''}\n`);
+console.log(`# 平衡模擬 v1（召喚祭壇：${SUMMON_AT * 100}% 之後去開）\n\n參數：${RUNS} 局／組合、關卡 ${SECONDS} 秒、${STAGES} 關、種子 ${SEED0}…${SEED0 + RUNS - 1}；機器人（風箏＋選卡策略＋可選去用要素）。數量×${tuning.countScale}、鬼火起步 ${tuning.volley} 顆。${TUNE ? ' 臨時旋鈕：' + TUNE : ''}\n`);
 for (const strategy of ONLY) {
   for (const useEl of modes) {
     const rs: Result[] = [];
