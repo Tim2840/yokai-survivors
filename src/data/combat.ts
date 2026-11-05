@@ -16,6 +16,9 @@ export const COMBAT = {
   playerRadius: 0.5,
   /** 單次查詢最多回傳幾個（預先配置的緩衝大小） */
   queryMax: 512,
+  /** 一發最多幾顆鬼火（瞄準緩衝大小）；同一個目標多顆時，出手錯開的角度（弧度） */
+  maxVolley: 16,
+  volleySpread: 0.35,
   /** 傷害數字：同時最多、停留（秒）、上飄速度 */
   damageNumbers: { max: 48, life: 0.6, rise: 1.2 },
   /** 暫停、死亡時的小延遲（秒），讓玩家看見最後一擊 */

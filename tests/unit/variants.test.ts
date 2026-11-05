@@ -1,12 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
-import { tuning } from '../../src/data/tuning';
+import { tuning, resetTuning } from '../../src/data/tuning';
 import { VARIANTS, VARIANT_LEVEL, variantsFor } from '../../src/data/variants';
 import { ITEM_POOL } from '../../src/data/items';
 import { kindIndex } from '../../src/systems/enemies';
 
 const DT = 1 / 60;
+afterEach(() => resetTuning());
+
 function make(seed = 3) {
   tuning.stageSeconds = 600;
   const run = new Run({ seed, bus: new EventBus() });
@@ -77,6 +79,8 @@ describe('選擇時機', () => {
 
 describe('三種變化的效果', () => {
   it('狐火分裂：命中後分裂出小火打到旁邊的敵人', () => {
+    // 一次只射 1 顆（鬼火 +N 會各打不同的敵人，會把對照組搞亂）
+    tuning.volley = 1;
     const run = make(7);
     run.devSetVariant('kitsunebi');
     const a = placeEnemy(run, 4, 0);

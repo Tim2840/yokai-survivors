@@ -255,6 +255,34 @@ export class Enemies {
     return best;
   }
 
+  /**
+   * 範圍內最近的 k 隻（不重複，由近到遠）寫進 out，回傳實際隻數（≤ k、≤ out.length）。
+   * 鬼火 +N 時每顆打不同的敵人用（以前全部瞄同一隻，會疊成一顆）。k 很小，用選擇法，不配置記憶體。
+   */
+  nearestK(x: number, z: number, range: number, k: number, out: Int32Array): number {
+    const n = this.hash.queryInto(x, z, range, this.x, this.z, this.near);
+    const want = Math.min(k, n, out.length);
+    for (let c = 0; c < want; c++) {
+      let best = -1;
+      let bd = Infinity;
+      for (let q = 0; q < n; q++) {
+        const j = this.near[q];
+        if (j < 0) continue;
+        const dx = this.x[j] - x;
+        const dz = this.z[j] - z;
+        const d = dx * dx + dz * dz;
+        if (d < bd) {
+          bd = d;
+          best = q;
+        }
+      }
+      if (best < 0) return c;
+      out[c] = this.near[best];
+      this.near[best] = -1; // 這一輪選過了
+    }
+    return want;
+  }
+
   /** 範圍內所有敵人寫進 out，回傳數量（呼叫端提供緩衝） */
   within(x: number, z: number, r: number, out: Int32Array): number {
     return this.hash.queryInto(x, z, r, this.x, this.z, out);

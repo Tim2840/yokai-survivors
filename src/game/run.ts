@@ -206,6 +206,8 @@ export class Run {
   clock = 0;
   private fireCd = 0;
   private readonly near = new Int32Array(COMBAT.queryMax);
+  /** 鬼火瞄準用：這一發每顆的目標（最多 COMBAT.maxVolley 顆） */
+  private readonly aim = new Int32Array(COMBAT.maxVolley);
   private readonly splashNear = new Int32Array(COMBAT.queryMax);
   private readonly splitNear = new Int32Array(COMBAT.queryMax);
 
@@ -635,22 +637,26 @@ export class Run {
     const burn = this.variant?.burn;
     this.fireCd -= dt;
     if (this.fireCd > 0) return;
-    const target = this.enemies.nearest(this.px, this.pz, w.range * s.area);
-    if (target < 0) {
+    const volleyExact = this.volleyExact;
+    // 小數的部分 = 機率多一顆（卡片的數值是小數，這樣每張卡的價值才能細調）
+    const volley = Math.min(this.aim.length, Math.floor(volleyExact) + (this.rngCombat.next() < volleyExact - Math.floor(volleyExact) ? 1 : 0));
+    // 每顆打不同的敵人（由近到遠）；敵人比鬼火少時，多的那幾顆輪流打同一批、出手時錯開角度（D39 之後修：以前全部瞄最近那隻，疊成一顆）
+    const nTargets = this.enemies.nearestK(this.px, this.pz, w.range * s.area, volley, this.aim);
+    if (nTargets <= 0) {
       this.fireCd = 0;
       return;
     }
     this.fireCd += (w.interval * this.cooldownMult * (burn ? burn.interval : 1)) / s.atkSpeed;
-    const dx = this.enemies.x[target] - this.px;
-    const dz = this.enemies.z[target] - this.pz;
-    const d = Math.hypot(dx, dz) || 1;
-    const volleyExact = this.volleyExact;
-    // 小數的部分 = 機率多一顆（卡片的數值是小數，這樣每張卡的價值才能細調）
-    const volley = Math.floor(volleyExact) + (this.rngCombat.next() < volleyExact - Math.floor(volleyExact) ? 1 : 0);
     for (let v = 0; v < volley; v++) {
+      const target = this.aim[v % nTargets];
+      const dx = this.enemies.x[target] - this.px;
+      const dz = this.enemies.z[target] - this.pz;
+      const d = Math.hypot(dx, dz) || 1;
       const crit = this.rngCombat.next() < s.crit;
       const dmg = this.baseShotDamage(crit) * (burn ? burn.shotDamage : 1);
-      const spread = (v - (volley - 1) / 2) * 0.18;
+      // 同一個目標的第 2、3 顆：出手時往兩側錯開，飛行路線看得出是好幾顆
+      const lap = Math.floor(v / nTargets);
+      const spread = lap === 0 ? 0 : (lap % 2 === 1 ? 1 : -1) * Math.ceil(lap / 2) * COMBAT.volleySpread;
       const c = Math.cos(spread);
       const sn = Math.sin(spread);
       const ux = dx / d;

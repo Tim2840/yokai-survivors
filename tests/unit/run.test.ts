@@ -455,7 +455,8 @@ describe('一局的模擬（無頭）', () => {
     const { run } = make(9);
     run.god = true;
     run.setMove(0, 0);
-    let snap = new Map<number, [number, number]>();
+    // 位置與生命：這 5 秒內被打過（生命變少）的不算卡住——鬼火 +N 每顆打不同的人類後，遠處的人類會被擊退釘住，那是戰鬥不是尋路卡住
+    let snap = new Map<number, [number, number, number]>();
     let stuck = 0;
     let compared = 0;
     for (let k = 0; k < 60 * 70; k++) {
@@ -463,17 +464,18 @@ describe('一局的模擬（無頭）', () => {
       else run.step(DT);
       if (k % 300 === 299) {
         const e = run.enemies;
-        const next = new Map<number, [number, number]>();
+        const next = new Map<number, [number, number, number]>();
         for (let i = 0; i < e.high; i++) {
           if (!e.alive[i]) continue;
           const id = e.phase[i];
-          next.set(id, [e.x[i], e.z[i]]);
+          next.set(id, [e.x[i], e.z[i], e.hp[i]]);
           const prev = snap.get(id);
           if (prev) {
             compared++;
             const moved = Math.hypot(e.x[i] - prev[0], e.z[i] - prev[1]);
             const far = Math.hypot(e.x[i] - run.px, e.z[i] - run.pz) > 3;
-            if (moved < 0.5 && far && e.kx[i] < 0.1) stuck++;
+            const hit = e.hp[i] < prev[2] - 1e-6;
+            if (moved < 0.5 && far && e.kx[i] < 0.1 && !hit) stuck++;
           }
         }
         snap = next;
