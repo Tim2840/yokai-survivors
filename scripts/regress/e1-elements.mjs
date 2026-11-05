@@ -63,13 +63,13 @@ export async function run(browser) {
         await page.evaluate(() => window.__game.advance(0.3));
       };
 
-      await step(`${vp.name} 石地藏：走近出現提示、按住 1 秒 → 護甲 +3（靈階）`, async () => {
+      await step(`${vp.name} 石地藏：走近出現提示、按住 1 秒 → 護甲 +3（良階）`, async () => {
         const s0 = await stats();
         const spot = await approach('jizo', 'rare');
         await page.evaluate(() => { window.__game.advance(0.4); window.__game.render(); });
         expect(await page.locator('#element-box').isVisible(), `走近了但沒有要素提示（${vp.name}）`);
         const title = await page.locator('#element-title').innerText();
-        expect(title === '靈・石地藏', `提示標題不對：${title}`);
+        expect(title === '良・石地藏', `提示標題不對：${title}`);
         const fill = await page.locator('#element-fill').evaluate((n) => parseFloat(n.style.width));
         expect(fill > 5 && fill < 100, `按住途中進度條應該在中間：${fill}`);
         files.push(await shot(ctx, 'e1-jizo'));
@@ -85,7 +85,7 @@ export async function run(browser) {
         const spot = await approach('altar', 'epic');
         const info = (await el()).find((e) => e.kind === 'altar' && Math.hypot(e.x - spot.x, e.z - spot.z) < 0.01);
         expect(info, '找不到剛放的祭壇');
-        expect(info.effects.length === 3, `妖階祭壇應該抽 3 個效果：${JSON.stringify(info.effects)}`);
+        expect(info.effects.length === 3, `珍階祭壇應該抽 3 個效果：${JSON.stringify(info.effects)}`);
         await page.evaluate(() => { window.__game.advance(0.3); window.__game.render(); });
         const desc = await page.locator('#element-desc').innerText();
         const shown = desc.split('\n').filter(Boolean).length;
@@ -124,7 +124,7 @@ export async function run(browser) {
         const title = await page.locator('.overlay[data-screen="levelup"] h2').innerText();
         expect(/賽錢箱/.test(title), `面板標題不對：${title}`);
         const rar = await page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card')].map((c) => c.dataset.rarity));
-        expect(rar.length === 3 && rar.every((x) => x === 'epic'), `靈階賽錢箱應給三張妖階卡：${rar}`);
+        expect(rar.length === 3 && rar.every((x) => x === 'epic'), `良階賽錢箱應給三張珍階卡：${rar}`);
         const r1 = await page.evaluate(() => window.__game.run);
         expect(r1.hp < hp0, `賽錢箱沒扣生命：${hp0} → ${r1.hp}`);
         await page.locator('.overlay[data-screen="levelup"] .card').first().click();

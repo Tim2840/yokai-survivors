@@ -45,7 +45,7 @@ export async function run(browser) {
           const stats = Object.fromEntries([...document.querySelectorAll('#sum-stats [data-stat]')].map((d) => [d.dataset.stat, d.querySelector('dd').innerText]));
           return { rows, stats, run: window.__game.run, syn: document.querySelector('#sum-syn').innerText };
         });
-        // 力量 凡 +10%、靈 +12%（稀有度 ×1.2）→ Lv2、累計 +22%；強健 妖 = 20 × 1.5 = +30
+        // 力量 凡 +10%、良 +12%（稀有度 ×1.2）→ Lv2、累計 +22%；強健 珍 = 20 × 1.5 = +30
         expect(/力量 Lv2\/5/.test(info.rows.power) && /\+22%/.test(info.rows.power), `力量的等級或累計效果不對：${info.rows.power}`);
         expect(/強健 Lv1\/5/.test(info.rows.hp) && /\+30/.test(info.rows.hp), `強健不對：${info.rows.hp}`);
         const slots = await page.locator('#sum-slots').innerText();

@@ -18,7 +18,7 @@ export const xpNeed = (level: number): number => Math.max(1, Math.round(PROGRESS
 
 /** 升級時能拿到的東西改成「法具」（src/data/items.ts 的 ITEM_POOL）。每次升級給幾張、可用的稀有度 */
 export const CARD_CHOICES = 3;
-/** 沒解鎖「妖」之前只有凡、靈（docs/02 第 4.1 節） */
+/** 沒解鎖「珍」之前只有凡、良（docs/02 第 4.1 節） */
 export const RARITIES_UNLOCKED_M1 = ['common', 'rare'] as const;
-/** 保底：連續幾次升級（每次 CARD_CHOICES 張）完全沒有「靈」以上，下一次的第 1 張保證至少是靈 */
+/** 保底：連續幾次升級（每次 CARD_CHOICES 張）完全沒有「良」以上，下一次的第 1 張保證至少是良 */
 export const PITY_LEVELUPS = 5;

@@ -35,14 +35,14 @@ for(const[a,l] of [[16/9,'橫16:9'],[19.5/9,'橫19.5:9'],[9/19.5,'直9:19.5'],[9
 // 5 rarity
 const w=(L,luck=0)=>{const m=1+luck/100;const c=100,r=Math.min(40,12+1.2*L)*m,e=Math.max(0,Math.min(16,L-4))*m,g=Math.max(0,Math.min(5,(L-10)*.4))*m;const t=c+r+e+g;return[c,r,e,g].map(x=>(100*x/t).toFixed(1)).join('/')};
 for(const L of[1,5,10,20,30])P(`稀有度 L=${L}`,w(L));
-P('15張無靈以上機率 L=1',Math.pow(1-(1-100/ (100+13.2)),15).toFixed(3));
+P('15張無良以上機率 L=1',Math.pow(1-(1-100/ (100+13.2)),15).toFixed(3));
 // 6 dates
 const start=new Date('2026-11-09');const f=(wk)=>{const s=new Date(start.getTime()+(wk-1)*7*864e5);const e=new Date(s.getTime()+6*864e5);return s.toISOString().slice(5,10)+'–'+e.toISOString().slice(5,10)};
 for(const wk of [1,2,3,4,7,8,11,12,15,16,17,20,21,22,23,25,26,27])P(`W${wk}`,f(wk));
 // 7 armor
 for(const A of [-20,-12,0,15,45,60])P(`護甲${A}倍率`,A>=0?Math.max(.25,1-A/(A+15)).toFixed(3):Math.min(1.8,1+Math.abs(A)/15).toFixed(3));
 // 8 ward stone / altar multipliers
-for(const[r,v] of [['凡',.2],['靈',.32],['妖',.48],['神',.72]])P(`結界石${r} 傷害倍率`,((1+v)**2).toFixed(2));
+for(const[r,v] of [['凡',.2],['良',.32],['妖',.48],['神',.72]])P(`結界石${r} 傷害倍率`,((1+v)**2).toFixed(2));
 // 9 speed
 P('河童深水極限速度',(4.4*1.8*1.6).toFixed(1)+' m/s');
 P('河童淺水淨倍率',(0.8*1.45).toFixed(2));P('赤鬼淺水淨倍率',(0.8*0.85).toFixed(2)+' 絕對速度 '+(3.6*0.68).toFixed(2));

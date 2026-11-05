@@ -98,7 +98,7 @@ describe('地圖要素：落下規則（種子全掃）', () => {
     expect(snap(9)).not.toBe(snap(10));
   });
 
-  it('稀有度權重：前期只有凡／靈，後期有神；幸運只乘非凡', () => {
+  it('稀有度權重：前期只有凡／良，後期有神；幸運只乘非凡', () => {
     expect(elementRarityWeights(1, 0)).toEqual({ common: 80, rare: 20, epic: 0, legend: 0 });
     expect(elementRarityWeights(16, 0).legend).toBe(10);
     const w = elementRarityWeights(16, 100);
@@ -224,7 +224,7 @@ describe('詛咒祭壇（D27：隨機抽數個不同效果，含詛咒）', () =
     expect(h0).toBeGreaterThan(0);
   });
 
-  it('石地藏神階解除一項詛咒', () => {
+  it('石地藏極階解除一項詛咒', () => {
     const { run } = make(12);
     const a = run.elements.devForce('altar', 'epic', run.px, run.pz)!;
     stand(run, a.x, a.z, ALTAR_HOLD_SECONDS + 0.2);
@@ -279,7 +279,7 @@ describe('要素過期', () => {
 export type { Rarity };
 
 describe('賽錢箱、神籤、寶箱（M2-2）', () => {
-  it('賽錢箱：按住 1.5 秒 → 扣生命、開對應稀有度的三選一；妖階連選 2 次；生命不夠不能用', () => {
+  it('賽錢箱：按住 1.5 秒 → 扣生命、開對應稀有度的三選一；珍階連選 2 次；生命不夠不能用', () => {
     for (const r of RARITIES) {
       const { run } = make(21);
       run.god = true;

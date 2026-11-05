@@ -196,7 +196,7 @@ describe('發牌', () => {
     expect(run(9)).toBe(run(9));
     expect(run(9)).not.toBe(run(10));
   });
-  it('稀有度分佈：L=20、幸運 0、全解鎖 ≈ 凡 64%／靈 23%／妖 10%／神 3%（docs/02 4.1）', () => {
+  it('稀有度分佈：L=20、幸運 0、全解鎖 ≈ 凡 64%／良 23%／珍 10%／極 3%（docs/02 4.1）', () => {
     const rng = new Rng(11);
     const w = { common: 100, rare: 36, epic: 16, legend: 4 };
     const cnt: Record<string, number> = { common: 0, rare: 0, epic: 0, legend: 0 };
@@ -206,7 +206,7 @@ describe('發牌', () => {
     expect(cnt.rare / N).toBeCloseTo(0.231, 1);
     expect(cnt.epic / N).toBeCloseTo(0.103, 1);
   });
-  it('保底：連續 5 次升級都沒有靈以上，下一次第一張會吃稀有度的卡至少是靈', () => {
+  it('保底：連續 5 次升級都沒有良以上，下一次第一張會吃稀有度的卡至少是良', () => {
     for (let sd = 0; sd < 200; sd++) {
       const dd = new CardDealer(new Rng(sd), ITEM_POOL, ['common', 'rare']);
       dd.drought = 5;
@@ -218,7 +218,7 @@ describe('發牌', () => {
 });
 
 describe('稀有度里程碑（D30，參考 Brotato）', () => {
-  it('升到 5 級：第一張會吃稀有度的卡至少是靈；10／15 級至少妖、20 級起每 5 級至少神（受已解鎖限制）', () => {
+  it('升到 5 級：第一張會吃稀有度的卡至少是良；10／15 級至少珍、20 級起每 5 級至少極（受已解鎖限制）', () => {
     for (let sd = 0; sd < 100; sd++) {
       const all = new CardDealer(new Rng(sd), ITEM_POOL, [...RARITIES]);
       const lv = new Map([['ghostfire', 1]]);
@@ -230,7 +230,7 @@ describe('稀有度里程碑（D30，參考 Brotato）', () => {
       if (f10) expect(rank(f10.rarity)).toBeGreaterThanOrEqual(2);
       const f25 = first(all.deal(25, 0, lv));
       if (f25) expect(f25.rarity).toBe('legend');
-      // 只解鎖凡／靈：里程碑最多到靈
+      // 只解鎖凡／良：里程碑最多到良
       const two = new CardDealer(new Rng(sd), ITEM_POOL, ['common', 'rare']);
       const g = first(two.deal(25, 0, lv));
       if (g) expect(g.rarity).toBe('rare');

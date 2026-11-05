@@ -40,7 +40,7 @@ export function slotsUsed(levels: ReadonlyMap<string, number>): number {
  * - 權重：主武器 > 已有道具 > 新道具（ITEM_WEIGHT），讓「練滿」有機會。
  * - 稀有度每張獨立抽；不吃稀有度的道具一律凡。
  * - 里程碑：升到 5／10／15／20+ 級時，第一張會吃稀有度的卡至少是指定稀有度（受已解鎖的稀有度限制）。
- * - 保底：連續 PITY_LEVELUPS 次沒有靈以上，下一次第一張會吃稀有度的卡至少是靈。
+ * - 保底：連續 PITY_LEVELUPS 次沒有良以上，下一次第一張會吃稀有度的卡至少是良。
  */
 export class CardDealer {
   drought = 0;

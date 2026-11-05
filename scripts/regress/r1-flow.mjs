@@ -71,7 +71,7 @@ export async function run(browser) {
         await page.evaluate(() => { window.__game.advance(0.4); window.__game.render(); });
         expect(await page.locator('#element-box').isVisible(), `站上祭壇但沒有提示（${vp.name}）`);
         const title = await page.locator('#element-title').innerText();
-        expect(title === '神・召喚祭壇', `提示標題不對：${title}`);
+        expect(title === '極・召喚祭壇', `提示標題不對：${title}`);
         const desc = await page.locator('#element-desc').innerText();
         expect(/越晚召喚越強（生命 ×[\d.]+）/.test(desc), `祭壇說明不對：${desc}`);
         for (let i = 0; i < 20; i++) {
@@ -100,7 +100,7 @@ export async function run(browser) {
         const txt = await page.locator('#portal-text').innerText();
         expect(/傳送門 \d+ 公尺/.test(txt), `箭頭距離文字不對：${txt}`);
         const chest = await page.evaluate(() => window.__game.run.elements.find((e) => e.kind === 'chest'));
-        expect(chest && chest.rarity === 'rare', `小頭目沒掉靈階寶箱：${JSON.stringify(chest)}`);
+        expect(chest && chest.rarity === 'rare', `小頭目沒掉良階寶箱：${JSON.stringify(chest)}`);
         const pt = await page.evaluate(() => window.__game.run.portal);
         expect(Math.hypot(chest.x - pt.x, chest.z - pt.z) > 3.3, `寶箱壓在傳送門上（${vp.name}）`);
         files.push(await shot(ctx, 'r1-portal'));

@@ -79,7 +79,7 @@ export const OFFERING_HOLD_SECONDS = 1.5;
 /** 寶箱（M2 新增，docs/02 沒有原案）：不用付代價，一次三選一（三張都是同稀有度），數量少 */
 export const CHEST_HOLD_SECONDS = 1.0;
 
-/** 神籤（③）：抽一次，結果隨機；好結果 60 秒、凶 45 秒。weights 依稀有度（凡／靈／妖／神） */
+/** 神籤（③）：抽一次，結果隨機；好結果 60 秒、凶 45 秒。weights 依稀有度（凡／良／珍／極） */
 export const OMIKUJI_HOLD_SECONDS = 1.0;
 export const OMIKUJI_RESULTS = ['daikichi', 'chukichi', 'shokichi', 'suekichi', 'kyo', 'daikyo'] as const;
 export type OmikujiResult = (typeof OMIKUJI_RESULTS)[number];

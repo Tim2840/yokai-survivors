@@ -216,7 +216,7 @@ describe('取捨道具（D30 第二步）', () => {
       const dn1 = run.stats.value[d.down!.stat];
       expect(up1, `${d.id} 好處`).toBeGreaterThan(up0);
       expect(dn1, `${d.id} 壞處`).toBeLessThan(dn0);
-      // 壞處不吃稀有度：神階一級扣的和凡階一樣
+      // 壞處不吃稀有度：極階一級扣的和凡階一樣
       const { run: r2 } = make(27);
       r2.give(d.id, 'common');
       expect(dn0 - r2.stats.value[d.down!.stat], `${d.id} 壞處固定`).toBeCloseTo(dn0 - dn1, 5);

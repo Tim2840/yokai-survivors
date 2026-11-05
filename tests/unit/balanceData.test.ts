@@ -9,7 +9,7 @@ describe('稀有度', () => {
   it('倍率隨階級遞增', () => {
     for (let i = 1; i < RARITIES.length; i++) expect(RARITY_MULT[RARITIES[i]]).toBeGreaterThan(RARITY_MULT[RARITIES[i - 1]]);
   });
-  it('權重：L=10、幸運 0 時 凡77%／靈18%／妖5%／神0%（docs/02 4.1）', () => {
+  it('權重：L=10、幸運 0 時 凡77%／良18%／珍5%／極0%（docs/02 4.1）', () => {
     const w = cardRarityWeights(10, 0, [...RARITIES]);
     const sum = RARITIES.reduce((s, r) => s + w[r], 0);
     expect(w.common / sum).toBeCloseTo(0.77, 2);
@@ -39,7 +39,7 @@ describe('法具（D30）', () => {
     }
     expect(ITEMS.find((i) => i.id === 'volley')!.maxLevel).toBe(2);
   });
-  it('稀有度倍率溫和、單調遞增，神階 ≤ 凡的 2 倍（docs/15：Megabonk 約 1.0～2.0）', () => {
+  it('稀有度倍率溫和、單調遞增，極階 ≤ 凡的 2 倍（docs/15：Megabonk 約 1.0～2.0）', () => {
     for (let i = 1; i < RARITIES.length; i++) expect(ITEM_RARITY_MULT[RARITIES[i]]).toBeGreaterThan(ITEM_RARITY_MULT[RARITIES[i - 1]]);
     expect(ITEM_RARITY_MULT.legend / ITEM_RARITY_MULT.common).toBeLessThanOrEqual(2);
   });
