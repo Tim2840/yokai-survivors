@@ -12,6 +12,8 @@ export const ULT = {
   perElite: 3,
   perBoss: 20,
   perSecond: 0.4,
+  /** 冷卻（使用者 2026-11-05）：發動後這麼多秒內量表不會充能（殺敵、時間都不算），大招鈕顯示倒數 */
+  cooldown: 25,
 } as const;
 
 export type UltEffect =

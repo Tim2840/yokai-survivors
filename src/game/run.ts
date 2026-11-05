@@ -2,7 +2,8 @@ import { bus as defaultBus, type EventBus } from '../core/bus';
 import { COMBAT } from '../data/combat';
 import { MOVE } from '../data/movement';
 import { PLAYABLE_YOKAI, YOKAI, type YokaiDef } from '../data/yokai';
-import { PROGRESSION, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
+import { CARD_CHOICES, PROGRESSION, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
+import { FUSE } from '../data/elements';
 import { ITEM_POOL, ITEM_SLOTS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById } from '../data/items';
 import { VARIANT_CARD_PREFIX, VARIANT_LEVEL, variantOfCard, variantsFor, type VariantDef } from '../data/variants';
 import { RARITY_MULT } from '../data/rarity';
@@ -151,7 +152,7 @@ export class Run {
   /** 招式變化（主武器 VARIANT_LEVEL 級時三選一，整局固定）；null = 還沒選 */
   variant: VariantDef | null = null;
   private variantPending = false;
-  private resumeKind: 'levelup' | 'offering' | 'chest' = 'levelup';
+  private resumeKind: 'levelup' | 'offering' | 'chest' | 'fusion' = 'levelup';
   /** 燈籠環：繞身鬼火的角度與下次判定倒數 */
   orbitAngle = 0;
   private orbitTimer = 0;
@@ -183,13 +184,25 @@ export class Run {
   bonusMerit = 0;
   lastOmikuji: { id: string; at: number } | null = null;
   /** 目前這個選卡面板的來源：升級／賽錢箱／寶箱；賽錢箱、寶箱的剩餘選卡次數與稀有度 */
-  offerKind: 'levelup' | 'offering' | 'chest' | 'variant' = 'levelup';
+  offerKind: 'levelup' | 'offering' | 'chest' | 'variant' | 'fusion' = 'levelup';
+  /** 有湊齊、還沒融合的大招（事件時更新，每步不重算）；從什麼時候開始有（合魂祠延遲出現用） */
+  private hasFusable = false;
+  private fusableSince = 0;
   private bonusLeft = 0;
   private bonusRarity: import('../data/rarity').Rarity = 'rare';
   /** 法具等級（id → 等級；大招配方用的「張數」就是等級）、已融合的大招、大招量表（0～ULT.max）、最近一次發動（給外觀用） */
   readonly cardCounts = new Map<string, number>();
   readonly fused: string[] = [];
   ultCharge = 0;
+  /** 大招冷卻到這個時間（clock）為止：期間量表不充能 */
+  ultCoolUntil = 0;
+  get ultCooling(): boolean {
+    return this.clock < this.ultCoolUntil;
+  }
+  /** 冷卻還剩幾秒（0 = 沒在冷卻） */
+  get ultCooldownLeft(): number {
+    return Math.max(0, this.ultCoolUntil - this.clock);
+  }
   lastFuse: { id: string; at: number } | null = null;
   /** 配方湊齊、等著開寶箱融合的大招（D30 第二步：進化式）；lastReady 給 HUD 提示用 */
   private readonly readyNotified: string[] = [];
@@ -322,6 +335,7 @@ export class Run {
         this.curseSources.delete(key);
         this.recomputeCurse();
       },
+      canFuse: () => this.hasFusable,
       summonBoss: () => {
         if (!this.director.summonBoss()) return 0;
         this.bus.emit('summonBoss', { stage: this.stageNumber, mult: this.director.summonMult });
@@ -465,7 +479,7 @@ export class Run {
     }
     this.time += dt;
     this.clock += dt;
-    this.ultCharge = Math.min(ULT.max, this.ultCharge + ULT.perSecond * dt);
+    if (!this.ultCooling) this.ultCharge = Math.min(ULT.max, this.ultCharge + ULT.perSecond * dt);
     if (this.frenzyUntil > 0 && this.clock >= this.frenzyUntil) {
       this.stats.clearMod('ult:frenzy');
       this.frenzyUntil = 0;
@@ -490,6 +504,10 @@ export class Run {
     if (gained > 0) this.addXp(gained);
 
     this.elements.update(dt, this.time, this.director.duration, this.director.virtualWave(), s.luck, this.px, this.py, this.pz);
+    // 合魂祠：大招材料湊齊後 appearDelay 秒出現在地圖上（一次一座）
+    if (this.hasFusable && !this.elements.fuseSlot && this.clock >= this.fusableSince + FUSE.appearDelay) {
+      if (this.elements.placeFuse(this.px, this.pz)) this.bus.emit('fuseShrine', { stage: this.stageNumber });
+    }
     if (!this.summonPlaced && this.summonStage && !this.director.bossSpawned && this.time >= STAGE.summon.appearAt * this.director.duration) {
       if (this.elements.placeSummon(this.px, this.pz)) {
         this.summonPlaced = true;
@@ -703,7 +721,7 @@ export class Run {
 
   private onKill(e: number): void {
     this.kills++;
-    this.ultCharge = Math.min(ULT.max, this.ultCharge + (this.enemies.variant[e] === 2 ? ULT.perBoss : this.enemies.variant[e] === 1 ? ULT.perElite : ULT.perKill));
+    if (!this.ultCooling) this.ultCharge = Math.min(ULT.max, this.ultCharge + (this.enemies.variant[e] === 2 ? ULT.perBoss : this.enemies.variant[e] === 1 ? ULT.perElite : ULT.perKill));
     const value = this.enemies.points(e) * PROGRESSION.orbPerPoint;
     const x = this.enemies.x[e];
     const z = this.enemies.z[e];
@@ -862,7 +880,7 @@ export class Run {
 
   /** 玩家選了第 index 張卡。回傳是否還有下一次待選（UI 繼續開著面板） */
   /** 賽錢箱、寶箱：開三選一面板（模擬暫停，沿用升級選卡的同一個面板，D15），連選 picks 次 */
-  private openBonusPick(rarity: import('../data/rarity').Rarity, picks: number, kind: 'offering' | 'chest'): void {
+  private openBonusPick(rarity: import('../data/rarity').Rarity, picks: number, kind: 'offering' | 'chest' | 'fusion'): void {
     if (this.offer !== null) return;
     this.bonusLeft = picks;
     this.bonusRarity = rarity;
@@ -873,6 +891,8 @@ export class Run {
 
   /** 賽錢箱／寶箱的三張卡；寶箱且有湊齊的配方時，融合卡排在最前面（D30 第二步） */
   private dealBonus(): CardOffer[] {
+    // 合魂祠：只有湊齊的大招（選一個融合）
+    if (this.offerKind === 'fusion') return this.fusable.slice(0, CARD_CHOICES).map((id) => ({ cardId: ULT_CARD_PREFIX + id, rarity: 'legend' as const }));
     const cards = this.dealer.dealRarity(this.bonusRarity, this.cardCounts);
     if (this.offerKind !== 'chest') return cards;
     const ult = this.fusable.slice(0, cards.length).map((id) => ({ cardId: ULT_CARD_PREFIX + id, rarity: 'legend' as const }));
@@ -889,6 +909,15 @@ export class Run {
     this.fused.push(id);
     this.lastFuse = { id, at: this.clock };
     this.bus.emit('fusion', { id });
+    this.refreshFusable();
+  }
+
+  /** 有沒有湊齊、還沒融合的大招：變成「有」時記下時間；變成「沒有」時收掉合魂祠 */
+  private refreshFusable(): void {
+    const has = this.fusable.length > 0;
+    if (has && !this.hasFusable) this.fusableSince = this.clock;
+    if (!has && this.hasFusable) this.elements.removeKind('fuse');
+    this.hasFusable = has;
   }
 
   /** 面板上「還有幾次」：賽錢箱／寶箱看剩下的連選次數，升級看待選的升級數 */
@@ -1017,10 +1046,11 @@ export class Run {
       this.lastReady = { id, at: this.clock };
       this.bus.emit('fusionReady', { id });
     }
+    this.refreshFusable();
   }
 
   get ultReady(): boolean {
-    return this.fused.length > 0 && this.ultCharge >= ULT.max;
+    return this.fused.length > 0 && this.ultCharge >= ULT.max && !this.ultCooling;
   }
 
   /** 玩家按大招：量表滿、有融合過的大招才會發動；全部已融合的大招一起發動，量表歸零 */
@@ -1040,6 +1070,7 @@ export class Run {
     }
     for (const id of this.fused) this.applyUltEffect(ULT_RECIPES.find((x) => x.id === id)!.effect, dx, dz);
     this.lastCast = { ids: [...this.fused], at: this.clock, x: this.px, z: this.pz, dx, dz };
+    this.ultCoolUntil = this.clock + ULT.cooldown;
     this.ultCharge = 0;
     this.bus.emit('ultimate', { ids: [...this.fused] });
     return true;
@@ -1099,6 +1130,7 @@ export class Run {
   /** 開發與測試：大招量表直接充滿 */
   devChargeUlt(): void {
     this.ultCharge = ULT.max;
+    this.ultCoolUntil = 0;
   }
 
   /** 測試與開發介面：直接給一張卡（不經選卡） */

@@ -182,6 +182,10 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     if (chest) {
       // 寶箱（小頭目、精英掉的，或地圖上的）：先開再走
       [mx, mz] = steer(run, chest.x, chest.z);
+    } else if (run.elements.fuseSlot && run.elements.fuseSlot.announce <= 0 && strategy !== 'random') {
+      // 合魂祠：大招材料齊了就去融合（亂選的機器人不特別去）
+      const f = run.elements.fuseSlot;
+      [mx, mz] = steer(run, f.x, f.z);
     } else if (run.portal.active) {
       [mx, mz] = steer(run, run.portal.x, run.portal.z);
     } else if (altar && altar.announce <= 0 && run.time >= SUMMON_AT * run.director.duration) {

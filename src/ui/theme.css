@@ -100,7 +100,10 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 .hud-hp .bar { width: clamp(110px, 24vw, 220px); height: 14px; background: rgba(0,0,0,0.45); border-radius: 999px; overflow: hidden; border: 2px solid rgba(255,255,255,0.25); }
 .hud-hp .bar i { display: block; height: 100%; width: 100%; background: linear-gradient(#ff7b6b, #d9503f); border-radius: 999px; }
 .hud-hp span { font-size: 14px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; }
-.hud-wave { display: flex; flex-direction: column; align-items: center; text-shadow: 0 1px 3px #000; }
+.hud-wave { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; text-shadow: 0 1px 3px #000; }
+.hud-wave i { font-style: normal; font-size: 12px; font-weight: 700; color: #ffb4a8; }
+.hud-wave i.hidden { display: none; }
+.hud-abilities { white-space: nowrap; }
 .hud-wave b { font-size: clamp(16px, 4vw, 22px); }
 .hud-wave span { font-size: clamp(18px, 4.5vw, 26px); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); }
 .hud-btns { justify-self: end; display: flex; gap: 8px; align-items: center; }
@@ -125,7 +128,8 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 }
 
 /* ── M1.5：關卡計時、頭目血條、傳送門箭頭、跳躍鈕 ── */
-.hud-wave em { font-style: normal; font-size: 13px; min-height: 1.2em; color: var(--text); text-shadow: 0 1px 3px #000; }
+/* 提示浮在頂端列下方、不佔中間欄的寬度（長提示不會把血條與右上的鈕擠壞） */
+.hud-wave em { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: max-content; max-width: min(92vw, 520px); font-style: normal; font-size: 13px; min-height: 1.2em; color: var(--text); text-shadow: 0 1px 3px #000; }
 .hud-wave em.alarm { color: #ff8a7a; font-weight: 700; }
 .hud-boss { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 58px); left: 50%; transform: translateX(-50%); width: min(60vw, 360px); display: flex; flex-direction: column; align-items: center; gap: 2px; text-shadow: 0 1px 3px #000; }
 .hud-boss span { font-size: 14px; font-weight: 700; }
@@ -177,6 +181,9 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 #btn-ult b { position: relative; font-size: 18px; z-index: 1; text-shadow: 0 1px 3px #000; }
 #btn-ult em { display: none; position: absolute; bottom: 4px; font-style: normal; font-size: 11px; opacity: 0.7; z-index: 1; }
 #btn-ult .ult-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(166,120,224,0.7); transition: height 0.2s; }
+#btn-ult.cooling { border-color: rgba(255,255,255,0.2); }
+#btn-ult.cooling b { opacity: 0.55; }
+#btn-ult.cooling em { display: block; opacity: 1; font-size: 13px; font-weight: 700; color: #bfe8ff; }
 #btn-ult.ready { border-color: #ffd27a; animation: ultPulse 1s ease-in-out infinite; }
 #btn-ult.ready .ult-fill { background: rgba(255,179,92,0.85); }
 @keyframes ultPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,210,122,0.0); } 50% { box-shadow: 0 0 16px 4px rgba(255,210,122,0.8); } }

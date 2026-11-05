@@ -24,6 +24,7 @@ import {
   CHEST_HOLD_SECONDS,
   ELEMENT_PER_KIND,
   FOX,
+  FUSE,
   OFFERING,
   OFFERING_HOLD_SECONDS,
   OMIKUJI_EFFECT,
@@ -45,7 +46,9 @@ export interface ElementHost {
   /** 賽錢箱：生命夠不夠付（付完至少剩 1 點）、付、開三選一面板（rarity 階的卡、連選 picks 次） */
   canPayHpFrac(frac: number): boolean;
   payHpFrac(frac: number): void;
-  openPick(rarity: Rarity, picks: number, kind: 'offering' | 'chest'): void;
+  openPick(rarity: Rarity, picks: number, kind: 'offering' | 'chest' | 'fusion'): void;
+  /** 合魂祠：現在有沒有湊齊、還沒融合的大招 */
+  canFuse(): boolean;
   addMerit(n: number): void;
   notifyOmikuji(result: OmikujiResult): void;
   /** 召喚祭壇開了：召喚小頭目（D34）；回傳小頭目的生命倍率（沒召喚成功 = 0） */
@@ -107,7 +110,7 @@ export interface AltarEffect {
 
 const USED_FADE = 0.7;
 /** 各要素按住幾秒（結界石不用按住） */
-const HOLD: Partial<Record<ElementKind, number>> = { jizo: JIZO_HOLD_SECONDS, altar: ALTAR_HOLD_SECONDS, offering: OFFERING_HOLD_SECONDS, omikuji: OMIKUJI_HOLD_SECONDS, chest: CHEST_HOLD_SECONDS, summon: STAGE.summon.holdSeconds };
+const HOLD: Partial<Record<ElementKind, number>> = { jizo: JIZO_HOLD_SECONDS, altar: ALTAR_HOLD_SECONDS, offering: OFFERING_HOLD_SECONDS, omikuji: OMIKUJI_HOLD_SECONDS, chest: CHEST_HOLD_SECONDS, summon: STAGE.summon.holdSeconds, fuse: FUSE.holdSeconds };
 
 function blankSlot(): ElementSlot {
   const n = FOX.offers;
@@ -264,7 +267,7 @@ export class Elements {
       }
       const near = dist <= ELEMENT_RULES.useRadius && vertical;
       s.inside = near;
-      s.blocked = s.kind === 'offering' && !this.host.canPayHpFrac(OFFERING[s.rarity].costFrac);
+      s.blocked = (s.kind === 'offering' && !this.host.canPayHpFrac(OFFERING[s.rarity].costFrac)) || (s.kind === 'fuse' && !this.host.canFuse());
       if (near && !s.blocked) {
         const hold = HOLD[s.kind] ?? JIZO_HOLD_SECONDS;
         s.progress = Math.min(1, s.progress + dt / hold);
@@ -397,6 +400,8 @@ export class Elements {
       this.host.openPick(o.reward, o.picks, 'offering');
     } else if (s.kind === 'chest') {
       this.host.openPick(s.rarity, 1, 'chest');
+    } else if (s.kind === 'fuse') {
+      this.host.openPick(s.rarity, 1, 'fusion');
     } else if (s.kind === 'omikuji') lines.push(...this.drawOmikuji(s));
     else if (s.kind === 'summon') {
       const mult = this.host.summonBoss();
@@ -581,17 +586,25 @@ export class Elements {
 
   /** 召喚祭壇（D34）：離玩家 ringMin～ringMax 公尺、平地、走得到；找不到就放寬距離。不會過期 */
   placeSummon(px: number, pz: number): ElementSlot | null {
+    return this.placeSpecial('summon', px, pz, STAGE.summon.ringMin, STAGE.summon.ringMax);
+  }
+
+  /** 合魂祠（大招材料齊了才出現）：離玩家 ringMin～ringMax 公尺；不會過期，沒有可以融合的大招時由 Run 收掉 */
+  placeFuse(px: number, pz: number): ElementSlot | null {
+    return this.placeSpecial('fuse', px, pz, FUSE.ringMin, FUSE.ringMax);
+  }
+
+  /** 特殊要素（召喚祭壇、合魂祠）：一定要放得下（池滿了擠掉最舊的一般要素），找不到位置就放寬距離 */
+  private placeSpecial(kind: 'summon' | 'fuse', px: number, pz: number, ringMin: number, ringMax: number): ElementSlot | null {
     let i = this.freeSlot();
     if (i < 0) {
-      // 一定要放得下：擠掉最舊的一般要素
       let oldest = -1;
-      for (let k = 0; k < this.slots.length; k++) if (this.slots[k].kind !== 'summon' && (oldest < 0 || this.slots[k].age > this.slots[oldest].age)) oldest = k;
+      for (let k = 0; k < this.slots.length; k++) if (this.slots[k].kind !== 'summon' && this.slots[k].kind !== 'fuse' && (oldest < 0 || this.slots[k].age > this.slots[oldest].age)) oldest = k;
       if (oldest < 0) return null;
       this.free(oldest);
       i = oldest;
     }
-    const S = STAGE.summon;
-    for (const [lo, hi] of [[S.ringMin, S.ringMax], [S.ringMin * 0.6, S.ringMax * 1.4], [6, 60]] as const) {
+    for (const [lo, hi] of [[ringMin, ringMax], [ringMin * 0.6, ringMax * 1.4], [6, 60]] as const) {
       for (let tr = 0; tr < ELEMENT_RULES.tries; tr++) {
         const a = this.rng.range(0, Math.PI * 2);
         const d = this.rng.range(lo, hi);
@@ -600,11 +613,22 @@ export class Elements {
         const m = this.map;
         if (x < m.minX + ELEMENT_RULES.edgeMargin || x > m.maxX - ELEMENT_RULES.edgeMargin || z < m.minZ + ELEMENT_RULES.edgeMargin || z > m.maxZ - ELEMENT_RULES.edgeMargin) continue;
         if (!this.spotOk(x, z)) continue;
-        this.place(i, 'summon', 'legend', x, z, ELEMENT_RULES.announce);
+        this.place(i, kind, 'legend', x, z, ELEMENT_RULES.announce);
         this.slots[i].life = Infinity;
         return this.slots[i];
       }
     }
+    return null;
+  }
+
+  /** 收掉還沒用的某種要素（合魂祠：沒有可以融合的大招了） */
+  removeKind(kind: ElementKind): void {
+    for (let i = 0; i < this.slots.length; i++) if (this.slots[i].active && this.slots[i].kind === kind && this.slots[i].usedAge < 0) this.free(i);
+  }
+
+  /** 合魂祠還在、還沒用（HUD 箭頭用） */
+  get fuseSlot(): ElementSlot | null {
+    for (const s of this.slots) if (s.active && s.kind === 'fuse' && s.usedAge < 0) return s;
     return null;
   }
 
@@ -613,7 +637,7 @@ export class Elements {
     let i = this.freeSlot();
     if (i < 0) {
       let oldest = -1;
-      for (let k = 0; k < this.slots.length; k++) if (this.slots[k].kind !== 'summon' && (oldest < 0 || this.slots[k].age > this.slots[oldest].age)) oldest = k;
+      for (let k = 0; k < this.slots.length; k++) if (this.slots[k].kind !== 'summon' && this.slots[k].kind !== 'fuse' && (oldest < 0 || this.slots[k].age > this.slots[oldest].age)) oldest = k;
       if (oldest < 0) return null;
       this.free(oldest);
       i = oldest;

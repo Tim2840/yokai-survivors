@@ -187,3 +187,21 @@ export async function walkOnto(ctx, x, z) {
   else await page.mouse.up();
   return arrived;
 }
+
+/** HUD 頂端列沒有被中間的長提示擠壞：「能力」鈕只有一行字、血條夠長、三塊互不重疊、提示不蓋住兩側（全畫面尺寸都要過） */
+export async function hudTopOk(ctx, label = '') {
+  const { page, vp } = ctx;
+  const r = await page.evaluate(() => {
+    const box = (sel) => { const e = document.querySelector(sel); if (!e) return null; const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; };
+    const ab = document.querySelector('#btn-abilities');
+    const rg = document.createRange();
+    rg.selectNodeContents(ab);
+    const lines = new Set([...rg.getClientRects()].map((q) => Math.round(q.top))).size;
+    return { hp: box('.hud-hp'), bar: box('.hud-hp .bar'), wave: box('.hud-wave'), btns: box('.hud-btns'), note: box('#wave-note'), lines };
+  });
+  expect(r.lines === 1, `「能力」鈕被擠成 ${r.lines} 行（${vp.name}${label}）`);
+  expect(r.bar && r.bar.w >= 40, `血條被擠太短（${vp.name}${label}）：${JSON.stringify(r.bar)}`);
+  const ov = (a, b) => a && b && a.w > 0 && b.w > 0 && a.x < b.x + b.w - 1 && b.x < a.x + a.w - 1 && a.y < b.y + b.h - 1 && b.y < a.y + a.h - 1;
+  expect(!ov(r.hp, r.wave) && !ov(r.wave, r.btns), `頂端列重疊（${vp.name}${label}）：${JSON.stringify(r)}`);
+  expect(!ov(r.note, r.hp) && !ov(r.note, r.btns), `提示蓋住血條或右上的鈕（${vp.name}${label}）：${JSON.stringify(r)}`);
+}

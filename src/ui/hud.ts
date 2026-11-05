@@ -38,7 +38,7 @@ export function buildHud(parent: HTMLElement): Hud {
         <div class="bar"><i id="hp-fill"></i></div>
         <span id="hp-text"></span>
       </div>
-      <div class="hud-wave"><b id="wave-text"></b><span id="wave-timer"></span><em id="wave-note"></em></div>
+      <div class="hud-wave"><b id="wave-text"></b><span id="wave-timer"></span><i id="wave-diff" class="hidden"></i><em id="wave-note"></em></div>
       <div class="hud-btns"><button class="hud-abilities" id="btn-abilities" type="button">${t('hud.abilities')}</button><button class="hud-pause" id="btn-pause" type="button" aria-label="${t('pause.button')}">II</button></div>
     </div>
     <div class="hud-boss hidden" id="boss-bar"><span>${t('hud.boss')}</span><div class="bar"><i id="boss-fill"></i></div></div>
@@ -50,7 +50,7 @@ export function buildHud(parent: HTMLElement): Hud {
       <span id="lv-text"></span>
     </div>
     <div class="stick" id="stick-base"><div class="knob" id="stick-knob"></div></div>
-    <button class="ult hidden" id="btn-ult" type="button"><span class="ult-fill" id="ult-fill"></span><b>${t('hud.ult')}</b><em>F</em></button>
+    <button class="ult hidden" id="btn-ult" type="button"><span class="ult-fill" id="ult-fill"></span><b>${t('hud.ult')}</b><em id="ult-key">F</em></button>
     <button class="jump" id="btn-jump" type="button" aria-label="${t('hud.jump')}">${t('hud.jump')}</button>`;
   parent.appendChild(root);
   const q = <T extends HTMLElement>(id: string) => root.querySelector<T>('#' + id)!;
@@ -59,6 +59,7 @@ export function buildHud(parent: HTMLElement): Hud {
   const waveText = q('wave-text');
   const timer = q('wave-timer');
   const note = q('wave-note');
+  const waveDiff = q('wave-diff');
   const bossBar = q('boss-bar');
   const bossFill = q('boss-fill');
   const portalBox = q('portal-box');
@@ -71,6 +72,7 @@ export function buildHud(parent: HTMLElement): Hud {
   const elAct = q('element-act');
   const ultBtn = q('btn-ult');
   const ultFill = q('ult-fill');
+  const ultKey = q('ult-key');
   let lastUlt = '';
   const synBox = q('synergy-box');
   let lastSyn = '';
@@ -108,7 +110,10 @@ export function buildHud(parent: HTMLElement): Hud {
       const waveKey = run.stageNumber * 10000 + diff;
       if (waveKey !== lastWave) {
         lastWave = waveKey;
-        waveText.textContent = diff > 0 ? t('hud.stageDiff', { n: run.stageNumber, d: diff }) : t('hud.stage', { n: run.stageNumber });
+        waveText.textContent = t('hud.stage', { n: run.stageNumber });
+        // 難度另起一行（中間欄要窄，不把血條與右上的鈕擠壞）
+        waveDiff.textContent = diff > 0 ? t('hud.diff', { d: diff }) : '';
+        waveDiff.classList.toggle('hidden', diff <= 0);
       }
       const left = Math.ceil(run.timeLeft);
       if (left !== lastTimer) {
@@ -116,7 +121,8 @@ export function buildHud(parent: HTMLElement): Hud {
         timer.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
       }
       const altar = run.elements.summonSlot;
-      const noteText = run.director.swarm ? t('hud.swarm') : run.portal.active ? t('hud.bossDown') : altar ? t('hud.summonNote') : '';
+      const shrine = run.elements.fuseSlot;
+      const noteText = run.director.swarm ? t('hud.swarm') : run.portal.active ? t('hud.bossDown') : altar ? t('hud.summonNote') : shrine ? t('hud.fuseNote') : '';
       if (noteText !== lastNote) {
         lastNote = noteText;
         note.textContent = noteText;
@@ -132,19 +138,23 @@ export function buildHud(parent: HTMLElement): Hud {
       if (bossAlive) bossFill.style.width = `${Math.max(0, run.enemies.hp[bi] / run.enemies.maxHp[bi]) * 100}%`;
       // 傳送門箭頭：相對鏡頭的方向與距離
       // 傳送門優先；還沒開的召喚祭壇也用同一個箭頭（D34）
-      const target = run.portal.active ? run.portal : altar && altar.announce <= 0 && Math.hypot(altar.x - run.px, altar.z - run.pz) > ALTAR_ARROW_HIDE ? altar : null;
+      // 箭頭：傳送門 > 召喚祭壇 > 合魂祠；走到旁邊就不顯示
+      const near = (e: { x: number; z: number; announce: number } | null) => !!e && e.announce <= 0 && Math.hypot(e.x - run.px, e.z - run.pz) > ALTAR_ARROW_HIDE;
+      const arrowKind = run.portal.active ? 'portal' : near(altar) ? 'summon' : near(shrine) ? 'fuse' : '';
+      const target = arrowKind === 'portal' ? run.portal : arrowKind === 'summon' ? altar : arrowKind === 'fuse' ? shrine : null;
       if (target) {
         portalBox.classList.remove('hidden');
-        portalBox.dataset.kind = run.portal.active ? 'portal' : 'summon';
+        portalBox.dataset.kind = arrowKind;
         const dx = target.x - run.px;
         const dz = target.z - run.pz;
         const right = Math.cos(yaw) * dx - Math.sin(yaw) * dz;
         const fwd = -Math.sin(yaw) * dx - Math.cos(yaw) * dz;
         portalArrow.style.transform = `rotate(${Math.round((Math.atan2(right, fwd) * 180) / Math.PI)}deg)`;
-        const m = Math.round(Math.hypot(dx, dz)) * 2 + (run.portal.active ? 0 : 1);
+        const kindNo = arrowKind === 'portal' ? 0 : arrowKind === 'summon' ? 1 : 2;
+        const m = Math.round(Math.hypot(dx, dz)) * 4 + kindNo;
         if (m !== lastPortal) {
           lastPortal = m;
-          portalText.textContent = t(run.portal.active ? 'hud.portal' : 'hud.summon', { m: m >> 1 });
+          portalText.textContent = t(kindNo === 0 ? 'hud.portal' : kindNo === 1 ? 'hud.summon' : 'hud.fuse', { m: m >> 2 });
         }
       } else if (lastPortal !== -1) {
         lastPortal = -1;
@@ -177,9 +187,13 @@ export function buildHud(parent: HTMLElement): Hud {
       }
       // 大招鈕：有融合過才顯示；量表滿了會發亮
       const hasUlt = run.fused.length > 0;
-      const ultKey = `${hasUlt}|${run.ultReady}`;
-      if (ultKey !== lastUlt) {
-        lastUlt = ultKey;
+      // 冷卻中：鈕上顯示倒數秒數（D：大招冷卻）
+      const cool = Math.ceil(run.ultCooldownLeft);
+      const ultState = `${hasUlt}|${run.ultReady}|${cool}`;
+      if (ultState !== lastUlt) {
+        lastUlt = ultState;
+        ultBtn.classList.toggle('cooling', cool > 0);
+        ultKey.textContent = cool > 0 ? t('hud.ultCool', { s: cool }) : 'F';
         ultBtn.classList.toggle('hidden', !hasUlt);
         ultBtn.classList.toggle('ready', run.ultReady);
       }
@@ -205,7 +219,7 @@ export function buildHud(parent: HTMLElement): Hud {
           elBox.classList.remove('hidden');
           elBox.dataset.rarity = f.rarity;
           elTitle.textContent = `${t(`rarity.${f.rarity}`)}・${t(`element.${f.kind}`)}`;
-          elDesc.textContent = f.kind === 'summon' ? t('element.summon.desc', { mult: mult.toFixed(1) }) : f.kind === 'fox' ? describeFox(f, run.cardCounts) : describeElement(f);
+          elDesc.textContent = f.kind === 'summon' ? t('element.summon.desc', { mult: mult.toFixed(1) }) : f.kind === 'fox' ? describeFox(f, run.cardCounts) : f.kind === 'fuse' ? t(f.blocked ? 'element.fuse.none' : 'element.fuse.desc') : describeElement(f);
           elAct.textContent = f.kind === 'barrier' ? t('element.stand') : f.kind === 'fox' ? t('element.fox.act') : t('element.hold');
         }
         elFill.style.width = `${f.kind === 'barrier' ? (f.inside ? 100 : 0) : Math.round(f.progress * 100)}%`;

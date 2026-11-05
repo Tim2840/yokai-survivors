@@ -130,8 +130,8 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
   const title = o.el.querySelector<HTMLElement>('#lv-title')!;
   const pending = o.el.querySelector<HTMLElement>('#lv-pending')!;
   return Object.assign(o, {
-    render(offer: CardOffer[], more: number, kind: 'levelup' | 'offering' | 'chest' | 'variant' = 'levelup', ult: { yokai: string; counts: ReadonlyMap<string, number>; fused: readonly string[] } = { yokai: '', counts: new Map(), fused: [] }) {
-      title.textContent = t(kind === 'variant' ? 'levelup.variant' : kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? 'levelup.offering' : 'levelup.chest');
+    render(offer: CardOffer[], more: number, kind: 'levelup' | 'offering' | 'chest' | 'variant' | 'fusion' = 'levelup', ult: { yokai: string; counts: ReadonlyMap<string, number>; fused: readonly string[] } = { yokai: '', counts: new Map(), fused: [] }) {
+      title.textContent = t(kind === 'variant' ? 'levelup.variant' : kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? 'levelup.offering' : kind === 'fusion' ? 'levelup.fusion' : 'levelup.chest');
       pending.textContent = more > 1 ? t('levelup.pending', { n: more - 1 }) : '';
       cardsEl.innerHTML = '';
       offer.forEach((c, i) => {

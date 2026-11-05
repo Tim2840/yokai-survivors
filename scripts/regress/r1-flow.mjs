@@ -2,7 +2,7 @@
 // → 真的走過去站著按住 → 頭目出現（血條）→ 頭目倒下 → 傳送門（箭頭）＋寶箱
 // → 真的走進去（鍵盤或搖桿）→ 過關畫面 → 點「出發」→ 第 2 關 → 暫停放棄 → 結算 → 重載後存檔還在 → 再來一局會重置。
 // 跳時間、傳送到祭壇旁、頭目「倒下」用開發介面（頭目 HP 太高、等 3 分鐘沒意義），其餘（走過去、按住、點卡、走進傳送門）全用真實輸入。三種畫面各一次，卡住偵測。
-import { openPage, startRun, press, step, expect, shot, reportErrors, untilDone, snapshotOf, walkOnto as walkOntoLib, VIEWPORTS } from './lib.mjs';
+import { openPage, startRun, press, step, expect, shot, reportErrors, untilDone, snapshotOf, walkOnto as walkOntoLib, hudTopOk, VIEWPORTS } from './lib.mjs';
 
 export const meta = { id: 'r1', desc: '整局流程：開局→升級選卡→召喚祭壇（箭頭→走過去按住）→頭目→傳送門＋寶箱→過關畫面→第 2 關（難度 %）→放棄→結算→重載後存檔還在（三種畫面）', max: 600, stall: 60 };
 
@@ -58,6 +58,7 @@ export async function run(browser) {
         expect(/召喚祭壇 \d+ 公尺/.test(txt), `箭頭文字不對：${txt}`);
         const note = await page.locator('#wave-note').innerText();
         expect(note === '召喚祭壇出現了', `提示文字不對：${note}`);
+        await hudTopOk(ctx, '・召喚祭壇提示');
         files.push(await shot(ctx, 'r1-altar'));
       });
 
@@ -116,6 +117,7 @@ export async function run(browser) {
         expect(!(await page.locator('#boss-bar').isVisible()), `頭目死了血條還在（${vp.name}）`);
         const txt = await page.locator('#portal-text').innerText();
         expect(/傳送門 \d+ 公尺/.test(txt), `箭頭距離文字不對：${txt}`);
+        await hudTopOk(ctx, '・頭目倒下提示');
         const chest = await page.evaluate(() => window.__game.run.elements.find((e) => e.kind === 'chest'));
         expect(chest && chest.rarity === 'rare', `小頭目沒掉良階寶箱：${JSON.stringify(chest)}`);
         const pt = await page.evaluate(() => window.__game.run.portal);
@@ -168,7 +170,9 @@ export async function run(browser) {
         const m2 = await page.evaluate(() => window.__game.map);
         expect(JSON.stringify(m2.plateaus) !== JSON.stringify(before.plateaus), `第 2 關的地圖沒換（${vp.name}）`);
         const st2 = await page.locator('.hud-wave b').innerText();
-        expect(st2 === '第 2 關・難度 +50%', `HUD 沒更新成第 2 關（含難度）：${st2}`);
+        const df2 = await page.locator('#wave-diff').innerText();
+        expect(st2 === '第 2 關' && df2 === '難度 +50%', `HUD 沒更新成第 2 關（含難度）：${st2}／${df2}`);
+        await hudTopOk(ctx, '・第 2 關難度');
         void after;
         await page.evaluate(() => { window.__game.advance(1); window.__game.render(); });
         files.push(await shot(ctx, 'r1-stage2'));

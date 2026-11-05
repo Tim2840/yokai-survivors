@@ -1,8 +1,8 @@
 // u1：終極技（大招，D29；D30 第二步改進化式）。湊齊配方（含鬼火滿級）→「材料齊了」提示、還沒有大招鈕 → 走去開寶箱 → 寶箱裡的融合卡（真的點）→ 融合提示 → 大招鈕出現、量表沒滿按了沒反應 → 量表滿了鈕發亮 → 真的點鈕（桌面也試 F 鍵）→ 範圍內的敵人被打倒、量表歸零。
 // 「能力」面板列出配方進度；選卡畫面的卡片寫出大招材料進度。三種畫面，卡住偵測。量表用開發介面 chargeUlt 充滿（等殺敵充能太久），其餘全是真實操作。
-import { openPage, startRun, press, step, expect, shot, reportErrors, walkOnto, VIEWPORTS } from './lib.mjs';
+import { openPage, startRun, press, step, expect, shot, reportErrors, walkOnto, hudTopOk, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'u1', desc: '大招：湊齊配方（鬼火滿級）→材料齊提示→走去開寶箱→點融合卡→融合提示→大招鈕→量表滿了才能放→真的按鈕／F 鍵→打倒周圍敵人→能力面板與選卡提示（三種畫面）', max: 300, stall: 50 };
+export const meta = { id: 'u1', desc: '大招：湊齊配方（鬼火滿級）→材料齊提示→走去開寶箱、跟著箭頭去合魂祠→點融合卡→融合提示→大招鈕→冷卻倒數→量表滿了才能放→真的按鈕／F 鍵→打倒周圍敵人→能力面板與選卡提示（三種畫面）', max: 300, stall: 50 };
 
 const overlap = (a, b) => a && b && a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
@@ -80,14 +80,30 @@ export async function run(browser) {
       }, 60);
 
       await step(`${vp.name} 走去開寶箱 → 面板最前面是融合卡 → 真的點 → 融合成功、大招鈕`, async () => {
+        // 第 1 個用寶箱融合；第 2 個用地圖上的合魂祠（材料齊了才出現，HUD 箭頭指過去）
         for (let round = 0; round < 2; round++) {
-          const spot = await page.evaluate(() => window.__game.forceElement('chest', 'common'));
-          expect(spot, `放不下寶箱（${vp.name}）`);
+          let spot;
+          if (round === 0) {
+            spot = await page.evaluate(() => window.__game.forceElement('chest', 'common'));
+            expect(spot, `放不下寶箱（${vp.name}）`);
+          } else {
+            for (let i = 0; i < 16 && !(await page.evaluate(() => window.__game.run.elements.some((e) => e.kind === 'fuse' && !e.used && e.announce <= 0))); i++) {
+              await page.evaluate(() => window.__game.advance(0.5));
+              await dismiss();
+            }
+            spot = (await page.evaluate(() => window.__game.run.elements)).find((e) => e.kind === 'fuse' && !e.used);
+            expect(spot, `材料齊了但地圖上沒有合魂祠（${vp.name}）`);
+            await page.evaluate(([x, z]) => { window.__game.teleport(x + 12, z); window.__game.advance(0.1); window.__game.render(); }, [spot.x, spot.z]);
+            const arrow = await page.locator('#portal-text').innerText();
+            expect(/合魂祠 \d+ 公尺/.test(arrow), `合魂祠的箭頭不對：${arrow}`);
+            await hudTopOk(ctx, '・合魂祠提示');
+            files.push(await shot(ctx, 'u1-shrine'));
+          }
           for (let tries = 0; tries < 3 && !(await walkOnto(ctx, spot.x, spot.z)); tries++) await dismiss();
           for (let i = 0; i < 12 && !(await page.evaluate(() => window.__game.screens)).includes('levelup'); i++) await page.evaluate(() => window.__game.advance(0.25));
           await page.evaluate(() => window.__game.render());
           const title = await page.locator('#lv-title').innerText();
-          expect(/寶箱/.test(title), `開出來的不是寶箱面板：${title}`);
+          expect(round === 0 ? /寶箱/.test(title) : /合魂祠/.test(title), `開出來的面板不對（第 ${round + 1} 個）：${title}`);
           const cards = await page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card')].map((c) => {
             const r = c.getBoundingClientRect();
             return { id: c.dataset.card, ult: c.classList.contains('r-ult'), t: c.innerText.replace(/\s+/g, ' '), r: { x: r.x, y: r.y, w: r.width, h: r.height } };
@@ -129,8 +145,8 @@ export async function run(browser) {
       });
 
       await step(`${vp.name} 量表滿 → 鈕發亮 → 真的按 → 敵人被打倒、量表歸零`, async () => {
-        await page.evaluate(() => window.__game.chargeUlt());
-        await page.evaluate(() => { window.__game.advance(0.1); window.__game.render(); });
+        // 人類生在身邊 8 公尺（大招範圍內）；鬼火會把人類擊退，所以生完馬上放
+        await page.evaluate(() => { window.__game.spawn('villager', 12); window.__game.chargeUlt(); window.__game.advance(0.05); window.__game.render(); });
         expect(await page.locator('#btn-ult.ready').count() === 1, `量表滿了鈕沒有發亮（${vp.name}）`);
         const e0 = await page.evaluate(() => window.__game.run.enemies);
         expect(e0 > 0, '場上沒有敵人可打');
@@ -142,6 +158,18 @@ export async function run(browser) {
         expect(r1.kills > k0, `按了大招沒有打倒敵人：${k0} → ${r1.kills}`);
         expect(r1.ult.charge < 5, `發動後量表沒有歸零：${r1.ult.charge}`);
         expect(await page.locator('#btn-ult.ready').count() === 0, `發動後鈕還在發亮（${vp.name}）`);
+        // 冷卻：鈕上寫倒數秒數；冷卻中按了沒反應
+        expect(await page.locator('#btn-ult.cooling').count() === 1, `發動後沒有進入冷卻（${vp.name}）`);
+        const cd = await page.locator('#ult-key').innerText();
+        expect(/^\d+ 秒$/.test(cd), `冷卻倒數文字不對：${cd}`);
+        const k1 = await page.evaluate(() => window.__game.run.kills);
+        await page.evaluate(() => { window.__game.spawn('villager', 6); window.__game.advance(0.3); });
+        await dismiss();
+        if (!vp.hasTouch) await page.keyboard.press('KeyF');
+        else await press(ctx, '#btn-ult');
+        await page.evaluate(() => window.__game.advance(0.1));
+        expect((await page.evaluate(() => window.__game.run.ult.charge)) < 5, `冷卻中量表在充能：${(await page.evaluate(() => window.__game.run.ult.charge))}`);
+        void k1;
         files.push(await shot(ctx, 'u1-cast'));
       });
 
