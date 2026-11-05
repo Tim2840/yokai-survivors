@@ -11,6 +11,7 @@ import { writeFileSync } from 'node:fs';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { resetTuning, tuning } from '../../src/data/tuning';
+import { TECHS } from '../../src/data/techniques';
 import { ultHints } from '../../src/data/ultimates';
 import { PROGRESSION } from '../../src/data/progression';
 import { WAVES } from '../../src/data/waves';
@@ -37,11 +38,18 @@ const ELEMENTS = arg('elements', 'both'); // on | off | both
 const JSON_OUT = arg('json', '');
 /** --cast on|off：機器人要不要發動大招（比較大招的影響） */
 const CAST = arg('cast', 'on') === 'on';
-/** --variant kitsunebi|lanternRing|hellfire|auto：主武器到變化等級時選哪一種（auto = 依策略：dps 分裂、survive 燈籠環、ult 業火、random 亂選） */
-const VARIANT = arg('variant', 'auto');
-/** --switchTo kitsunebi：選了別的變化之後，去道祖神（D47）換成這一種（不給 = 不去） */
-const SWITCH_TO = arg('switchTo', '');
-const VARIANT_BY_STRATEGY: Record<string, string> = { dps: 'kitsunebi', survive: 'lanternRing', ult: 'hellfire' };
+/** --techs a,b,c：技法面板優先選這幾個（沒給 = 依策略的偏好；random 亂選） */
+const TECH_PREF = arg('techs', '');
+/** --give a,b：開局直接給這幾個技法；--techMax N：一局最多 N 個（給 2 個再 --techMax 2 = 只測這一對，不會再抽到別的） */
+const GIVE = arg('give', '');
+const TECH_MAX_ARG = arg('techMax', '');
+/** --giveSets N：每局隨機（固定種子）給一組四個合法技法，用來全掃「真的一局會拿到的組合」；報告各技法的平均過關率 */
+const GIVE_SETS = Number(arg('giveSets', '0'));
+const TECH_BY_STRATEGY: Record<string, string[]> = {
+  dps: ['kitsunebi', 'bounce', 'pillar', 'seed', 'satellite', 'hellfire', 'homing', 'ring', 'ward'],
+  survive: ['ring', 'ward', 'satellite', 'hellfire', 'pillar', 'seed', 'kitsunebi', 'bounce', 'homing'],
+  ult: ['hellfire', 'seed', 'pillar', 'kitsunebi', 'satellite', 'bounce', 'ring', 'homing', 'ward'],
+};
 /** --tune countScale=3,hpScale=1.2,xp.needPerLevel=4,w.hpPerWave=0.2：臨時改旋鈕比較（不改檔案）；xp. 開頭是 PROGRESSION、w. 開頭是 WAVES */
 const TUNE = arg('tune', '');
 function applyTune(): void {
@@ -67,10 +75,16 @@ const RARITY_SCORE: Record<string, number> = { common: 1, rare: 1.6, epic: 2.4, 
 
 function choose(run: Run, strategy: string, rnd: () => number): number {
   const offer = run.offer!;
-  if (run.offerKind === 'variant') {
-    const want = run.variantRechoose && SWITCH_TO ? SWITCH_TO : VARIANT === 'auto' ? VARIANT_BY_STRATEGY[strategy] : VARIANT;
-    const i = offer.findIndex((o) => o.cardId === 'variant:' + want);
-    return i >= 0 ? i : Math.floor(rnd() * offer.length);
+  if (run.offerKind === 'tech') {
+    // 道祖神的換法：機器人不換（維持現狀）；加深：第一張；新技法：依偏好
+    if (run.techMode === 'swap') return Math.max(0, offer.findIndex((o) => o.cardId === 'tech-keep'));
+    if (run.techMode === 'up' || strategy === 'random' && !TECH_PREF) return Math.floor(rnd() * offer.length);
+    const pref = TECH_PREF ? TECH_PREF.split(',') : TECH_BY_STRATEGY[strategy] ?? [];
+    for (const id of pref) {
+      const i = offer.findIndex((o) => o.cardId === 'tech:' + id);
+      if (i >= 0) return i;
+    }
+    return Math.floor(rnd() * offer.length);
   }
   if (strategy === 'random') return Math.floor(rnd() * offer.length);
   // 寶箱裡的融合卡（D30 第二步）：會玩的人一定拿
@@ -132,6 +146,19 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   const rnd = lcg(seed * 7919);
   tuning.stageSeconds = SECONDS;
   const run = new Run({ seed, bus: new EventBus(), mapNumber: 1 });
+  if (TECH_MAX_ARG) run.tech.max = Number(TECH_MAX_ARG);
+  if (GIVE) run.devAddTech(...GIVE.split(','));
+  if (GIVE_SETS > 0) {
+    // 這一局的四個技法：用種子隨機排列，依序加進去（跳過互斥的）
+    const order = TECHS.map((x) => x.id);
+    const r2 = lcg(seed * 104729);
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(r2() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    run.tech.max = 4;
+    for (const id of order) if (run.tech.owned.length < 4 && run.tech.canOffer(id)) run.devAddTech(id);
+  }
   // 要測的關卡數：STAGES 關（超過一般地圖的關數就以地圖為準）
   let used = 0;
   const bus = (run as unknown as { bus: EventBus }).bus;
@@ -188,10 +215,6 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
       // 合魂祠：大招材料齊了就去融合（亂選的機器人不特別去）
       const f = run.elements.fuseSlot;
       [mx, mz] = steer(run, f.x, f.z);
-    } else if (SWITCH_TO && run.variant && run.variant.id !== SWITCH_TO && run.elements.dosojinSlot && run.elements.dosojinSlot.announce <= 0) {
-      // 道祖神：換成想要的變化
-      const d = run.elements.dosojinSlot;
-      [mx, mz] = steer(run, d.x, d.z);
     } else if (run.portal.active) {
       [mx, mz] = steer(run, run.portal.x, run.portal.z);
     } else if (altar && altar.announce <= 0 && run.time >= SUMMON_AT * run.director.duration) {
@@ -243,7 +266,7 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     elementsUsed: used,
     cards,
     fused: run.fused.length,
-    variant: run.variant?.id ?? '-',
+    variant: run.tech.owned.join('+') || '-',
     casts,
     summonedAt,
     pickups,
@@ -401,7 +424,7 @@ function summarize(rs: Result[]): string {
     `等級 ${avg(rs.map((r) => r.level)).toFixed(1)}`,
     `用掉要素 ${avg(rs.map((r) => r.elementsUsed)).toFixed(1)}`,
     `融合大招 ${avg(rs.map((r) => r.fused)).toFixed(1)} 個、發動 ${avg(rs.map((r) => r.casts)).toFixed(1)} 次`,
-    `變化 ${[...new Set(rs.map((r) => r.variant))].join('/')}`,
+    `技法 ${[...new Set(rs.map((r) => r.variant))].slice(0, 6).join('/')}`,
     `補給品 ${avg(rs.map((r) => r.pickups)).toFixed(1)} 個`,
     `聯動初 ${((rs.filter((r) => r.synT1 >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.synT1 >= 0).map((r) => r.synT1), 50)?.toFixed(0) ?? '-'} 秒）、極 ${((rs.filter((r) => r.synT2 >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.synT2 >= 0).map((r) => r.synT2), 50)?.toFixed(0) ?? '-'} 秒）`,
     `死在召喚後 ${rs.filter((r) => r.diedAfterSummon >= 0).length} 局（中位 ${pct(rs.filter((r) => r.diedAfterSummon >= 0).map((r) => r.diedAfterSummon), 50)?.toFixed(0) ?? '-'} 秒）`,
@@ -421,6 +444,21 @@ for (const strategy of ONLY) {
     all.push(...rs);
     console.log(`- **${strategy}／${useEl ? '用要素' : '不理要素'}**：${summarize(rs)}`);
   }
+}
+
+if (GIVE_SETS > 0) {
+  // 各技法的平均過關率（每個技法出現在大約 1/3 的組合裡）：差距太大就是某個技法太強／太弱
+  const by: Record<string, { n: number; clear: number; surv: number }> = {};
+  for (const r of all) {
+    for (const id of r.variant.split('+')) {
+      const e = (by[id] ??= { n: 0, clear: 0, surv: 0 });
+      e.n++;
+      e.clear += r.stagesCleared >= Math.min(STAGES, 99) ? 1 : 0;
+      e.surv += r.survived;
+    }
+  }
+  console.log('\n各技法（出現在哪些局，就用那些局的結果平均）：\n');
+  for (const [id, e] of Object.entries(by).sort((a, b) => b[1].clear / b[1].n - a[1].clear / a[1].n)) console.log(`- ${id}：${e.n} 局，過關 ${((e.clear / e.n) * 100).toFixed(0)}%，平均存活 ${(e.surv / e.n).toFixed(0)} 秒`);
 }
 
 // 註：不輸出「拿某張卡的局 vs 沒拿的局」的比較——活得久的局本來就拿到更多卡（存活者偏誤），會誤導；單張卡的價值用 tests/unit/card-dps-probe.test.ts。

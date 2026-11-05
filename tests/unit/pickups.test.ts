@@ -191,6 +191,7 @@ describe('補給品：撿到的效果', () => {
     run.devPickup('koban', 20);
     expect(run.pickups.aliveCount).toBe(1);
     run.devClearStage();
+    while (run.offer) run.chooseCard(0);
     run.continueFromIntermission();
     expect(run.pickups.aliveCount).toBe(0);
   });

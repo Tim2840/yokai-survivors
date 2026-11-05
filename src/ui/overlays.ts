@@ -5,7 +5,7 @@ import { setWeaponTextFormatter, type BuildSummary } from '../game/buildSummary'
 import { SYNERGIES, synergyHints } from '../data/synergies';
 import { isUltCard, ultHints, ultOfCard } from '../data/ultimates';
 import { DIFFICULTY } from '../data/difficulty';
-import { isVariantCard, variantOfCard } from '../data/variants';
+import { TECH_CARD_PREFIX, TECH_KEEP, TECH_LEVELS, TECH_SWAP_PREFIX, TECH_UP_PREFIX, isTechCard, techById, techMix } from '../data/techniques';
 import { cardById, type CardOffer } from '../systems/cards';
 import { WEAPON_LEVELS, itemDown, itemValue, type WeaponLevel } from '../data/items';
 import { PLAYABLE_YOKAI, STARTER_YOKAI } from '../data/yokai';
@@ -126,14 +126,53 @@ export function downText(stat: StatId, v: number): string {
   return t(`card.fmtDown.${CARD_FORMAT[stat]}` as I18nKey, { name: t(`stat.${stat}` as I18nKey), v: num(v, 1) });
 }
 
+/** 選卡面板需要的玩家狀態（技法卡要寫出混搭、等級） */
+export interface PickerContext {
+  yokai: string;
+  counts: ReadonlyMap<string, number>;
+  fused: readonly string[];
+  techs?: readonly string[];
+  techLevels?: readonly number[];
+  techMode?: 'new' | 'up' | 'swap';
+}
+
+const techName = (id: string): string => t(`tech.${id}` as I18nKey);
+
+/** 技法卡的內容（HTML）：標籤、名稱、玩法說明、適合的道具、和已有技法的混搭 */
+function techCardHtml(cardId: string, owned: readonly string[], levels: readonly number[]): string {
+  if (cardId === TECH_KEEP) return `<span class="rname">${t('card.techTag')}</span><b>${t('tech.keep')}</b><span class="cdesc">${t('tech.keep.desc')}</span>`;
+  if (cardId.startsWith(TECH_UP_PREFIX)) {
+    const id = cardId.slice(TECH_UP_PREFIX.length);
+    const lv = levels[owned.indexOf(id)] ?? 1;
+    return `<span class="rname">${t('tech.up.tag', { a: lv, b: lv + 1 })}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="csyn">${t('tech.up.fx', { v: Math.round(TECH_LEVELS.perLevel * 100) })}</span>`;
+  }
+  let id: string;
+  let tag: string;
+  let rest = owned;
+  if (cardId.startsWith(TECH_SWAP_PREFIX)) {
+    const [from, to] = cardId.slice(TECH_SWAP_PREFIX.length).split('>');
+    id = to;
+    tag = t('tech.swap.tag', { old: techName(from) });
+    rest = owned.filter((x) => x !== from);
+  } else {
+    id = cardId.slice(TECH_CARD_PREFIX.length);
+    tag = `${t('card.techTag')}・${t(`tech.family.${techById(id).family}` as I18nKey)}`;
+  }
+  const d = techById(id);
+  const likes = d.likes.map((x) => t(`card.${x}` as I18nKey)).join('、');
+  const mix = techMix(id, rest);
+  const mixText = !mix ? '' : mix.kind === 'hit' ? t('tech.mix.hit', { via: techName(mix.via), hit: techName(mix.hit) }) : t('tech.mix.family', { family: t(`tech.family.${mix.family}` as I18nKey) });
+  return `<span class="rname">${tag}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="csyn">${t('tech.likes', { items: likes })}</span>${mixText ? `<span class="csyn mix">${mixText}</span>` : ''}`;
+}
+
 export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => void) {
   const o = overlay(parent, 'levelup', `<div class="panel"><h2 id="lv-title"></h2><div class="cards" id="cards"></div><p class="hint" id="lv-pending"></p></div>`);
   const cardsEl = o.el.querySelector<HTMLElement>('#cards')!;
   const title = o.el.querySelector<HTMLElement>('#lv-title')!;
   const pending = o.el.querySelector<HTMLElement>('#lv-pending')!;
   return Object.assign(o, {
-    render(offer: CardOffer[], more: number, kind: 'levelup' | 'offering' | 'chest' | 'variant' | 'fusion' = 'levelup', ult: { yokai: string; counts: ReadonlyMap<string, number>; fused: readonly string[]; current?: string | null } = { yokai: '', counts: new Map(), fused: [] }) {
-      title.textContent = t(kind === 'variant' ? (ult.current ? 'levelup.dosojin' : 'levelup.variant') : kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? 'levelup.offering' : kind === 'fusion' ? 'levelup.fusion' : 'levelup.chest');
+    render(offer: CardOffer[], more: number, kind: 'levelup' | 'offering' | 'chest' | 'tech' | 'fusion' = 'levelup', ult: PickerContext = { yokai: '', counts: new Map(), fused: [] }) {
+      title.textContent = t(kind === 'tech' ? (ult.techMode === 'swap' ? 'levelup.dosojin' : ult.techMode === 'up' ? 'levelup.techUp' : 'levelup.tech') : kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? 'levelup.offering' : kind === 'fusion' ? 'levelup.fusion' : 'levelup.chest');
       pending.textContent = more > 1 ? t('levelup.pending', { n: more - 1 }) : '';
       cardsEl.innerHTML = '';
       offer.forEach((c, i) => {
@@ -150,18 +189,15 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
           cardsEl.appendChild(b);
           return;
         }
-        if (isVariantCard(c.cardId)) {
-          // 招式變化：名稱、玩法說明、適合搭配的道具
-          const v = variantOfCard(c.cardId);
+        if (isTechCard(c.cardId)) {
+          // 技法（D48）：新技法／加深／道祖神換一個／維持現狀
+          const owned = ult.techs ?? [];
           const b = document.createElement('button');
           b.type = 'button';
-          const cur = ult.current === v.id;
-          b.className = `card r-variant${cur ? ' is-current' : ''}`;
+          b.className = 'card r-variant';
           b.dataset.card = c.cardId;
           b.dataset.index = String(i);
-          if (cur) b.dataset.current = '1';
-          const likes = v.likes.map((id) => t(`card.${id}` as I18nKey)).join('、');
-          b.innerHTML = `<span class="rname">${t('card.variantTag')}${cur ? `<em class="cur-tag">${t('variant.current')}</em>` : ''}</span><b>${t(`variant.${v.id}` as I18nKey)}</b><span class="cdesc">${t(`variant.${v.id}.desc` as I18nKey)}</span><span class="csyn">${t('variant.likes', { items: likes })}</span>`;
+          b.innerHTML = techCardHtml(c.cardId, owned, ult.techLevels ?? []);
           b.addEventListener('click', () => onPick(i));
           cardsEl.appendChild(b);
           return;
@@ -362,7 +398,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
         const li = document.createElement('li');
         li.dataset.card = c.id;
         const chips = (['common', 'rare', 'epic', 'legend'] as const).map((r) => `<i class="chip r-${r}"></i>`.repeat(c.byRarity[r])).join('');
-        li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), lv: c.level, max: c.maxLevel })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}${c.kind === 'weapon' && sum.variant ? `<br>${t('pause.variant', { name: t(`variant.${sum.variant}` as I18nKey) })}` : ''}</em>`;
+        li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), lv: c.level, max: c.maxLevel })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}${c.kind === 'weapon' && sum.techs.length > 0 ? `<br>${t('pause.techs', { list: sum.techs.map((x) => (x.level > 1 ? `${techName(x.id)} Lv${x.level}` : techName(x.id))).join('、') })}` : ''}</em>`;
         cards.appendChild(li);
       }
       const syn = q('sum-syn');

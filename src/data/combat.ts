@@ -19,6 +19,9 @@ export const COMBAT = {
   /** 一發最多幾顆鬼火（瞄準緩衝大小）；同一個目標多顆時，出手錯開的角度（弧度） */
   maxVolley: 16,
   volleySpread: 0.35,
+  /** 歸巢（技法）：回程多給的飛行秒數、離玩家多近算「飛回來了」（公尺） */
+  homingSlack: 1,
+  homingArrive: 1.2,
   /** 傷害數字：同時最多、停留（秒）、上飄速度 */
   damageNumbers: { max: 48, life: 0.6, rise: 1.2 },
   /** 暫停、死亡時的小延遲（秒），讓玩家看見最後一擊 */

@@ -17,7 +17,8 @@ export interface BuildSummary {
   slotsUsed: number;
   slots: number;
   /** 招式變化 id（還沒選是 null） */
-  variant: string | null;
+  /** 這一局拿到的技法（D48）與各自的技法等級 */
+  techs: { id: string; level: number }[];
   /** 屬性：id、目前值（內部單位）、基礎值 */
   stats: { id: StatId; value: number; base: number }[];
   /** 武器：鬼火數量、濺射半徑（公尺）、穿透 */
@@ -90,7 +91,7 @@ export function summarizeBuild(run: Run): BuildSummary {
   return {
     cards: [...map.values()].sort((a, b) => (a.kind === 'weapon' ? -1 : b.kind === 'weapon' ? 1 : b.level - a.level || a.id.localeCompare(b.id))),
     slotsUsed: slotsUsed(run.cardCounts),
-    variant: run.variant?.id ?? null,
+    techs: run.tech.owned.map((id, i) => ({ id, level: run.tech.levels[i] })),
     slots: ITEM_SLOTS,
     stats: STAT_IDS.filter((id) => id !== 'merit').map((id) => ({ id, value: s[id], base: run.stats.baseOf(id) })),
     weapon: {

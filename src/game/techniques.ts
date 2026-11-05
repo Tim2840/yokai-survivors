@@ -1,0 +1,611 @@
+import { COMBAT } from '../data/combat';
+import { TECHS, TECH_CHOICES, TECH_DEEPEN, TECH_FAMILIES, TECH_LEVELS, TECH_MAX, TECH_RULES, techById, techsFor, type TechDef, type TechFamily, type TechMechanic } from '../data/techniques';
+import type { WeaponDef } from '../data/yokai';
+import type { Rng } from '../lib/random';
+import type { Run } from './run';
+
+const ZONES = 32;
+const SEEDS = 16;
+const FLASHES = 24;
+const PILLARS = 4;
+
+/** 畫面上一閃而過的爆炸圈：0 = 火種、1 = 護身火、2 = 鬼火柱落地 */
+export const FLASH_KINDS = { seed: 0, ward: 1, pillar: 2 } as const;
+
+/**
+ * 技法系統（D48）：這一局拿到的技法、它們的狀態與效果。Run 在固定的幾個地方呼叫它：
+ * 每步 update、鬼火射出前（weaponParams）、鬼火命中（hitFx）、人類被武器打倒（onWeaponKill）、被碰到（tryWard）。
+ * 每幀不配置記憶體（池與暫存陣列都在建構時開好）。
+ */
+export class Techniques {
+  /** 一局最多幾個技法（預設 TECH_MAX；sim 的組合全掃可以改小，只測指定的幾個） */
+  max: number = TECH_MAX;
+  /** 擁有的技法（拿到的順序）與各自的技法等級（1～TECH_LEVELS.max） */
+  readonly owned: string[] = [];
+  readonly levels: number[] = [];
+  /** 現在作用中的技法（依機制；沒有 = null） */
+  readonly act: Record<TechMechanic, TechDef | null> = { kitsunebi: null, bounce: null, homing: null, ring: null, ward: null, satellite: null, hellfire: null, seed: null, pillar: null };
+  /** 每系「多拿了幾個」（同系 N 個 → N − 1） */
+  readonly deep: Record<TechFamily, number> = { split: 0, orbit: 0, burn: 0 };
+
+  // ── 繞身（燈籠環、衛星燈）──
+  ringAngle = 0;
+  private ringTimer = 0;
+  satAngle = 0;
+  private satTimer = 0;
+  /** 環內護身打到的累計次數（畫面閃一下、測試用） */
+  innerHits = 0;
+
+  // ── 護身火 ──
+  wardCharge = 0;
+  get wardReady(): boolean {
+    const w = this.act.ward?.ward;
+    return !!w && this.wardCharge >= this.wardNeed(w);
+  }
+  /** 最近一次護身火炸開的時間（clock；畫面與測試用） */
+  wardAt = -1;
+
+  // ── 燃燒地（業火）──
+  readonly zoneX = new Float32Array(ZONES);
+  readonly zoneZ = new Float32Array(ZONES);
+  readonly zoneR = new Float32Array(ZONES);
+  readonly zoneLife = new Float32Array(ZONES);
+  readonly zoneMaxLife = new Float32Array(ZONES);
+  readonly zoneDmg = new Float32Array(ZONES);
+  readonly zoneTick = new Float32Array(ZONES);
+  private zoneNext = 0;
+
+  // ── 火種 ──
+  readonly seedX = new Float32Array(SEEDS);
+  readonly seedZ = new Float32Array(SEEDS);
+  /** 還有幾秒爆炸；<= 0 = 沒有這顆 */
+  readonly seedT = new Float32Array(SEEDS);
+
+  // ── 鬼火柱 ──
+  private pillarTimer = 0;
+  readonly pillarX = new Float32Array(PILLARS);
+  readonly pillarZ = new Float32Array(PILLARS);
+  readonly pillarLife = new Float32Array(PILLARS);
+  readonly pillarMax = new Float32Array(PILLARS);
+  pillarR = 0;
+
+  // ── 爆炸圈（只給畫面）──
+  readonly flashX = new Float32Array(FLASHES);
+  readonly flashZ = new Float32Array(FLASHES);
+  readonly flashR = new Float32Array(FLASHES);
+  readonly flashLife = new Float32Array(FLASHES);
+  readonly flashMax = new Float32Array(FLASHES);
+  readonly flashKind = new Uint8Array(FLASHES);
+  private flashNext = 0;
+
+  /** 每隻人類下次可以被「繞身／火柱」觸發命中效果的時間（run.clock） */
+  private readonly fxUntil: Float32Array;
+  private readonly near = new Int32Array(COMBAT.queryMax);
+  private readonly pick = new Int32Array(COMBAT.queryMax);
+  /** 射出去的鬼火用的武器參數（歸巢加速） */
+  weapon: WeaponDef;
+
+  constructor(
+    private readonly run: Run,
+    capacity: number,
+  ) {
+    this.fxUntil = new Float32Array(capacity);
+    this.weapon = run.yokai.weapon;
+  }
+
+  // ── 擁有 ─────────────────────────────────────────────────────
+  has(id: string): boolean {
+    return this.owned.includes(id);
+  }
+  levelOf(id: string): number {
+    const i = this.owned.indexOf(id);
+    return i < 0 ? 0 : this.levels[i];
+  }
+  /** 技法等級的效果倍率 */
+  private pw(m: TechMechanic): number {
+    const d = this.act[m];
+    return d ? 1 + TECH_LEVELS.perLevel * (this.levelOf(d.id) - 1) : 1;
+  }
+
+  add(id: string): boolean {
+    if (this.has(id) || this.owned.length >= this.max) return false;
+    this.owned.push(id);
+    this.levels.push(1);
+    this.recompute();
+    return true;
+  }
+  /** 換掉一個（位置不變、等級重來） */
+  replace(oldId: string, newId: string): boolean {
+    const i = this.owned.indexOf(oldId);
+    if (i < 0 || this.has(newId)) return false;
+    this.owned[i] = newId;
+    this.levels[i] = 1;
+    this.recompute();
+    return true;
+  }
+  levelUp(id: string): boolean {
+    const i = this.owned.indexOf(id);
+    if (i < 0 || this.levels[i] >= TECH_LEVELS.max) return false;
+    this.levels[i]++;
+    this.recompute();
+    return true;
+  }
+
+  private recompute(): void {
+    for (const k of Object.keys(this.act) as TechMechanic[]) this.act[k] = null;
+    const fam: Record<TechFamily, number> = { split: 0, orbit: 0, burn: 0 };
+    for (const id of this.owned) {
+      const d = techById(id);
+      this.act[id as TechMechanic] = d;
+      fam[d.family]++;
+    }
+    for (const f of TECH_FAMILIES) this.deep[f] = Math.max(0, fam[f] - 1);
+    // 拿掉的技法留下的東西清掉
+    if (!this.act.hellfire) this.zoneLife.fill(0);
+    if (!this.act.seed) this.seedT.fill(0);
+    if (!this.act.pillar) this.pillarLife.fill(0);
+    if (!this.act.ward) this.wardCharge = 0;
+    const h = this.act.homing?.homing;
+    const base = this.run.yokai.weapon;
+    this.weapon = h ? { ...base, projectileSpeed: base.projectileSpeed * h.speedMult } : base;
+    this.run.projectiles.homeReturnPierce = h ? h.returnPierce + this.deep.split * TECH_DEEPEN.split.homingPierce : 0;
+  }
+
+  /** 這個技法現在能不能被抽到（沒拿過、沒和已有的互斥、拿掉 skip 之後） */
+  canOffer(id: string, skip?: string): boolean {
+    if (this.has(id) && id !== skip) return false;
+    const d = techById(id);
+    for (const o of this.owned) {
+      if (o === skip) continue;
+      if (d.excludes.includes(o) || techById(o).excludes.includes(id)) return false;
+    }
+    return true;
+  }
+
+  /** 技法三選一的候選（隨機 n 個；固定種子） */
+  offerNew(rng: Rng, n: number = TECH_CHOICES): string[] {
+    const pool = techsFor(this.run.weaponItemId).map((t) => t.id).filter((id) => !this.has(id) && this.canOffer(id));
+    const out: string[] = [];
+    while (out.length < n && pool.length > 0) out.push(pool.splice(Math.floor(rng.next() * pool.length), 1)[0]);
+    return out;
+  }
+  /** 加深的候選（還沒到技法等級上限的，最多 n 個） */
+  offerUp(rng: Rng, n: number = TECH_CHOICES): string[] {
+    const pool = this.owned.filter((_, i) => this.levels[i] < TECH_LEVELS.max);
+    const out: string[] = [];
+    while (out.length < n && pool.length > 0) out.push(pool.splice(Math.floor(rng.next() * pool.length), 1)[0]);
+    return out;
+  }
+  /** 道祖神的換法提案：[舊, 新]（舊的是現有的、新的是拿掉舊的之後抽得到的；不同提案的新技法不同） */
+  offerSwap(rng: Rng, n: number = TECH_RULES.swapProposals): [string, string][] {
+    const out: [string, string][] = [];
+    const olds = [...this.owned];
+    const usedNew = new Set<string>();
+    for (let k = 0; k < n && olds.length > 0; k++) {
+      const old = olds.splice(Math.floor(rng.next() * olds.length), 1)[0];
+      const pool = techsFor(this.run.weaponItemId).map((t) => t.id).filter((id) => !this.has(id) && !usedNew.has(id) && this.canOffer(id, old));
+      if (pool.length === 0) continue;
+      const nw = pool[Math.floor(rng.next() * pool.length)];
+      usedNew.add(nw);
+      out.push([old, nw]);
+    }
+    return out;
+  }
+
+  // ── 出手 ─────────────────────────────────────────────────────
+  /** 取代原本的發射（燈籠環） */
+  get replacesFire(): boolean {
+    return !!this.act.ring;
+  }
+  /** 鬼火射出時的傷害倍率、冷卻倍率（業火） */
+  get shotMult(): number {
+    return (this.act.hellfire?.burn?.shotDamage ?? 1);
+  }
+  get intervalMult(): number {
+    return (this.act.hellfire?.burn?.interval ?? 1);
+  }
+  /** 歸巢：射出的主鬼火記號（回頭追） */
+  get homingFlag(): number {
+    return this.act.homing ? 1 : 0;
+  }
+  /** 歸巢滿級：穿透 +1 */
+  get pierceExtra(): number {
+    const h = this.act.homing?.homing;
+    return h && this.run.weaponMaxed ? h.atMaxPierce : 0;
+  }
+
+  /** 燈籠環：繞身鬼火幾顆、半徑（公尺）；沒有燈籠環 = 0 */
+  get ringCount(): number {
+    const o = this.act.ring?.orbit;
+    if (!o) return 0;
+    return Math.max(1, Math.floor(this.run.volleyExact) + o.baseOrbs + (this.run.weaponMaxed ? o.atMaxOrbs : 0) + this.deep.orbit * TECH_DEEPEN.orbit.orbs);
+  }
+  get ringRadius(): number {
+    const o = this.act.ring?.orbit;
+    if (!o) return 0;
+    return o.radius * this.run.stats.value.area * (this.run.weaponMaxed ? o.atMaxRadius : 1) * Math.pow(TECH_DEEPEN.orbit.radius, this.deep.orbit);
+  }
+  /** 衛星燈：幾盞、半徑（公尺） */
+  get satCount(): number {
+    const o = this.act.satellite?.satellite;
+    return o ? o.count + (this.run.weaponMaxed ? o.atMaxCount - o.count : 0) : 0;
+  }
+  get satRadius(): number {
+    const o = this.act.satellite?.satellite;
+    return o ? o.radius * this.run.stats.value.area * Math.pow(TECH_DEEPEN.orbit.radius, this.deep.orbit) : 0;
+  }
+
+  private wardNeed(w: NonNullable<TechDef['ward']>): number {
+    return (this.run.weaponMaxed ? w.atMaxChargeSeconds : w.chargeSeconds) * Math.pow(TECH_DEEPEN.orbit.wardCharge, this.deep.orbit);
+  }
+  /** 護身火充能進度 0～1（HUD、畫面用） */
+  get wardProgress(): number {
+    const w = this.act.ward?.ward;
+    return w ? Math.min(1, this.wardCharge / this.wardNeed(w)) : 0;
+  }
+
+  // ── 每步 ─────────────────────────────────────────────────────
+  update(dt: number): void {
+    const run = this.run;
+    const s = run.stats.value;
+    const a = this.act;
+    if (a.ring?.orbit) {
+      const o = a.ring.orbit;
+      this.ringAngle = (this.ringAngle + o.spin * dt) % (Math.PI * 2);
+      this.ringTimer -= dt;
+      if (this.ringTimer <= 0) {
+        this.ringTimer += (o.tick * run.cooldownMult) / s.atkSpeed;
+        this.sweepRing(o, this.pw('ring'));
+      }
+    }
+    if (a.satellite?.satellite) {
+      const o = a.satellite.satellite;
+      this.satAngle = (this.satAngle + o.spin * dt) % (Math.PI * 2);
+      this.satTimer -= dt;
+      if (this.satTimer <= 0) {
+        this.satTimer += (o.tick * run.cooldownMult) / s.atkSpeed;
+        this.sweepSatellites(o, this.pw('satellite'));
+      }
+    }
+    if (a.pillar?.pillar) this.pillarStep(dt, a.pillar.pillar);
+    if (a.ward?.ward && !this.wardReady) this.wardCharge += dt;
+    if (a.hellfire?.burn) this.zonesStep(dt, a.hellfire.burn);
+    if (a.seed?.seed) this.seedsStep(dt, a.seed.seed);
+    for (let i = 0; i < PILLARS; i++) if (this.pillarLife[i] > 0) this.pillarLife[i] -= dt;
+    for (let i = 0; i < FLASHES; i++) if (this.flashLife[i] > 0) this.flashLife[i] -= dt;
+  }
+
+  /** 換關：地上的東西全部消失 */
+  endStage(): void {
+    this.zoneLife.fill(0);
+    this.seedT.fill(0);
+    this.pillarLife.fill(0);
+    this.flashLife.fill(0);
+  }
+
+  // ── 繞身 ─────────────────────────────────────────────────────
+  private sweepRing(o: NonNullable<TechDef['orbit']>, power: number): void {
+    const run = this.run;
+    const en = run.enemies;
+    const s = run.stats.value;
+    const n = this.ringCount;
+    const R = this.ringRadius;
+    // 環內護身（D46）：鑽進環內的人類受傷並被推出去（以前貼身的打不到，被包圍就只能挨打）
+    const inner = R - o.hitRadius;
+    if (inner > 0) {
+      const m0 = en.within(run.px, run.pz, inner, this.near);
+      for (let j = 0; j < m0; j++) {
+        const e = this.near[j];
+        if (!en.alive[e]) continue;
+        const ex = en.x[e] - run.px;
+        const ez = en.z[e] - run.pz;
+        if (ex * ex + ez * ez > inner * inner) continue;
+        const d = Math.hypot(ex, ez) || 1;
+        const crit = run.rollCrit();
+        const dmg = run.shotDamage(crit) * o.damage * o.innerDamage * power;
+        this.innerHits++;
+        run.weaponHit(e, dmg, ex / d, ez / d, o.innerKnockback, crit);
+      }
+    }
+    for (let k = 0; k < n; k++) {
+      const a = this.ringAngle + (k / n) * Math.PI * 2;
+      this.sweepAt(run.px + Math.cos(a) * R, run.pz + Math.sin(a) * R, o.hitRadius, o.damage * power, o.knockback, s.crit);
+    }
+  }
+
+  private sweepSatellites(o: NonNullable<TechDef['satellite']>, power: number): void {
+    const run = this.run;
+    const n = this.satCount;
+    const R = this.satRadius;
+    for (let k = 0; k < n; k++) {
+      const a = this.satAngle + (k / n) * Math.PI * 2;
+      this.sweepAt(run.px + Math.cos(a) * R, run.pz + Math.sin(a) * R, o.hitRadius, o.damage * power, o.knockback, run.stats.value.crit);
+    }
+  }
+
+  /** 在 (ox, oz) 半徑 hit 內的人類各受一次傷害（可暴擊），並觸發命中效果 */
+  private sweepAt(ox: number, oz: number, hit: number, dmgRatio: number, knock: number, critRate: number): void {
+    const run = this.run;
+    const en = run.enemies;
+    const m = en.within(ox, oz, hit + 0.5, this.near);
+    for (let j = 0; j < m; j++) {
+      const e = this.near[j];
+      if (!en.alive[e]) continue;
+      const dx = en.x[e] - ox;
+      const dz = en.z[e] - oz;
+      const rr = hit + en.radius(e);
+      if (dx * dx + dz * dz > rr * rr) continue;
+      const crit = run.rollCrit(critRate);
+      const dmg = run.shotDamage(crit) * dmgRatio;
+      const ex = en.x[e] - run.px;
+      const ez = en.z[e] - run.pz;
+      const d = Math.hypot(ex, ez) || 1;
+      const x = en.x[e];
+      const z = en.z[e];
+      run.weaponHit(e, dmg, ex / d, ez / d, knock, crit);
+      this.hitFx(e, x, z, dmg, false);
+    }
+  }
+
+  // ── 命中效果（任何出手方式打中人類都會觸發）────────────────────
+  /**
+   * 打中 e（在 x, z）造成 dmg：觸發全部「命中效果」。鬼火直接命中（direct）每次都觸發；
+   * 繞身、火柱的命中每隻人類 TECH_RULES.hitFxCooldown 秒內只觸發一次（高頻判定不爆量）。
+   */
+  hitFx(e: number, x: number, z: number, dmg: number, direct: boolean): void {
+    const a = this.act;
+    if (!a.kitsunebi && !a.bounce && !a.hellfire) return;
+    if (!direct) {
+      const now = this.run.clock;
+      if (now < this.fxUntil[e]) return;
+      this.fxUntil[e] = now + TECH_RULES.hitFxCooldown;
+    }
+    if (a.kitsunebi?.split) this.splitFrom(a.kitsunebi.split, x, z, e, dmg * this.pw('kitsunebi'));
+    if (a.bounce?.bounce) {
+      const b = a.bounce.bounce;
+      const jumps = (this.run.weaponMaxed ? b.atMaxJumps : b.jumps) + this.deep.split * TECH_DEEPEN.split.targets;
+      this.bounceFrom(b, x, z, e, dmg * b.damage * this.pw('bounce'), jumps);
+    }
+    if (a.hellfire?.burn) this.addZone(a.hellfire.burn, x, z, dmg * a.hellfire.burn.damage * this.pw('hellfire') * Math.pow(TECH_DEEPEN.burn.damage, this.deep.burn));
+  }
+
+  /** 狐火分裂：從命中處朝其他敵人分裂出小火（小火不會再分裂；有碎火時另見 Run.emitShards） */
+  private splitFrom(sp: NonNullable<TechDef['split']>, x: number, z: number, e: number, dmg: number): void {
+    const run = this.run;
+    const en = run.enemies;
+    const want = (run.weaponMaxed ? sp.atMaxChildren : sp.children) + this.deep.split * TECH_DEEPEN.split.targets;
+    const m = en.within(x, z, sp.range, this.pick);
+    let made = 0;
+    while (made < want) {
+      // 找還沒選過的最近敵人（n 很小，重複掃描即可，不配置記憶體）
+      let best = -1;
+      let bd = Infinity;
+      for (let j = 0; j < m; j++) {
+        const o = this.pick[j];
+        if (o === e || o < 0 || !en.alive[o]) continue;
+        const d = (en.x[o] - x) ** 2 + (en.z[o] - z) ** 2;
+        if (d < bd) {
+          bd = d;
+          best = j;
+        }
+      }
+      if (best < 0) break;
+      const t = this.pick[best];
+      this.pick[best] = -1;
+      const d = Math.sqrt(bd) || 1;
+      const ci = run.projectiles.spawn(x, z, (en.x[t] - x) / d, (en.z[t] - z) / d, this.weapon, dmg * sp.damage, false, t, 0, 1);
+      // 小火從被打中的那隻身上出發：不要馬上又打回同一隻
+      if (ci >= 0) run.projectiles.lastHit[ci] = e;
+      made++;
+    }
+  }
+
+  /** 彈跳：從 (x, z) 朝範圍內最近的另一隻跳過去（dmg = 這一跳的傷害）；jumps = 還能跳幾次（含這一跳） */
+  bounceFrom(b: NonNullable<TechDef['bounce']>, x: number, z: number, e: number, dmg: number, jumps: number): void {
+    if (jumps <= 0) return;
+    const run = this.run;
+    const en = run.enemies;
+    const m = en.within(x, z, b.range, this.pick);
+    let best = -1;
+    let bd = Infinity;
+    for (let j = 0; j < m; j++) {
+      const o = this.pick[j];
+      if (o === e || !en.alive[o]) continue;
+      const d = (en.x[o] - x) ** 2 + (en.z[o] - z) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = o;
+      }
+    }
+    if (best < 0) return;
+    const d = Math.sqrt(bd) || 1;
+    const ci = run.projectiles.spawn(x, z, (en.x[best] - x) / d, (en.z[best] - z) / d, this.weapon, dmg, false, best, 0, 3);
+    if (ci >= 0) {
+      run.projectiles.lastHit[ci] = e;
+      run.projectiles.chain[ci] = jumps - 1;
+    }
+  }
+
+  /** 彈跳的小火打中後：還有次數就再跳（傷害 × b.damage；等級倍率只在第一跳乘） */
+  onBounceHit(e: number, x: number, z: number, dmg: number, chainLeft: number): void {
+    const b = this.act.bounce?.bounce;
+    if (!b || chainLeft <= 0) return;
+    this.bounceFrom(b, x, z, e, dmg * b.damage, chainLeft);
+  }
+
+  // ── 燃燒地（業火）────────────────────────────────────────────
+  addZone(b: NonNullable<TechDef['burn']>, x: number, z: number, tickDamage: number): void {
+    const i = this.zoneNext;
+    this.zoneNext = (this.zoneNext + 1) % Math.min(b.maxZones, ZONES);
+    this.zoneX[i] = x;
+    this.zoneZ[i] = z;
+    this.zoneR[i] = b.radius * this.run.stats.value.area * (this.run.weaponMaxed ? b.atMaxScale : 1);
+    this.zoneLife[i] = b.seconds;
+    this.zoneMaxLife[i] = b.seconds;
+    this.zoneDmg[i] = tickDamage;
+    this.zoneTick[i] = 0;
+  }
+  get zoneCount(): number {
+    let n = 0;
+    for (let i = 0; i < ZONES; i++) if (this.zoneLife[i] > 0) n++;
+    return n;
+  }
+  private zonesStep(dt: number, b: NonNullable<TechDef['burn']>): void {
+    const run = this.run;
+    const en = run.enemies;
+    for (let i = 0; i < ZONES; i++) {
+      if (this.zoneLife[i] <= 0) continue;
+      this.zoneLife[i] -= dt;
+      this.zoneTick[i] -= dt;
+      if (this.zoneTick[i] > 0) continue;
+      this.zoneTick[i] += b.tick;
+      const m = en.within(this.zoneX[i], this.zoneZ[i], this.zoneR[i], this.near);
+      for (let j = 0; j < m; j++) {
+        const e = this.near[j];
+        if (en.alive[e]) run.weaponHit(e, this.zoneDmg[i], 0, 0, 0, false);
+      }
+    }
+  }
+
+  // ── 火種 ─────────────────────────────────────────────────────
+  /** 人類被武器打倒：有火種技法就在那裡留一顆 */
+  onWeaponKill(x: number, z: number): void {
+    const sd = this.act.seed?.seed;
+    if (!sd) return;
+    let live = 0;
+    let free = -1;
+    for (let i = 0; i < SEEDS; i++) {
+      if (this.seedT[i] > 0) live++;
+      else if (free < 0) free = i;
+    }
+    if (free < 0 || live >= sd.max) return;
+    this.seedX[free] = x;
+    this.seedZ[free] = z;
+    this.seedT[free] = sd.delay;
+  }
+  get seedCount(): number {
+    let n = 0;
+    for (let i = 0; i < SEEDS; i++) if (this.seedT[i] > 0) n++;
+    return n;
+  }
+  private seedsStep(dt: number, sd: NonNullable<TechDef['seed']>): void {
+    const run = this.run;
+    const en = run.enemies;
+    for (let i = 0; i < SEEDS; i++) {
+      if (this.seedT[i] <= 0) continue;
+      this.seedT[i] -= dt;
+      if (this.seedT[i] > 0) continue;
+      const R = (run.weaponMaxed ? sd.atMaxRadius : sd.radius) * run.stats.value.area;
+      const x = this.seedX[i];
+      const z = this.seedZ[i];
+      this.addFlash(x, z, R, 0.35, FLASH_KINDS.seed);
+      const dmg = run.shotDamage(false) * sd.damage * this.pw('seed') * Math.pow(TECH_DEEPEN.burn.damage, this.deep.burn);
+      const m = en.within(x, z, R, this.near);
+      for (let j = 0; j < m; j++) {
+        const e = this.near[j];
+        if (en.alive[e]) run.weaponHit(e, dmg, en.x[e] - x, en.z[e] - z, 2, false);
+      }
+    }
+  }
+
+  // ── 鬼火柱 ───────────────────────────────────────────────────
+  private pillarStep(dt: number, p: NonNullable<TechDef['pillar']>): void {
+    const run = this.run;
+    this.pillarTimer -= dt;
+    if (this.pillarTimer > 0) return;
+    const en = run.enemies;
+    const R = p.radius * run.stats.value.area;
+    const m = en.within(run.px, run.pz, p.range, this.near);
+    if (m <= 0) {
+      this.pillarTimer = 0; // 沒有人：等有人出現馬上噴
+      return;
+    }
+    this.pillarTimer += (p.interval * run.cooldownMult) / run.stats.value.atkSpeed;
+    this.pillarR = R;
+    const count = run.weaponMaxed ? p.atMaxCount : 1;
+    let fx = NaN;
+    let fz = NaN;
+    for (let c = 0; c < count; c++) {
+      // 周圍（半徑 R）人最多的那隻；第二根要離第一根夠遠
+      let best = -1;
+      let bestN = -1;
+      for (let j = 0; j < Math.min(m, 24); j++) {
+        const cand = this.near[j];
+        if (!en.alive[cand]) continue;
+        const cx = en.x[cand];
+        const cz = en.z[cand];
+        if (c > 0 && (cx - fx) ** 2 + (cz - fz) ** 2 < (R * 1.6) ** 2) continue;
+        const n = en.within(cx, cz, R, this.pick);
+        if (n > bestN) {
+          bestN = n;
+          best = cand;
+        }
+      }
+      if (best < 0) break;
+      const x = en.x[best];
+      const z = en.z[best];
+      fx = x;
+      fz = z;
+      this.dropPillar(p, x, z, R);
+    }
+  }
+  private dropPillar(p: NonNullable<TechDef['pillar']>, x: number, z: number, R: number): void {
+    const run = this.run;
+    const en = run.enemies;
+    let slot = 0;
+    for (let i = 0; i < Math.min(p.max, PILLARS); i++) if (this.pillarLife[i] <= this.pillarLife[slot]) slot = i;
+    this.pillarX[slot] = x;
+    this.pillarZ[slot] = z;
+    this.pillarLife[slot] = p.life;
+    this.pillarMax[slot] = p.life;
+    this.addFlash(x, z, R, p.life, FLASH_KINDS.pillar);
+    const base = p.damage * this.pw('pillar') * Math.pow(TECH_DEEPEN.burn.damage, this.deep.burn);
+    // 先收齊這一根打到的人（hitFx 會生出新的投射物，不能在迴圈裡改陣列）
+    const m = en.within(x, z, R, this.near);
+    for (let j = 0; j < m; j++) {
+      const e = this.near[j];
+      if (!en.alive[e]) continue;
+      const crit = run.rollCrit();
+      const dmg = run.shotDamage(crit) * base;
+      const ex = en.x[e];
+      const ez = en.z[e];
+      run.weaponHit(e, dmg, ex - x, ez - z, 0, crit);
+      this.hitFx(e, ex, ez, dmg, false);
+    }
+  }
+
+  // ── 護身火 ───────────────────────────────────────────────────
+  /** 被碰到：護身火充好了就擋下這次傷害並炸開，回傳 true */
+  tryWard(): boolean {
+    const w = this.act.ward?.ward;
+    if (!w || !this.wardReady) return false;
+    const run = this.run;
+    this.wardCharge = 0;
+    this.wardAt = run.clock;
+    const R = w.burstRadius * run.stats.value.area;
+    this.addFlash(run.px, run.pz, R, 0.4, FLASH_KINDS.ward);
+    const en = run.enemies;
+    const m = en.within(run.px, run.pz, R, this.near);
+    const dmg = run.shotDamage(false) * w.burstDamage * this.pw('ward');
+    for (let j = 0; j < m; j++) {
+      const e = this.near[j];
+      if (en.alive[e]) run.weaponHit(e, dmg, en.x[e] - run.px, en.z[e] - run.pz, 5, false);
+    }
+    return true;
+  }
+
+  // ── 畫面用 ───────────────────────────────────────────────────
+  private addFlash(x: number, z: number, r: number, life: number, kind: number): void {
+    const i = this.flashNext;
+    this.flashNext = (this.flashNext + 1) % FLASHES;
+    this.flashX[i] = x;
+    this.flashZ[i] = z;
+    this.flashR[i] = r;
+    this.flashLife[i] = life;
+    this.flashMax[i] = life;
+    this.flashKind[i] = kind;
+  }
+}
+
+/** 全部技法（資料全掃用） */
+export const ALL_TECH_IDS: readonly string[] = TECHS.map((t) => t.id);

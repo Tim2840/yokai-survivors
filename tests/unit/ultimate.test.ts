@@ -19,8 +19,8 @@ function make(seed = 3) {
 }
 /** 主武器到 Lv4 會跳出招式變化三選一：選狐火分裂（照樣會發射） */
 function resolveVariant(run: Run) {
-  while (run.awaitingPick && run.offerKind === 'variant') {
-    const i = run.offer!.findIndex((c) => c.cardId === 'variant:kitsunebi');
+  while (run.awaitingPick && run.offerKind === 'tech') {
+    const i = run.offer!.findIndex((c) => c.cardId === 'tech:kitsunebi');
     run.chooseCard(Math.max(0, i));
   }
 }

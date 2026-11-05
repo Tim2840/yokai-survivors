@@ -16,7 +16,7 @@ function setup(shardLevels: number, around: number, variant?: 'kitsunebi') {
   const run = new Run({ seed: 91, bus: new EventBus() });
   run.god = true;
   for (let k = 0; k < shardLevels; k++) run.give('splash', 'common');
-  if (variant) run.devSetVariant(variant);
+  if (variant) run.devAddTech(variant);
   const en = run.enemies;
   for (let i = 0; i < en.capacity; i++) if (en.alive[i]) en.kill(i);
   run.director.active = false;

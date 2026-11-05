@@ -30,8 +30,8 @@ export interface GameEvents {
   fuseShrine: { stage: number };
   /** 道祖神出現了（D47） */
   dosojin: { stage: number };
-  /** 在道祖神換了招式變化 */
-  variantChanged: { from: string; to: string };
+  /** 在道祖神換了技法 */
+  techChanged: { from: string; to: string };
   summonBoss: { stage: number; mult: number };
   /** 玩家受傷（低頻事件；每擊殺等高頻事件不走匯流排，見 docs/06） */
   playerHurt: { damage: number; hp: number };

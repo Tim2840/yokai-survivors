@@ -9,7 +9,7 @@ import type { RarityLike } from './rarityLike';
 
 /**
  * 開發模式介面 window.__game（CLAUDE.md「開發模式介面」）。主網址（build:single:main）與正式 build 不含這個檔。
- * 已有：state／seed／paused／simTime／quality／audio／perf／screens／run／camera／offer／advance／render／spawn／setTime／killBoss／summonBoss／forcePickup／dropOrbs／give／addXp／god／teleport。
+ * 已有：state／seed／paused／simTime／quality／audio／perf／screens／run／camera／offer／advance／render／spawn／setTime／killBoss／clearStage／summonBoss／forcePickup／dropOrbs／giveTech／give／addXp／god／teleport。
  * 還沒有（隨系統加入）：forceElement。
  */
 export interface DevContext {
@@ -104,7 +104,12 @@ export function installDevApi(ctx: DevContext): void {
           const s = r.elements.summonSlot;
           return { stage: r.summonStage, bossSpawned: r.director.bossSpawned, altar: s ? { x: s.x, z: s.z, announce: s.announce } : null };
         })(),
-        variant: r.variant?.id ?? null,
+        techs: [...r.tech.owned],
+        techLevels: [...r.tech.levels],
+        techMode: r.techMode,
+        ward: r.tech.wardProgress,
+        wardReady: r.tech.wardReady,
+        seeds: r.tech.seedCount,
         weaponLevel: r.weaponLevel,
         zones: r.zoneCount,
         orbit: r.orbitCount,
@@ -154,6 +159,8 @@ export function installDevApi(ctx: DevContext): void {
     chargeUlt: () => run()?.devChargeUlt(),
     /** 頭目現在就倒下（走正常的擊殺流程，傳送門會開） */
     killBoss: () => run()?.devKillBoss() ?? false,
+    /** 現在就過關（走正常流程：進過關畫面；一般地圖第 1 關過關會跳技法面板，D48） */
+    clearStage: () => run()?.devClearStage(),
     summonBoss: () => run()?.devSummonBoss() ?? false,
     /** 把生命設成 v（測回血用） */
     setHp: (v: number) => {
@@ -180,6 +187,13 @@ export function installDevApi(ctx: DevContext): void {
       const o = r.orbs;
       for (let i = 0; i < o.high; i++) if (o.alive[i] && !o.pulled[i] && Math.hypot(o.x[i] - r.px, o.z[i] - r.pz) > dist) n++;
       return n;
+    },
+    /** 直接給技法（不經面板，D48；給 TECH_MAX 以內） */
+    giveTech: (...ids: string[]) => {
+      const r = run();
+      if (!r) return false;
+      r.devAddTech(...ids);
+      return true;
     },
     forcePickup: (kind: string, dist?: number) => {
       const r = run();

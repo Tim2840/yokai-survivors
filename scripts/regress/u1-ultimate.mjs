@@ -50,15 +50,15 @@ export async function run(browser) {
         void sawComplete;
       }, 60);
 
-      await step(`${vp.name} 湊齊「鬼火亂舞」「炎獄燈」配方（鬼火升到 8 級，Lv4 時點選招式變化）→「材料齊了」提示，但還沒融合`, async () => {
+      await step(`${vp.name} 湊齊「鬼火亂舞」「炎獄燈」配方（鬼火升到 8 級，Lv4 時點選技法）→「材料齊了」提示，但還沒融合`, async () => {
         await dismiss();
         for (let k = 0; k < 12; k++) {
           const lv = (await ult()).counts.ghostfire ?? 1;
           if (lv >= 8) break;
           await page.evaluate(() => window.__game.give('ghostfire', 'common'));
-          // 主武器到 Lv4：同一個面板跳出招式變化三選一，真的點「狐火分裂」
+          // 主武器到 Lv4：同一個面板跳出技法三選一，真的點「狐火分裂」
           if ((await page.evaluate(() => window.__game.screens)).includes('levelup')) {
-            const v = page.locator('.overlay[data-screen="levelup"] .card.r-variant[data-card="variant:kitsunebi"]');
+            const v = page.locator('.overlay[data-screen="levelup"] .card.r-variant[data-card="tech:kitsunebi"]');
             if (await v.count()) await v.click();
             else await dismiss();
           }

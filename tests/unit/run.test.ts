@@ -42,6 +42,7 @@ function botStep(run: Run, t: number) {
     return;
   }
   if (run.phase === 'intermission') {
+    while (run.offer) run.chooseCard(0);
     run.continueFromIntermission();
     return;
   }
@@ -159,6 +160,7 @@ describe('連續計時關卡（D22）', () => {
     }
     expect(run.phase).toBe('intermission');
     expect(log).toEqual(['boss1', 'clear1']);
+    while (run.offer) run.chooseCard(0);
     run.continueFromIntermission();
     expect(run.stageNumber).toBe(2);
     expect(run.phase).toBe('combat');
@@ -190,7 +192,10 @@ describe('連續計時關卡（D22）', () => {
         if (run.awaitingPick) run.chooseCard(0);
         run.step(DT);
       }
-      if (run.phase === 'intermission') run.continueFromIntermission();
+      if (run.phase === 'intermission') {
+        while (run.offer) run.chooseCard(0);
+        run.continueFromIntermission();
+      }
     }
     expect(run.bossesDefeated, `打倒的頭目數 ${run.bossesDefeated}、階段 ${run.phase}、第 ${run.stageNumber} 關、傳送門 ${JSON.stringify(run.portal)}、玩家 ${run.px.toFixed(1)},${run.pz.toFixed(1)}`).toBe(run.stageCount);
     expect(run.phase).toBe('ended');
@@ -380,7 +385,7 @@ describe('一局的模擬（無頭）', () => {
     // 主武器到 4 級會插一次招式變化三選一（不算升級的次數）
     let picks = 0;
     for (let g = 0; g < total + 5 && run.awaitingPick; g++) {
-      if (run.offerKind !== 'variant') picks++;
+      if (run.offerKind !== 'tech') picks++;
       run.chooseCard(0);
     }
     expect(run.awaitingPick).toBe(false);

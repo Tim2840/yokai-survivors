@@ -12,7 +12,7 @@ import { DamageNumbers } from './damageNumbers';
 import { ElementsView } from './elementsView';
 import { PickupsView } from './pickupsView';
 import { UltFx } from './ultFx';
-import { VariantFx } from './variantFx';
+import { TechFx } from './techFx';
 import type { Renderer } from '../core/renderer';
 
 const TWO_PI = Math.PI * 2;
@@ -44,7 +44,7 @@ export class RunView {
   private readonly elementsView: ElementsView;
   private readonly pickupsView: PickupsView;
   private readonly ultFx: UltFx;
-  private readonly variantFx: VariantFx;
+  private readonly techFx: TechFx;
   private readonly portal: THREE.Group;
   private readonly portalRing: THREE.Mesh;
   private readonly portalBeam: THREE.Mesh;
@@ -148,8 +148,8 @@ export class RunView {
     this.group.add(this.pickupsView.group);
     this.ultFx = new UltFx(run);
     this.group.add(this.ultFx.group);
-    this.variantFx = new VariantFx(run);
-    this.group.add(this.variantFx.group);
+    this.techFx = new TechFx(run);
+    this.group.add(this.techFx.group);
     this.numbers = new DamageNumbers(renderer.camera, run.feed);
     this.group.add(this.numbers.mesh);
 
@@ -216,7 +216,7 @@ export class RunView {
     this.elementsView.update(t);
     this.pickupsView.update(t);
     this.ultFx.update();
-    this.variantFx.update(t);
+    this.techFx.update(t);
     this.timeUniform.value = t % TWO_PI;
 
     // 敵人
@@ -288,7 +288,7 @@ export class RunView {
     this.elementsView.dispose();
     this.pickupsView.dispose();
     this.ultFx.dispose();
-    this.variantFx.dispose();
+    this.techFx.dispose();
     this.player.dispose();
     this.world.dispose();
     for (const d of this.disposables) d.dispose();

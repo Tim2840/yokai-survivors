@@ -183,10 +183,10 @@ export function buildHud(parent: HTMLElement): Hud {
         synAt = rd.at;
         synText = t('hud.fusionReady', { name: t(`ult.${rd.id}` as I18nKey) });
       }
-      const vc = run.lastVariantChange;
+      const vc = run.lastTechChange;
       if (vc && run.clock - vc.at < 4 && vc.at >= synAt) {
         synAt = vc.at;
-        synText = t('hud.variantChanged', { name: t(`variant.${vc.to}` as I18nKey) });
+        synText = t('hud.techChanged', { name: t(`tech.${vc.to}` as I18nKey) });
       }
       const fu = run.lastFuse;
       if (fu && run.clock - fu.at < 6 && fu.at >= synAt) {

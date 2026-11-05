@@ -212,6 +212,7 @@ describe('詛咒祭壇（D27：隨機抽數個不同效果，含詛咒）', () =
       run.step(DT);
     }
     expect(run.phase).toBe('intermission');
+    while (run.offer) run.chooseCard(0);
     run.continueFromIntermission();
     expect(run.stageNumber).toBe(2);
     expect(run.curse).toEqual(afterCurse);

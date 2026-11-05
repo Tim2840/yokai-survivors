@@ -18,8 +18,8 @@ function make(seed = 3) {
   return { run, bus };
 }
 function resolve(run: Run) {
-  while (run.awaitingPick && run.offerKind === 'variant') {
-    const i = run.offer!.findIndex((c) => c.cardId === 'variant:kitsunebi');
+  while (run.awaitingPick && run.offerKind === 'tech') {
+    const i = run.offer!.findIndex((c) => c.cardId === 'tech:kitsunebi');
     run.chooseCard(Math.max(0, i));
   }
 }

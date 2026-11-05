@@ -15,8 +15,16 @@ export class Projectiles {
   readonly target: Int32Array;
   readonly lastHit: Int32Array;
   readonly alive: Uint8Array;
-  /** 0 = 主武器射出的、1 = 分裂出來的小火（不會再分裂） */
+  /** 0 = 主武器射出的、1 = 分裂出來的小火／碎火（不會再分裂）、2 = 碎火再分裂、3 = 彈跳的小火 */
   readonly gen: Uint8Array;
+  /** 彈跳：這顆打中後還能再跳幾次 */
+  readonly chain: Int8Array;
+  /** 歸巢：1 = 還在去程（飛到盡頭時折返）、2 = 回程中（飛向玩家）、0 = 沒有 */
+  readonly homing: Uint8Array;
+  /** 歸巢的回程目標（玩家的位置，Run 每步更新）與回程多穿透幾隻（技法系統重算） */
+  homeX = 0;
+  homeZ = 0;
+  homeReturnPierce = 0;
   high = 0;
   aliveCount = 0;
   private readonly near = new Int32Array(COMBAT.queryMax);
@@ -34,6 +42,8 @@ export class Projectiles {
     this.lastHit = new Int32Array(capacity);
     this.alive = new Uint8Array(capacity);
     this.gen = new Uint8Array(capacity);
+    this.chain = new Int8Array(capacity);
+    this.homing = new Uint8Array(capacity);
   }
 
   reset(): void {
@@ -64,6 +74,8 @@ export class Projectiles {
     this.target[i] = target;
     this.lastHit[i] = -1;
     this.gen[i] = gen;
+    this.chain[i] = 0;
+    this.homing[i] = 0;
     this.aliveCount++;
     return i;
   }
@@ -84,18 +96,47 @@ export class Projectiles {
       if (!this.alive[i]) continue;
       this.life[i] -= dt;
       if (this.life[i] <= 0) {
-        this.kill(i);
-        continue;
+        // 歸巢：鬼火飛到盡頭還沒用完 → 折返飛回玩家身邊，回程也會打人
+        if (this.homing[i] === 1) {
+          const back = Math.hypot(this.homeX - this.x[i], this.homeZ - this.z[i]);
+          this.homing[i] = 2;
+          this.life[i] = back / speed2 + COMBAT.homingSlack;
+          this.target[i] = -1;
+          this.lastHit[i] = -1;
+          this.pierceLeft[i] = Math.max(this.pierceLeft[i], 0) + this.homeReturnPierce;
+        } else {
+          this.kill(i);
+          continue;
+        }
       }
-      // 追蹤：目標死了就重找最近的
-      let t = this.target[i];
-      if (t < 0 || !enemies.alive[t]) {
-        t = enemies.nearest(this.x[i], this.z[i], w.range * rangeMult);
-        this.target[i] = t;
+      let tx = 0;
+      let tz = 0;
+      let steer = false;
+      if (this.homing[i] === 2) {
+        // 回程：飛向玩家，到了就消失
+        tx = this.homeX;
+        tz = this.homeZ;
+        if ((tx - this.x[i]) ** 2 + (tz - this.z[i]) ** 2 < COMBAT.homingArrive ** 2) {
+          this.kill(i);
+          continue;
+        }
+        steer = true;
+      } else {
+        // 追蹤：目標死了就重找最近的
+        let t = this.target[i];
+        if (t < 0 || !enemies.alive[t]) {
+          t = enemies.nearest(this.x[i], this.z[i], w.range * rangeMult);
+          this.target[i] = t;
+        }
+        if (t >= 0) {
+          tx = enemies.x[t];
+          tz = enemies.z[t];
+          steer = true;
+        }
       }
-      if (t >= 0) {
-        const dx = enemies.x[t] - this.x[i];
-        const dz = enemies.z[t] - this.z[i];
+      if (steer) {
+        const dx = tx - this.x[i];
+        const dz = tz - this.z[i];
         const want = Math.atan2(dz, dx);
         const cur = Math.atan2(this.vz[i], this.vx[i]);
         let diff = want - cur;

@@ -10,7 +10,7 @@ import { RunView } from '../render/runView';
 import { buildHud, type Hud } from '../ui/hud';
 import { buildMenu, toast } from '../ui/menu';
 import { summarizeBuild } from './buildSummary';
-import { buildCardPicker, buildIntermission, buildPause, buildResultCard, buildRunEnd, buildSetup } from '../ui/overlays';
+import { buildCardPicker, buildIntermission, buildPause, buildResultCard, buildRunEnd, buildSetup, type PickerContext } from '../ui/overlays';
 import { t } from '../i18n';
 import { tuning } from '../data/tuning';
 import { CAMERA } from '../data/camera';
@@ -254,7 +254,7 @@ export class Game {
       if (!run || !run.offer) return;
       this.loop.hold('levelup');
       if (this.resultCard.visible) return; // 結果卡關掉後才開選卡
-      this.picker.render(run.offer, run.picksLeft, run.offerKind, { yokai: run.yokai.id, counts: run.cardCounts, fused: run.fused, current: run.variantRechoose ? (run.variant?.id ?? null) : null });
+      this.picker.render(run.offer, run.picksLeft, run.offerKind, this.pickerCtx(run));
       this.picker.show();
       this.audio.sfx('levelUp');
     });
@@ -285,13 +285,18 @@ export class Game {
     });
   }
 
+  /** 選卡面板要用的玩家狀態 */
+  private pickerCtx(run: Run): PickerContext {
+    return { yokai: run.yokai.id, counts: run.cardCounts, fused: run.fused, techs: run.tech.owned, techLevels: run.tech.levels, techMode: run.techMode };
+  }
+
   private pickCard(i: number): void {
     const run = this.run;
     if (!run || !run.offer) return;
     this.audio.sfx('cardFlip', ['common', 'rare', 'epic', 'legend'].indexOf(run.offer[i]?.rarity ?? 'common'));
     const more = run.chooseCard(i);
     if (more && run.offer) {
-      this.picker.render(run.offer, run.picksLeft, run.offerKind, { yokai: run.yokai.id, counts: run.cardCounts, fused: run.fused, current: run.variantRechoose ? (run.variant?.id ?? null) : null });
+      this.picker.render(run.offer, run.picksLeft, run.offerKind, this.pickerCtx(run));
     } else {
       this.picker.hide();
       this.loop.release('levelup');
@@ -304,7 +309,7 @@ export class Game {
     this.resultCard.hide();
     this.loop.release('result');
     if (run && run.offer) {
-      this.picker.render(run.offer, run.picksLeft, run.offerKind, { yokai: run.yokai.id, counts: run.cardCounts, fused: run.fused, current: run.variantRechoose ? (run.variant?.id ?? null) : null });
+      this.picker.render(run.offer, run.picksLeft, run.offerKind, this.pickerCtx(run));
       this.picker.show();
     }
   }
