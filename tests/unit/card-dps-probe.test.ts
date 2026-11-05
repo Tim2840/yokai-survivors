@@ -2,7 +2,7 @@ import { describe, it } from 'vitest';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { resetTuning } from '../../src/data/tuning';
-import { CARD_POOL_M1 } from '../../src/data/progression';
+import { ITEM_POOL as CARD_POOL_M1 } from '../../src/data/items';
 import { RARITIES } from '../../src/data/rarity';
 
 // 卡片輸出探針（不是斷言型，比 card-value-probe 乾淨）：玩家不動、無敵、不升級，場上固定放一圈村人，量 SECONDS 秒內「打倒幾隻」。

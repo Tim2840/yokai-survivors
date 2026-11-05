@@ -45,9 +45,9 @@ function applyTune(): void {
 
 // ── 選卡策略：每張卡的分數（越高越想拿）；random 不看分數 ──
 const SCORES: Record<string, Record<string, number>> = {
-  dps: { volley: 3, splash: 2.6, pierce: 2.2, power: 2.4, atkSpeed: 2.4, area: 1.6, hp: 1, speed: 0.6, armor: 0.8, regen: 0.6, dodge: 0.6 },
+  dps: { ghostfire: 3.4, heal: 0.2, meritBag: 0.1, volley: 3, splash: 2.6, pierce: 2.2, power: 2.4, atkSpeed: 2.4, area: 1.6, hp: 1, speed: 0.6, armor: 0.8, regen: 0.6, dodge: 0.6 },
   // 防禦優先但不放棄輸出（純防禦沒有輸出就殺不掉敵人、升級也慢，哪個類型的遊戲都玩不下去）
-  survive: { hp: 3, armor: 3, regen: 2.8, dodge: 2.4, volley: 2.6, splash: 2.4, pierce: 1.6, speed: 1.5, area: 1.4, atkSpeed: 1, power: 1 },
+  survive: { ghostfire: 2.8, heal: 0.4, meritBag: 0.1, hp: 3, armor: 3, regen: 2.8, dodge: 2.4, volley: 2.6, splash: 2.4, pierce: 1.6, speed: 1.5, area: 1.4, atkSpeed: 1, power: 1 },
 };
 const RARITY_SCORE: Record<string, number> = { common: 1, rare: 1.6, epic: 2.4, legend: 3.5 };
 

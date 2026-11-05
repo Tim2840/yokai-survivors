@@ -161,15 +161,15 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 @media (max-height: 520px) { .sum { grid-template-columns: 1fr 1fr; gap: 8px 14px; font-size: 13px; } .pause-panel h3 { font-size: 13px; } }
 
 /* ── 大招鈕 ── */
-.ult.hidden { display: none; }
-.ult { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: calc(max(34px, env(safe-area-inset-bottom)) + 12px + clamp(76px, 20vmin, 104px) + 14px); width: clamp(64px, 17vmin, 88px); aspect-ratio: 1; border-radius: 50%; border: 3px solid rgba(255,255,255,0.4); background: rgba(20,20,40,0.6); color: var(--text); font-family: inherit; overflow: hidden; pointer-events: auto !important; touch-action: none; display: grid; place-items: center; cursor: pointer; }
-.ult b { position: relative; font-size: 18px; z-index: 1; text-shadow: 0 1px 3px #000; }
-.ult em { display: none; position: absolute; bottom: 4px; font-style: normal; font-size: 11px; opacity: 0.7; z-index: 1; }
-.ult .ult-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(166,120,224,0.7); transition: height 0.2s; }
-.ult.ready { border-color: #ffd27a; animation: ultPulse 1s ease-in-out infinite; }
-.ult.ready .ult-fill { background: rgba(255,179,92,0.85); }
+#btn-ult.hidden { display: none; }
+#btn-ult { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: calc(max(34px, env(safe-area-inset-bottom)) + 12px + clamp(76px, 20vmin, 104px) + 14px); width: clamp(64px, 17vmin, 88px); aspect-ratio: 1; border-radius: 50%; border: 3px solid rgba(255,255,255,0.4); background: rgba(20,20,40,0.6); color: var(--text); font-family: inherit; overflow: hidden; pointer-events: auto !important; touch-action: none; display: grid; place-items: center; cursor: pointer; }
+#btn-ult b { position: relative; font-size: 18px; z-index: 1; text-shadow: 0 1px 3px #000; }
+#btn-ult em { display: none; position: absolute; bottom: 4px; font-style: normal; font-size: 11px; opacity: 0.7; z-index: 1; }
+#btn-ult .ult-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(166,120,224,0.7); transition: height 0.2s; }
+#btn-ult.ready { border-color: #ffd27a; animation: ultPulse 1s ease-in-out infinite; }
+#btn-ult.ready .ult-fill { background: rgba(255,179,92,0.85); }
 @keyframes ultPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,210,122,0.0); } 50% { box-shadow: 0 0 16px 4px rgba(255,210,122,0.8); } }
-@media (pointer: fine) { .ult em { display: block; } }
+@media (pointer: fine) { #btn-ult em { display: block; } }
 
 .sum-ult { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .sum-ult li { padding: 6px 8px; border-radius: 10px; background: rgba(255,255,255,0.06); display: grid; gap: 2px; }
@@ -178,3 +178,9 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 .sum-ult span { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; }
 .sum-ult i { font-style: normal; color: var(--text-dim); } .sum-ult i.ok { color: #9fe8a0; }
 #sum-ult { margin-top: 10px; }
+
+/* ── 法具（D30）── */
+.card.r-weapon { --rc: #ffd27a; background: rgba(255,210,122,0.1); }
+.card .clv { font-size: 12px; color: var(--text-dim, #b9b2a4); }
+.card.is-new .clv { color: #9fe8a0; font-weight: 700; }
+.shape.weapon { border-radius: 4px; }

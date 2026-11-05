@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { EventBus } from '../../src/core/bus';
 import { cardById } from '../../src/systems/cards';
+import { itemValue } from '../../src/data/items';
 import { Run } from '../../src/game/run';
 import { tuning, resetTuning } from '../../src/data/tuning';
 import { STAGE } from '../../src/data/stage';
@@ -375,7 +376,7 @@ describe('一局的模擬（無頭）', () => {
     const { run } = make(4);
     const before = run.maxHp;
     run.give('hp', 'rare');
-    const gain = cardById('hp').values.rare;
+    const gain = itemValue(cardById('hp'), 'rare');
     expect(run.maxHp).toBe(before + gain);
     expect(run.hp).toBe(before + gain);
   });

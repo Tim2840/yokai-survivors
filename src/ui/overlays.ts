@@ -1,10 +1,11 @@
 import { t } from '../i18n';
 import type { I18nKey } from '../i18n/zh-TW';
 import { CARD_FORMAT, type StatId } from '../data/stats';
-import type { BuildSummary } from '../game/buildSummary';
+import { setWeaponTextFormatter, type BuildSummary } from '../game/buildSummary';
 import { synergyHints } from '../data/synergies';
 import { ultHints } from '../data/ultimates';
-import { cardById, isWeaponCard, type CardOffer } from '../systems/cards';
+import { cardById, type CardOffer } from '../systems/cards';
+import { WEAPON_LEVELS, itemValue, type WeaponLevel } from '../data/items';
 import { PLAYABLE_YOKAI, STARTER_YOKAI } from '../data/yokai';
 
 /** 全螢幕覆蓋層（選妖怪、升級選卡、整備、結算、暫停）。都有 data-screen，給回歸的卡住偵測讀。 */
@@ -62,19 +63,36 @@ export function buildSetup(parent: HTMLElement, onStart: (yokaiId: string) => vo
 // ── 升級選卡 ──
 const SHAPES: Record<string, string> = { common: 'circle', rare: 'diamond', epic: 'hex', legend: 'star' };
 
-export function describeCard(o: CardOffer): { name: string; desc: string } {
-  const card = cardById(o.cardId);
-  const v = card.values[o.rarity];
-  if (isWeaponCard(card)) {
-    const shown = String(Number(v.toFixed(2)));
-    return { name: t(`card.${card.id}` as I18nKey), desc: t(`card.fmt.${card.weapon}` as I18nKey, { v: shown }) };
+const num = (v: number, d = 2): string => String(Number(v.toFixed(d)));
+
+/** 主武器某一級加什麼（文字） */
+export function weaponLevelText(step: WeaponLevel): string {
+  const parts: string[] = [];
+  if (step.damage) parts.push(t('item.w.damage', { v: num(step.damage) }));
+  if (step.volley) parts.push(t('item.w.volley', { v: num(step.volley) }));
+  if (step.cooldownPct) parts.push(t('item.w.cooldown', { v: num(step.cooldownPct) }));
+  if (step.pierce) parts.push(t('item.w.pierce', { v: num(step.pierce) }));
+  if (step.splash) parts.push(t('item.w.splash', { v: num(step.splash) }));
+  return parts.join('、');
+}
+
+setWeaponTextFormatter((s) => weaponLevelText(s) || t('item.w.none'));
+
+/** 一張卡的名稱、等級變化與「這一級加多少」（levels = 目前的法具等級） */
+export function describeCard(o: CardOffer, levels: ReadonlyMap<string, number> = new Map()): { name: string; desc: string; level: string; isNew: boolean } {
+  const d = cardById(o.cardId);
+  const lv = levels.get(d.id) ?? 0;
+  const name = t(`card.${d.id}` as I18nKey);
+  if (d.kind === 'fallback') return { name, desc: t(`card.fmt.${d.id}` as I18nKey, { v: num(d.perLevel ?? 0) }), level: '', isNew: false };
+  const level = lv === 0 ? t('card.new') : t('card.levelUp', { from: lv, to: lv + 1, max: d.maxLevel });
+  if (d.kind === 'weapon') {
+    const step = WEAPON_LEVELS[d.id]?.[lv - 1];
+    return { name, desc: step ? weaponLevelText(step) : '', level, isNew: false };
   }
-  const fmt = CARD_FORMAT[card.stat as StatId];
-  const value = Number.isInteger(v) ? String(v) : v.toFixed(1);
-  return {
-    name: t(`card.${card.id}` as I18nKey),
-    desc: t(`card.fmt.${fmt}` as I18nKey, { name: t(`stat.${card.stat}` as I18nKey), v: value }),
-  };
+  const v = itemValue(d, o.rarity);
+  if (d.kind === 'mod') return { name, desc: t(`card.fmt.${d.mod}` as I18nKey, { v: num(v) }), level, isNew: lv === 0 };
+  const fmt = CARD_FORMAT[d.stat as StatId];
+  return { name, desc: t(`card.fmt.${fmt}` as I18nKey, { name: t(`stat.${d.stat}` as I18nKey), v: num(v, 1) }), level, isNew: lv === 0 };
 }
 
 export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => void) {
@@ -88,10 +106,11 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
       pending.textContent = more > 1 ? t('levelup.pending', { n: more - 1 }) : '';
       cardsEl.innerHTML = '';
       offer.forEach((c, i) => {
-        const d = describeCard(c);
+        const d = describeCard(c, ult.counts);
+        const kind = cardById(c.cardId).kind;
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = `card r-${c.rarity}`;
+        b.className = `card r-${kind === 'weapon' ? 'weapon' : c.rarity}${d.isNew ? ' is-new' : ''}`;
         b.dataset.card = c.cardId;
         b.dataset.rarity = c.rarity;
         b.dataset.index = String(i);
@@ -105,10 +124,10 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
           .join('');
         // 大招配方：這張卡是哪個大招的材料、目前進度；選了就湊齊的特別標出
         const ultLines = ultHints(c.cardId, ult.yokai, ult.counts, ult.fused)
-          .map((h) => `<span class="csyn ult${h.completes ? ' ready' : ''}">${h.completes ? t('card.ult.completes', { name: t(`ult.${h.id}` as I18nKey) }) : t('card.ult.need', { name: t(`ult.${h.id}` as I18nKey), have: h.have, need: h.need })}</span>`)
+          .map((h) => `<span class="csyn ulthint${h.completes ? ' ready' : ''}">${h.completes ? t('card.ult.completes', { name: t(`ult.${h.id}` as I18nKey) }) : t('card.ult.need', { name: t(`ult.${h.id}` as I18nKey), have: h.have, need: h.need })}</span>`)
           .join('');
         b.innerHTML = `<span class="shape ${SHAPES[c.rarity]}" aria-hidden="true"></span>
-          <span class="rname">${t(`rarity.${c.rarity}` as I18nKey)}</span><b>${d.name}</b><span class="cdesc">${d.desc}</span>${hints}${ultLines}`;
+          <span class="rname">${kind === 'weapon' ? t('card.weaponTag') : kind === 'fallback' ? '' : cardById(c.cardId).rarityScales ? t(`rarity.${c.rarity}` as I18nKey) : ''}</span><b>${d.name}</b><span class="clv">${d.level}</span><span class="cdesc">${d.desc}</span>${hints}${ultLines}`;
         b.addEventListener('click', () => onPick(i));
         cardsEl.appendChild(b);
       });
@@ -176,9 +195,10 @@ function statText(id: StatId, v: number, sum: BuildSummary): string {
   }
 }
 
-/** 一張卡累計的效果文字（同一張卡拿幾次、各稀有度加總） */
+/** 一個法具累計的效果文字 */
 function cardEffectText(c: BuildSummary['cards'][number]): string {
-  if (c.weapon) return t(`card.fmt.${c.stat}` as I18nKey, { v: fix(c.total) });
+  if (c.kind === 'weapon') return c.weaponText;
+  if (c.kind === 'mod') return t(`card.fmt.${c.stat}` as I18nKey, { v: fix(c.total) });
   const fmt = CARD_FORMAT[c.stat as StatId];
   return t(`card.fmt.${fmt}` as I18nKey, { name: t(`stat.${c.stat}` as I18nKey), v: fix(c.total, 1) });
 }
@@ -189,7 +209,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
     parent,
     'pause',
     `<div class="panel pause-panel"><h2>${t('pause.title')}</h2><p id="pause-status"></p>
-      <div class="sum"><section class="sum-col"><h3>${t('pause.cards')}</h3><ul class="sum-cards" id="sum-cards"></ul><div id="sum-syn"></div><div id="sum-ult"></div></section>
+      <div class="sum"><section class="sum-col"><h3>${t('pause.cards')} <span id="sum-slots"></span></h3><ul class="sum-cards" id="sum-cards"></ul><div id="sum-syn"></div><div id="sum-ult"></div></section>
       <section class="sum-col"><h3>${t('pause.abilities')}</h3><dl class="sum-stats" id="sum-stats"></dl><div id="sum-curse"></div></section></div>
       <div class="row">${btn('btn-pause-quit', 'pause.quit', 'secondary')}${btn('btn-pause-resume', 'pause.resume')}</div></div>`,
   );
@@ -199,6 +219,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
   return Object.assign(o, {
     render(sum: BuildSummary) {
       q('pause-status').textContent = t('pause.status', { level: sum.level, kills: sum.kills });
+      q('sum-slots').textContent = t('pause.slots', { used: sum.slotsUsed, max: sum.slots });
       const cards = q('sum-cards');
       cards.innerHTML = '';
       if (sum.cards.length === 0) cards.innerHTML = `<li class="empty">${t('pause.noCards')}</li>`;
@@ -206,7 +227,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
         const li = document.createElement('li');
         li.dataset.card = c.id;
         const chips = (['common', 'rare', 'epic', 'legend'] as const).map((r) => `<i class="chip r-${r}"></i>`.repeat(c.byRarity[r])).join('');
-        li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), n: c.count })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}</em>`;
+        li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), lv: c.level, max: c.maxLevel })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}</em>`;
         cards.appendChild(li);
       }
       const syn = q('sum-syn');

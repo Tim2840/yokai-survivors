@@ -7,9 +7,9 @@ import { Stats, armorMult } from '../../src/systems/stats';
 import { CardDealer, cardById, pickRarity } from '../../src/systems/cards';
 import { PROTOTYPE_MAP } from '../../src/data/maps/prototype';
 import { STAT_IDS, STAT_LIMITS, STAT_BASE } from '../../src/data/stats';
-import { STAT_CARDS } from '../../src/data/statCards';
+import { ITEMS, ITEM_POOL } from '../../src/data/items';
 import { RARITIES } from '../../src/data/rarity';
-import { CARD_POOL_M1, xpNeed } from '../../src/data/progression';
+import { xpNeed } from '../../src/data/progression';
 import { computeMerit } from '../../src/systems/merit';
 
 describe('空間雜湊', () => {
@@ -163,34 +163,35 @@ describe('屬性', () => {
     expect(armorMult(-12)).toBeCloseTo(1.8);
     expect(armorMult(-20)).toBe(1.8);
   });
-  it('每張屬性卡的 stat 都是合法屬性、數值能被屬性系統吃進去', () => {
-    for (const c of STAT_CARDS) {
-      expect((STAT_IDS as readonly string[]).includes(c.stat), c.id).toBe(true);
+  it('每個屬性道具的 stat 都是合法屬性、數值能被屬性系統吃進去', () => {
+    for (const c of ITEMS.filter((i) => i.kind === 'stat')) {
+      expect((STAT_IDS as readonly string[]).includes(c.stat!), c.id).toBe(true);
       const s = new Stats();
-      s.addCard(c.stat as (typeof STAT_IDS)[number], c.values.legend);
-      expect(Number.isFinite(s.value[c.stat as (typeof STAT_IDS)[number]])).toBe(true);
+      s.addCard(c.stat!, (c.perLevel ?? 0) * 2);
+      expect(Number.isFinite(s.value[c.stat!])).toBe(true);
     }
   });
 });
 
 describe('發牌', () => {
-  it('三張是不同的卡、都在卡池內、稀有度只有已解鎖的', () => {
-    const d = new CardDealer(new Rng(3), CARD_POOL_M1, ['common', 'rare']);
+  it('三張是不同的卡、都在卡池內、稀有度只有已解鎖的、不吃稀有度的一律凡', () => {
+    const d = new CardDealer(new Rng(3), ITEM_POOL, ['common', 'rare']);
+    const levels = new Map([['ghostfire', 1]]);
     for (let L = 1; L < 60; L++) {
-      const o = d.deal(L, 0);
+      const o = d.deal(L, 0, levels);
       expect(o).toHaveLength(3);
       expect(new Set(o.map((x) => x.cardId)).size).toBe(3);
       for (const c of o) {
-        expect(CARD_POOL_M1).toContain(c.cardId);
+        expect(ITEM_POOL).toContain(c.cardId);
         expect(['common', 'rare']).toContain(c.rarity);
-        expect(cardById(c.cardId).values[c.rarity]).toBeGreaterThan(0);
+        if (!cardById(c.cardId).rarityScales) expect(c.rarity).toBe('common');
       }
     }
   });
   it('同種子同結果；不同種子不同結果', () => {
     const run = (seed: number) => {
-      const d = new CardDealer(new Rng(seed), CARD_POOL_M1, [...RARITIES]);
-      return JSON.stringify(Array.from({ length: 20 }, (_, i) => d.deal(i + 1, 0)));
+      const d = new CardDealer(new Rng(seed), ITEM_POOL, [...RARITIES]);
+      return JSON.stringify(Array.from({ length: 20 }, (_, i) => d.deal(i + 1, 0, new Map([['ghostfire', 1]]))));
     };
     expect(run(9)).toBe(run(9));
     expect(run(9)).not.toBe(run(10));
@@ -205,23 +206,44 @@ describe('發牌', () => {
     expect(cnt.rare / N).toBeCloseTo(0.231, 1);
     expect(cnt.epic / N).toBeCloseTo(0.103, 1);
   });
-  it('保底：連續 5 次升級都沒有靈以上，下一次第 1 張至少是靈', () => {
-    // 用一個永遠抽到「凡」的假亂數（next 恆為 0.99 會落在最後一個稀有度，所以只開 common+rare 並讓 rare 權重為 0：L=0、luck=-50 時 rare 仍>0，改用直接設 drought）
-    const d = new CardDealer(new Rng(1), CARD_POOL_M1, ['common', 'rare']);
-    d.drought = 5;
-    // 對很多種子試：第 1 張一定不是凡
-    for (let s = 0; s < 200; s++) {
-      const dd = new CardDealer(new Rng(s), CARD_POOL_M1, ['common', 'rare']);
+  it('保底：連續 5 次升級都沒有靈以上，下一次第一張會吃稀有度的卡至少是靈', () => {
+    for (let sd = 0; sd < 200; sd++) {
+      const dd = new CardDealer(new Rng(sd), ITEM_POOL, ['common', 'rare']);
       dd.drought = 5;
-      expect(dd.deal(1, 0)[0].rarity).toBe('rare');
+      const o = dd.deal(1, 0, new Map([['ghostfire', 1]]));
+      const first = o.find((x) => cardById(x.cardId).rarityScales);
+      if (first) expect(first.rarity).toBe('rare');
+    }
+  });
+});
+
+describe('稀有度里程碑（D30，參考 Brotato）', () => {
+  it('升到 5 級：第一張會吃稀有度的卡至少是靈；10／15 級至少妖、20 級起每 5 級至少神（受已解鎖限制）', () => {
+    for (let sd = 0; sd < 100; sd++) {
+      const all = new CardDealer(new Rng(sd), ITEM_POOL, [...RARITIES]);
+      const lv = new Map([['ghostfire', 1]]);
+      const rank = (r: string) => RARITIES.indexOf(r as (typeof RARITIES)[number]);
+      const first = (o: { cardId: string; rarity: string }[]) => o.find((x) => cardById(x.cardId).rarityScales);
+      const f5 = first(all.deal(5, 0, lv));
+      if (f5) expect(rank(f5.rarity)).toBeGreaterThanOrEqual(1);
+      const f10 = first(all.deal(10, 0, lv));
+      if (f10) expect(rank(f10.rarity)).toBeGreaterThanOrEqual(2);
+      const f25 = first(all.deal(25, 0, lv));
+      if (f25) expect(f25.rarity).toBe('legend');
+      // 只解鎖凡／靈：里程碑最多到靈
+      const two = new CardDealer(new Rng(sd), ITEM_POOL, ['common', 'rare']);
+      const g = first(two.deal(25, 0, lv));
+      if (g) expect(g.rarity).toBe('rare');
     }
   });
 });
 
 describe('升級曲線與功德', () => {
-  it('第 L 級需要 6 + 2.5L 魂火（docs/02 3.1）', () => {
-    expect(xpNeed(0)).toBe(6);
-    expect(xpNeed(10)).toBe(31);
+  it('第 L 級需要 round(0.35 × (L + 3)²) 魂火（D30 平方曲線）', () => {
+    expect(xpNeed(0)).toBe(3);
+    expect(xpNeed(10)).toBe(59);
+    expect(xpNeed(20)).toBe(185);
+    for (let L = 1; L < 60; L++) expect(xpNeed(L)).toBeGreaterThan(xpNeed(L - 1));
   });
   it('功德（D22 版，docs/02 第 8.1 節）：每關 120 ＋ 擊殺 ÷ 10 ＋ 每隻頭目 100 ＋ 首次通關 200', () => {
     const m = computeMerit({ stagesCleared: 2, kills: 4000, bossesDefeated: 2, firstClear: true, meritStat: 0, night: 0, abandoned: false });

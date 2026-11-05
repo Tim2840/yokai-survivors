@@ -22,11 +22,13 @@ export async function run(browser) {
         }
         expect(b.x >= 0 && b.x + b.width <= vp.width, `「能力」鈕超出畫面（${vp.name}）`);
       });
-      await step(`${vp.name} 空的時候顯示「還沒有拿到卡片」`, async () => {
+      await step(`${vp.name} 開局：只有主武器鬼火 Lv1、道具欄 0/6`, async () => {
         await press(ctx, '#btn-abilities');
         await page.waitForFunction(() => window.__game.screens.includes('pause'));
         const txt = await page.locator('#sum-cards').innerText();
-        expect(/還沒有拿到卡片/.test(txt), `沒有卡時沒有提示：${txt}`);
+        expect(/鬼火 Lv1\/8/.test(txt), `開局應該只看到鬼火 Lv1：${txt}`);
+        const slots = await page.locator('#sum-slots').innerText();
+        expect(/0\/6/.test(slots), `道具欄應該是 0/6：${slots}`);
         await press(ctx, '#btn-pause-resume');
         await page.waitForFunction(() => !window.__game.screens.includes('pause'));
       });
@@ -43,8 +45,11 @@ export async function run(browser) {
           const stats = Object.fromEntries([...document.querySelectorAll('#sum-stats [data-stat]')].map((d) => [d.dataset.stat, d.querySelector('dd').innerText]));
           return { rows, stats, run: window.__game.run, syn: document.querySelector('#sum-syn').innerText };
         });
-        expect(/力量 ×2/.test(info.rows.power) && /\+26%/.test(info.rows.power), `力量卡的數量或累計效果不對：${info.rows.power}`);
-        expect(/強健 ×1/.test(info.rows.hp) && /\+60/.test(info.rows.hp), `強健卡不對：${info.rows.hp}`);
+        // 力量 凡 +10%、靈 +12%（稀有度 ×1.2）→ Lv2、累計 +22%；強健 妖 = 20 × 1.5 = +30
+        expect(/力量 Lv2\/5/.test(info.rows.power) && /\+22%/.test(info.rows.power), `力量的等級或累計效果不對：${info.rows.power}`);
+        expect(/強健 Lv1\/5/.test(info.rows.hp) && /\+30/.test(info.rows.hp), `強健不對：${info.rows.hp}`);
+        const slots = await page.locator('#sum-slots').innerText();
+        expect(/5\/6/.test(slots), `道具欄應該是 5/6：${slots}`);
         expect(info.rows.volley && info.rows.splash && info.rows.armor, `少了卡片：${Object.keys(info.rows)}`);
         expect(/連環爆/.test(info.syn), `已觸發的聯動沒列出：${info.syn}`);
         const p = info.run.stats.power;

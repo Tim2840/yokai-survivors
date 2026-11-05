@@ -18,7 +18,7 @@ export const WAVES = {
   batches: 5,
   spawnSpan: 0.8,
   /** 敵人強度（第 n 波、夜深度 d） */
-  hpPerWave: 0.25,
+  hpPerWave: 0.35,
   hpPerNight: 0.15,
   damagePerWave: 0.08,
   speedPerNight: 0.03,

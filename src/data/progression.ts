@@ -1,8 +1,8 @@
 /** 魂火與升級（docs/02 第 3.1 節，起始提案）。 */
 export const PROGRESSION = {
-  /** 第 L 級升到 L+1 所需魂火 = base + perLevel × L */
-  needBase: 6,
-  needPerLevel: 2.5,
+  /** 第 L 級升到 L+1 所需魂火 = round(needScale × (L + needOffset)²)（D30：平方曲線，參考 Brotato 的 (L+3)²；後期升級變慢、每一級更有份量） */
+  needScale: 0.35,
+  needOffset: 3,
   /** 魂火顆的數值 = 威脅點數 × 這個 */
   orbPerPoint: 1,
   /** 魂火被吸向玩家的速度（公尺/秒）與加速度 */
@@ -14,10 +14,9 @@ export const PROGRESSION = {
   orbSweepSpeed: 22,
 } as const;
 
-export const xpNeed = (level: number): number => PROGRESSION.needBase + PROGRESSION.needPerLevel * level;
+export const xpNeed = (level: number): number => Math.max(1, Math.round(PROGRESSION.needScale * (level + PROGRESSION.needOffset) ** 2));
 
-/** M1 的升級卡池（docs/05：4 張屬性卡就好）；M2 起改成依局外解鎖。每次升級給幾張、可用的稀有度 */
-export const CARD_POOL_M1: readonly string[] = ['hp', 'power', 'atkSpeed', 'speed', 'area', 'volley', 'splash', 'pierce', 'armor', 'regen', 'dodge'];
+/** 升級時能拿到的東西改成「法具」（src/data/items.ts 的 ITEM_POOL）。每次升級給幾張、可用的稀有度 */
 export const CARD_CHOICES = 3;
 /** 沒解鎖「妖」之前只有凡、靈（docs/02 第 4.1 節） */
 export const RARITIES_UNLOCKED_M1 = ['common', 'rare'] as const;

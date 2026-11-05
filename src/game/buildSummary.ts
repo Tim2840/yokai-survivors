@@ -1,5 +1,6 @@
 import type { Run } from './run';
-import { cardById, isWeaponCard } from '../systems/cards';
+import { cardById, slotsUsed } from '../systems/cards';
+import { ITEM_SLOTS, WEAPON_LEVELS, itemValue, type ItemKind } from '../data/items';
 import { armorMult } from '../systems/stats';
 import { type Rarity } from '../data/rarity';
 import { type StatId } from '../data/stats';
@@ -10,7 +11,10 @@ import { ULT, ULT_RECIPES, recipeProgress } from '../data/ultimates';
 
 /** 暫停畫面「能力」面板的資料（純資料，不含文字；文字由介面層用 i18n 組） */
 export interface BuildSummary {
-  cards: { id: string; weapon: boolean; stat: string; count: number; byRarity: Record<Rarity, number>; total: number }[];
+  /** 已有的法具（主武器在最前面）：等級、各稀有度拿了幾次、累計效果 */
+  cards: { id: string; kind: ItemKind; stat: string; level: number; maxLevel: number; byRarity: Record<Rarity, number>; total: number; weaponText: string }[];
+  slotsUsed: number;
+  slots: number;
   /** 屬性：id、目前值（內部單位）、基礎值 */
   stats: { id: StatId; value: number; base: number }[];
   /** 武器：鬼火數量、濺射半徑（公尺）、穿透 */
@@ -32,25 +36,53 @@ export interface BuildSummary {
   kills: number;
 }
 
+/** 主武器累計加成的文字由介面層注入（避免這裡依賴 i18n） */
+let weaponText: (s: { damage: number; volley: number; cooldownPct: number; pierce: number; splash: number }) => string = () => '';
+export function setWeaponTextFormatter(f: typeof weaponText): void {
+  weaponText = f;
+}
+
 export function summarizeBuild(run: Run): BuildSummary {
   const map = new Map<string, BuildSummary['cards'][number]>();
-  for (const o of run.picked) {
-    const c = cardById(o.cardId);
-    let e = map.get(c.id);
+  const ensure = (id: string): BuildSummary['cards'][number] => {
+    let e = map.get(id);
     if (!e) {
-      e = { id: c.id, weapon: isWeaponCard(c), stat: isWeaponCard(c) ? c.weapon : c.stat, count: 0, byRarity: { common: 0, rare: 0, epic: 0, legend: 0 }, total: 0 };
-      map.set(c.id, e);
+      const d = cardById(id);
+      e = { id, kind: d.kind, stat: d.kind === 'mod' ? d.mod! : d.stat ?? '', level: run.cardCounts.get(id) ?? 0, maxLevel: d.maxLevel, byRarity: { common: 0, rare: 0, epic: 0, legend: 0 }, total: 0, weaponText: '' };
+      map.set(id, e);
     }
-    e.count++;
-    e.byRarity[o.rarity]++;
-    e.total += c.values[o.rarity];
+    return e;
+  };
+  ensure(run.weaponItemId);
+  for (const o of run.picked) {
+    const d = cardById(o.cardId);
+    if (d.kind === 'fallback') continue;
+    const e = ensure(d.id);
+    if (d.rarityScales) e.byRarity[o.rarity]++;
+    e.total += itemValue(d, o.rarity);
   }
+  // 主武器：列出已經加過的東西
+  const wl = run.cardCounts.get(run.weaponItemId) ?? 1;
+  const steps = (WEAPON_LEVELS[run.weaponItemId] ?? []).slice(0, wl - 1);
+  const wsum = { damage: 0, volley: 0, cooldownPct: 0, pierce: 0, splash: 0 };
+  let cd = 1;
+  for (const st of steps) {
+    wsum.damage += st.damage ?? 0;
+    wsum.volley += st.volley ?? 0;
+    wsum.pierce += st.pierce ?? 0;
+    wsum.splash += st.splash ?? 0;
+    if (st.cooldownPct) cd *= 1 - st.cooldownPct / 100;
+  }
+  wsum.cooldownPct = Math.round((1 - cd) * 100);
+  ensure(run.weaponItemId).weaponText = weaponText(wsum);
   const w = run.yokai.weapon;
   const s = run.stats.value;
   const curses: BuildSummary['curses'] = [];
   for (const id of ALTAR_CURSE_IDS) if (run.curse[id] > 1e-9) curses.push({ id, v: run.curse[id] });
   return {
-    cards: [...map.values()].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)),
+    cards: [...map.values()].sort((a, b) => (a.kind === 'weapon' ? -1 : b.kind === 'weapon' ? 1 : b.level - a.level || a.id.localeCompare(b.id))),
+    slotsUsed: slotsUsed(run.cardCounts),
+    slots: ITEM_SLOTS,
     stats: STAT_IDS.filter((id) => id !== 'merit').map((id) => ({ id, value: s[id], base: run.stats.baseOf(id) })),
     weapon: {
       volley: (tuning.volley > 0 ? tuning.volley : w.volley) + run.volleyBonus + run.syn.volley,

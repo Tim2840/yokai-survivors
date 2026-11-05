@@ -2,7 +2,7 @@ import { describe, it } from 'vitest';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { tuning, resetTuning } from '../../src/data/tuning';
-import { CARD_POOL_M1 } from '../../src/data/progression';
+import { ITEM_POOL as CARD_POOL_M1 } from '../../src/data/items';
 import { RARITIES } from '../../src/data/rarity';
 
 // 卡片價值探針（不是斷言型）：每張卡每個稀有度各給 1 張、跑 N 秒（機器人風箏），和「沒有卡」的基準比擊殺數與受傷。

@@ -2,7 +2,8 @@ import { bus as defaultBus, type EventBus } from '../core/bus';
 import { COMBAT } from '../data/combat';
 import { MOVE } from '../data/movement';
 import { PLAYABLE_YOKAI, YOKAI, type YokaiDef } from '../data/yokai';
-import { PROGRESSION, CARD_POOL_M1, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
+import { PROGRESSION, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
+import { ITEM_POOL, WEAPON_LEVELS, itemValue } from '../data/items';
 import { RARITY_MULT } from '../data/rarity';
 import { STAGE, stagesForMap, bossHpMult } from '../data/stage';
 import { WAVES } from '../data/waves';
@@ -17,12 +18,10 @@ import { Projectiles } from '../systems/projectiles';
 import { Orbs } from '../systems/orbs';
 import { HitFeed } from '../systems/hitFeed';
 import { Stats, armorMult } from '../systems/stats';
-import { CardDealer, cardById, isWeaponCard, type CardOffer } from '../systems/cards';
+import { CardDealer, cardById, type CardOffer } from '../systems/cards';
 import { StageDirector } from '../systems/stageDirector';
 import { Elements, type ElementCarry } from '../systems/elements';
 import { computeMerit } from '../systems/merit';
-import type { StatId } from '../data/stats';
-import { WEAPON_LIMITS } from '../data/weaponCards';
 import { SYNERGIES } from '../data/synergies';
 import { ULT, ULT_RECIPES, recipeDone, type UltEffect } from '../data/ultimates';
 import { ALTAR_CURSE_IDS, type CurseId } from '../data/altar';
@@ -132,6 +131,17 @@ export class Run {
   volleyBonus = 0;
   splashBonus = 0;
   pierceBonus = 0;
+  /** 主武器升級帶來的：基礎傷害加值、冷卻倍率（< 1 = 變快） */
+  weaponDamageBonus = 0;
+  cooldownMult = 1;
+  /** 主武器的道具 id（鬼火） */
+  get weaponItemId(): string {
+    return this.yokai.weapon.id;
+  }
+  /** 主武器目前幾級 */
+  get weaponLevel(): number {
+    return this.cardCounts.get(this.weaponItemId) ?? 1;
+  }
   /** 拿過的卡 id、已觸發的聯動，與聯動帶來的加成（D28） */
   readonly ownedCards = new Set<string>();
   readonly activeSynergies: string[] = [];
@@ -145,7 +155,7 @@ export class Run {
   offerKind: 'levelup' | 'offering' | 'chest' = 'levelup';
   private bonusLeft = 0;
   private bonusRarity: import('../data/rarity').Rarity = 'rare';
-  /** 拿過的卡各幾張（大招配方用）、已融合的大招、大招量表（0～ULT.max）、最近一次發動（給外觀用） */
+  /** 法具等級（id → 等級；大招配方用的「張數」就是等級）、已融合的大招、大招量表（0～ULT.max）、最近一次發動（給外觀用） */
   readonly cardCounts = new Map<string, number>();
   readonly fused: string[] = [];
   ultCharge = 0;
@@ -180,7 +190,10 @@ export class Run {
     this.rngCards = new Rng(subSeed(this.seed, 2));
     this.rngSpawn = new Rng(subSeed(this.seed, 3));
     this.rngElements = new Rng(subSeed(this.seed, 4));
-    this.dealer = new CardDealer(this.rngCards, CARD_POOL_M1, RARITIES_UNLOCKED_M1);
+    this.dealer = new CardDealer(this.rngCards, ITEM_POOL, RARITIES_UNLOCKED_M1);
+    // 主武器從 1 級開始（佔的不是道具欄位）
+    this.cardCounts.set(this.weaponItemId, 1);
+    this.ownedCards.add(this.weaponItemId);
     this.hp = this.stats.value.maxHp;
     this.startNextStage();
   }
@@ -511,7 +524,7 @@ export class Run {
       this.fireCd = 0;
       return;
     }
-    this.fireCd += w.interval / s.atkSpeed;
+    this.fireCd += (w.interval * this.cooldownMult) / s.atkSpeed;
     const dx = this.enemies.x[target] - this.px;
     const dz = this.enemies.z[target] - this.pz;
     const d = Math.hypot(dx, dz) || 1;
@@ -520,7 +533,7 @@ export class Run {
     const volley = Math.floor(volleyExact) + (this.rngCombat.next() < volleyExact - Math.floor(volleyExact) ? 1 : 0);
     for (let v = 0; v < volley; v++) {
       const crit = this.rngCombat.next() < s.crit;
-      const dmg = w.damage * s.power * tuning.damageScale * (crit ? s.critDmg : 1);
+      const dmg = (w.damage + this.weaponDamageBonus) * s.power * tuning.damageScale * (crit ? s.critDmg : 1);
       const spread = (v - (volley - 1) / 2) * 0.18;
       const c = Math.cos(spread);
       const sn = Math.sin(spread);
@@ -603,7 +616,7 @@ export class Run {
   }
 
   private makeOffer(): void {
-    this.offer = this.dealer.deal(this.level, this.stats.value.luck);
+    this.offer = this.dealer.deal(this.level, this.stats.value.luck, this.cardCounts);
   }
 
   /** 玩家選了第 index 張卡。回傳是否還有下一次待選（UI 繼續開著面板） */
@@ -613,7 +626,7 @@ export class Run {
     this.bonusLeft = picks;
     this.bonusRarity = rarity;
     this.offerKind = kind;
-    this.offer = this.dealer.dealRarity(rarity);
+    this.offer = this.dealer.dealRarity(rarity, this.cardCounts);
     this.bus.emit('levelUp', { level: this.level, pending: this.bonusLeft });
   }
 
@@ -630,7 +643,7 @@ export class Run {
     if (this.offerKind !== 'levelup') {
       this.bonusLeft--;
       if (this.bonusLeft > 0) {
-        this.offer = this.dealer.dealRarity(this.bonusRarity);
+        this.offer = this.dealer.dealRarity(this.bonusRarity, this.cardCounts);
         return true;
       }
       this.offerKind = 'levelup';
@@ -650,25 +663,40 @@ export class Run {
     return false;
   }
 
+  /** 套用一張卡（法具升一級；D30） */
   private applyCard(o: CardOffer): void {
-    const card = cardById(o.cardId);
-    this.ownedCards.add(card.id);
-    this.cardCounts.set(card.id, (this.cardCounts.get(card.id) ?? 0) + 1);
-    if (isWeaponCard(card)) {
-      if (card.weapon === 'pierce') this.pierceBonus = Math.min(WEAPON_LIMITS.pierce, this.pierceBonus + card.values[o.rarity]);
-      else if (card.weapon === 'volley') this.volleyBonus = Math.min(WEAPON_LIMITS.volley - 1, this.volleyBonus + card.values[o.rarity]);
-      else this.splashBonus = Math.min(WEAPON_LIMITS.splash, this.splashBonus + card.values[o.rarity]);
-      this.picked.push(o);
-      this.checkSynergies();
-      this.checkFusion();
+    const d = cardById(o.cardId);
+    this.picked.push(o);
+    if (d.kind === 'fallback') {
+      if (d.id === 'heal') this.hp = Math.min(this.maxHp, this.hp + this.maxHp * (d.perLevel ?? 0) / 100);
+      else this.bonusMerit += d.perLevel ?? 0;
       return;
     }
-    const before = this.maxHp;
-    this.stats.addCard(card.stat as StatId, card.values[o.rarity]);
-    // 最大生命增加時，現有生命同步增加（不會「變成扣血」）
-    if (this.maxHp > before) this.hp += this.maxHp - before;
-    this.hp = Math.min(this.hp, this.maxHp);
-    this.picked.push(o);
+    const lv = this.cardCounts.get(d.id) ?? 0;
+    if (lv >= d.maxLevel) return;
+    this.ownedCards.add(d.id);
+    this.cardCounts.set(d.id, lv + 1);
+    if (d.kind === 'weapon') {
+      const step = WEAPON_LEVELS[d.id]?.[lv - 1];
+      if (step) {
+        this.weaponDamageBonus += step.damage ?? 0;
+        this.volleyBonus += step.volley ?? 0;
+        this.pierceBonus += step.pierce ?? 0;
+        this.splashBonus += step.splash ?? 0;
+        if (step.cooldownPct) this.cooldownMult *= 1 - step.cooldownPct / 100;
+      }
+    } else if (d.kind === 'mod') {
+      const v = itemValue(d, o.rarity);
+      if (d.mod === 'volley') this.volleyBonus += v;
+      else if (d.mod === 'pierce') this.pierceBonus += v;
+      else this.splashBonus += v;
+    } else if (d.stat) {
+      const before = this.maxHp;
+      this.stats.addCard(d.stat, itemValue(d, o.rarity));
+      // 最大生命增加時，現有生命同步增加（不會「變成扣血」）
+      if (this.maxHp > before) this.hp += this.maxHp - before;
+      this.hp = Math.min(this.hp, this.maxHp);
+    }
     this.checkSynergies();
     this.checkFusion();
   }
@@ -728,7 +756,7 @@ export class Run {
   }
 
   private ultDamage(e: UltEffect & { damageMult: number }): number {
-    return this.yokai.weapon.damage * this.stats.value.power * tuning.damageScale * e.damageMult;
+    return (this.yokai.weapon.damage + this.weaponDamageBonus) * this.stats.value.power * tuning.damageScale * e.damageMult;
   }
 
   private applyUltEffect(e: UltEffect, dx: number, dz: number): void {

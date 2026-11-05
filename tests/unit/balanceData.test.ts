@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RARITIES, RARITY_MULT, cardRarityWeights } from '../../src/data/rarity';
-import { STAT_CARDS } from '../../src/data/statCards';
+import { ITEMS, ITEM_RARITY_MULT, GHOSTFIRE_LEVELS } from '../../src/data/items';
 import { TRAINING, TRAINING_MAX_LEVEL, trainingPrice } from '../../src/data/meta';
 import { ALTAR_BOON_PCT, ALTAR_CURSE, ALTAR_CURSE_IDS, ALTAR_EFFECT_COUNT, ALTAR_MAX_EFFECTS } from '../../src/data/altar';
 
@@ -30,23 +30,23 @@ describe('稀有度', () => {
   });
 });
 
-describe('屬性卡', () => {
-  it('id 唯一、四階都有、數值單調遞增', () => {
-    expect(new Set(STAT_CARDS.map((c) => c.id)).size).toBe(STAT_CARDS.length);
-    for (const c of STAT_CARDS) {
-      for (let i = 1; i < RARITIES.length; i++) expect(c.values[RARITIES[i]], c.id).toBeGreaterThan(c.values[RARITIES[i - 1]]);
+describe('法具（D30）', () => {
+  it('id 唯一、每級數值 > 0、最高等級合理（屬性 5 級、多一顆 2 級）', () => {
+    expect(new Set(ITEMS.map((c) => c.id)).size).toBe(ITEMS.length);
+    for (const c of ITEMS) {
+      if (c.kind !== 'weapon') expect(c.perLevel ?? 0, c.id).toBeGreaterThan(0);
+      if (c.kind === 'stat') expect(c.maxLevel, c.id).toBe(5);
     }
+    expect(ITEMS.find((i) => i.id === 'volley')!.maxLevel).toBe(2);
   });
-  it('起始卡池 8 張', () => {
-    expect(STAT_CARDS.filter((c) => c.starter)).toHaveLength(8);
+  it('稀有度倍率溫和、單調遞增，神階 ≤ 凡的 2 倍（docs/15：Megabonk 約 1.0～2.0）', () => {
+    for (let i = 1; i < RARITIES.length; i++) expect(ITEM_RARITY_MULT[RARITIES[i]]).toBeGreaterThan(ITEM_RARITY_MULT[RARITIES[i - 1]]);
+    expect(ITEM_RARITY_MULT.legend / ITEM_RARITY_MULT.common).toBeLessThanOrEqual(2);
   });
-  it('各階數值大致是凡的倍率（誤差 ≤ 30%，整數四捨五入造成（護甲妖階 3 vs 2.4 最大））', () => {
-    for (const c of STAT_CARDS) {
-      for (const r of RARITIES) {
-        const expected = c.values.common * RARITY_MULT[r];
-        expect(Math.abs(c.values[r] - expected) / expected, `${c.id}/${r}`).toBeLessThanOrEqual(0.3);
-      }
-    }
+  it('主武器 8 級表：每一級都有加東西，而且不是每級都一樣', () => {
+    expect(GHOSTFIRE_LEVELS).toHaveLength(7);
+    for (const st of GHOSTFIRE_LEVELS) expect(Object.keys(st).length).toBeGreaterThan(0);
+    expect(new Set(GHOSTFIRE_LEVELS.map((s) => JSON.stringify(Object.keys(s).sort()))).size).toBeGreaterThanOrEqual(4);
   });
 });
 
@@ -92,20 +92,3 @@ describe('局外修行總價（docs/02 7.1／7.4 審查重算）', () => {
   });
 });
 
-import { WEAPON_CARDS } from '../../src/data/weaponCards';
-
-describe('武器卡平衡（2026-11-04 卡片價值探針）', () => {
-  it('數值隨稀有度單調遞增，神階 / 凡階不超過 4 倍', () => {
-    for (const c of WEAPON_CARDS) {
-      for (let i = 1; i < RARITIES.length; i++) expect(c.values[RARITIES[i]], c.id).toBeGreaterThan(c.values[RARITIES[i - 1]]);
-      expect(c.values.legend / c.values.common, c.id).toBeLessThanOrEqual(4.5);
-    }
-  });
-  it('單張鬼火增殖、穿透永遠不到整整 1 顆（舊值 +1 顆＝輸出 +50%，一張抵好幾張屬性卡）', () => {
-    for (const id of ['volley', 'pierce']) {
-      const c = WEAPON_CARDS.find((x) => x.id === id)!;
-      for (const r of RARITIES) expect(c.values[r], `${id}/${r}`).toBeLessThan(1.5);
-      expect(c.values.common, id).toBeLessThan(0.5);
-    }
-  });
-});

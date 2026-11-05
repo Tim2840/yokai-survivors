@@ -44,22 +44,50 @@ describe('章節制（D26）：每第 N 張地圖是 3 關的大關、頭目更�
   });
 });
 
-import { WEAPON_CARDS, WEAPON_LIMITS } from '../../src/data/weaponCards';
-import { CARD_POOL_M1 } from '../../src/data/progression';
+import { ITEM_POOL, itemById, ITEM_SLOTS } from '../../src/data/items';
 
-describe('武器卡（鬼火增殖、爆裂）', () => {
-  it('在卡池裡；給一張就多發射／濺射變大；有上限', () => {
-    for (const c of WEAPON_CARDS) expect(CARD_POOL_M1).toContain(c.id);
+describe('法具：武器改造與主武器（D30）', () => {
+  it('鬼火增殖 +1 顆、最多 2 級；爆裂吃稀有度；穿透最多 3 級；主武器 8 級後不再升', () => {
+    for (const id of ['volley', 'splash', 'pierce', 'ghostfire']) expect(ITEM_POOL).toContain(id);
     const run = new Run({ seed: 5, bus: new EventBus() });
     expect(run.volleyBonus).toBe(0);
     run.give('volley', 'epic');
-    expect(run.volleyBonus).toBeCloseTo(0.6);
-    for (let i = 0; i < 20; i++) run.give('volley', 'legend');
-    expect(run.volleyBonus).toBe(WEAPON_LIMITS.volley - 1);
+    expect(run.volleyBonus).toBe(1);
+    run.give('volley', 'legend');
+    run.give('volley', 'legend');
+    expect(run.volleyBonus).toBe(itemById('volley').maxLevel);
     run.give('splash', 'rare');
-    expect(run.splashBonus).toBeCloseTo(0.5);
-    for (let i = 0; i < 10; i++) run.give('splash', 'legend');
-    expect(run.splashBonus).toBe(WEAPON_LIMITS.splash);
+    expect(run.splashBonus).toBeCloseTo(0.3 * 1.2);
+    for (let i = 0; i < 5; i++) run.give('pierce', 'common');
+    expect(run.pierceBonus).toBe(itemById('pierce').maxLevel);
+    expect(run.weaponLevel).toBe(1);
+    for (let i = 0; i < 12; i++) run.give('ghostfire', 'common');
+    expect(run.weaponLevel).toBe(itemById('ghostfire').maxLevel);
+    expect(run.weaponDamageBonus).toBe(12);
+    expect(run.cooldownMult).toBeCloseTo(0.81);
+  });
+  it('道具欄位上限：裝滿以後升級只出現已有道具（與主武器、備用獎勵）', () => {
+    const run = new Run({ seed: 8, bus: new EventBus() });
+    const six = ['power', 'atkSpeed', 'area', 'hp', 'armor', 'regen'];
+    for (const id of six) run.give(id, 'common');
+    expect(six.length).toBe(ITEM_SLOTS);
+    for (let k = 0; k < 30; k++) {
+      const o = run.dealer.deal(5, 0, run.cardCounts);
+      for (const c of o) expect([...six, 'ghostfire', 'heal', 'meritBag'], `欄位滿了還出現 ${c.cardId}`).toContain(c.cardId);
+    }
+  });
+  it('全部練滿後只出現備用獎勵：療傷回血、香油錢加功德', () => {
+    const run = new Run({ seed: 9, bus: new EventBus() });
+    const six = ['power', 'atkSpeed', 'area', 'hp', 'armor', 'regen'];
+    for (const id of [...six, 'ghostfire']) for (let i = 0; i < 10; i++) run.give(id, 'common');
+    const o = run.dealer.deal(30, 0, run.cardCounts);
+    expect(o.map((c) => c.cardId).sort()).toEqual(['heal', 'meritBag']);
+    run.hp = 10;
+    run.give('heal', 'common');
+    expect(run.hp).toBeGreaterThan(10);
+    const m = run.bonusMerit;
+    run.give('meritBag', 'common');
+    expect(run.bonusMerit).toBeGreaterThan(m);
   });
 });
 

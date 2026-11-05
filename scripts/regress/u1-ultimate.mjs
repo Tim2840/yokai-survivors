@@ -30,9 +30,16 @@ export async function run(browser) {
         let sawComplete = false;
         for (let k = 0; k < 25 && !saw; k++) {
           for (let g = 0; g < 40 && !(await page.evaluate(() => window.__game.screens)).includes('levelup'); g++) await page.evaluate(() => window.__game.addXp(20));
-          const lines = await page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card .csyn.ult')].map((e) => ({ t: e.textContent, ready: e.classList.contains('ready') })));
+          const lines = await page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card .csyn.ulthint, .overlay[data-screen="levelup"] .card .csyn.ult')].map((e) => {
+            // 提示必須在自己那張卡裡面（曾經被大招鈕的樣式套到，飛到畫面右下角）
+            const r = e.getBoundingClientRect();
+            const c = e.closest('.card').getBoundingClientRect();
+            const inside = r.left >= c.left - 1 && r.right <= c.right + 1 && r.top >= c.top - 1 && r.bottom <= c.bottom + 1;
+            return { t: e.textContent, ready: e.classList.contains('ready'), inside, pos: getComputedStyle(e).position };
+          }));
           for (const l of lines) {
             expect(/大招/.test(l.t), `大招提示文字不對：${l.t}`);
+            expect(l.inside && l.pos !== 'absolute', `大招提示跑出卡片外（${vp.name}）：${JSON.stringify(l)}`);
             saw = true;
             if (l.ready) sawComplete = true;
           }

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { tuning } from '../../src/data/tuning';
-import { CARD_POOL_M1 } from '../../src/data/progression';
+import { ITEM_POOL, itemById } from '../../src/data/items';
 import { ULT, ULT_RECIPES, ultHints, recipeProgress } from '../../src/data/ultimates';
 import { kindIndex } from '../../src/systems/enemies';
 import { YOKAI } from '../../src/data/yokai';
@@ -39,7 +39,8 @@ describe('大招配方（資料全掃）', () => {
       expect(YOKAI[r.yokai], r.id).toBeTruthy();
       let total = 0;
       for (const [card, n] of Object.entries(r.requires)) {
-        expect(CARD_POOL_M1, `${r.id} 的材料 ${card} 不在卡池`).toContain(card);
+        expect(ITEM_POOL, `${r.id} 的材料 ${card} 不在卡池`).toContain(card);
+        expect(n, `${r.id} 要 ${card} ${n} 級，超過最高等級`).toBeLessThanOrEqual(itemById(card).maxLevel);
         expect(n).toBeGreaterThan(0);
         total += n;
       }

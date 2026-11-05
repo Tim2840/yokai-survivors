@@ -42,7 +42,7 @@ export async function run(browser) {
           const info = await page.evaluate(() =>
             [...document.querySelectorAll('.overlay[data-screen="levelup"] .card')].map((c) => {
               const r = c.getBoundingClientRect();
-              return { id: c.dataset.card, hints: [...c.querySelectorAll('.csyn:not(.ult)')].map((h) => ({ t: h.textContent, ready: h.classList.contains('ready') })), clipped: c.scrollHeight > c.clientHeight + 1 || c.scrollWidth > c.clientWidth + 1, inView: r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight };
+              return { id: c.dataset.card, hints: [...c.querySelectorAll('.csyn:not(.ulthint)')].map((h) => ({ t: h.textContent, ready: h.classList.contains('ready') })), clipped: c.scrollHeight > c.clientHeight + 1 || c.scrollWidth > c.clientWidth + 1, inView: r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight };
             }),
           );
           for (const c of info) {

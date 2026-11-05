@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Run } from '../../src/game/run';
 import { EventBus } from '../../src/core/bus';
 import { STAGE } from '../../src/data/stage';
+import { itemById } from '../../src/data/items';
 import { tuning } from '../../src/data/tuning';
 import { RARITIES, type Rarity } from '../../src/data/rarity';
 import { ALTAR_BOON_PCT, ALTAR_CURSE, ALTAR_EFFECT_COUNT, ALTAR_BOONS, ALTAR_CURSE_IDS } from '../../src/data/altar';
@@ -15,6 +16,12 @@ import { Rng } from '../../src/lib/random';
 import { makeHighlands } from '../../src/data/maps/highlands';
 
 const DT = 1 / 60;
+/** 測要素時升級選卡只挑「不改屬性」的卡（主武器、武器改造、備用），免得選到護甲／再生把比較搞亂 */
+function pickSafe(run: Run): void {
+  const o = run.offer!;
+  const i = o.findIndex((c) => ['weapon', 'mod', 'fallback'].includes(itemById(c.cardId).kind));
+  run.chooseCard(Math.max(0, i));
+}
 function make(seed = 3) {
   tuning.stageSeconds = 600;
   const bus = new EventBus();
@@ -24,7 +31,7 @@ function make(seed = 3) {
 }
 function advance(run: Run, sec: number) {
   for (let i = 0; i < Math.round(sec / DT); i++) {
-    if (run.awaitingPick) run.chooseCard(0);
+    if (run.awaitingPick) pickSafe(run);
     run.step(DT);
   }
 }
@@ -33,7 +40,7 @@ function stand(run: Run, x: number, z: number, sec: number) {
   run.devTeleport(x, z);
   run.setMove(0, 0);
   for (let i = 0; i < Math.round(sec / DT); i++) {
-    if (run.awaitingPick) run.chooseCard(0);
+    if (run.awaitingPick) pickSafe(run);
     run.step(DT);
   }
 }
@@ -182,7 +189,7 @@ describe('詛咒祭壇（D27：隨機抽數個不同效果，含詛咒）', () =
     run.devTeleport(run.portal.x - 2, run.portal.z);
     for (let g = 0; run.phase === 'combat' && g < 600; g++) {
       run.setMove(run.portal.x - run.px, run.portal.z - run.pz);
-      if (run.awaitingPick) run.chooseCard(0);
+      if (run.awaitingPick) pickSafe(run);
       run.step(DT);
     }
     expect(run.phase).toBe('intermission');
@@ -284,7 +291,7 @@ describe('賽錢箱、神籤、寶箱（M2-2）', () => {
       expect(run.offer, `${r} 按滿後應開三選一`).not.toBeNull();
       expect(run.offerKind).toBe('offering');
       expect(run.offer!.length).toBe(3);
-      expect(run.offer!.every((c) => c.rarity === o.reward)).toBe(true);
+      expect(run.offer!.filter((c) => itemById(c.cardId).rarityScales).every((c) => c.rarity === o.reward)).toBe(true);
       expect(run.hp).toBeLessThan(hp0);
       expect(run.hp).toBeGreaterThan(0);
       for (let k = 0; k < o.picks; k++) {
@@ -317,7 +324,7 @@ describe('賽錢箱、神籤、寶箱（M2-2）', () => {
       for (let i = 0; i < Math.round((CHEST_HOLD_SECONDS + 0.5) / DT) && !run.offer; i++) run.step(DT);
       expect(run.offer, r).not.toBeNull();
       expect(run.offerKind).toBe('chest');
-      expect(run.offer!.every((c) => c.rarity === r)).toBe(true);
+      expect(run.offer!.filter((c) => itemById(c.cardId).rarityScales).every((c) => c.rarity === r)).toBe(true);
       expect(run.hp).toBeGreaterThanOrEqual(hp0 - 1e-6);
       run.chooseCard(1);
       expect(run.offer).toBeNull();
