@@ -20,6 +20,7 @@
 | 風險與待辦 | `docs/11-risks-backlog.md` |
 | 用詞、台詞、介面文字 | `docs/12-voice-and-terms.md` |
 | 市場與同類遊戲研究（含來源） | `docs/13-market-research.md`；**同類肉鴿的系統與數值研究、改版提案：`docs/15-roguelike-research.md`** |
+| 收集、抽卡、活動系統的研究與排程 | `docs/16-collection-events.md` |
 | 還沒決定、等使用者點頭的事 | `docs/14-open-questions.md` |
 
 ## 架構鐵則（細節見 docs/06）
