@@ -9,7 +9,7 @@ import type { RarityLike } from './rarityLike';
 
 /**
  * 開發模式介面 window.__game（CLAUDE.md「開發模式介面」）。主網址（build:single:main）與正式 build 不含這個檔。
- * 已有：state／seed／paused／simTime／quality／audio／perf／screens／run／camera／offer／advance／render／spawn／setTime／killBoss／summonBoss／forcePickup／give／addXp／god／teleport。
+ * 已有：state／seed／paused／simTime／quality／audio／perf／screens／run／camera／offer／advance／render／spawn／setTime／killBoss／summonBoss／forcePickup／dropOrbs／give／addXp／god／teleport。
  * 還沒有（隨系統加入）：forceElement。
  */
 export interface DevContext {
@@ -24,6 +24,12 @@ export interface DevContext {
 function countVariant(r: NonNullable<Game['run']>, v: number): number {
   let n = 0;
   for (let i = 0; i < r.enemies.high; i++) if (r.enemies.alive[i] && r.enemies.variant[i] === v) n++;
+  return n;
+}
+
+function countOrbs(r: NonNullable<Game['run']>, pulled: 0 | 1): number {
+  let n = 0;
+  for (let i = 0; i < r.orbs.high; i++) if (r.orbs.alive[i] && r.orbs.pulled[i] === pulled) n++;
   return n;
 }
 
@@ -74,6 +80,9 @@ export function installDevApi(ctx: DevContext): void {
         portal: { ...r.portal },
         projectiles: r.projectiles.aliveCount,
         orbs: r.orbs.aliveCount,
+        /** 已經在飛向玩家的魂火（拾取範圍內或招魂鈴）／還躺在地上的（k1 用） */
+        orbsPulled: countOrbs(r, 1),
+        orbsLoose: countOrbs(r, 0),
         pending: r.pendingPicks,
         awaitingPick: r.awaitingPick,
         px: r.px,
@@ -152,6 +161,26 @@ export function installDevApi(ctx: DevContext): void {
       if (r) r.hp = Math.max(1, Math.min(r.maxHp, v));
     },
     /** 在玩家前方放一個補給品（D39）：dango／onigiri／sake／bell／drum／yukiBreath／koban */
+    /** 在玩家周圍 dist 公尺的圈上放 n 個魂火（k1：招魂鈴要把拾取範圍外的都吸過來）；回傳放了幾個 */
+    dropOrbs: (n: number, dist: number) => {
+      const r = run();
+      if (!r) return 0;
+      let k = 0;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        if (r.orbs.spawn(r.px + Math.cos(a) * dist, r.pz + Math.sin(a) * dist, 1)) k++;
+      }
+      return k;
+    },
+    /** 離玩家超過 dist 公尺、還躺在地上（沒在飛）的魂火數（k1） */
+    orbsLooseBeyond: (dist: number) => {
+      const r = run();
+      if (!r) return 0;
+      let n = 0;
+      const o = r.orbs;
+      for (let i = 0; i < o.high; i++) if (o.alive[i] && !o.pulled[i] && Math.hypot(o.x[i] - r.px, o.z[i] - r.pz) > dist) n++;
+      return n;
+    },
     forcePickup: (kind: string, dist?: number) => {
       const r = run();
       if (!r || !(PICKUP_KINDS as readonly string[]).includes(kind)) return false;

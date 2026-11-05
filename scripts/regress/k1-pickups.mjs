@@ -77,15 +77,24 @@ export async function run(browser) {
       });
 
       await step(`${vp.name} 招魂鈴：遠處的魂火全部飛過來`, async () => {
-        await page.evaluate(() => { const g = window.__game; g.spawn('villager', 20); g.advance(3); });
+        // 在很遠處（比鬼火瞄準距離 30 公尺＋碎火 6 公尺還遠）放一圈魂火。以前靠 3 秒內打倒人類掉出來：
+        // 掉在哪、掉幾個看運氣，撿鈴的時候可能一個都沒有，之後打倒的人類掉的新魂火又被算成「沒飛過來」
         await dismiss();
+        const FAR = 42;
+        const placed = await page.evaluate((d) => window.__game.dropOrbs(12, d), FAR + 8);
+        const far0 = await page.evaluate((d) => window.__game.orbsLooseBeyond(d), FAR);
+        expect(placed === 12 && far0 >= 12, `放不下魂火：放了 ${placed}、遠處 ${far0}`);
         const { note } = await pick('bell');
         expect(/撿到 招魂鈴：魂火全部飛過來/.test(note), `提示不對：${note}`);
-        for (let i = 0; i < 20 && (await r()).orbs > 0; i++) {
+        const far1 = await page.evaluate((d) => window.__game.orbsLooseBeyond(d), FAR);
+        expect(far1 === 0, `招魂鈴後遠處還有 ${far1} 個魂火沒動（${vp.name}）`);
+        // 飛過來的全部被收走（之後打倒的人類掉的新魂火不算：它們沒被鈴拉，orbsPulled 只數在飛的）
+        for (let i = 0; i < 24 && (await r()).orbsPulled > 0; i++) {
           await page.evaluate(() => window.__game.advance(0.5));
           await dismiss();
         }
-        expect((await r()).orbs === 0, `招魂鈴後還有魂火沒飛過來：${(await r()).orbs}`);
+        const s1 = await r();
+        expect(s1.orbsPulled === 0, `招魂鈴拉過來的魂火沒收到：還有 ${s1.orbsPulled} 個在飛（${vp.name}）`);
       });
 
       await step(`${vp.name} 雪女的吐息：人類凍住（不動）`, async () => {
