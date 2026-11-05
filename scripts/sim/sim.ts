@@ -116,6 +116,8 @@ interface Result {
   variant: string;
   summonedAt: number;
   /** 第一個聯動到「初」「極」的時間（秒；沒到 = -1） */
+  /** 撿到幾個補給品 */
+  pickups: number;
   synT1: number;
   synT2: number;
   /** 死在召喚之後幾秒（沒死或沒召喚 = -1） */
@@ -142,6 +144,8 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   let casts = 0;
   let summonedAt = -1;
   let synT1 = -1;
+  let pickups = 0;
+  bus.on('pickup', () => pickups++);
   let synT2 = -1;
   bus.on('synergy', (e) => {
     if (e.tier >= 1 && synT1 < 0) synT1 = totalTime + run.time;
@@ -191,8 +195,8 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
       mx = dx / d + Math.cos(t) * 0.4;
       mz = dz / d + Math.sin(t) * 0.4;
     } else {
-      // 附近沒有敵人：想用要素就走過去（站著按住），否則繞圈
-      const target = useElements ? nearestElement(run, strategy) : null;
+      // 附近沒有敵人：12 公尺內有補給品就去撿（D39），其次想用要素就走過去（站著按住），否則繞圈
+      const target = nearestPickup(run, 12) ?? (useElements ? nearestElement(run, strategy) : null);
       if (target) {
         [mx, mz] = steer(run, target.x, target.z);
       } else {
@@ -232,6 +236,7 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     variant: run.variant?.id ?? '-',
     casts,
     summonedAt,
+    pickups,
     synT1,
     synT2,
     diedAfterSummon: run.phase === 'ended' && run.result === 'death' && summonedAt >= 0 && run.director.bossSpawned ? run.time - summonedAt : -1,
@@ -308,6 +313,22 @@ function nearestChest(run: Run): { x: number; z: number } | null {
   return best;
 }
 
+/** within 公尺內最近的補給品 */
+function nearestPickup(run: Run, within: number): { x: number; z: number } | null {
+  const p = run.pickups;
+  let best: { x: number; z: number } | null = null;
+  let bd = within;
+  for (let i = 0; i < p.capacity; i++) {
+    if (!p.alive[i]) continue;
+    const d = Math.hypot(p.x[i] - run.px, p.z[i] - run.pz);
+    if (d < bd) {
+      bd = d;
+      best = { x: p.x[i], z: p.z[i] };
+    }
+  }
+  return best;
+}
+
 function nearestElement(run: Run, strategy: string): { x: number; z: number } | null {
   let best: { x: number; z: number } | null = null;
   let bd = 40;
@@ -371,6 +392,7 @@ function summarize(rs: Result[]): string {
     `用掉要素 ${avg(rs.map((r) => r.elementsUsed)).toFixed(1)}`,
     `融合大招 ${avg(rs.map((r) => r.fused)).toFixed(1)} 個、發動 ${avg(rs.map((r) => r.casts)).toFixed(1)} 次`,
     `變化 ${[...new Set(rs.map((r) => r.variant))].join('/')}`,
+    `補給品 ${avg(rs.map((r) => r.pickups)).toFixed(1)} 個`,
     `聯動初 ${((rs.filter((r) => r.synT1 >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.synT1 >= 0).map((r) => r.synT1), 50)?.toFixed(0) ?? '-'} 秒）、極 ${((rs.filter((r) => r.synT2 >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.synT2 >= 0).map((r) => r.synT2), 50)?.toFixed(0) ?? '-'} 秒）`,
     `死在召喚後 ${rs.filter((r) => r.diedAfterSummon >= 0).length} 局（中位 ${pct(rs.filter((r) => r.diedAfterSummon >= 0).map((r) => r.diedAfterSummon), 50)?.toFixed(0) ?? '-'} 秒）`,
     `召喚頭目 ${((rs.filter((r) => r.summonedAt >= 0).length / rs.length) * 100).toFixed(0)}%（平均第 ${avg(rs.filter((r) => r.summonedAt >= 0).map((r) => r.summonedAt)).toFixed(0)} 秒）`,

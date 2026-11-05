@@ -10,6 +10,7 @@ import { buildWorldView, type WorldView } from '../world/worldView';
 import { writeMatrix, setHugeBounds } from './instancedLayer';
 import { DamageNumbers } from './damageNumbers';
 import { ElementsView } from './elementsView';
+import { PickupsView } from './pickupsView';
 import { UltFx } from './ultFx';
 import { VariantFx } from './variantFx';
 import type { Renderer } from '../core/renderer';
@@ -38,6 +39,7 @@ export class RunView {
   private readonly aura: THREE.Mesh;
   private readonly numbers: DamageNumbers;
   private readonly elementsView: ElementsView;
+  private readonly pickupsView: PickupsView;
   private readonly ultFx: UltFx;
   private readonly variantFx: VariantFx;
   private readonly portal: THREE.Group;
@@ -139,6 +141,8 @@ export class RunView {
 
     this.elementsView = new ElementsView(run.elements, map);
     this.group.add(this.elementsView.group);
+    this.pickupsView = new PickupsView(run);
+    this.group.add(this.pickupsView.group);
     this.ultFx = new UltFx(run);
     this.group.add(this.ultFx.group);
     this.variantFx = new VariantFx(run);
@@ -207,6 +211,7 @@ export class RunView {
     }
 
     this.elementsView.update(t);
+    this.pickupsView.update(t);
     this.ultFx.update();
     this.variantFx.update(t);
     this.timeUniform.value = t % TWO_PI;
@@ -276,6 +281,7 @@ export class RunView {
   dispose(): void {
     this.numbers.dispose();
     this.elementsView.dispose();
+    this.pickupsView.dispose();
     this.ultFx.dispose();
     this.variantFx.dispose();
     this.player.dispose();

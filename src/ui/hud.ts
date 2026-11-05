@@ -7,6 +7,7 @@ import type { StatId } from '../data/stats';
 import type { ElementSlot } from '../systems/elements';
 import { ULT } from '../data/ultimates';
 import { STAGE } from '../data/stage';
+import { PICKUPS } from '../data/pickups';
 import { BARRIER, JIZO, JIZO_ARMOR_SECONDS, OFFERING } from '../data/elements';
 
 
@@ -159,6 +160,11 @@ export function buildHud(parent: HTMLElement): Hud {
         synText = t('hud.synergy', { name: synergyName(sy.id, sy.tier), desc: synergyDesc(sy.id, sy.tier) });
       }
       // 神籤的結果改由結果卡顯示（D36），這裡不再重複
+      const pk = run.lastPickup;
+      if (pk && run.clock - pk.at < 3 && pk.at >= synAt) {
+        synAt = pk.at;
+        synText = t('hud.pickup', { name: t(`pickup.${pk.kind}` as I18nKey), fx: t(`pickup.fx.${PICKUPS[pk.kind].type}` as I18nKey, { v: Math.round(pk.v) }) });
+      }
       const rd = run.lastReady;
       if (rd && run.clock - rd.at < 6 && rd.at >= synAt && !run.fused.includes(rd.id)) {
         synAt = rd.at;

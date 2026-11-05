@@ -10,6 +10,8 @@ export const palette = {
   },
   human: { earth: '#a58563', slate: '#6b7a8f', robe: '#2b2b30', robeAccent: '#d88a3a' },
   rarity: { common: '#e8e6e0', rare: '#5ec4e8', epic: '#a678e0', legend: '#ffb347' },
+  /** 補給品（D39）：糰子三色、飯糰、海苔、御神酒瓶與紅紋、金（鈴、小判、鼓框）、鼓身朱紅、雪女的吐息、地上光圈（回復綠、法器金、冰藍） */
+  pickup: { dangoPink: '#f6a6bf', dangoWhite: '#f6f1e6', dangoGreen: '#a6d58a', stick: '#c99a64', rice: '#fbf8f0', nori: '#25382c', bottle: '#f3efe4', red: '#d8453a', gold: '#ffcf5a', drum: '#c8402f', yuki: '#bfe8ff', glowHeal: '#8ff0a0', glowTool: '#ffd27a', glowIce: '#9fdcff' },
   /** 狐面商的兩個圈（紅圈、藍圈；HUD 文字也叫紅圈／藍圈）與面具 */
   fox: { ringA: '#ff6f5a', ringB: '#5aaeff', mask: '#f6f1e6', mark: '#d8453a', robe: '#3d3f72' },
   /** 地形頂點色（docs/03 第 2 節各地形的外觀） */

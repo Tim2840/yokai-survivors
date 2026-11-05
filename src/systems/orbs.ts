@@ -49,6 +49,15 @@ export class Orbs {
     return true;
   }
 
+  /** 招魂鈴（D39）：場上所有魂火都被吸過來（不管距離） */
+  vacuum(): void {
+    for (let i = 0; i < this.high; i++) {
+      if (!this.alive[i] || this.pulled[i]) continue;
+      this.pulled[i] = 1;
+      this.speed[i] = PROGRESSION.orbMagnetSpeed * 0.5;
+    }
+  }
+
   /** 前進一步；回傳這一步被拾取的總價值 */
   update(dt: number, px: number, pz: number, pickupRadius: number): number {
     let gained = 0;

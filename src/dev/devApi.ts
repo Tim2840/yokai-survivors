@@ -1,4 +1,5 @@
 import type { ElementKind } from '../data/elements';
+import { PICKUP_KINDS, type PickupKind } from '../data/pickups';
 import type { AudioEngine } from '../core/audio';
 import type { FixedLoop } from '../core/loop';
 import type { Renderer } from '../core/renderer';
@@ -8,7 +9,7 @@ import type { RarityLike } from './rarityLike';
 
 /**
  * 開發模式介面 window.__game（CLAUDE.md「開發模式介面」）。主網址（build:single:main）與正式 build 不含這個檔。
- * 已有：state／seed／paused／simTime／quality／audio／perf／screens／run／camera／offer／advance／render／spawn／setTime／killBoss／summonBoss／give／addXp／god／teleport。
+ * 已有：state／seed／paused／simTime／quality／audio／perf／screens／run／camera／offer／advance／render／spawn／setTime／killBoss／summonBoss／forcePickup／give／addXp／god／teleport。
  * 還沒有（隨系統加入）：forceElement。
  */
 export interface DevContext {
@@ -88,6 +89,8 @@ export function installDevApi(ctx: DevContext): void {
         curse: { ...r.curse },
         ult: { fused: [...r.fused], fusable: r.fusable, charge: r.ultCharge, ready: r.ultReady, counts: Object.fromEntries(r.cardCounts), volleyBonus: r.volleyBonus },
         difficulty: r.difficulty,
+        pickups: Array.from({ length: r.pickups.capacity }, (_, i) => i).filter((i) => r.pickups.alive[i]).map((i) => ({ kind: PICKUP_KINDS[r.pickups.kind[i]], x: r.pickups.x[i], z: r.pickups.z[i] })),
+        frozen: r.frozenEnemies,
         summon: (() => {
           const s = r.elements.summonSlot;
           return { stage: r.summonStage, bossSpawned: r.director.bossSpawned, altar: s ? { x: s.x, z: s.z, announce: s.announce } : null };
@@ -143,6 +146,18 @@ export function installDevApi(ctx: DevContext): void {
     /** 頭目現在就倒下（走正常的擊殺流程，傳送門會開） */
     killBoss: () => run()?.devKillBoss() ?? false,
     summonBoss: () => run()?.devSummonBoss() ?? false,
+    /** 把生命設成 v（測回血用） */
+    setHp: (v: number) => {
+      const r = run();
+      if (r) r.hp = Math.max(1, Math.min(r.maxHp, v));
+    },
+    /** 在玩家前方放一個補給品（D39）：dango／onigiri／sake／bell／drum／yukiBreath／koban */
+    forcePickup: (kind: string, dist?: number) => {
+      const r = run();
+      if (!r || !(PICKUP_KINDS as readonly string[]).includes(kind)) return false;
+      r.devPickup(kind as PickupKind, dist);
+      return true;
+    },
     give: (cardId: string, rarity: RarityLike) => run()?.give(cardId, rarity),
     set god(v: boolean) {
       const r = run();

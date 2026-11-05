@@ -39,6 +39,8 @@ export interface GameEvents {
   synergy: { id: string; tier: number };
   elementSpawn: { kind: string; rarity: string };
   elementUsed: { kind: string; rarity: string };
+  /** 撿到補給品（D39） */
+  pickup: { kind: string };
   /** 要素結果卡要顯示（D36） */
   elementResult: { kind: string };
   runEnd: { result: 'death' | 'victory' | 'abandon'; stage: number; kills: number; level: number; time: number; merit: number };

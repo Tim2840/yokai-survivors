@@ -16,6 +16,8 @@ import { Rng } from '../lib/random';
 import { TerrainMap, WALL_TAN } from '../world/terrainMap';
 import { PlayerReach } from '../systems/reach';
 import type { ElementResult } from '../systems/elementResult';
+import { Pickups } from '../systems/pickups';
+import { PICKUPS, PICKUP_KINDS, PICKUP_RULES, type PickupKind } from '../data/pickups';
 import { FlowField } from '../systems/flowField';
 import { Enemies, kindIndex } from '../systems/enemies';
 import { Projectiles } from '../systems/projectiles';
@@ -86,6 +88,13 @@ export class Run {
   private readonly rngCards: Rng;
   private readonly rngSpawn: Rng;
   private readonly rngElements: Rng;
+  private readonly rngPickups: Rng;
+  /** 補給品（D39） */
+  readonly pickups: Pickups;
+  /** 雪女的吐息：人類凍住到這個時間（clock）；最近一次撿到的補給品（HUD 提示）、最近一次雷鼓（畫面效果） */
+  freezeUntil = 0;
+  lastPickup: { kind: PickupKind; at: number; v: number } | null = null;
+  lastThunder: { at: number; x: number; z: number; r: number } | null = null;
   private readonly bus: EventBus;
   private readonly opts: RunOptions;
   private readonly maxEnemies: number;
@@ -218,6 +227,8 @@ export class Run {
     this.rngCards = new Rng(subSeed(this.seed, 2));
     this.rngSpawn = new Rng(subSeed(this.seed, 3));
     this.rngElements = new Rng(subSeed(this.seed, 4));
+    this.rngPickups = new Rng(subSeed(this.seed, 5));
+    this.pickups = new Pickups(this.rngPickups);
     this.dealer = new CardDealer(this.rngCards, ITEM_POOL, RARITIES_UNLOCKED_M1);
     // 主武器從 1 級開始（佔的不是道具欄位）
     this.cardCounts.set(this.weaponItemId, 1);
@@ -328,6 +339,8 @@ export class Run {
     }, this.elementCarry);
     this.projectiles.reset();
     this.orbs.reset();
+    this.pickups?.reset();
+    this.freezeUntil = 0;
     const s = this.map.def.playerStart;
     this.px = s.x;
     this.pz = s.z;
@@ -470,6 +483,8 @@ export class Run {
     this.zonesStep(dt);
     this.projectiles.update(dt, this.yokai.weapon, this.enemies, s.area, this.onProjectileHit);
     const gained = this.orbs.update(dt, this.px, this.pz, s.pickup);
+    const picked = this.pickups.update(dt, this.px, this.pz, s.pickup);
+    for (let k = 0; k < picked; k++) this.applyPickup(PICKUP_KINDS[this.pickups.got[k]]);
     if (gained > 0) this.addXp(gained);
 
     this.elements.update(dt, this.time, this.director.duration, this.director.virtualWave(), s.luck, this.px, this.py, this.pz);
@@ -481,7 +496,7 @@ export class Run {
     }
     this.director.extraMult = this.elements.spawnMult * (1 + this.curse.spawnRate) * (1 + this.difficulty * DIFFICULTY.spawn);
     this.director.hpCurse = 1 + this.curse.enemyHp;
-    this.enemies.speedMult = 1 + this.curse.enemySpeed;
+    this.enemies.speedMult = this.frozenEnemies ? 0 : 1 + this.curse.enemySpeed;
     this.director.update(dt, this.px, this.pz, this.night, this.bossDefeated);
 
     if (this.hp <= 0 && !this.god) {
@@ -602,7 +617,7 @@ export class Run {
       if (dx * dx + dz * dz > r * r) continue;
       // 跳起來越過人群：腳高於敵人腳底一定高度就不會被這隻的接觸傷害
       if (this.py - this.map.heightAt(e.x[i], e.z[i]) > MOVE.contactClear * e.scale[i]) continue;
-      if (this.invul > 0 || this.god) continue;
+      if (this.invul > 0 || this.god || this.frozenEnemies) continue;
       e.contactCd[i] = COMBAT.contactCooldown;
       if (this.rngCombat.next() < this.stats.value.dodge) continue;
       const dmg = e.damage[i] * (1 + this.curse.enemyDamage) * (1 + this.difficulty * DIFFICULTY.damage) * armorMult(this.stats.value.armor);
@@ -703,6 +718,68 @@ export class Run {
       this.reachableNear(x, z);
       this.elements.dropChest(this.spot[0], this.spot[1], STAGE.drops.eliteChest);
     }
+    this.dropPickups(x, z, isBoss ? 'boss' : isElite ? 'elite' : 'normal');
+  }
+
+  /** 補給品掉落（D39）：一般人類機率（幸運加成）、精英 1 個、頭目 bossDrops 個；精英與頭目的放在玩家走得到的地方 */
+  private dropPickups(x: number, z: number, source: 'normal' | 'elite' | 'boss'): void {
+    const R = PICKUP_RULES;
+    if (source === 'normal') {
+      if (this.rngPickups.next() >= R.normalChance * (1 + Math.max(0, this.stats.value.luck) / 100)) return;
+      this.pickups.spawn(this.pickups.roll('normal'), x, z);
+      return;
+    }
+    const n = source === 'boss' ? R.bossDrops : 1;
+    for (let k = 0; k < n; k++) {
+      this.reachableNear(x + (k - (n - 1) / 2) * R.spread, z);
+      this.pickups.spawn(this.pickups.roll(source), this.spot[0], this.spot[1]);
+    }
+  }
+
+  /** 人類被雪女的吐息凍住中 */
+  get frozenEnemies(): boolean {
+    return this.clock < this.freezeUntil;
+  }
+
+  /** 撿到補給品：套用效果、HUD 提示、發事件（D39） */
+  private applyPickup(kind: PickupKind): void {
+    const e = PICKUPS[kind];
+    let v = 0;
+    if (e.type === 'heal') {
+      const before = this.hp;
+      this.hp = Math.min(this.maxHp, this.hp + this.maxHp * e.frac);
+      v = this.hp - before;
+    } else if (e.type === 'vacuum') {
+      v = this.orbs.aliveCount;
+      this.orbs.vacuum();
+    } else if (e.type === 'thunder') {
+      if (this.ultNear.length < this.enemies.capacity) this.ultNear = new Int32Array(this.enemies.capacity);
+      const en = this.enemies;
+      const n = en.within(this.px, this.pz, e.radius, this.ultNear);
+      for (let k = 0; k < n; k++) {
+        const i = this.ultNear[k];
+        if (!en.alive[i]) continue;
+        const dmg = en.variant[i] === 0 ? en.hp[i] + 1 : en.maxHp[i] * e.bossFrac;
+        if (en.hurt(i, dmg, 0, 0, 0)) {
+          this.onKill(i);
+          v++;
+        }
+      }
+      this.lastThunder = { at: this.clock, x: this.px, z: this.pz, r: e.radius };
+    } else if (e.type === 'freeze') {
+      this.freezeUntil = this.clock + e.seconds;
+      v = e.seconds;
+    } else {
+      this.bonusMerit += e.amount;
+      v = e.amount;
+    }
+    this.lastPickup = { kind, at: this.clock, v };
+    this.bus.emit('pickup', { kind });
+  }
+
+  /** 開發與測試：在玩家前方 dist 公尺放一個補給品 */
+  devPickup(kind: PickupKind, dist = 2.5): void {
+    this.pickups.spawn(kind, this.px + dist, this.pz);
   }
 
   private readonly spot = new Float32Array(2);
