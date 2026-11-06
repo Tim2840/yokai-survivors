@@ -2,7 +2,6 @@ import { t } from '../i18n';
 import type { I18nKey } from '../i18n/zh-TW';
 import { CARD_FORMAT, type StatId } from '../data/stats';
 import { setWeaponTextFormatter, type BuildSummary } from '../game/buildSummary';
-import { SYNERGIES, synergyHints } from '../data/synergies';
 import { isUltCard, ultHints, ultOfCard } from '../data/ultimates';
 import { DIFFICULTY } from '../data/difficulty';
 import { TECH_CARD_PREFIX, TECH_KEEP, TECH_LEVELS, TECH_SWAP_PREFIX, isTechCard, techById, techMix } from '../data/techniques';
@@ -83,27 +82,6 @@ export function weaponLevelText(step: WeaponLevel): string {
 }
 
 setWeaponTextFormatter((s) => weaponLevelText(s) || t('item.w.none'));
-
-/** 聯動某一段的效果文字（從資料組出來，數字不寫死在文字裡） */
-export function synergyDesc(id: string, tier: number): string {
-  const sy = SYNERGIES.find((x) => x.id === id);
-  if (!sy || tier < 1) return '';
-  const e = sy.tiers[tier - 1].effect;
-  const parts: string[] = [];
-  if (e.splashRatio) parts.push(t('syn.fx.splashRatio', { v: num(e.splashRatio * 100, 0) }));
-  if (e.splashMult) parts.push(t('syn.fx.splashMult', { v: num(e.splashMult, 2) }));
-  if (e.shardCount) parts.push(t('syn.fx.shardCount', { v: num(e.shardCount) }));
-  if (e.shardDamage) parts.push(t('syn.fx.shardDamage', { v: num(e.shardDamage * 100, 0) }));
-  if (e.pierce) parts.push(t('syn.fx.pierce', { v: num(e.pierce) }));
-  if (e.volley) parts.push(t('syn.fx.volley', { v: num(e.volley) }));
-  if (e.auraMult) parts.push(t('syn.fx.auraMult', { v: num(e.auraMult, 2) }));
-  return parts.join('、');
-}
-
-/** 聯動名稱加段數：「連環爆・初」 */
-export function synergyName(id: string, tier: number): string {
-  return t('synergy.withTier', { name: t(`synergy.${id}` as I18nKey), tier: t(`synergy.tier${tier}` as I18nKey) });
-}
 
 /** 一張卡的名稱、等級變化與「這一級加多少」（levels = 目前的法具等級） */
 export function describeCard(o: CardOffer, levels: ReadonlyMap<string, number> = new Map()): { name: string; desc: string; level: string; isNew: boolean } {
@@ -214,20 +192,12 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
         b.dataset.card = c.cardId;
         b.dataset.rarity = c.rarity;
         b.dataset.index = String(i);
-        // 這張卡能把哪個聯動推到下一段（D37）：選了就到 → 「選了就觸發」；還差 → 列出下一段每件道具的等級進度
-        const hints = synergyHints(c.cardId, ult.counts)
-          .map((h) => {
-            const name = synergyName(h.id, h.nextTier);
-            const items = h.progress.map((p) => t('card.syn.item', { card: t(`card.${p.card}` as I18nKey), have: p.have, need: p.need })).join('、');
-            return `<span class="csyn${h.completes ? ' ready' : ''}">${h.completes ? t('card.syn.ready', { name }) : t('card.syn.need', { name, items })}</span>`;
-          })
-          .join('');
         // 大招配方：這張卡是哪個大招的材料、目前進度；選了就湊齊的特別標出
         const ultLines = ultHints(c.cardId, ult.yokai, ult.counts, ult.fused)
           .map((h) => `<span class="csyn ulthint${h.completes ? ' ready' : ''}">${h.completes ? t('card.ult.completes', { name: t(`ult.${h.id}` as I18nKey) }) : t('card.ult.need', { name: t(`ult.${h.id}` as I18nKey), have: h.have, need: h.need })}</span>`)
           .join('');
         b.innerHTML = `<span class="shape ${SHAPES[c.rarity]}" aria-hidden="true"></span>
-          <span class="rname">${kind === 'weapon' ? t('card.weaponTag') : kind === 'fallback' ? '' : cardById(c.cardId).rarityScales ? t(`rarity.${c.rarity}` as I18nKey) : ''}</span><b>${d.name}</b><span class="clv">${d.level}</span><span class="cdesc">${d.desc}</span>${hints}${ultLines}`;
+          <span class="rname">${kind === 'weapon' ? t('card.weaponTag') : kind === 'fallback' ? '' : cardById(c.cardId).rarityScales ? t(`rarity.${c.rarity}` as I18nKey) : ''}</span><b>${d.name}</b><span class="clv">${d.level}</span><span class="cdesc">${d.desc}</span>${ultLines}`;
         b.addEventListener('click', () => onPick(i));
         cardsEl.appendChild(b);
       });
@@ -384,7 +354,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
     parent,
     'pause',
     `<div class="panel pause-panel"><h2>${t('pause.title')}</h2><p id="pause-status"></p>
-      <div class="sum"><section class="sum-col"><h3>${t('pause.cards')} <span id="sum-slots"></span></h3><ul class="sum-cards" id="sum-cards"></ul><div id="sum-syn"></div><div id="sum-ult"></div></section>
+      <div class="sum"><section class="sum-col"><h3>${t('pause.cards')} <span id="sum-slots"></span></h3><ul class="sum-cards" id="sum-cards"></ul><div id="sum-ult"></div></section>
       <section class="sum-col"><h3>${t('pause.abilities')}</h3><dl class="sum-stats" id="sum-stats"></dl><div id="sum-curse"></div></section></div>
       <div class="row">${btn('btn-pause-quit', 'pause.quit', 'secondary')}${btn('btn-pause-resume', 'pause.resume')}</div></div>`,
   );
@@ -405,15 +375,6 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
         li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), lv: c.level, max: c.maxLevel })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}${c.kind === 'weapon' && sum.techs.length > 0 ? `<br>${t('pause.techs', { list: sum.techs.map((x) => (x.level > 1 ? `${techName(x.id)} Lv${x.level}` : techName(x.id))).join('、') })}` : ''}</em>`;
         cards.appendChild(li);
       }
-      const syn = q('sum-syn');
-      syn.innerHTML = sum.synergies.length
-        ? `<h3>${t('pause.synergies')}</h3><ul class="sum-syn">${sum.synergies
-            .map((s) => {
-              const next = s.next ? `<br><span class="sum-next">${t('pause.synNext', { tier: t(`synergy.tier${s.tier + 1}` as I18nKey), items: s.next.map((p) => t('card.syn.item', { card: t(`card.${p.card}` as I18nKey), have: p.have, need: p.need })).join('、') })}</span>` : '';
-              return `<li data-syn="${s.id}" data-tier="${s.tier}"><b>${synergyName(s.id, s.tier)}</b> <em>${synergyDesc(s.id, s.tier)}</em>${next}</li>`;
-            })
-            .join('')}</ul>`
-        : '';
       const ult = q('sum-ult');
       ult.innerHTML = sum.ultimates.length
         ? `<h3>${t('pause.ultimates')}</h3><ul class="sum-ult">${sum.ultimates

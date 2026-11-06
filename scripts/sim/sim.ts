@@ -131,7 +131,6 @@ interface Result {
   casts: number;
   variant: string;
   summonedAt: number;
-  /** 第一個聯動到「初」「極」的時間（秒；沒到 = -1） */
   /** 撿到幾個補給品 */
   pickups: number;
   /** 主武器滿級（8 級）的時間（秒；沒到 = -1）、結束時主武器等級、技法等級總和、場上敵人數（每秒取樣的平均與最大） */
@@ -141,8 +140,6 @@ interface Result {
   techLvSum: number;
   aliveAvg: number;
   alivePeak: number;
-  synT1: number;
-  synT2: number;
   /** 死在召喚之後幾秒（沒死或沒召喚 = -1） */
   diedAfterSummon: number;
 }
@@ -179,7 +176,6 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   let guard = 0;
   let casts = 0;
   let summonedAt = -1;
-  let synT1 = -1;
   let pickups = 0;
   let weaponMaxAt = -1;
   let weapon4At = -1;
@@ -188,11 +184,6 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   let alivePeak = 0;
   let sampleT = 0;
   bus.on('pickup', () => pickups++);
-  let synT2 = -1;
-  bus.on('synergy', (e) => {
-    if (e.tier >= 1 && synT1 < 0) synT1 = totalTime + run.time;
-    if (e.tier >= 2 && synT2 < 0) synT2 = totalTime + run.time;
-  });
   bus.on('summonBoss', () => { if (summonedAt < 0) summonedAt = run.time; });
   const scratch = new Int32Array(512);
   while (run.phase !== 'ended' && guard++ < 5e7) {
@@ -298,8 +289,6 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     techLvSum: run.tech.levels.reduce((a, b) => a + b, 0),
     aliveAvg: aliveN ? aliveSum / aliveN : 0,
     alivePeak,
-    synT1,
-    synT2,
     diedAfterSummon: run.phase === 'ended' && run.result === 'death' && summonedAt >= 0 && run.director.bossSpawned ? run.time - summonedAt : -1,
     curseTotal: run.curse.enemyHp + run.curse.enemySpeed + run.curse.enemyDamage + run.curse.spawnRate,
   };
@@ -457,7 +446,6 @@ function summarize(rs: Result[]): string {
     `主武器 4 級中位第 ${pct(rs.filter((r) => r.weapon4At >= 0).map((r) => r.weapon4At), 50)?.toFixed(0) ?? '-'} 秒、滿級 ${((rs.filter((r) => r.weaponMaxAt >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.weaponMaxAt >= 0).map((r) => r.weaponMaxAt), 50)?.toFixed(0) ?? '-'} 秒）、結束時平均 ${avg(rs.map((r) => r.weaponLv)).toFixed(1)} 級`,
     `技法等級合計 ${avg(rs.map((r) => r.techLvSum)).toFixed(1)}`,
     `場上敵人 平均 ${avg(rs.map((r) => r.aliveAvg)).toFixed(0)}、最多 ${avg(rs.map((r) => r.alivePeak)).toFixed(0)}`,
-    `聯動初 ${((rs.filter((r) => r.synT1 >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.synT1 >= 0).map((r) => r.synT1), 50)?.toFixed(0) ?? '-'} 秒）、極 ${((rs.filter((r) => r.synT2 >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.synT2 >= 0).map((r) => r.synT2), 50)?.toFixed(0) ?? '-'} 秒）`,
     `死在召喚後 ${rs.filter((r) => r.diedAfterSummon >= 0).length} 局（中位 ${pct(rs.filter((r) => r.diedAfterSummon >= 0).map((r) => r.diedAfterSummon), 50)?.toFixed(0) ?? '-'} 秒）`,
     `召喚頭目 ${((rs.filter((r) => r.summonedAt >= 0).length / rs.length) * 100).toFixed(0)}%（平均第 ${avg(rs.filter((r) => r.summonedAt >= 0).map((r) => r.summonedAt)).toFixed(0)} 秒）`,
   ].join('；');

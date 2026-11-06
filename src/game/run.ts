@@ -30,7 +30,6 @@ import { CardDealer, cardById, slotsUsed, type CardOffer } from '../systems/card
 import { StageDirector } from '../systems/stageDirector';
 import { Elements, type ElementCarry } from '../systems/elements';
 import { computeMerit } from '../systems/merit';
-import { SYNERGIES, synergyTierOf } from '../data/synergies';
 import { ULT, ULT_RECIPES, ULT_CARD_PREFIX, isUltCard, ultOfCard, recipeDone, type UltEffect } from '../data/ultimates';
 import { ALTAR_CURSE_IDS, type CurseId } from '../data/altar';
 
@@ -146,7 +145,7 @@ export class Run {
   /** 武器卡累積：多發射的顆數、濺射半徑（公尺）。一開始都是 0（領頭只有一顆鬼火、沒有濺射） */
   volleyBonus = 0;
   splashBonus = 0;
-  /** 碎火（D43）：平均每次命中多飛出幾片（道具＋聯動） */
+  /** 碎火（D43）：平均每次命中多飛出幾片 */
   shardBonus = 0;
   pierceBonus = 0;
   /** 主武器升級帶來的：基礎傷害加值、冷卻倍率（< 1 = 變快） */
@@ -171,13 +170,8 @@ export class Run {
   get weaponLevel(): number {
     return this.cardCounts.get(this.weaponItemId) ?? 1;
   }
-  /** 拿過的卡 id、已觸發的聯動（D28）與目前的段數（D37：1 = 初、2 = 極），與聯動帶來的加成 */
+  /** 拿過的卡 id */
   readonly ownedCards = new Set<string>();
-  readonly activeSynergies: string[] = [];
-  readonly synergyTiers = new Map<string, number>();
-  readonly syn = { splashRatio: 0, splashMult: 1, pierce: 0, volley: 0, auraMult: 1, shardCount: 0, shardDamage: 0 };
-  /** 最近一次聯動觸發或升段的時間（模擬累計秒）、id 與段數，HUD 顯示提示用 */
-  lastSynergy: { id: string; tier: number; at: number } | null = null;
   /** 神籤的功德獎勵累計、最近一次神籤結果（HUD 提示用） */
   bonusMerit = 0;
   lastOmikuji: { id: string; at: number } | null = null;
@@ -493,7 +487,7 @@ export class Run {
 
     this.flow.update(this.px, this.pz);
     const aura = this.yokai.aura;
-    this.enemies.update(dt, this.px, this.pz, this.flow, aura.radius * s.area * this.syn.auraMult, aura.slow);
+    this.enemies.update(dt, this.px, this.pz, this.flow, aura.radius * s.area, aura.slow);
     this.contactDamage();
     this.weapon(dt);
     this.tech.update(dt);
@@ -697,7 +691,7 @@ export class Run {
 
   /** 每顆鬼火的穿透次數：小數 = 機率多穿一隻 */
   private rollPierce(): number {
-    const p = this.pierceBonus + this.syn.pierce + this.tech.pierceExtra;
+    const p = this.pierceBonus + this.tech.pierceExtra;
     const base = Math.floor(p);
     return base + (this.rngCombat.next() < p - base ? 1 : 0);
   }
@@ -720,15 +714,15 @@ export class Run {
       const exact = this.shardsExact;
       if (exact > 0) {
         const n = Math.min(SHARDS.max, Math.floor(exact) + (this.rngCombat.next() < exact - Math.floor(exact) ? 1 : 0));
-        this.emitShards(hx, hz, e, dmg * (SHARDS.damage + this.syn.shardDamage), n, 1);
+        this.emitShards(hx, hz, e, dmg * SHARDS.damage, n, 1);
       }
     } else if (gen === 1 && this.tech.act.kitsunebi?.split && this.shardsExact > 0) {
       this.emitShards(hx, hz, e, dmg, this.tech.act.kitsunebi.split.reSplit, 2);
     }
-    const splashR = ((tuning.splash > 0 ? tuning.splash : w.splashRadius) + this.splashBonus) * this.syn.splashMult;
+    const splashR = ((tuning.splash > 0 ? tuning.splash : w.splashRadius) + this.splashBonus);
     if (splashR > 0) {
       const n = this.enemies.within(hx, hz, splashR * this.stats.value.area, this.splashNear);
-      const sd = dmg * ((w.splashRatio > 0 ? w.splashRatio : 0.6) + this.syn.splashRatio);
+      const sd = dmg * ((w.splashRatio > 0 ? w.splashRatio : 0.6));
       for (let k = 0; k < n; k++) {
         const o = this.splashNear[k];
         if (o === e || !this.enemies.alive[o]) continue;
@@ -1099,30 +1093,7 @@ export class Run {
       if (this.maxHp > before) this.hp += this.maxHp - before;
       this.hp = Math.min(this.hp, this.maxHp);
     }
-    this.checkSynergies();
     this.checkFusion();
-  }
-
-  /** 拿到卡之後檢查聯動（D37）：兩件道具都練到門檻 → 觸發「初」；再練到「極」→ 升段。只補這一段和上一段的差額 */
-  private checkSynergies(): void {
-    for (const sy of SYNERGIES) {
-      const before = this.synergyTiers.get(sy.id) ?? 0;
-      const now = synergyTierOf(sy, this.cardCounts);
-      if (now <= before) continue;
-      const prev = before > 0 ? sy.tiers[before - 1].effect : {};
-      const e = sy.tiers[now - 1].effect;
-      this.syn.splashRatio += (e.splashRatio ?? 0) - (prev.splashRatio ?? 0);
-      this.syn.splashMult *= (e.splashMult ?? 1) / (prev.splashMult ?? 1);
-      this.syn.pierce += (e.pierce ?? 0) - (prev.pierce ?? 0);
-      this.syn.volley += (e.volley ?? 0) - (prev.volley ?? 0);
-      this.syn.auraMult *= (e.auraMult ?? 1) / (prev.auraMult ?? 1);
-      this.syn.shardCount += (e.shardCount ?? 0) - (prev.shardCount ?? 0);
-      this.syn.shardDamage += (e.shardDamage ?? 0) - (prev.shardDamage ?? 0);
-      this.synergyTiers.set(sy.id, now);
-      if (before === 0) this.activeSynergies.push(sy.id);
-      this.lastSynergy = { id: sy.id, tier: now, at: this.clock };
-      this.bus.emit('synergy', { id: sy.id, tier: now });
-    }
   }
 
   /** 拿到卡之後檢查大招配方：湊齊了就提示「開寶箱融合」（進化式，D30 第二步；不再自動融合） */
@@ -1246,7 +1217,7 @@ export class Run {
   /** 現在一次發射幾顆（含小數：小數 = 機率多一顆） */
   get volleyExact(): number {
     const w = this.yokai.weapon;
-    return (tuning.volley > 0 ? tuning.volley : w.volley) + this.volleyBonus + this.syn.volley + this.frenzyVolley;
+    return (tuning.volley > 0 ? tuning.volley : w.volley) + this.volleyBonus + this.frenzyVolley;
   }
 
   /** 燈籠環：繞身鬼火幾顆、半徑（公尺）；環內護身打到的累計次數；燃燒地數（外觀、測試用） */
@@ -1269,9 +1240,9 @@ export class Run {
     return (this.yokai.weapon.damage + this.weaponDamageBonus) * s.power * tuning.damageScale * (crit ? s.critDmg : 1);
   }
 
-  /** 平均每次命中的碎火片數（道具＋聯動；狐火分裂時有碎火就 +shardBonus） */
+  /** 平均每次命中的碎火片數（狐火分裂時有碎火就 +shardBonus） */
   get shardsExact(): number {
-    const base = this.shardBonus + this.syn.shardCount;
+    const base = this.shardBonus;
     if (base <= 0) return 0;
     return base + (this.tech.act.kitsunebi?.split?.shardBonus ?? 0);
   }

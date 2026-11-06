@@ -41,8 +41,6 @@ export interface GameEvents {
   /** 大招配方湊齊（等著開寶箱融合） */
   fusionReady: { id: string };
   ultimate: { ids: string[] };
-  /** 觸發了一個卡片聯動（低頻） */
-  synergy: { id: string; tier: number };
   elementSpawn: { kind: string; rarity: string };
   elementUsed: { kind: string; rarity: string };
   /** 撿到補給品（D39） */

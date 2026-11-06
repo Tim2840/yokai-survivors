@@ -1,5 +1,5 @@
 import { t } from '../i18n';
-import { describeCard, synergyDesc, synergyName } from './overlays';
+import { describeCard } from './overlays';
 import type { I18nKey } from '../i18n/zh-TW';
 import type { Run } from '../game/run';
 import type { CurseId } from '../data/altar';
@@ -163,15 +163,9 @@ export function buildHud(parent: HTMLElement): Hud {
         lastPortal = -1;
         portalBox.classList.add('hidden');
       }
-      // 卡片聯動：觸發後顯示 4 秒（不是彈窗，不暫停）
-      // 提示框：聯動、大招材料齊、大招融合，誰最近發生就顯示誰（4 秒）
+      // 提示框：補給品、大招材料齊、大招融合，誰最近發生就顯示誰（4 秒；不是彈窗，不暫停）
       let synText = '';
       let synAt = -1;
-      const sy = run.lastSynergy;
-      if (sy && run.clock - sy.at < 4 && sy.at > synAt) {
-        synAt = sy.at;
-        synText = t('hud.synergy', { name: synergyName(sy.id, sy.tier), desc: synergyDesc(sy.id, sy.tier) });
-      }
       // 神籤的結果改由結果卡顯示（D36），這裡不再重複
       const pk = run.lastPickup;
       if (pk && run.clock - pk.at < 3 && pk.at >= synAt) {

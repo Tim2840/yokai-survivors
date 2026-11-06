@@ -43,7 +43,7 @@ export async function run(browser) {
         const info = await page.evaluate(() => {
           const rows = Object.fromEntries([...document.querySelectorAll('#sum-cards li[data-card]')].map((li) => [li.dataset.card, li.innerText.replace(/\s+/g, ' ')]));
           const stats = Object.fromEntries([...document.querySelectorAll('#sum-stats [data-stat]')].map((d) => [d.dataset.stat, d.querySelector('dd').innerText]));
-          return { rows, stats, run: window.__game.run, syn: document.querySelector('#sum-syn').innerText };
+          return { rows, stats, run: window.__game.run };
         });
         // 力量 凡 +10%、良 +12%（稀有度 ×1.2）→ Lv2、累計 +22%；強健 珍 = 20 × 1.5 = +30
         expect(/力量 Lv2\/5/.test(info.rows.power) && /\+22%/.test(info.rows.power), `力量的等級或累計效果不對：${info.rows.power}`);
@@ -51,8 +51,8 @@ export async function run(browser) {
         const slots = await page.locator('#sum-slots').innerText();
         expect(/5\/6/.test(slots), `道具欄應該是 5/6：${slots}`);
         expect(info.rows.volley && info.rows.splash && info.rows.armor, `少了卡片：${Object.keys(info.rows)}`);
-        // D37：鬼火增殖 2、碎火 3 → 連環爆・初
-        expect(/連環爆・初/.test(info.syn), `已觸發的聯動沒列出：${info.syn}`);
+        // D51：聯動已刪除，面板上不再有聯動區塊
+        expect(!(await page.locator('#sum-syn').count()), '面板還有聯動區塊');
         const p = info.run.stats.power;
         expect(info.stats.power === `×${Number(p.toFixed(2))}`, `攻擊力顯示和實際不符：${info.stats.power} vs ${p}`);
         expect(info.stats.maxHp.includes(`/ ${Math.round(info.run.maxHp)}`), `最大生命顯示不符：${info.stats.maxHp}`);

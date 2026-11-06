@@ -25,7 +25,7 @@
 
 - **M2-1 完成**：地圖要素框架（`src/data/elements.ts`、`src/systems/elements.ts`、`src/render/elementsView.ts`、HUD 提示）＋石地藏、結界石、詛咒祭壇；單元 + 回歸 `e1`。**使用者回饋 D26 已定**：章節制（每第 3 張地圖 3 關、頭目 HP ×2.5）。
 - **2026-11-04 手感調整（使用者：太簡單）**：試玩預設改成數量 ×2、起步 2 顆、濺射 0.8、傷害 ×1；新增武器卡「鬼火增殖」「爆裂」（`src/data/weaponCards.ts`）。依據與數字在 docs/02 變更紀錄。
-- **D28 卡片聯動已加入**：`src/data/synergies.ts`、`Run.checkSynergies`、HUD 提示、回歸 `s1`。河童、赤鬼的專屬武器卡與聯動等做到這兩隻時加。
+- **卡片聯動（D28／D37）已在 D51（2026-11-06）刪除**：`synergies.ts`、`checkSynergies`、選卡提示、能力面板區塊、回歸 `s1` 都沒了；`#synergy-box` 這個 HUD 提示框 id 保留給補給品／大招提示用。
 - **工作方式（D33）**：使用者提的新項目先評估、寫文件、排程；明確說「開始」才做。
 - **大招冷卻＋合魂祠（D41，2026-11-05）**：`ULT.cooldown`、`Run.ultCooling`／`ultCooldownLeft`；合魂祠是要素種類 `fuse`（`FUSE`、`Elements.placeFuse`／`fuseSlot`／`removeKind`，`Run.refreshFusable` 在材料齊時記時間、沒得融合時收掉），面板種類 `offerKind = 'fusion'`。HUD 頂端：長提示改成浮在頂端列下方、難度另起一行（`#wave-diff`），回歸 `hudTopOk` 檢查「能力」鈕不換行、血條夠長。
 - **技法取得改版（D49，2026-11-06）**：拿掉 `techPending`／`maybeOpenTech`／過關畫面的技法面板；`Run.mixTechCard`（`makeOffer` 之後，依 `TECH_OFFER` 機率換進一張技法卡）、`applyTechCard`（學會或升一級，吃稀有度 `ITEM_RARITY_MULT`）、`devTechNext`（開發介面 `techNext()`）；`Techniques.pickCard`（沒拿過 fresh／已有 owned 權重）、`points`（累積稀有度倍率）、`powerOf`；`CardDealer.rollRarity`；`TECH_LEVELS.max = 8`。技法面板（`offerKind = 'tech'`）只剩道祖神的換法。

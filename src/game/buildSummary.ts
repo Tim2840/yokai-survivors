@@ -8,7 +8,6 @@ import { STAT_IDS } from '../data/stats';
 import { ALTAR_CURSE_IDS, type CurseId } from '../data/altar';
 import { tuning } from '../data/tuning';
 import { ULT, ULT_RECIPES, recipeProgress } from '../data/ultimates';
-import { SYNERGIES } from '../data/synergies';
 
 /** 暫停畫面「能力」面板的資料（純資料，不含文字；文字由介面層用 i18n 組） */
 export interface BuildSummary {
@@ -23,9 +22,6 @@ export interface BuildSummary {
   stats: { id: StatId; value: number; base: number }[];
   /** 武器：鬼火數量、濺射半徑（公尺）、穿透 */
   weapon: { volley: number; splash: number; pierce: number; shards: number; shardDamage: number };
-  /** 卡片聯動（已觸發的 id） */
-  /** 已觸發的聯動、段數（1 初、2 極）、下一段還差什麼（已到極 = null） */
-  synergies: { id: string; tier: number; next: { card: string; have: number; need: number }[] | null }[];
   /** 詛咒：讓敵人變強，> 0 才列 */
   curses: { id: CurseId; v: number }[];
   /** 難度 %（關卡、地圖；0.5 = +50%） */
@@ -95,18 +91,12 @@ export function summarizeBuild(run: Run): BuildSummary {
     slots: ITEM_SLOTS,
     stats: STAT_IDS.filter((id) => id !== 'merit').map((id) => ({ id, value: s[id], base: run.stats.baseOf(id) })),
     weapon: {
-      volley: (tuning.volley > 0 ? tuning.volley : w.volley) + run.volleyBonus + run.syn.volley,
-      splash: ((tuning.splash > 0 ? tuning.splash : w.splashRadius) + run.splashBonus) * run.syn.splashMult,
-      pierce: w.pierce + run.pierceBonus + run.syn.pierce,
+      volley: (tuning.volley > 0 ? tuning.volley : w.volley) + run.volleyBonus,
+      splash: ((tuning.splash > 0 ? tuning.splash : w.splashRadius) + run.splashBonus),
+      pierce: w.pierce + run.pierceBonus,
       shards: run.shardsExact,
-      shardDamage: SHARDS.damage + run.syn.shardDamage,
+      shardDamage: SHARDS.damage,
     },
-    synergies: run.activeSynergies.map((id) => {
-      const sy = SYNERGIES.find((x) => x.id === id)!;
-      const tier = run.synergyTiers.get(id) ?? 1;
-      const nt = sy.tiers[tier];
-      return { id, tier, next: nt ? Object.entries(nt.requires).map(([card, need]) => ({ card, have: Math.min(need, run.cardCounts.get(card) ?? 0), need })) : null };
-    }),
     curses,
     difficulty: run.difficulty,
     ultimates: ULT_RECIPES.filter((r) => r.yokai === run.yokai.id).map((r) => ({ id: r.id, fused: run.fused.includes(r.id), ingredients: recipeProgress(r, run.cardCounts) })),
