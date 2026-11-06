@@ -46,9 +46,9 @@ const TECH_MAX_ARG = arg('techMax', '');
 /** --giveSets N：每局隨機（固定種子）給一組四個合法技法，用來全掃「真的一局會拿到的組合」；報告各技法的平均過關率 */
 const GIVE_SETS = Number(arg('giveSets', '0'));
 const TECH_BY_STRATEGY: Record<string, string[]> = {
-  dps: ['kitsunebi', 'bounce', 'pillar', 'seed', 'satellite', 'hellfire', 'homing', 'ring', 'ward'],
-  survive: ['ring', 'ward', 'satellite', 'hellfire', 'pillar', 'seed', 'kitsunebi', 'bounce', 'homing'],
-  ult: ['hellfire', 'seed', 'pillar', 'kitsunebi', 'satellite', 'bounce', 'ring', 'homing', 'ward'],
+  dps: ['kitsunebi', 'bounce', 'rain', 'pillar', 'oil', 'seed', 'satellite', 'hellfire', 'lamp', 'homing', 'ring', 'ward'],
+  survive: ['ring', 'ward', 'lamp', 'satellite', 'hellfire', 'pillar', 'oil', 'seed', 'kitsunebi', 'rain', 'bounce', 'homing'],
+  ult: ['hellfire', 'seed', 'oil', 'pillar', 'kitsunebi', 'rain', 'satellite', 'lamp', 'bounce', 'ring', 'homing', 'ward'],
 };
 /** --tune countScale=3,hpScale=1.2,xp.needPerLevel=4,w.hpPerWave=0.2：臨時改旋鈕比較（不改檔案）；xp. 開頭是 PROGRESSION、w. 開頭是 WAVES */
 const TUNE = arg('tune', '');

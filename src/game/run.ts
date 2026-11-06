@@ -753,6 +753,11 @@ export class Run {
     }
   }
 
+  /** 戰鬥用的固定種子亂數 0～1（技法系統用） */
+  rand(): number {
+    return this.rngCombat.next();
+  }
+
   /** 暴擊判定（技法系統用；rate 不給就用玩家的暴擊率） */
   rollCrit(rate: number = this.stats.value.crit): boolean {
     return this.rngCombat.next() < rate;

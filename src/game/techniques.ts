@@ -8,9 +8,12 @@ const ZONES = 32;
 const SEEDS = 16;
 const FLASHES = 24;
 const PILLARS = 4;
+const LAMPS = 2;
+/** 同時畫出幾隻燒著的人類 */
+const OIL_SHOWN = 24;
 
 /** 畫面上一閃而過的爆炸圈：0 = 火種、1 = 護身火、2 = 鬼火柱落地 */
-export const FLASH_KINDS = { seed: 0, ward: 1, pillar: 2 } as const;
+export const FLASH_KINDS = { seed: 0, ward: 1, pillar: 2, rain: 3 } as const;
 
 /**
  * 技法系統（D48）：這一局拿到的技法、它們的狀態與效果。Run 在固定的幾個地方呼叫它：
@@ -24,7 +27,7 @@ export class Techniques {
   readonly owned: string[] = [];
   readonly levels: number[] = [];
   /** 現在作用中的技法（依機制；沒有 = null） */
-  readonly act: Record<TechMechanic, TechDef | null> = { kitsunebi: null, bounce: null, homing: null, ring: null, ward: null, satellite: null, hellfire: null, seed: null, pillar: null };
+  readonly act: Record<TechMechanic, TechDef | null> = { kitsunebi: null, bounce: null, homing: null, rain: null, ring: null, ward: null, satellite: null, lamp: null, hellfire: null, seed: null, pillar: null, oil: null };
   /** 每系「多拿了幾個」（同系 N 個 → N − 1） */
   readonly deep: Record<TechFamily, number> = { split: 0, orbit: 0, burn: 0 };
 
@@ -69,6 +72,20 @@ export class Techniques {
   readonly pillarMax = new Float32Array(PILLARS);
   pillarR = 0;
 
+  // ── 開路燈 ──
+  readonly lampX = new Float32Array(LAMPS);
+  readonly lampZ = new Float32Array(LAMPS);
+  lampN = 0;
+  private lampTimer = 0;
+
+  // ── 燈油：每隻人類身上的火（下標 = 敵人編號）──
+  private readonly oilT: Float32Array;
+  private readonly oilTick: Float32Array;
+  private readonly oilDmg: Float32Array;
+  /** 這一步燒著的人類（畫面用，最多 OIL_SHOWN 個）與數量 */
+  readonly oilShow = new Int32Array(OIL_SHOWN);
+  oilShown = 0;
+
   // ── 爆炸圈（只給畫面）──
   readonly flashX = new Float32Array(FLASHES);
   readonly flashZ = new Float32Array(FLASHES);
@@ -90,6 +107,9 @@ export class Techniques {
     capacity: number,
   ) {
     this.fxUntil = new Float32Array(capacity);
+    this.oilT = new Float32Array(capacity);
+    this.oilTick = new Float32Array(capacity);
+    this.oilDmg = new Float32Array(capacity);
     this.weapon = run.yokai.weapon;
   }
 
@@ -145,6 +165,11 @@ export class Techniques {
     if (!this.act.seed) this.seedT.fill(0);
     if (!this.act.pillar) this.pillarLife.fill(0);
     if (!this.act.ward) this.wardCharge = 0;
+    if (!this.act.lamp) this.lampN = 0;
+    if (!this.act.oil) {
+      this.oilT.fill(0);
+      this.oilShown = 0;
+    }
     const h = this.act.homing?.homing;
     const base = this.run.yokai.weapon;
     this.weapon = h ? { ...base, projectileSpeed: base.projectileSpeed * h.speedMult } : base;
@@ -267,6 +292,8 @@ export class Techniques {
         this.sweepSatellites(o, this.pw('satellite'));
       }
     }
+    if (a.lamp?.lamp) this.lampStep(dt, a.lamp.lamp);
+    if (a.oil?.oil) this.oilStep(dt, a.oil.oil);
     if (a.pillar?.pillar) this.pillarStep(dt, a.pillar.pillar);
     if (a.ward?.ward && !this.wardReady) this.wardCharge += dt;
     if (a.hellfire?.burn) this.zonesStep(dt, a.hellfire.burn);
@@ -281,6 +308,8 @@ export class Techniques {
     this.seedT.fill(0);
     this.pillarLife.fill(0);
     this.flashLife.fill(0);
+    this.oilT.fill(0);
+    this.oilShown = 0;
   }
 
   // ── 繞身 ─────────────────────────────────────────────────────
@@ -354,7 +383,7 @@ export class Techniques {
    */
   hitFx(e: number, x: number, z: number, dmg: number, direct: boolean): void {
     const a = this.act;
-    if (!a.kitsunebi && !a.bounce && !a.hellfire) return;
+    if (!a.kitsunebi && !a.bounce && !a.hellfire && !a.rain && !a.oil) return;
     if (!direct) {
       const now = this.run.clock;
       if (now < this.fxUntil[e]) return;
@@ -367,6 +396,110 @@ export class Techniques {
       this.bounceFrom(b, x, z, e, dmg * b.damage * this.pw('bounce'), jumps);
     }
     if (a.hellfire?.burn) this.addZone(a.hellfire.burn, x, z, dmg * a.hellfire.burn.damage * this.pw('hellfire') * Math.pow(TECH_DEEPEN.burn.damage, this.deep.burn));
+    if (a.rain?.rain) this.rainFrom(a.rain.rain, x, z, dmg * this.pw('rain'));
+    if (a.oil?.oil) this.ignite(a.oil.oil, e, dmg * a.oil.oil.damage * this.pw('oil') * Math.pow(TECH_DEEPEN.burn.damage, this.deep.burn));
+  }
+
+  /** 鬼火雨：在命中點 range 公尺內隨機落下幾顆小火，各自炸到半徑內的人（不追人，落點隨機） */
+  private rainFrom(r: NonNullable<TechDef['rain']>, x: number, z: number, dmg: number): void {
+    const run = this.run;
+    const en = run.enemies;
+    const n = (run.weaponMaxed ? r.atMaxCount : r.count) + this.deep.split * TECH_DEEPEN.split.targets;
+    for (let k = 0; k < n; k++) {
+      const a = run.rand() * Math.PI * 2;
+      const d = Math.sqrt(run.rand()) * r.range;
+      const px = x + Math.cos(a) * d;
+      const pz = z + Math.sin(a) * d;
+      this.addFlash(px, pz, r.radius, r.life, FLASH_KINDS.rain);
+      const m = en.within(px, pz, r.radius, this.pick);
+      for (let j = 0; j < m; j++) {
+        const o = this.pick[j];
+        if (en.alive[o]) run.weaponHit(o, dmg * r.damage, en.x[o] - px, en.z[o] - pz, 1, false);
+      }
+    }
+  }
+
+  // ── 燈油 ─────────────────────────────────────────────────────
+  /** 讓 e 身上沾火（已經在燒就重新計時、傷害取大的）；同時燒著的人類有上限 */
+  private ignite(o: NonNullable<TechDef['oil']>, e: number, tickDamage: number): void {
+    const burning = this.oilT[e] > 0;
+    if (!burning) {
+      let live = 0;
+      for (let i = 0; i < this.oilT.length && live < o.max; i++) if (this.oilT[i] > 0) live++;
+      if (live >= o.max) return;
+      this.oilTick[e] = o.tick;
+    }
+    this.oilT[e] = this.run.weaponMaxed ? o.atMaxSeconds : o.seconds;
+    this.oilDmg[e] = burning ? Math.max(this.oilDmg[e], tickDamage) : tickDamage;
+  }
+  private oilStep(dt: number, o: NonNullable<TechDef['oil']>): void {
+    const run = this.run;
+    const en = run.enemies;
+    let shown = 0;
+    for (let e = 0; e < this.oilT.length; e++) {
+      if (this.oilT[e] <= 0) continue;
+      if (!en.alive[e]) {
+        this.oilT[e] = 0;
+        continue;
+      }
+      this.oilT[e] -= dt;
+      this.oilTick[e] -= dt;
+      if (shown < OIL_SHOWN) this.oilShow[shown++] = e;
+      if (this.oilTick[e] > 0) continue;
+      this.oilTick[e] += o.tick;
+      const x = en.x[e];
+      const z = en.z[e];
+      run.weaponHit(e, this.oilDmg[e], 0, 0, 0, false);
+      if (!en.alive[e]) {
+        this.oilT[e] = 0;
+        this.spreadOil(o, x, z, e, this.oilDmg[e]);
+      }
+    }
+    this.oilShown = shown;
+  }
+  /** 燒死的人把火傳給 spreadRange 公尺內最近的幾個還沒著火的人 */
+  private spreadOil(o: NonNullable<TechDef['oil']>, x: number, z: number, from: number, tickDamage: number): void {
+    const en = this.run.enemies;
+    const want = this.run.weaponMaxed ? o.atMaxSpread : o.spread;
+    const m = en.within(x, z, o.spreadRange, this.pick);
+    for (let made = 0; made < want; made++) {
+      let best = -1;
+      let bd = Infinity;
+      for (let j = 0; j < m; j++) {
+        const t = this.pick[j];
+        if (t < 0 || t === from || !en.alive[t] || this.oilT[t] > 0) continue;
+        const d = (en.x[t] - x) ** 2 + (en.z[t] - z) ** 2;
+        if (d < bd) {
+          bd = d;
+          best = j;
+        }
+      }
+      if (best < 0) return;
+      const t = this.pick[best];
+      this.pick[best] = -1;
+      this.oilT[t] = 0;
+      this.ignite(o, t, tickDamage);
+    }
+  }
+
+  // ── 開路燈 ───────────────────────────────────────────────────
+  private lampStep(dt: number, o: NonNullable<TechDef['lamp']>): void {
+    const run = this.run;
+    const s = run.stats.value;
+    const n = run.weaponMaxed ? o.atMaxCount : o.count;
+    this.lampN = Math.min(LAMPS, n);
+    const dx = Math.sin(run.facing);
+    const dz = Math.cos(run.facing);
+    const A = o.ahead * s.area;
+    for (let i = 0; i < this.lampN; i++) {
+      const off = this.lampN === 1 ? 0 : (i === 0 ? -1 : 1) * o.side;
+      this.lampX[i] = run.px + dx * A - dz * off;
+      this.lampZ[i] = run.pz + dz * A + dx * off;
+    }
+    this.lampTimer -= dt;
+    if (this.lampTimer > 0) return;
+    this.lampTimer += (o.tick * run.cooldownMult) / s.atkSpeed;
+    for (let i = 0; i < this.lampN; i++) this.sweepAt(this.lampX[i], this.lampZ[i], o.hitRadius, o.damage * this.pw('lamp'), o.knockback, s.crit);
   }
 
   /** 狐火分裂：從命中處朝其他敵人分裂出小火（小火不會再分裂；有碎火時另見 Run.emitShards） */

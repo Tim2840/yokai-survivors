@@ -20,7 +20,7 @@ export type TechFamily = (typeof TECH_FAMILIES)[number];
 
 /** delivery：取代原本的發射；extra：照常發射，另外多一種出手方式；onHit：打中人類時多發生的事（出手方式打中也會觸發）；passive：自己運作，不吃也不給掛勾（歸巢、護身火） */
 export type TechKind = 'delivery' | 'extra' | 'onHit' | 'passive';
-export type TechMechanic = 'kitsunebi' | 'bounce' | 'homing' | 'ring' | 'ward' | 'satellite' | 'hellfire' | 'seed' | 'pillar';
+export type TechMechanic = 'kitsunebi' | 'bounce' | 'homing' | 'rain' | 'ring' | 'ward' | 'satellite' | 'lamp' | 'hellfire' | 'seed' | 'pillar' | 'oil';
 
 export interface TechDef {
   id: string;
@@ -37,6 +37,8 @@ export interface TechDef {
   split?: { children: number; damage: number; range: number; atMaxChildren: number; shardBonus: number; reSplit: number };
   /** 彈跳：打中後跳到範圍內下一隻（不回頭），最多 jumps 次，每次傷害 × damage；atMax：多跳一次 */
   bounce?: { range: number; jumps: number; damage: number; atMaxJumps: number };
+  /** 鬼火雨：命中時在命中點 range 公尺內隨機落下 count 顆小火（落點隨機、不追人；每顆在半徑 radius 內傷害 × damage，畫面停留 life 秒）；atMax：多一顆 */
+  rain?: { count: number; atMaxCount: number; range: number; radius: number; damage: number; life: number };
   /** 歸巢：鬼火飛到盡頭還沒用完時折返，飛回你身邊（回程也會打人，多穿透 returnPierce 隻）；所有鬼火飛行速度 × speedMult；atMax：穿透 +1 */
   homing?: { returnPierce: number; speedMult: number; atMaxPierce: number };
   /** 燈籠環：不再發射，鬼火繞身（數量 = 鬼火數量 + baseOrbs）；半徑（× 範圍）、角速度（弧度/秒）、命中半徑、
@@ -47,6 +49,10 @@ export interface TechDef {
   ward?: { chargeSeconds: number; atMaxChargeSeconds: number; burstRadius: number; burstDamage: number };
   /** 衛星燈：照常發射，另有 count 盞大燈籠在半徑 radius（× 範圍）慢慢繞；其餘同燈籠環；atMax：多一盞 */
   satellite?: { count: number; atMaxCount: number; radius: number; spin: number; hitRadius: number; tick: number; damage: number; knockback: number };
+  /** 開路燈：count 盞燈籠跑在移動方向前方 ahead 公尺處（不動時留在身前；兩盞時在前方兩側 side 公尺），每 tick 秒判定、命中半徑、傷害比例、擊退；atMax：兩盞 */
+  lamp?: { count: number; atMaxCount: number; ahead: number; side: number; hitRadius: number; tick: number; damage: number; knockback: number };
+  /** 燈油：命中的人身上沾火，燒 seconds 秒（每 tick 秒燒一次，傷害 = 命中傷害 × damage）；燒死時火傳給 spreadRange 公尺內最多 spread 個人；atMax：燒 atMaxSeconds 秒、傳 atMaxSpread 個 */
+  oil?: { seconds: number; atMaxSeconds: number; tick: number; damage: number; spreadRange: number; spread: number; atMaxSpread: number; max: number };
   /** 業火：命中處留下燃燒地（半徑 × 範圍、秒數、每隔幾秒燒一次、每次傷害比例），鬼火本身傷害與冷卻倍率；atMax：燃燒地大小倍率 */
   burn?: { radius: number; seconds: number; tick: number; damage: number; shotDamage: number; interval: number; atMaxScale: number; maxZones: number };
   /** 火種：被鬼火打倒的人留下火種，delay 秒後爆炸（半徑、傷害比例）；最多 max 個；atMax：半徑 atMaxRadius */
@@ -84,6 +90,15 @@ export const TECHS: readonly TechDef[] = [
     excludes: ['ring'],
     homing: { returnPierce: 2, speedMult: 1.15, atMaxPierce: 1 },
   },
+  {
+    id: 'rain',
+    weapon: 'ghostfire',
+    family: 'split',
+    kind: 'onHit',
+    likes: ['volley', 'atkSpeed', 'power'],
+    excludes: [],
+    rain: { count: 2, atMaxCount: 3, range: 3, radius: 1.2, damage: 0.5, life: 0.3 },
+  },
   // ── 環繞系 ──
   {
     id: 'ring',
@@ -112,6 +127,15 @@ export const TECHS: readonly TechDef[] = [
     excludes: [],
     satellite: { count: 1, atMaxCount: 2, radius: 5.5, spin: 1.2, hitRadius: 1.3, tick: 0.4, damage: 1.5, knockback: 3 },
   },
+  {
+    id: 'lamp',
+    weapon: 'ghostfire',
+    family: 'orbit',
+    kind: 'extra',
+    likes: ['speed', 'area', 'atkSpeed'],
+    excludes: [],
+    lamp: { count: 1, atMaxCount: 2, ahead: 4, side: 1.6, hitRadius: 1.3, tick: 0.3, damage: 1.2, knockback: 4 },
+  },
   // ── 燃燒系 ──
   {
     id: 'hellfire',
@@ -139,6 +163,15 @@ export const TECHS: readonly TechDef[] = [
     likes: ['power', 'area', 'atkSpeed'],
     excludes: [],
     pillar: { interval: 4, range: 10, radius: 1.8, damage: 2.5, atMaxCount: 2, life: 0.5, max: 4 },
+  },
+  {
+    id: 'oil',
+    weapon: 'ghostfire',
+    family: 'burn',
+    kind: 'onHit',
+    likes: ['power', 'atkSpeed', 'volley'],
+    excludes: [],
+    oil: { seconds: 3, atMaxSeconds: 4, tick: 0.5, damage: 0.25, spreadRange: 3, spread: 2, atMaxSpread: 3, max: 24 },
   },
 ];
 

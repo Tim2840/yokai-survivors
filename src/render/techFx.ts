@@ -6,7 +6,8 @@ import type { Run } from '../game/run';
 import { FLASH_KINDS } from '../game/techniques';
 import { setHugeBounds } from './instancedLayer';
 
-const MAX_ORBS = 16;
+const MAX_ORBS = 18;
+const MAX_OIL = 24;
 const MAX_SEEDS = 16;
 const MAX_PILLARS = 4;
 const MAX_FLASHES = 24;
@@ -22,6 +23,7 @@ export class TechFx {
   private readonly orbs: THREE.InstancedMesh;
   private readonly zones: THREE.InstancedMesh;
   private readonly seeds: THREE.InstancedMesh;
+  private readonly oil: THREE.InstancedMesh;
   private readonly pillars: THREE.InstancedMesh;
   private readonly flashes: THREE.InstancedMesh;
   private readonly m = new THREE.Matrix4();
@@ -52,6 +54,9 @@ export class TechFx {
     const sg = ball(0.2, 12, 8);
     const sm = glow(palette.fire.torch, 3.2);
     this.seeds = this.instanced(sg, sm, MAX_SEEDS);
+    const og2 = ball(0.2, 10, 8);
+    const om2 = glow(palette.fire.torch, 2.6);
+    this.oil = this.instanced(og2, om2, MAX_OIL);
     const pg = new THREE.CylinderGeometry(1, 1, 1, 18, 1, true);
     const pm = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
     this.pillars = this.instanced(pg, pm, MAX_PILLARS, true);
@@ -68,8 +73,8 @@ export class TechFx {
     this.ward = new THREE.Mesh(wg, this.wardMat);
     this.ward.renderOrder = 3;
     this.ward.visible = false;
-    this.group.add(this.orbs, this.zones, this.seeds, this.pillars, this.flashes, this.guard, this.ward);
-    this.disposables.push(og, om, zg, zm, sg, sm, pg, pm, fm, wg, this.guardMat, this.wardMat);
+    this.group.add(this.orbs, this.zones, this.seeds, this.oil, this.pillars, this.flashes, this.guard, this.ward);
+    this.disposables.push(og, om, og2, om2, zg, zm, sg, sm, pg, pm, fm, wg, this.guardMat, this.wardMat);
   }
 
   private instanced(g: THREE.BufferGeometry, mat: THREE.Material, n: number, colored = false): THREE.InstancedMesh {
@@ -105,6 +110,12 @@ export class TechFx {
       const a = tc.satAngle + (i / nSat) * Math.PI * 2;
       const s = SAT_SCALE * (1 + 0.08 * Math.sin(t * 5 + i));
       this.m.makeScale(s, s, s).setPosition(run.px + Math.cos(a) * RS, run.py + 1.0, run.pz + Math.sin(a) * RS);
+      this.orbs.setMatrixAt(k, this.m);
+    }
+    // 開路燈：移動方向前方的燈籠
+    for (let i = 0; i < tc.lampN && k < MAX_ORBS; i++, k++) {
+      const s = 1.4 * (1 + 0.08 * Math.sin(t * 7 + i));
+      this.m.makeScale(s, s, s).setPosition(tc.lampX[i], run.py + 0.9, tc.lampZ[i]);
       this.orbs.setMatrixAt(k, this.m);
     }
     this.orbs.count = k;
@@ -160,6 +171,18 @@ export class TechFx {
     }
     this.seeds.count = sc;
     this.seeds.instanceMatrix.needsUpdate = true;
+    // 燈油：燒著的人頭上一朵小火
+    let oc = 0;
+    for (let i = 0; i < tc.oilShown && oc < MAX_OIL; i++) {
+      const e = tc.oilShow[i];
+      const x = run.enemies.x[e];
+      const z = run.enemies.z[e];
+      const s = 1 + 0.25 * Math.sin(t * 13 + i);
+      this.m.makeScale(s, s, s).setPosition(x, run.map.heightAt(x, z) + 1.5, z);
+      this.oil.setMatrixAt(oc++, this.m);
+    }
+    this.oil.count = oc;
+    this.oil.instanceMatrix.needsUpdate = true;
     // 鬼火柱：一根往上的光柱，快速淡出
     let pc = 0;
     for (let i = 0; i < MAX_PILLARS; i++) {
@@ -187,7 +210,7 @@ export class TechFx {
       const r = tc.flashR[i] * (1.25 - 0.25 * f);
       this.m.makeScale(r, 1, r).setPosition(x, run.map.heightAt(x, z) + DECAL_LIFT + 0.03, z);
       this.flashes.setMatrixAt(fc, this.m);
-      this.c.copy(tc.flashKind[i] === FLASH_KINDS.ward ? this.soul : tc.flashKind[i] === FLASH_KINDS.pillar ? this.ghost : this.fire).multiplyScalar(0.2 + 0.8 * f);
+      this.c.copy(tc.flashKind[i] === FLASH_KINDS.ward ? this.soul : tc.flashKind[i] === FLASH_KINDS.pillar || tc.flashKind[i] === FLASH_KINDS.rain ? this.ghost : this.fire).multiplyScalar(0.2 + 0.8 * f);
       this.flashes.setColorAt(fc, this.c);
       fc++;
     }
@@ -201,6 +224,7 @@ export class TechFx {
     this.orbs.dispose();
     this.zones.dispose();
     this.seeds.dispose();
+    this.oil.dispose();
     this.pillars.dispose();
     this.flashes.dispose();
     this.group.removeFromParent();

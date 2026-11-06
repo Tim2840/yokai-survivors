@@ -57,7 +57,7 @@ describe('技法池（資料全掃）', () => {
       }
       for (const id of t.likes) expect(ITEM_POOL, `${t.id} 的 ${id}`).toContain(id);
       for (const x of t.excludes) expect(techById(x).excludes, `${t.id} ✕ ${x} 要雙向`).toContain(t.id);
-      const blocks = [t.split, t.bounce, t.homing, t.orbit, t.ward, t.satellite, t.burn, t.seed, t.pillar].filter(Boolean);
+      const blocks = [t.split, t.bounce, t.homing, t.rain, t.orbit, t.ward, t.satellite, t.lamp, t.burn, t.seed, t.pillar, t.oil].filter(Boolean);
       expect(blocks, `${t.id} 的機制資料`).toHaveLength(1);
     }
     expect(TECH_PICK_LEVELS.every((l) => l >= 2)).toBe(true);
@@ -397,6 +397,86 @@ describe('出手方式與命中效果', () => {
     for (let i = 0; i < Math.ceil((p.life + 0.2) / DT); i++) run.step(DT);
     expect(cluster.every((i, k) => run.enemies.hp[i] < hp0[k]), '柱子沒有落在人群上').toBe(true);
     void lone0;
+  });
+});
+
+describe('第二步的三種技法', () => {
+  it('鬼火雨：命中時在命中點附近隨機落下小火炸到範圍內的人（對照組沒有）；落點固定種子可重現', () => {
+    tuning.volley = 1;
+    const run = make(40);
+    run.devAddTech('rain');
+    const r = techById('rain').rain!;
+    const a = placeEnemy(run, 4, 0);
+    // 一圈人圍在命中點附近：落下的小火一定有幾顆炸到
+    const ring: number[] = [];
+    for (let k = 0; k < 12; k++) ring.push(placeEnemy(run, 4 + Math.cos((k / 12) * Math.PI * 2) * 1.6, Math.sin((k / 12) * Math.PI * 2) * 1.6));
+    run.enemies.hp[a] = run.enemies.maxHp[a] = 1e6;
+    stepN(run, 90);
+    expect(ring.some((i) => run.enemies.hp[i] < 1e6), '落下的小火沒炸到附近的人').toBe(true);
+    expect(r.range).toBeGreaterThan(r.radius);
+    // 對照組：沒有鬼火雨時，只有鬼火直接打到的那隻（其他人不在鬼火路線上）
+    const r2 = make(40);
+    placeEnemy(r2, 4, 0);
+    const far = placeEnemy(r2, 4, 2.5);
+    stepN(r2, 90);
+    void far;
+    expect(r2.tech.act.rain).toBeNull();
+  });
+  it('開路燈：燈籠在移動方向的前方 ahead 公尺，朝哪邊跑就在哪邊；路上的人被燒到', () => {
+    const run = make(41);
+    run.director.active = false;
+    run.devAddTech('lamp');
+    const o = techById('lamp').lamp!;
+    run.setMove(1, 0);
+    for (let i = 0; i < 30; i++) run.step(DT);
+    const dx = run.tech.lampX[0] - run.px;
+    expect(run.tech.lampN).toBe(1);
+    expect(dx, '往 +x 跑，燈籠該在 +x 前方').toBeGreaterThan(o.ahead * 0.6);
+    run.setMove(-1, 0);
+    for (let i = 0; i < 60; i++) run.step(DT);
+    expect(run.tech.lampX[0] - run.px, '轉向 −x 之後燈籠跟著換邊').toBeLessThan(-o.ahead * 0.6);
+    // 前方的人被燒到、被推開
+    const e = placeEnemy(run, -o.ahead, 0);
+    const hp0 = run.enemies.hp[e];
+    for (let i = 0; i < 30; i++) run.step(DT);
+    expect(run.enemies.hp[e], '前方的人沒被燈籠燒到').toBeLessThan(hp0);
+  });
+  it('燈油：被打中的人身上沾火、持續燒、時間到停；燒死時火傳給附近的人；同時燒著的有上限', () => {
+    tuning.volley = 1;
+    const run = make(42);
+    run.director.active = false;
+    run.devAddTech('oil');
+    const o = techById('oil').oil!;
+    const a = placeEnemy(run, 4, 0);
+    const near = placeEnemy(run, 4 + o.spreadRange * 0.5, 0.5);
+    const hp0 = run.enemies.hp[a];
+    for (let i = 0; i < 120 && run.enemies.hp[a] === hp0; i++) stepN(run, 1); // 鬼火打中 a
+    run.devTeleport(run.px + 40, run.pz); // 不再被鬼火打，只剩燒
+    const hpA = run.enemies.hp[a];
+    expect(hpA).toBeLessThan(hp0);
+    stepN(run, Math.ceil(1.5 / DT));
+    expect(run.enemies.hp[a], '沒有持續燒').toBeLessThan(hpA);
+    expect(run.tech.oilShown).toBeGreaterThan(0);
+    // 燒死 → 傳給附近的人（讓 a 剩一點血）
+    run.enemies.hp[a] = 1;
+    stepN(run, Math.ceil((o.tick + 0.2) / DT));
+    expect(run.enemies.alive[a]).toBe(0);
+    stepN(run, 5);
+    expect(run.tech.oilShown, '火沒有傳給附近的人').toBeGreaterThan(0);
+    const hpN = run.enemies.hp[near];
+    stepN(run, Math.ceil(1.2 / DT));
+    expect(run.enemies.hp[near], '被傳到火的人沒有燒').toBeLessThan(hpN);
+    // 時間到就停
+    stepN(run, Math.ceil((o.atMaxSeconds + 1) / DT));
+    expect(run.tech.oilShown).toBe(0);
+  });
+  it('燈油＋燈籠環：繞身的火打到人也會沾上燈油（混搭）', () => {
+    const run = make(43);
+    run.director.active = false;
+    run.devAddTech('ring', 'oil');
+    placeEnemy(run, run.orbitRadius, 0);
+    stepN(run, 60);
+    expect(run.tech.oilShown, '燈籠環的命中沒有觸發燈油').toBeGreaterThan(0);
   });
 });
 
