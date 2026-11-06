@@ -165,10 +165,9 @@ export async function run(browser) {
         expect((await page.evaluate(() => window.__game.screens)).includes('levelup'), `按住賽錢箱後沒有開選卡面板（${vp.name}）`);
         const title = await page.locator('.overlay[data-screen="levelup"] h2').innerText();
         expect(/賽錢箱/.test(title), `面板標題不對：${title}`);
-        // 會吃稀有度的卡都是珍階；不吃稀有度的（主武器、鬼火增殖、穿透、備用獎勵）標成凡
-        const NO_SCALE = ['ghostfire', 'volley', 'pierce', 'heal', 'meritBag'];
+        // D53：每一次升級卡都有稀有度（主武器、多重、穿透、備用獎勵也算）：良階賽錢箱的三張卡全部是珍階
         const rar = await page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card')].map((c) => [c.dataset.card, c.dataset.rarity]));
-        expect(rar.length === 3 && rar.every(([id, r]) => r === 'epic' || NO_SCALE.includes(id)), `良階賽錢箱應給三張珍階卡：${JSON.stringify(rar)}`);
+        expect(rar.length === 3 && rar.every(([, r]) => r === 'epic'), `良階賽錢箱應給三張珍階卡：${JSON.stringify(rar)}`);
         const r1 = await page.evaluate(() => window.__game.run);
         expect(r1.hp < hp0, `賽錢箱沒扣生命：${hp0} → ${r1.hp}`);
         await page.locator('.overlay[data-screen="levelup"] .card').first().click();

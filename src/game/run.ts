@@ -2,10 +2,10 @@ import { bus as defaultBus, type EventBus } from '../core/bus';
 import { COMBAT } from '../data/combat';
 import { MOVE } from '../data/movement';
 import { PLAYABLE_YOKAI, YOKAI, type YokaiDef } from '../data/yokai';
-import { PROGRESSION, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
-import { DOSOJIN } from '../data/elements';
-import { ITEM_POOL, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById } from '../data/items';
-import { TECH_CARD_PREFIX, TECH_KEEP, TECH_OFFER, TECH_SWAP_PREFIX, isTechCard } from '../data/techniques';
+import { CARD_CHOICES, PROGRESSION, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
+import { DOSOJIN, FUSE } from '../data/elements';
+import { ITEM_POOL, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById, scaleWeaponStep } from '../data/items';
+import { EVO_CARD_PREFIX, TECH_CARD_PREFIX, TECH_KEEP, TECH_OFFER, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard } from '../data/techniques';
 import { Techniques } from './techniques';
 import { RARITY_MULT } from '../data/rarity';
 import { STAGE, stagesForMap, bossHpMult, isBigBossStage } from '../data/stage';
@@ -164,7 +164,7 @@ export class Run {
   private dosojinAt = Infinity;
   /** 最近一次在道祖神換了技法（HUD 提示用） */
   lastTechChange: { from: string; to: string; at: number } | null = null;
-  private resumeKind: 'levelup' | 'offering' | 'chest' = 'levelup';
+  private resumeKind: 'levelup' | 'offering' | 'chest' | 'fusion' = 'levelup';
   /** 主武器的道具 id（鬼火） */
   get weaponItemId(): string {
     return this.yokai.weapon.id;
@@ -179,7 +179,14 @@ export class Run {
   bonusMerit = 0;
   lastOmikuji: { id: string; at: number } | null = null;
   /** 目前這個選卡面板的來源：升級／賽錢箱／寶箱；賽錢箱、寶箱的剩餘選卡次數與稀有度 */
-  offerKind: 'levelup' | 'offering' | 'chest' | 'tech' = 'levelup';
+  offerKind: 'levelup' | 'offering' | 'chest' | 'tech' | 'fusion' = 'levelup';
+  /** 有可以進化、還沒進化的技法組合（D53；事件時更新，每步不重算）；從什麼時候開始有（合魂祠延遲出現用） */
+  private hasEvolvable = false;
+  private evolvableSince = 0;
+  /** 已經提示過「可以進化」的配方、最近一次提示與最近一次進化（HUD 提示用） */
+  private readonly evolveNotified: string[] = [];
+  lastReady: { id: string; at: number } | null = null;
+  lastEvolve: { id: string; at: number } | null = null;
   private bonusLeft = 0;
   private bonusRarity: import('../data/rarity').Rarity = 'rare';
   /** 法具等級（id → 等級）、這一局裝配的大招（D52，最多 ULT_SLOTS 招）、大招量表（0～ULT.max）、最近一次發動（給外觀用） */
@@ -317,6 +324,7 @@ export class Run {
         this.hp -= this.maxHp * f;
       },
       openPick: (rarity, picks, kind) => this.openBonusPick(rarity, picks, kind),
+      canFuse: () => this.hasEvolvable,
       addMerit: (n) => {
         this.bonusMerit += n;
       },
@@ -502,6 +510,10 @@ export class Run {
     if (gained > 0) this.addXp(gained);
 
     this.elements.update(dt, this.time, this.director.duration, this.director.virtualWave(), s.luck, this.px, this.py, this.pz);
+    // 合魂祠：可以進化之後 appearDelay 秒出現在地圖上（一次一座；D53）
+    if (this.hasEvolvable && !this.elements.fuseSlot && this.clock >= this.evolvableSince + FUSE.appearDelay) {
+      if (this.elements.placeFuse(this.px, this.pz)) this.bus.emit('fuseShrine', { stage: this.stageNumber });
+    }
     // 道祖神：選了變化之後每關一座（D47）
     if (this.clock >= this.dosojinAt && this.phase === 'combat') {
       this.dosojinAt = Infinity;
@@ -689,7 +701,7 @@ export class Run {
 
   /** 每顆鬼火的穿透次數：小數 = 機率多穿一隻 */
   private rollPierce(): number {
-    const p = this.pierceBonus + this.tech.pierceExtra;
+    const p = this.pierceBonus + this.tech.pierceExtra + this.tech.evoPierce;
     const base = Math.floor(p);
     return base + (this.rngCombat.next() < p - base ? 1 : 0);
   }
@@ -945,7 +957,7 @@ export class Run {
 
   /** 玩家選了第 index 張卡。回傳是否還有下一次待選（UI 繼續開著面板） */
   /** 賽錢箱、寶箱：開三選一面板（模擬暫停，沿用升級選卡的同一個面板，D15），連選 picks 次 */
-  private openBonusPick(rarity: import('../data/rarity').Rarity, picks: number, kind: 'offering' | 'chest'): void {
+  private openBonusPick(rarity: import('../data/rarity').Rarity, picks: number, kind: 'offering' | 'chest' | 'fusion'): void {
     if (this.offer !== null) return;
     this.bonusLeft = picks;
     this.bonusRarity = rarity;
@@ -956,8 +968,29 @@ export class Run {
 
   /** 賽錢箱／寶箱的三張卡 */
   private dealBonus(): CardOffer[] {
+    // 合魂祠：只有可以進化的（選一個）
+    if (this.offerKind === 'fusion') return this.tech.evolvable.slice(0, CARD_CHOICES).map((e) => ({ cardId: EVO_CARD_PREFIX + e.id, rarity: 'legend' as const }));
     this.dealer.playerLevel = this.level;
-    return this.dealer.dealRarity(this.bonusRarity, this.cardCounts);
+    const cards = this.dealer.dealRarity(this.bonusRarity, this.cardCounts);
+    if (this.offerKind !== 'chest') return cards;
+    // 寶箱：可以進化的排在最前面
+    const evo = this.tech.evolvable.slice(0, cards.length).map((e) => ({ cardId: EVO_CARD_PREFIX + e.id, rarity: 'legend' as const }));
+    return [...evo, ...cards.slice(0, Math.max(0, cards.length - evo.length))];
+  }
+
+  /** 有沒有可以進化的：變成「有」時記下時間；變成「沒有」時收掉合魂祠；第一次湊齊時提示（D53） */
+  private refreshEvolvable(): void {
+    const list = this.tech.evolvable;
+    const has = list.length > 0;
+    for (const e of list) {
+      if (this.evolveNotified.includes(e.id)) continue;
+      this.evolveNotified.push(e.id);
+      this.lastReady = { id: e.id, at: this.clock };
+      this.bus.emit('evolveReady', { id: e.id });
+    }
+    if (has && !this.hasEvolvable) this.evolvableSince = this.clock;
+    if (!has && this.hasEvolvable) this.elements.removeKind('fuse');
+    this.hasEvolvable = has;
   }
 
   /** 面板上「還有幾次」：賽錢箱／寶箱看剩下的連選次數，升級看待選的升級數 */
@@ -970,8 +1003,16 @@ export class Run {
     if (!this.offer || index < 0 || index >= this.offer.length) return this.offer !== null;
     const o = this.offer[index];
     if (this.offerKind === 'tech') return this.chooseTech(o);
-    if (isTechCard(o.cardId)) this.applyTechCard(o);
+    if (isEvoCard(o.cardId)) {
+      // 進化卡（D53）：兩個材料技法併成一個
+      const e = evoOfCard(o.cardId);
+      if (this.tech.evolve(e.id)) {
+        this.lastEvolve = { id: e.id, at: this.clock };
+        this.bus.emit('evolve', { id: e.id });
+      }
+    } else if (isTechCard(o.cardId)) this.applyTechCard(o);
     else this.applyCard(o);
+    this.refreshEvolvable();
     this.bus.emit('cardChosen', { cardId: o.cardId, rarity: o.rarity });
     if (this.offerKind !== 'levelup') this.bonusLeft--;
     else this.pendingPicks--;
@@ -1029,8 +1070,9 @@ export class Run {
     const d = cardById(o.cardId);
     this.picked.push(o);
     if (d.kind === 'fallback') {
-      if (d.id === 'heal') this.hp = Math.min(this.maxHp, this.hp + this.maxHp * (d.perLevel ?? 0) / 100);
-      else this.bonusMerit += d.perLevel ?? 0;
+      const v = itemValue(d, o.rarity);
+      if (d.id === 'heal') this.hp = Math.min(this.maxHp, this.hp + (this.maxHp * v) / 100);
+      else this.bonusMerit += v;
       return;
     }
     const lv = this.cardCounts.get(d.id) ?? 0;
@@ -1038,7 +1080,8 @@ export class Run {
     this.ownedCards.add(d.id);
     this.cardCounts.set(d.id, lv + 1);
     if (d.kind === 'weapon') {
-      const step = WEAPON_LEVELS[d.id]?.[lv - 1];
+      const raw = WEAPON_LEVELS[d.id]?.[lv - 1];
+      const step = raw ? scaleWeaponStep(raw, o.rarity) : null;
       if (step) {
         this.weaponDamageBonus += step.damage ?? 0;
         this.volleyBonus += step.volley ?? 0;
@@ -1059,6 +1102,8 @@ export class Run {
       if (this.maxHp > before) this.hp += this.maxHp - before;
       this.hp = Math.min(this.hp, this.maxHp);
     }
+    // 適合的法具等級變了：技法的「適合」加成跟著重算（D53）
+    this.tech.recompute();
   }
 
   get ultReady(): boolean {
@@ -1176,6 +1221,13 @@ export class Run {
       const first = this.tech.owned.length === 0;
       if (this.tech.add(id) && first) this.dosojinAt = this.clock + DOSOJIN.appearDelay;
     }
+    this.refreshEvolvable();
+  }
+
+  /** 開發與測試：把技法（或鬼火）練到指定等級，並重新檢查可不可以進化 */
+  devTechLevel(id: string, level: number): void {
+    this.tech.devSetLevel(id, level);
+    this.refreshEvolvable();
   }
 
   /** 主武器滿級了嗎（變化的 atMax 加強） */
@@ -1186,7 +1238,7 @@ export class Run {
   /** 現在一次發射幾顆（含小數：小數 = 機率多一顆） */
   get volleyExact(): number {
     const w = this.yokai.weapon;
-    return (tuning.volley > 0 ? tuning.volley : w.volley) + this.volleyBonus + this.frenzyVolley;
+    return (tuning.volley > 0 ? tuning.volley : w.volley) + this.volleyBonus + this.frenzyVolley + this.tech.evoVolley;
   }
 
   /** 燈籠環：繞身鬼火幾顆、半徑（公尺）；環內護身打到的累計次數；燃燒地數（外觀、測試用） */
@@ -1206,7 +1258,7 @@ export class Run {
   /** 一發鬼火的基礎傷害（主武器傷害＋升級加值、攻擊力、暴擊） */
   shotDamage(crit: boolean): number {
     const s = this.stats.value;
-    return (this.yokai.weapon.damage + this.weaponDamageBonus) * s.power * tuning.damageScale * (crit ? s.critDmg : 1);
+    return (this.yokai.weapon.damage + this.weaponDamageBonus) * s.power * tuning.damageScale * (crit ? s.critDmg : 1) * this.tech.baseFit * this.tech.evoWeaponDamage;
   }
 
   /** 平均每次命中的碎火片數（狐火分裂時有碎火就 +shardBonus） */

@@ -45,7 +45,7 @@ const TECH_PREF = arg('techs', '');
 /** --give a,b：開局直接給這幾個技法；--techMax N：一局最多 N 個（給 2 個再 --techMax 2 = 只測這一對，不會再抽到別的） */
 const GIVE = arg('give', '');
 const TECH_MAX_ARG = arg('techMax', '');
-/** --giveSets N：每局隨機（固定種子）給一組四個合法技法，用來全掃「真的一局會拿到的組合」；報告各技法的平均過關率 */
+/** --giveSets N：每局隨機（固定種子）給一組 TECH_MAX 個合法技法，用來全掃「真的一局會拿到的組合」；報告各技法的平均過關率 */
 const GIVE_SETS = Number(arg('giveSets', '0'));
 /** --mobile：用手機的敵人上限（WAVES.maxEnemiesMobile） */
 const MOBILE = process.argv.includes('--mobile');
@@ -81,6 +81,9 @@ function choose(run: Run, strategy: string, rnd: () => number): number {
   // 道祖神的技法面板：機器人不換（維持現狀）
   if (run.offerKind === 'tech') return Math.max(0, offer.findIndex((o) => o.cardId === 'tech-keep'));
   if (strategy === 'random') return Math.floor(rnd() * offer.length);
+  // 寶箱／合魂祠裡的進化卡（D53）：會玩的人一定拿
+  const evo = offer.findIndex((o) => o.cardId.startsWith('evo:'));
+  if (evo >= 0) return evo;
   const sc = SCORES[strategy];
   let best = 0;
   let bestV = -1;
@@ -122,6 +125,7 @@ interface Result {
   cards: Record<string, number>;
   curseTotal: number;
   casts: number;
+  evolved: number;
   variant: string;
   summonedAt: number;
   /** 撿到幾個補給品 */
@@ -146,15 +150,14 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   if (TECH_MAX_ARG) run.tech.max = Number(TECH_MAX_ARG);
   if (GIVE) run.devAddTech(...GIVE.split(','));
   if (GIVE_SETS > 0) {
-    // 這一局的四個技法：用種子隨機排列，依序加進去（跳過互斥的）
+    // 這一局的技法：用種子隨機排列，依序加進去（跳過互斥的）
     const order = TECHS.map((x) => x.id);
     const r2 = lcg(seed * 104729);
     for (let i = order.length - 1; i > 0; i--) {
       const j = Math.floor(r2() * (i + 1));
       [order[i], order[j]] = [order[j], order[i]];
     }
-    run.tech.max = 4;
-    for (const id of order) if (run.tech.owned.length < 4 && run.tech.canOffer(id)) run.devAddTech(id);
+    for (const id of order) if (run.tech.owned.length < run.tech.max && run.tech.canOffer(id)) run.devAddTech(id);
   }
   // 要測的關卡數：STAGES 關（超過一般地圖的關數就以地圖為準）
   let used = 0;
@@ -208,6 +211,10 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     if (chest) {
       // 寶箱（小頭目、精英掉的，或地圖上的）：先開再走
       [mx, mz] = steer(run, chest.x, chest.z);
+    } else if (run.elements.fuseSlot && run.elements.fuseSlot.announce <= 0 && strategy !== 'random') {
+      // 合魂祠：技法進化的材料齊了就去進化（亂選的機器人不特別去）
+      const f = run.elements.fuseSlot;
+      [mx, mz] = steer(run, f.x, f.z);
     } else if (run.portal.active) {
       [mx, mz] = steer(run, run.portal.x, run.portal.z);
     } else if (altar && altar.announce <= 0 && run.time >= SUMMON_AT * run.director.duration) {
@@ -269,6 +276,7 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     cards,
     variant: run.tech.owned.join('+') || '-',
     casts,
+    evolved: run.tech.evolved.length,
     summonedAt,
     pickups,
     weaponMaxAt,
@@ -428,7 +436,7 @@ function summarize(rs: Result[]): string {
     `擊殺 ${avg(rs.map((r) => r.kills)).toFixed(0)}`,
     `等級 ${avg(rs.map((r) => r.level)).toFixed(1)}`,
     `用掉要素 ${avg(rs.map((r) => r.elementsUsed)).toFixed(1)}`,
-    `大招 ${ULT_ID || '預設'} Lv${ULT_LV}、發動 ${avg(rs.map((r) => r.casts)).toFixed(1)} 次`,
+    `大招 ${ULT_ID || '預設'} Lv${ULT_LV}、發動 ${avg(rs.map((r) => r.casts)).toFixed(1)} 次、技法進化 ${avg(rs.map((r) => r.evolved)).toFixed(2)} 次`,
     `技法平均 ${avg(rs.map((r) => (r.variant === '-' ? 0 : r.variant.split('+').length))).toFixed(1)} 個（${[...new Set(rs.map((r) => r.variant))].slice(0, 4).join('/')}…）`,
     `補給品 ${avg(rs.map((r) => r.pickups)).toFixed(1)} 個`,
     `主武器 4 級中位第 ${pct(rs.filter((r) => r.weapon4At >= 0).map((r) => r.weapon4At), 50)?.toFixed(0) ?? '-'} 秒、滿級 ${((rs.filter((r) => r.weaponMaxAt >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.weaponMaxAt >= 0).map((r) => r.weaponMaxAt), 50)?.toFixed(0) ?? '-'} 秒）、結束時平均 ${avg(rs.map((r) => r.weaponLv)).toFixed(1)} 級`,

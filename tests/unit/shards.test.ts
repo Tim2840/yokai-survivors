@@ -59,7 +59,8 @@ describe('碎火（D43）：爆裂改成碎片飛去打附近的敵人', () => {
     expect(targets.size).toBe(3);
     for (const s of shards) {
       expect(side).toContain(s.target);
-      expect(s.dmg).toBeCloseTo(hit * SHARDS.damage, 3);
+      // hit 是 1e6 − 剩下的血，float32 在 1e6 附近的精度只有約 0.06，所以只比到小數點後一位
+      expect(s.dmg).toBeCloseTo(hit * SHARDS.damage, 1);
       expect(s.gen).toBe(1);
     }
   });

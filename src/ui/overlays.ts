@@ -4,11 +4,11 @@ import { CARD_FORMAT, type StatId } from '../data/stats';
 import { setWeaponTextFormatter, type BuildSummary } from '../game/buildSummary';
 import { cardLinks } from '../data/links';
 import { DIFFICULTY } from '../data/difficulty';
-import { TECH_CARD_PREFIX, TECH_KEEP, TECH_LEVELS, TECH_SWAP_PREFIX, isTechCard, techById, techMix } from '../data/techniques';
+import { TECH_CARD_PREFIX, TECH_FIT, TECH_KEEP, TECH_LEVELS, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard, techById, techMix } from '../data/techniques';
 import { ITEM_RARITY_MULT } from '../data/items';
 import type { Rarity } from '../data/rarity';
 import { cardById, type CardOffer } from '../systems/cards';
-import { WEAPON_LEVELS, itemDown, itemValue, type WeaponLevel } from '../data/items';
+import { WEAPON_LEVELS, itemDown, itemValue, scaleWeaponStep, type WeaponLevel } from '../data/items';
 import { PLAYABLE_YOKAI, STARTER_YOKAI } from '../data/yokai';
 import { CARD_EFFECT } from '../data/stats';
 import { lineIsGood, type ElementResult, type ResultLine } from '../systems/elementResult';
@@ -179,11 +179,11 @@ export function describeCard(o: CardOffer, levels: ReadonlyMap<string, number> =
   const d = cardById(o.cardId);
   const lv = levels.get(d.id) ?? 0;
   const name = t(`card.${d.id}` as I18nKey);
-  if (d.kind === 'fallback') return { name, desc: t(`card.fmt.${d.id}` as I18nKey, { v: num(d.perLevel ?? 0) }), level: '', isNew: false };
+  if (d.kind === 'fallback') return { name, desc: t(`card.fmt.${d.id}` as I18nKey, { v: num(itemValue(d, o.rarity)) }), level: '', isNew: false };
   const level = lv === 0 ? t('card.new') : t('card.levelUp', { from: lv, to: lv + 1, max: d.maxLevel });
   if (d.kind === 'weapon') {
-    const step = WEAPON_LEVELS[d.id]?.[lv - 1];
-    return { name, desc: step ? weaponLevelText(step) : '', level, isNew: false };
+    const raw = WEAPON_LEVELS[d.id]?.[lv - 1];
+    return { name, desc: raw ? weaponLevelText(scaleWeaponStep(raw, o.rarity)) : '', level, isNew: false };
   }
   const v = itemValue(d, o.rarity);
   if (d.kind === 'mod') return { name, desc: t(`card.fmt.${d.mod}` as I18nKey, { v: num(v) }), level, isNew: lv === 0 };
@@ -208,14 +208,28 @@ export interface PickerContext {
 
 const techName = (id: string): string => t(`tech.${id}` as I18nKey);
 
+/** 「適合」加成的文字（D53）：適合的法具有幾件到了門檻、效果加多少 */
+function fitText(id: string, counts: ReadonlyMap<string, number>): string {
+  const likes = techById(id).likes;
+  const n = likes.filter((l) => (counts.get(l) ?? 0) >= TECH_FIT.minLevel).length;
+  return t('card.fit', { n, m: likes.length, pct: Math.round(n * TECH_FIT.perItem * 100) });
+}
+
+/** 進化卡的內容（HTML）：標籤、名稱、說明、材料 */
+function evoCardHtml(cardId: string): string {
+  const e = evoOfCard(cardId);
+  const [a, b] = e.from;
+  return `<span class="rname">${t('card.evoTag')}</span><b>${t(`evo.${e.id}` as I18nKey)}</b><span class="cdesc">${t(`evo.${e.id}.desc` as I18nKey)}</span><span class="ctech">${t('card.evoFrom', { a: techName(a), la: TECH_LEVELS.max, b: techName(b), lb: TECH_LEVELS.max })}</span>`;
+}
+
 /** 技法卡的內容（HTML）：標籤、名稱、玩法說明、適合的道具、和已有技法的混搭 */
-function techCardHtml(cardId: string, rarity: Rarity, owned: readonly string[], levels: readonly number[]): string {
+function techCardHtml(cardId: string, rarity: Rarity, owned: readonly string[], levels: readonly number[], counts: ReadonlyMap<string, number>): string {
   if (cardId === TECH_KEEP) return `<span class="rname">${t('card.techTag')}</span><b>${t('tech.keep')}</b><span class="cdesc">${t('tech.keep.desc')}</span>`;
   // 已有的技法：升一級（D49：最高 TECH_LEVELS.max 級，效果吃這張卡的稀有度）
   if (cardId.startsWith(TECH_CARD_PREFIX) && owned.includes(cardId.slice(TECH_CARD_PREFIX.length))) {
     const id = cardId.slice(TECH_CARD_PREFIX.length);
     const lv = levels[owned.indexOf(id)] ?? 1;
-    return `<span class="rname">${t(`rarity.${rarity}` as I18nKey)}・${t('tech.up.tag', { a: lv, b: lv + 1, max: TECH_LEVELS.max })}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="ctech">${t('tech.up.fx', { v: Math.round(TECH_LEVELS.perLevel * ITEM_RARITY_MULT[rarity] * 100) })}</span>`;
+    return `<span class="rname">${t(`rarity.${rarity}` as I18nKey)}・${t('tech.up.tag', { a: lv, b: lv + 1, max: TECH_LEVELS.max })}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="ctech">${t('tech.up.fx', { v: Math.round(TECH_LEVELS.perLevel * ITEM_RARITY_MULT[rarity] * 100) })}</span><span class="ctech fit">${fitText(id, counts)}</span>`;
   }
   let id: string;
   let tag: string;
@@ -233,7 +247,7 @@ function techCardHtml(cardId: string, rarity: Rarity, owned: readonly string[], 
   const likes = d.likes.map((x) => t(`card.${x}` as I18nKey)).join('、');
   const mix = techMix(id, rest);
   const mixText = !mix ? '' : mix.kind === 'hit' ? t('tech.mix.hit', { via: techName(mix.via), hit: techName(mix.hit) }) : t('tech.mix.family', { family: t(`tech.family.${mix.family}` as I18nKey) });
-  return `<span class="rname">${tag}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="ctech">${t('tech.likes', { items: likes })}</span>${mixText ? `<span class="ctech mix">${mixText}</span>` : ''}`;
+  return `<span class="rname">${tag}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="ctech">${t('tech.likes', { items: likes })}</span><span class="ctech fit">${fitText(id, counts)}</span>${mixText ? `<span class="ctech mix">${mixText}</span>` : ''}`;
 }
 
 /** 大招的局外升級累計（能力面板用）：「威力 ×1.1、範圍 ×1.08、冷卻 23 秒、充能 ×1.1」 */
@@ -256,11 +270,23 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
   const title = o.el.querySelector<HTMLElement>('#lv-title')!;
   const pending = o.el.querySelector<HTMLElement>('#lv-pending')!;
   return Object.assign(o, {
-    render(offer: CardOffer[], more: number, kind: 'levelup' | 'offering' | 'chest' | 'tech' = 'levelup', ult: PickerContext = { yokai: '', counts: new Map() }) {
-      title.textContent = t(kind === 'tech' ? (ult.techMode === 'swap' ? 'levelup.dosojin' : 'levelup.tech') : kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? 'levelup.offering' : 'levelup.chest');
+    render(offer: CardOffer[], more: number, kind: 'levelup' | 'offering' | 'chest' | 'tech' | 'fusion' = 'levelup', ult: PickerContext = { yokai: '', counts: new Map() }) {
+      title.textContent = t(kind === 'tech' ? (ult.techMode === 'swap' ? 'levelup.dosojin' : 'levelup.tech') : kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? 'levelup.offering' : kind === 'fusion' ? 'levelup.fusion' : 'levelup.chest');
       pending.textContent = more > 1 ? t('levelup.pending', { n: more - 1 }) : '';
       cardsEl.innerHTML = '';
       offer.forEach((c, i) => {
+        if (isEvoCard(c.cardId)) {
+          // 進化卡（D53）：寶箱最前面、合魂祠
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'card r-evo';
+          b.dataset.card = c.cardId;
+          b.dataset.index = String(i);
+          b.innerHTML = evoCardHtml(c.cardId);
+          b.addEventListener('click', () => onPick(i));
+          cardsEl.appendChild(b);
+          return;
+        }
         if (isTechCard(c.cardId)) {
           // 技法（D48）：新技法／加深／道祖神換一個／維持現狀
           const owned = ult.techs ?? [];
@@ -269,7 +295,7 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
           b.className = 'card r-variant';
           b.dataset.card = c.cardId;
           b.dataset.index = String(i);
-          b.innerHTML = techCardHtml(c.cardId, c.rarity, owned, ult.techLevels ?? []);
+          b.innerHTML = techCardHtml(c.cardId, c.rarity, owned, ult.techLevels ?? [], ult.counts);
           b.dataset.rarity = c.rarity;
           b.addEventListener('click', () => onPick(i));
           cardsEl.appendChild(b);
@@ -284,7 +310,7 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
         b.dataset.rarity = c.rarity;
         b.dataset.index = String(i);
         b.innerHTML = `<span class="shape ${SHAPES[c.rarity]}" aria-hidden="true"></span>
-          <span class="rname">${kind === 'weapon' ? t('card.weaponTag') : kind === 'fallback' ? '' : cardById(c.cardId).rarityScales ? t(`rarity.${c.rarity}` as I18nKey) : ''}</span><b>${d.name}</b><span class="clv">${d.level}</span><span class="cdesc">${d.desc}</span>${cardLinkLines(c.cardId, ult.yokai).map((x) => `<span class="csyn clink">${x}</span>`).join('')}`;
+          <span class="rname">${kind === 'weapon' ? `${t(`rarity.${c.rarity}` as I18nKey)}・${t('card.weaponTag')}` : kind === 'fallback' ? '' : cardById(c.cardId).rarityScales ? t(`rarity.${c.rarity}` as I18nKey) : ''}</span><b>${d.name}</b><span class="clv">${d.level}</span><span class="cdesc">${d.desc}</span>${cardLinkLines(c.cardId, ult.yokai).map((x) => `<span class="csyn clink">${x}</span>`).join('')}`;
         b.addEventListener('click', () => onPick(i));
         cardsEl.appendChild(b);
       });
@@ -441,7 +467,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
     parent,
     'pause',
     `<div class="panel pause-panel"><h2>${t('pause.title')}</h2><p id="pause-status"></p>
-      <div class="sum"><section class="sum-col"><h3>${t('pause.cards')} <span id="sum-slots"></span></h3><ul class="sum-cards" id="sum-cards"></ul><div id="sum-ult"></div></section>
+      <div class="sum"><section class="sum-col"><h3>${t('pause.cards')} <span id="sum-slots"></span></h3><ul class="sum-cards" id="sum-cards"></ul><div id="sum-evo"></div><div id="sum-ult"></div></section>
       <section class="sum-col"><h3>${t('pause.abilities')}</h3><dl class="sum-stats" id="sum-stats"></dl><div id="sum-curse"></div></section></div>
       <div class="row">${btn('btn-pause-quit', 'pause.quit', 'secondary')}${btn('btn-pause-resume', 'pause.resume')}</div></div>`,
   );
@@ -459,9 +485,20 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
         const li = document.createElement('li');
         li.dataset.card = c.id;
         const chips = (['common', 'rare', 'epic', 'legend'] as const).map((r) => `<i class="chip r-${r}"></i>`.repeat(c.byRarity[r])).join('');
-        li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), lv: c.level, max: c.maxLevel })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}${cardLinkLines(c.id, sum.yokai).map((x) => `<br><span class="clink">${x}</span>`).join('')}${c.kind === 'weapon' && sum.techs.length > 0 ? `<br>${t('pause.techs', { list: sum.techs.map((x) => (x.level > 1 ? `${techName(x.id)} Lv${x.level}` : techName(x.id))).join('、') })}` : ''}</em>`;
+        li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), lv: c.level, max: c.maxLevel })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}${cardLinkLines(c.id, sum.yokai).map((x) => `<br><span class="clink">${x}</span>`).join('')}${c.kind === 'weapon' ? `<br>${t('pause.baseFit', { n: sum.baseFit.n, m: sum.baseFit.total, pct: sum.baseFit.pct })}` : ''}${c.kind === 'weapon' && sum.techs.length > 0 ? `<br>${t('pause.techs', { list: sum.techs.map((x) => t('pause.techRow', { name: techName(x.id), lv: x.level, n: x.fitN, m: x.fitTotal, pct: x.pct })).join('、') })}` : ''}</em>`;
         cards.appendChild(li);
       }
+      const evo = q('sum-evo');
+      evo.innerHTML = sum.evolutions.length
+        ? `<h3>${t('pause.evolutions')}</h3><ul class="sum-ult">${sum.evolutions
+            .map(
+              (e) =>
+                `<li data-evo="${e.id}" class="${e.done ? 'fused' : ''}"><b>${t(`evo.${e.id}` as I18nKey)}${e.done ? ' ✓' : ''}</b><em>${t(`evo.${e.id}.desc` as I18nKey)}</em><span>${e.from
+                  .map((m) => `<i class="${m.level >= TECH_LEVELS.max ? 'ok' : ''}">${t('pause.evoPart', { name: techName(m.id), lv: Math.min(m.level, TECH_LEVELS.max), max: TECH_LEVELS.max })}</i>`)
+                  .join('')}${e.ready ? `<i class="ok">${t('pause.evoReady')}</i>` : ''}</span></li>`,
+            )
+            .join('')}</ul>`
+        : '';
       const ult = q('sum-ult');
       ult.innerHTML = sum.ultimates.length
         ? `<h3>${t('pause.ultimates')}</h3><ul class="sum-ult">${sum.ultimates

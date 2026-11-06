@@ -1,5 +1,5 @@
 import { COMBAT } from '../data/combat';
-import { TECHS, TECH_CHOICES, TECH_DEEPEN, TECH_FAMILIES, TECH_LEVELS, TECH_MAX, TECH_OFFER, TECH_RULES, techById, techsFor, type TechDef, type TechFamily, type TechMechanic } from '../data/techniques';
+import { BASE_TECH_ID, BASE_TECH_LIKES, EVO, EVOS, TECHS, TECH_CHOICES, TECH_DEEPEN, TECH_FAMILIES, TECH_FIT, TECH_LEVELS, TECH_MAX, TECH_OFFER, TECH_RULES, evoById, techById, techsFor, type EvoDef, type TechDef, type TechFamily, type TechMechanic } from '../data/techniques';
 import type { WeaponDef } from '../data/yokai';
 import type { Rng } from '../lib/random';
 import type { Run } from './run';
@@ -28,6 +28,14 @@ export class Techniques {
   readonly levels: number[] = [];
   /** 各技法累積的稀有度倍率（每拿一次加上那張卡的倍率；效果倍率 = 1 + perLevel × (累積 − 1)） */
   readonly points: number[] = [];
+  /** 已進化的配方 id（D53）：兩個材料技法併成一個，效果 × EVO.power、參數換成進化後的值 */
+  readonly evolved: string[] = [];
+  /** 各技法目前的「適合」加成倍率（D53；依法具等級，recompute 時算好，每步不重算）與適合的件數 */
+  private readonly fitMult: number[] = [];
+  private readonly fitN: number[] = [];
+  /** 鬼火（主武器）自己的適合件數、傷害倍率 */
+  baseFitN = 0;
+  baseFit = 1;
   /** 現在作用中的技法（依機制；沒有 = null） */
   readonly act: Record<TechMechanic, TechDef | null> = { kitsunebi: null, bounce: null, homing: null, rain: null, ring: null, ward: null, satellite: null, lamp: null, hellfire: null, seed: null, pillar: null, oil: null };
   /** 每系「多拿了幾個」（同系 N 個 → N − 1） */
@@ -123,25 +131,88 @@ export class Techniques {
     const i = this.owned.indexOf(id);
     return i < 0 ? 0 : this.levels[i];
   }
-  /** 技法等級的效果倍率 */
+  /** 技法的效果倍率：技法等級 × 適合加成（D53）× 進化（D53） */
   private pw(m: TechMechanic): number {
     const d = this.act[m];
     if (!d) return 1;
-    const i = this.owned.indexOf(d.id);
-    return 1 + TECH_LEVELS.perLevel * (this.points[i] - 1);
+    return this.powerAt(this.owned.indexOf(d.id));
+  }
+  private powerAt(i: number): number {
+    return (1 + TECH_LEVELS.perLevel * (this.points[i] - 1)) * this.fitMult[i] * (this.isEvolved(this.owned[i]) ? EVO.power : 1);
   }
   /** 效果倍率（畫面、測試用） */
   powerOf(id: string): number {
     const i = this.owned.indexOf(id);
-    return i < 0 ? 0 : 1 + TECH_LEVELS.perLevel * (this.points[i] - 1);
+    return i < 0 ? 0 : this.powerAt(i);
+  }
+  /** 適合的法具有幾件到了門檻（畫面、測試用）；總共幾件適合 */
+  fitOf(id: string): { n: number; total: number; mult: number } {
+    if (id === BASE_TECH_ID) return { n: this.baseFitN, total: BASE_TECH_LIKES.length, mult: this.baseFit };
+    const i = this.owned.indexOf(id);
+    return { n: i < 0 ? 0 : this.fitN[i], total: techById(id).likes.length, mult: i < 0 ? 1 : this.fitMult[i] };
+  }
+  private countFit(likes: readonly string[]): number {
+    let n = 0;
+    for (const l of likes) if ((this.run.cardCounts.get(l) ?? 0) >= TECH_FIT.minLevel) n++;
+    return n;
+  }
+
+  // ── 進化（D53）──
+  /** 這個技法已經併進某個進化了（鬼火不會被用掉：它可以和不同的技法各進化一次） */
+  isEvolved(id: string): boolean {
+    if (id === BASE_TECH_ID) return false;
+    for (const e of this.evolved) if (evoById(e).from.includes(id)) return true;
+    return false;
+  }
+  /** 這個技法（或鬼火）現在幾級（鬼火 = 主武器等級；沒有 = 0） */
+  techLevel(id: string): number {
+    return id === BASE_TECH_ID ? this.run.weaponLevel : this.levelOf(id);
+  }
+  /** 材料都到 TECH_LEVELS.max 級、還沒進化、而且沒有被別的進化用掉的進化 */
+  get evolvable(): EvoDef[] {
+    return EVOS.filter((e) => !this.evolved.includes(e.id) && e.from.every((m) => !this.isEvolved(m) && this.techLevel(m) >= TECH_LEVELS.max));
+  }
+  /** 進化：兩個技法併成一個 */
+  evolve(id: string): boolean {
+    if (!this.evolvable.some((e) => e.id === id)) return false;
+    this.evolved.push(id);
+    this.recompute();
+    return true;
+  }
+  /** 目前佔幾個技法欄位（進化的兩個技法併成一格；有鬼火的進化不省格） */
+  get slotsUsed(): number {
+    let n = this.owned.length;
+    for (const id of this.evolved) {
+      const e = evoById(id);
+      if (!e.from.includes(BASE_TECH_ID) && e.from.every((m) => this.has(m))) n--;
+    }
+    return n;
+  }
+  /** 進化給主武器的加成（傷害倍率、穿透、發射數） */
+  get evoWeaponDamage(): number {
+    let m = 1;
+    for (const e of this.evolved) m += evoById(e).weapon?.damage ?? 0;
+    return m;
+  }
+  get evoPierce(): number {
+    let n = 0;
+    for (const e of this.evolved) n += evoById(e).weapon?.pierce ?? 0;
+    return n;
+  }
+  get evoVolley(): number {
+    let n = 0;
+    for (const e of this.evolved) n += evoById(e).weapon?.volley ?? 0;
+    return n;
   }
 
   /** 學會一個技法（rarityMult = 那張卡的稀有度倍率） */
   add(id: string, rarityMult = 1): boolean {
-    if (this.has(id) || this.owned.length >= this.max) return false;
+    if (this.has(id) || this.slotsUsed >= this.max) return false;
     this.owned.push(id);
     this.levels.push(1);
     this.points.push(rarityMult);
+    this.fitMult.push(1);
+    this.fitN.push(0);
     this.recompute();
     return true;
   }
@@ -152,8 +223,22 @@ export class Techniques {
     this.owned[i] = newId;
     this.levels[i] = 1;
     this.points[i] = 1;
+    // 換掉進化過的技法：進化跟著拆掉（兩個材料都要在才算）
+    for (let k = this.evolved.length - 1; k >= 0; k--) if (evoById(this.evolved[k]).from.includes(oldId)) this.evolved.splice(k, 1);
     this.recompute();
     return true;
+  }
+  /** 開發與測試：直接把技法（或鬼火）練到指定等級 */
+  devSetLevel(id: string, level: number): void {
+    if (id === BASE_TECH_ID) {
+      while (this.run.weaponLevel < level) this.run.give(BASE_TECH_ID, 'common');
+      return;
+    }
+    const i = this.owned.indexOf(id);
+    if (i < 0) return;
+    this.levels[i] = level;
+    this.points[i] = Math.max(this.points[i], level);
+    this.recompute();
   }
   levelUp(id: string, rarityMult = 1): boolean {
     const i = this.owned.indexOf(id);
@@ -164,14 +249,19 @@ export class Techniques {
     return true;
   }
 
-  private recompute(): void {
+  /** 重算作用中的技法、適合加成、進化的參數（技法或法具變動時呼叫） */
+  recompute(): void {
     for (const k of Object.keys(this.act) as TechMechanic[]) this.act[k] = null;
     const fam: Record<TechFamily, number> = { split: 0, orbit: 0, burn: 0 };
-    for (const id of this.owned) {
+    this.owned.forEach((id, i) => {
       const d = techById(id);
-      this.act[id as TechMechanic] = d;
+      this.act[id as TechMechanic] = this.withEvo(d);
       fam[d.family]++;
-    }
+      this.fitN[i] = this.countFit(d.likes);
+      this.fitMult[i] = 1 + TECH_FIT.perItem * this.fitN[i];
+    });
+    this.baseFitN = this.countFit(BASE_TECH_LIKES);
+    this.baseFit = 1 + TECH_FIT.perItem * this.baseFitN;
     for (const f of TECH_FAMILIES) this.deep[f] = Math.max(0, fam[f] - 1);
     // 拿掉的技法留下的東西清掉
     if (!this.act.hellfire) this.zoneLife.fill(0);
@@ -187,6 +277,21 @@ export class Techniques {
     const base = this.run.yokai.weapon;
     this.weapon = h ? { ...base, projectileSpeed: base.projectileSpeed * h.speedMult } : base;
     this.run.projectiles.homeReturnPierce = h ? h.returnPierce + this.deep.split * TECH_DEEPEN.split.homingPierce : 0;
+  }
+
+  /** 套用進化：把進化指定的區塊欄位換成新值（回傳新的定義；沒有進化就回原本的） */
+  private withEvo(d: TechDef): TechDef {
+    let out: TechDef | null = null;
+    for (const e of this.evolved) {
+      const blocks = evoById(e).set[d.id];
+      if (!blocks) continue;
+      out ??= { ...d };
+      for (const [name, vals] of Object.entries(blocks)) {
+        const cur = (out as unknown as Record<string, Record<string, number>>)[name];
+        (out as unknown as Record<string, Record<string, number>>)[name] = { ...cur, ...vals };
+      }
+    }
+    return out ?? d;
   }
 
   /** 這個技法現在能不能被抽到（沒拿過、沒和已有的互斥、拿掉 skip 之後） */
@@ -214,7 +319,7 @@ export class Techniques {
   pickCard(rng: Rng): string | null {
     const ids: string[] = [];
     const w: number[] = [];
-    if (this.owned.length < this.max) {
+    if (this.slotsUsed < this.max) {
       for (const t of techsFor(this.run.weaponItemId)) {
         if (this.has(t.id) || !this.canOffer(t.id)) continue;
         ids.push(t.id);

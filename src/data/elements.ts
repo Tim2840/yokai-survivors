@@ -1,7 +1,7 @@
 import type { Rarity } from './rarity';
 
 /** 地圖要素（docs/02 第 6 節）。M2 先做石地藏、結界石、詛咒祭壇；其餘隨後加入。 */
-export const ELEMENT_KINDS = ['jizo', 'barrier', 'altar', 'offering', 'omikuji', 'chest', 'summon', 'fox', 'dosojin'] as const;
+export const ELEMENT_KINDS = ['jizo', 'barrier', 'altar', 'offering', 'omikuji', 'chest', 'summon', 'fox', 'fuse', 'dosojin'] as const;
 export type ElementKind = (typeof ELEMENT_KINDS)[number];
 
 /** 出現規則（docs/02 第 6.3 節，改成連續關卡：用「關卡經過比例」取代「整備」） */
@@ -30,9 +30,9 @@ export const ELEMENT_RULES = {
 } as const;
 
 /** 要素種類權重（地圖可覆寫） */
-export const ELEMENT_WEIGHTS: Record<ElementKind, number> = { jizo: 1, barrier: 1, altar: 1, offering: 1, omikuji: 1, chest: 0.6, summon: 0, fox: 0.8, dosojin: 0 };
+export const ELEMENT_WEIGHTS: Record<ElementKind, number> = { jizo: 1, barrier: 1, altar: 1, offering: 1, omikuji: 1, chest: 0.6, summon: 0, fox: 0.8, fuse: 0, dosojin: 0 };
 /** 同種同時最多幾個（沒寫的用 ELEMENT_RULES.perKind） */
-export const ELEMENT_PER_KIND: Partial<Record<ElementKind, number>> = { chest: 1, omikuji: 1, summon: 1, fox: 1, dosojin: 1 };
+export const ELEMENT_PER_KIND: Partial<Record<ElementKind, number>> = { chest: 1, omikuji: 1, summon: 1, fox: 1, fuse: 1, dosojin: 1 };
 
 /** 稀有度權重（依虛擬波數；docs/02 第 6.3 節）。波數落在哪一列取最後一個 from <= n */
 export const ELEMENT_RARITY_BY_WAVE: readonly { from: number; w: Record<Rarity, number> }[] = [
@@ -113,6 +113,13 @@ export const FOX = {
   /** 站在圈內幾秒算收下 */
   acceptSeconds: 1.0,
 } as const;
+
+/**
+ * 合魂祠（使用者 2026-11-05：「融合不要限制在打王後，請在地圖上弄一個可以融合的要素」）：
+ * 大招材料湊齊後 appearDelay 秒，在離玩家 ringMin～ringMax 公尺的平地出現（HUD 箭頭指過去）；站上去按住 holdSeconds 秒
+ * → 融合面板（只有湊齊的大招，選一個）。不會過期；沒有可以融合的大招時收掉。寶箱也照樣可以融合。
+ */
+export const FUSE = { appearDelay: 3, ringMin: 15, ringMax: 28, holdSeconds: 1.5 } as const;
 
 /**
  * 道祖神（D47，使用者：「抽到某個方向的變化，要可以改，不然一抽定生死」）：守護岔路的神，在這裡換方向。

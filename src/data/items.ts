@@ -3,9 +3,9 @@ import type { Rarity } from './rarity';
 
 /**
  * 法具（D30 第一步，docs/15 第 3 節；取代「無限重複的屬性卡」）。
- * - 主武器（鬼火）有 8 級，每一級加不同的東西（參考吸血鬼倖存者的魔杖）；升級不看稀有度。
+ * - 主武器（鬼火）有 8 級，每一級加不同的東西（參考吸血鬼倖存者的魔杖）；**D53 起每一級也看稀有度**（那一級加的東西 × 稀有度倍率）。
  * - 屬性道具最多 5 級，每級固定幅度 × 稀有度倍率（凡 1.0／良 1.2／珍 1.5／極 2.0，參考 Megabonk）。
- * - 「多一顆」「穿透」這種整數效果不吃稀有度，而且等級很少（鬼火增殖 2 級，參考 Duplicator）。
+ * - 「多一顆」「穿透」這種整數效果（D53 起也吃稀有度，小數 = 機率多一顆／多穿一隻）等級很少（多重 2 級，參考 Duplicator）。
  * - 道具欄位有上限（ITEM_SLOTS）：滿了以後只會出現「已有道具的下一級」。都滿級之後出現備用獎勵（療傷、香油錢）。
  * 數字是起始提案，依 npm run sim 校準（docs/02 變更紀錄）。
  */
@@ -61,7 +61,7 @@ export const GHOSTFIRE_LEVELS: readonly WeaponLevel[] = [
 export const WEAPON_LEVELS: Record<string, readonly WeaponLevel[]> = { ghostfire: GHOSTFIRE_LEVELS };
 
 export const ITEMS: readonly ItemDef[] = [
-  { id: 'ghostfire', kind: 'weapon', maxLevel: GHOSTFIRE_LEVELS.length + 1, rarityScales: false, levelGate: 4 },
+  { id: 'ghostfire', kind: 'weapon', maxLevel: GHOSTFIRE_LEVELS.length + 1, rarityScales: true, levelGate: 4 },
   // 屬性道具（5 級）
   { id: 'power', kind: 'stat', stat: 'power', perLevel: 10, maxLevel: 5, rarityScales: true },
   { id: 'atkSpeed', kind: 'stat', stat: 'atkSpeed', perLevel: 8, maxLevel: 5, rarityScales: true },
@@ -77,13 +77,13 @@ export const ITEMS: readonly ItemDef[] = [
   { id: 'diamondBody', kind: 'stat', stat: 'armor', perLevel: 4, maxLevel: 5, rarityScales: true, down: { stat: 'speed', perLevel: 3 } },
   // 武器改造
   // 鬼火增殖：每顆鬼火打不同的敵人之後（修正疊成一顆）變得很強 → 6 級以後才出現、出現機率 ×0.35（使用者：太容易拿到、遊戲太簡單）
-  { id: 'volley', kind: 'mod', mod: 'volley', perLevel: 1, maxLevel: 2, rarityScales: false, weight: 0.35, minLevel: 6 },
+  { id: 'volley', kind: 'mod', mod: 'volley', perLevel: 1, maxLevel: 2, rarityScales: true, weight: 0.35, minLevel: 6 },
   // 碎火（道具 id 沿用 splash；D43 取代原本的範圍濺射）：每級平均多飛出 perLevel 片（小數 = 機率多一片），吃稀有度
   { id: 'splash', kind: 'mod', mod: 'shards', perLevel: 0.6, maxLevel: 5, rarityScales: true },
-  { id: 'pierce', kind: 'mod', mod: 'pierce', perLevel: 1, maxLevel: 3, rarityScales: false },
+  { id: 'pierce', kind: 'mod', mod: 'pierce', perLevel: 1, maxLevel: 3, rarityScales: true },
   // 備用獎勵（全部滿級、欄位也滿了才會出現；不佔欄位、沒有等級上限）
-  { id: 'heal', kind: 'fallback', perLevel: 30, maxLevel: Infinity, rarityScales: false },
-  { id: 'meritBag', kind: 'fallback', perLevel: 5, maxLevel: Infinity, rarityScales: false },
+  { id: 'heal', kind: 'fallback', perLevel: 30, maxLevel: Infinity, rarityScales: true },
+  { id: 'meritBag', kind: 'fallback', perLevel: 5, maxLevel: Infinity, rarityScales: true },
 ];
 
 /** 提燈小僧能拿到的道具（之後依局外解鎖與妖怪分開） */
@@ -114,6 +114,12 @@ export const itemById = (id: string): ItemDef => {
 /** 取捨道具這一級扣多少（卡片單位，正數；D38 起乘稀有度） */
 export function itemDown(d: ItemDef, rarity: Rarity): number {
   return d.down ? d.down.perLevel * ITEM_RARITY_MULT[rarity] : 0;
+}
+
+/** 主武器某一級的步驟 × 稀有度倍率（D53：每一級升級卡都有稀有度，加成的多寡） */
+export function scaleWeaponStep(st: WeaponLevel, rarity: Rarity): WeaponLevel {
+  const m = ITEM_RARITY_MULT[rarity];
+  return { damage: (st.damage ?? 0) * m, volley: (st.volley ?? 0) * m, cooldownPct: (st.cooldownPct ?? 0) * m, pierce: (st.pierce ?? 0) * m, splash: (st.splash ?? 0) * m };
 }
 
 /** 這一級的實際數值（已乘稀有度） */

@@ -1,11 +1,11 @@
 /**
  * 法具的「連結」（使用者 2026-11-06：「所有法具能輔助融合成什麼、影響了哪些招式，都要清楚寫明」）。
  * 從資料反推：這個法具是哪些技法「適合」搭配（`TechDef.likes`）。大招在 D52 改成局外裝配後，法具不再是大招的材料，
- * 所以只剩技法。選卡畫面與能力面板都用這一份，所以新增技法或法具時不用另外維護文字。
+ * 所以只剩技法（主武器鬼火也算一個技法）。選卡畫面與能力面板都用這一份，所以新增技法或法具時不用另外維護文字。
  * 取捨道具（妖刀、狂燈、金剛身）算成它們加強的那個屬性道具（力量、迅捷、堅甲）。
  */
 import { ITEMS, type ItemDef } from './items';
-import { TECHS } from './techniques';
+import { BASE_TECH_ID, BASE_TECH_LIKES, TECHS } from './techniques';
 import { YOKAI } from './yokai';
 
 export interface CardLinks {
@@ -27,7 +27,8 @@ export function cardLinks(cardId: string, yokai: string): CardLinks {
   if (!d || d.kind === 'fallback') return { techs: [], weapon: false };
   const base = baseItemId(d);
   return {
-    techs: TECHS.filter((x) => x.weapon === weaponId && x.likes.includes(base)).map((x) => x.id),
+    // 主武器（鬼火）也是一個技法（D53）：排在最前面
+    techs: [...(BASE_TECH_LIKES.includes(base) ? [BASE_TECH_ID] : []), ...TECHS.filter((x) => x.weapon === weaponId && x.likes.includes(base)).map((x) => x.id)],
     weapon: d.kind === 'weapon',
   };
 }

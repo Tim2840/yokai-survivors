@@ -1,6 +1,6 @@
 import type { Run } from './run';
 import { cardById, slotsUsed } from '../systems/cards';
-import { ITEM_SLOTS, SHARDS, WEAPON_LEVELS, itemDown, itemValue, type ItemKind } from '../data/items';
+import { ITEM_SLOTS, SHARDS, WEAPON_LEVELS, itemDown, itemValue, scaleWeaponStep, type ItemKind } from '../data/items';
 import { armorMult } from '../systems/stats';
 import { type Rarity } from '../data/rarity';
 import { type StatId } from '../data/stats';
@@ -8,6 +8,7 @@ import { STAT_IDS } from '../data/stats';
 import { ALTAR_CURSE_IDS, type CurseId } from '../data/altar';
 import { tuning } from '../data/tuning';
 import { ULT, ULT_UPGRADE } from '../data/ultimates';
+import { BASE_TECH_ID, EVOS } from '../data/techniques';
 
 /** 暫停畫面「能力」面板的資料（純資料，不含文字；文字由介面層用 i18n 組） */
 export interface BuildSummary {
@@ -19,7 +20,11 @@ export interface BuildSummary {
   yokai: string;
   /** 招式變化 id（還沒選是 null） */
   /** 這一局拿到的技法（D48）與各自的技法等級 */
-  techs: { id: string; level: number }[];
+  techs: { id: string; level: number; fitN: number; fitTotal: number; pct: number; evolved: boolean }[];
+  /** 技法進化（D53）：兩個材料都拿到的配方、各自的技法等級（鬼火 = 主武器等級）、是否已進化 */
+  evolutions: { id: string; from: { id: string; level: number }[]; done: boolean; ready: boolean }[];
+  /** 鬼火（主武器，也是一個技法）的適合加成 */
+  baseFit: { n: number; total: number; pct: number };
   /** 屬性：id、目前值（內部單位）、基礎值 */
   stats: { id: StatId; value: number; base: number }[];
   /** 武器：鬼火數量、濺射半徑（公尺）、穿透 */
@@ -70,7 +75,10 @@ export function summarizeBuild(run: Run): BuildSummary {
   }
   // 主武器：列出已經加過的東西
   const wl = run.cardCounts.get(run.weaponItemId) ?? 1;
-  const steps = (WEAPON_LEVELS[run.weaponItemId] ?? []).slice(0, wl - 1);
+  const table = WEAPON_LEVELS[run.weaponItemId] ?? [];
+  // 每一級加的東西 × 當時那張卡的稀有度（D53）
+  const weaponPicks = run.picked.filter((o) => o.cardId === run.weaponItemId);
+  const steps = table.slice(0, wl - 1).map((st, k) => scaleWeaponStep(st, weaponPicks[k]?.rarity ?? 'common'));
   const wsum = { damage: 0, volley: 0, cooldownPct: 0, pierce: 0, splash: 0 };
   let cd = 1;
   for (const st of steps) {
@@ -90,7 +98,20 @@ export function summarizeBuild(run: Run): BuildSummary {
     cards: [...map.values()].sort((a, b) => (a.kind === 'weapon' ? -1 : b.kind === 'weapon' ? 1 : b.level - a.level || a.id.localeCompare(b.id))),
     slotsUsed: slotsUsed(run.cardCounts),
     yokai: run.yokai.id,
-    techs: run.tech.owned.map((id, i) => ({ id, level: run.tech.levels[i] })),
+    techs: run.tech.owned.map((id, i) => {
+      const f = run.tech.fitOf(id);
+      return { id, level: run.tech.levels[i], fitN: f.n, fitTotal: f.total, pct: Math.round((f.mult - 1) * 100), evolved: run.tech.isEvolved(id) };
+    }),
+    evolutions: EVOS.filter((e) => e.from.every((m) => m === BASE_TECH_ID || run.tech.has(m))).map((e) => ({
+      id: e.id,
+      from: e.from.map((m) => ({ id: m, level: run.tech.techLevel(m) })),
+      done: run.tech.evolved.includes(e.id),
+      ready: run.tech.evolvable.some((x) => x.id === e.id),
+    })),
+    baseFit: (() => {
+      const f = run.tech.fitOf(BASE_TECH_ID);
+      return { n: f.n, total: f.total, pct: Math.round((f.mult - 1) * 100) };
+    })(),
     slots: ITEM_SLOTS,
     stats: STAT_IDS.filter((id) => id !== 'merit').map((id) => ({ id, value: s[id], base: run.stats.baseOf(id) })),
     weapon: {

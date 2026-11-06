@@ -106,6 +106,12 @@ export function installDevApi(ctx: DevContext): void {
         })(),
         techs: [...r.tech.owned],
         techLevels: [...r.tech.levels],
+        evolved: [...r.tech.evolved],
+        evolvable: r.tech.evolvable.map((e) => e.id),
+        fuseSlot: (() => {
+          const f = r.elements.fuseSlot;
+          return f ? { x: f.x, z: f.z, announce: f.announce } : null;
+        })(),
         techMode: r.techMode,
         ward: r.tech.wardProgress,
         wardReady: r.tech.wardReady,
@@ -192,6 +198,13 @@ export function installDevApi(ctx: DevContext): void {
     },
     /** 下一次升級選卡一定有一張技法卡（D49：平常是機率；回歸用真的點擊拿技法） */
     techNext: () => run()?.devTechNext(),
+    /** 把技法（或 ghostfire）練到指定等級（D53：進化要兩個材料都 8 級） */
+    techLevel: (id: string, level: number) => {
+      const r = run();
+      if (!r) return false;
+      r.devTechLevel(id, level);
+      return true;
+    },
     /** 直接給技法（不經面板，D48；給 TECH_MAX 以內） */
     giveTech: (...ids: string[]) => {
       const r = run();

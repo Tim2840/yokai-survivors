@@ -12,7 +12,7 @@
  * 同系拿兩個以上 → 該系加深（TECH_DEEPEN）。互斥（excludes）：燈籠環不再發射，所以不能和要靠飛出去的鬼火的技法一起拿。
  * 數字為起始提案，用 npm run sim -- --techs 全掃組合校準（docs/02 變更紀錄）。
  */
-export const TECH_MAX = 4;
+export const TECH_MAX = 3;
 /** 道祖神換法提案用的抽選數（舊的三選一面板已拿掉） */
 export const TECH_CHOICES = 3;
 /**
@@ -232,3 +232,84 @@ export function techMix(candidate: string, owned: readonly string[]): TechMix | 
   }
   return family;
 }
+
+/**
+ * 「適合」加成（D53，使用者 2026-11-06：「適合可有加成」）：技法每有一件「適合」的法具（`TechDef.likes`）練到 minLevel 級以上，
+ * 那個技法的效果倍率 + perItem（可以和技法等級的倍率相乘）。卡上寫「適合 2/4」。起始提案，sim 校準（docs/02 變更紀錄）。
+ */
+export const TECH_FIT = { minLevel: 3, perItem: 0.1 } as const;
+
+/** 主武器（鬼火）也是一個技法（D53）：它的等級就是主武器等級，適合的法具如下（效果 = 主武器傷害） */
+export const BASE_TECH_ID = 'ghostfire';
+export const BASE_TECH_LIKES: readonly string[] = ['power', 'atkSpeed', 'volley', 'pierce', 'splash'];
+
+/**
+ * 技法進化（D53，使用者 2026-11-06：「技法進化要做，一開始的鬼火也要是一個技法，納入招式進化的名單，融合時兩招都要等級 8」）：
+ * 配方 = 兩個技法（其中一個可以是主武器鬼火 `ghostfire`）都練到 TECH_LEVELS.max 級。湊齊後到**合魂祠**（地圖上出現）或**開寶箱**選進化卡。
+ * 進化後兩個技法併成一個（技法欄位少佔一格；有鬼火的不省格）、效果倍率 × EVO.power，並套用 `set`（把兩個技法的參數換成更強的值，
+ * 只寫要換的欄位）；有鬼火的另外給主武器 `weapon` 加成。一個技法一局只能進化一次。
+ * 名稱先用暫名（使用者要保留「九尾」給之後的角色）。
+ */
+export const EVO = { power: 1.25 } as const;
+
+type Block = Record<string, number>;
+export interface EvoDef {
+  id: string;
+  /** 兩個材料（技法 id 或 BASE_TECH_ID） */
+  from: readonly [string, string];
+  /** 把這幾個技法的參數換掉：技法 id → 區塊名 → 欄位 → 新值（直接取代） */
+  set: Readonly<Record<string, Readonly<Record<string, Block>>>>;
+  /** 有鬼火的進化：主武器傷害倍率、穿透、發射數（加在主武器上） */
+  weapon?: { damage: number; pierce: number; volley: number };
+}
+
+export const EVOS: readonly EvoDef[] = [
+  {
+    id: 'evoSplit',
+    from: ['ghostfire', 'kitsunebi'],
+    set: { kitsunebi: { split: { children: 4, atMaxChildren: 5, damage: 0.75, range: 9, reSplit: 2 } } },
+    weapon: { damage: 0.15, pierce: 1, volley: 0 },
+  },
+  {
+    id: 'evoSoul',
+    from: ['ghostfire', 'seed'],
+    set: { seed: { seed: { delay: 0.6, radius: 2.8, atMaxRadius: 3.4, damage: 1.0, max: 20 } } },
+    weapon: { damage: 0.15, pierce: 0, volley: 0.5 },
+  },
+  {
+    id: 'evoBounce',
+    from: ['bounce', 'homing'],
+    set: { bounce: { bounce: { range: 8, jumps: 5, atMaxJumps: 6, damage: 0.85 } }, homing: { homing: { returnPierce: 4, speedMult: 1.3, atMaxPierce: 2 } } },
+  },
+  {
+    id: 'evoSky',
+    from: ['rain', 'pillar'],
+    set: { rain: { rain: { count: 5, atMaxCount: 6, range: 4, radius: 1.5, damage: 0.7, life: 0.3 } }, pillar: { pillar: { interval: 2.5, range: 12, radius: 2.2, damage: 3.5, atMaxCount: 3, life: 0.5, max: 6 } } },
+  },
+  {
+    id: 'evoArray',
+    from: ['ring', 'satellite'],
+    set: { ring: { orbit: { baseOrbs: 3, atMaxOrbs: 2, radius: 3.6, damage: 1.7, innerDamage: 0.8 } }, satellite: { satellite: { count: 3, atMaxCount: 4, radius: 6.5, damage: 2.0 } } },
+  },
+  {
+    id: 'evoWatch',
+    from: ['ward', 'lamp'],
+    set: { ward: { ward: { chargeSeconds: 3, atMaxChargeSeconds: 2, burstRadius: 3.8, burstDamage: 3 } }, lamp: { lamp: { count: 2, atMaxCount: 3, damage: 1.7 } } },
+  },
+  {
+    id: 'evoInferno',
+    from: ['hellfire', 'oil'],
+    set: { hellfire: { burn: { radius: 2.2, seconds: 4, damage: 0.5, atMaxScale: 1.4 } }, oil: { oil: { seconds: 5, atMaxSeconds: 6, damage: 0.4, spread: 4, atMaxSpread: 5 } } },
+  },
+];
+
+export const evoById = (id: string): EvoDef => {
+  const e = EVOS.find((x) => x.id === id);
+  if (!e) throw new Error(`沒有這個進化：${id}`);
+  return e;
+};
+
+/** 進化卡在選卡面板裡的 id：evo:<進化 id> */
+export const EVO_CARD_PREFIX = 'evo:';
+export const isEvoCard = (id: string): boolean => id.startsWith(EVO_CARD_PREFIX);
+export const evoOfCard = (id: string): EvoDef => evoById(id.slice(EVO_CARD_PREFIX.length));

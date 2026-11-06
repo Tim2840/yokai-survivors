@@ -58,11 +58,13 @@ describe('法具：武器改造與主武器（D30）', () => {
     for (const id of ['volley', 'splash', 'pierce', 'ghostfire']) expect(ITEM_POOL).toContain(id);
     const run = new Run({ seed: 5, bus: new EventBus() });
     expect(run.volleyBonus).toBe(0);
+    // D53：多重也吃稀有度（珍 ×1.5、極 ×2.0；小數 = 機率多一顆）；最多 2 級，多的卡不再加
     run.give('volley', 'epic');
-    expect(run.volleyBonus).toBe(1);
+    expect(run.volleyBonus).toBeCloseTo(1.5);
     run.give('volley', 'legend');
     run.give('volley', 'legend');
-    expect(run.volleyBonus).toBe(itemById('volley').maxLevel);
+    expect(run.volleyBonus).toBeCloseTo(1.5 + 2);
+    expect(run.cardCounts.get('volley')).toBe(itemById('volley').maxLevel);
     // 碎火（D43）：每級平均多飛出 0.6 片 × 稀有度
     run.give('splash', 'rare');
     expect(run.shardBonus).toBeCloseTo(0.6 * 1.2);

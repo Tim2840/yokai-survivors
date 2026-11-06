@@ -35,6 +35,10 @@ export interface GameEvents {
   /** 玩家受傷（低頻事件；每擊殺等高頻事件不走匯流排，見 docs/06） */
   playerHurt: { damage: number; hp: number };
   /** 地圖要素落下／被用掉／消失（低頻） */
+  /** 合魂祠出現了、可以進化了、進化成功（低頻，D53） */
+  fuseShrine: { stage: number };
+  evolveReady: { id: string };
+  evolve: { id: string };
   /** 大招發動（低頻） */
   ultimate: { ids: string[] };
   elementSpawn: { kind: string; rarity: string };
