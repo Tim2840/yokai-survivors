@@ -16,7 +16,7 @@ import { STAGE } from './stage';
  * 改成數量 ×2、起步 2 顆、濺射 0.8、傷害 ×1（鬼火再多、濺射再大要靠「鬼火增殖」「爆裂」武器卡）→ 機器人 2/4 過關（平均 341 秒、擊殺 1,630）。
  * 起步 1 顆、無濺射太弱（×1.5 平均 201 秒、×2.5 平均 49 秒，機器人撐不過前幾分鐘）。
  */
-export const M1_PLAYTEST = { countScale: 2, hpScale: WAVES.hpScale as number, damageScale: 1, volley: 2, splash: 0.8, stageSeconds: STAGE.duration as number };
+export const M1_PLAYTEST = { countScale: 3, hpScale: WAVES.hpScale as number, damageScale: 1, volley: 2, splash: 0.8, stageSeconds: STAGE.duration as number };
 
 export const tuning = {
   /** 敵人數量倍率（見 WAVES.countScale） */

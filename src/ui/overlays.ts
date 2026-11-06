@@ -147,7 +147,7 @@ function techCardHtml(cardId: string, rarity: Rarity, owned: readonly string[], 
   if (cardId.startsWith(TECH_CARD_PREFIX) && owned.includes(cardId.slice(TECH_CARD_PREFIX.length))) {
     const id = cardId.slice(TECH_CARD_PREFIX.length);
     const lv = levels[owned.indexOf(id)] ?? 1;
-    return `<span class="rname">${t(`rarity.${rarity}` as I18nKey)}・${t('tech.up.tag', { a: lv, b: lv + 1, max: TECH_LEVELS.max })}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="csyn">${t('tech.up.fx', { v: Math.round(TECH_LEVELS.perLevel * ITEM_RARITY_MULT[rarity] * 100) })}</span>`;
+    return `<span class="rname">${t(`rarity.${rarity}` as I18nKey)}・${t('tech.up.tag', { a: lv, b: lv + 1, max: TECH_LEVELS.max })}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="ctech">${t('tech.up.fx', { v: Math.round(TECH_LEVELS.perLevel * ITEM_RARITY_MULT[rarity] * 100) })}</span>`;
   }
   let id: string;
   let tag: string;
@@ -165,7 +165,7 @@ function techCardHtml(cardId: string, rarity: Rarity, owned: readonly string[], 
   const likes = d.likes.map((x) => t(`card.${x}` as I18nKey)).join('、');
   const mix = techMix(id, rest);
   const mixText = !mix ? '' : mix.kind === 'hit' ? t('tech.mix.hit', { via: techName(mix.via), hit: techName(mix.hit) }) : t('tech.mix.family', { family: t(`tech.family.${mix.family}` as I18nKey) });
-  return `<span class="rname">${tag}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="csyn">${t('tech.likes', { items: likes })}</span>${mixText ? `<span class="csyn mix">${mixText}</span>` : ''}`;
+  return `<span class="rname">${tag}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="ctech">${t('tech.likes', { items: likes })}</span>${mixText ? `<span class="ctech mix">${mixText}</span>` : ''}`;
 }
 
 export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => void) {

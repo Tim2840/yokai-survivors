@@ -69,7 +69,8 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 .card:hover, .card:focus-visible { background: rgba(255,255,255,0.14); outline: none; transform: translateY(-2px); }
 .card b { font-size: 22px; }
 .card .cdesc { font-size: 15px; color: var(--text); }
-.card .csyn { font-size: 12px; color: var(--text-dim, #b9b2a4); }
+.card .csyn, .card .ctech { font-size: 12px; color: var(--text-dim, #b9b2a4); }
+.card .ctech.mix { color: #c08cff; }
 .card .csyn.ready { color: #ffd27a; font-weight: 700; }
 .card .rname { font-size: 13px; letter-spacing: 0.3em; color: var(--rc); }
 .card.r-common { --rc: #e8e6e0; } .card.r-rare { --rc: #5ec4e8; } .card.r-epic { --rc: #a678e0; } .card.r-legend { --rc: #ffb347; }
@@ -83,7 +84,7 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
   .card { width: auto; min-height: 0; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; align-items: center; padding: 10px 14px; gap: 4px 10px; text-align: left; }
   .card b { font-size: 20px; }
   .card .cdesc { flex-basis: 100%; font-size: 14px; }
-  .card .csyn { flex-basis: 100%; }
+  .card .csyn, .card .ctech { flex-basis: 100%; }
 }
 @media (max-height: 520px) {
   .panel { padding: 10px 16px; gap: 6px; }

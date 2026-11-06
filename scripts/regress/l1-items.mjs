@@ -16,7 +16,8 @@ export async function run(browser) {
         for (let g = 0; g < 60 && !(await page.evaluate(() => window.__game.screens)).includes('levelup'); g++) await page.evaluate(() => window.__game.addXp(10));
         expect((await page.evaluate(() => window.__game.screens)).includes('levelup'), `加魂火後沒有升級（${vp.name}）`);
       };
-      const cards = () => page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card')].map((c) => ({ id: c.dataset.card, lv: c.querySelector('.clv').textContent, tag: c.querySelector('.rname').textContent, weapon: c.classList.contains('r-weapon') })));
+      // 技法卡（D49：機率混在升級卡裡）不是法具，這裡不看
+      const cards = () => page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card:not([data-card^="tech:"])')].map((c) => ({ id: c.dataset.card, lv: c.querySelector('.clv').textContent, tag: c.querySelector('.rname').textContent, weapon: c.classList.contains('r-weapon') })));
 
       await step(`${vp.name} 連續升級 12 次：每張卡寫出新／等級、點了等級真的加一`, async () => {
         let sawWeapon = false;
@@ -33,7 +34,7 @@ export async function run(browser) {
           if (k === 0) files.push(await shot(ctx, 'l1-pick'));
           const before = await page.evaluate(() => window.__game.run.ult.counts);
           const pick = cs[k % cs.length];
-          await page.locator('.overlay[data-screen="levelup"] .card').nth(k % cs.length).click();
+          await page.locator(`.overlay[data-screen="levelup"] .card[data-card="${pick.id}"]`).first().click();
           await page.waitForFunction(() => true);
           const after = await page.evaluate(() => window.__game.run.ult.counts);
           if (!['heal', 'meritBag'].includes(pick.id)) expect((after[pick.id] ?? 0) === (before[pick.id] ?? 0) + 1, `選了 ${pick.id} 等級沒有加一：${before[pick.id]} → ${after[pick.id]}`);
