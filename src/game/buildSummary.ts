@@ -15,6 +15,8 @@ export interface BuildSummary {
   cards: { id: string; kind: ItemKind; stat: string; level: number; maxLevel: number; byRarity: Record<Rarity, number>; total: number; weaponText: string; down?: { stat: StatId; total: number } }[];
   slotsUsed: number;
   slots: number;
+  /** 這隻妖怪的 id（法具連結要用） */
+  yokai: string;
   /** 招式變化 id（還沒選是 null） */
   /** 這一局拿到的技法（D48）與各自的技法等級 */
   techs: { id: string; level: number }[];
@@ -87,6 +89,7 @@ export function summarizeBuild(run: Run): BuildSummary {
   return {
     cards: [...map.values()].sort((a, b) => (a.kind === 'weapon' ? -1 : b.kind === 'weapon' ? 1 : b.level - a.level || a.id.localeCompare(b.id))),
     slotsUsed: slotsUsed(run.cardCounts),
+    yokai: run.yokai.id,
     techs: run.tech.owned.map((id, i) => ({ id, level: run.tech.levels[i] })),
     slots: ITEM_SLOTS,
     stats: STAT_IDS.filter((id) => id !== 'merit').map((id) => ({ id, value: s[id], base: run.stats.baseOf(id) })),

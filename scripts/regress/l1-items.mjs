@@ -17,7 +17,7 @@ export async function run(browser) {
         expect((await page.evaluate(() => window.__game.screens)).includes('levelup'), `加魂火後沒有升級（${vp.name}）`);
       };
       // 技法卡（D49：機率混在升級卡裡）不是法具，這裡不看
-      const cards = () => page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card:not([data-card^="tech:"])')].map((c) => ({ id: c.dataset.card, lv: c.querySelector('.clv').textContent, tag: c.querySelector('.rname').textContent, weapon: c.classList.contains('r-weapon') })));
+      const cards = () => page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card:not([data-card^="tech:"])')].map((c) => ({ id: c.dataset.card, lv: c.querySelector('.clv').textContent, tag: c.querySelector('.rname').textContent, weapon: c.classList.contains('r-weapon'), link: [...c.querySelectorAll('.clink')].map((x) => x.textContent).join('｜') })));
 
       await step(`${vp.name} 連續升級 12 次：每張卡寫出新／等級、點了等級真的加一`, async () => {
         let sawWeapon = false;
@@ -26,6 +26,8 @@ export async function run(browser) {
           const cs = await cards();
           for (const c of cs) {
             expect(/新！|Lv\d+ → \d+|^$/.test(c.lv), `卡片等級文字不對：${JSON.stringify(c)}`);
+            // 使用者 2026-11-06：每張法具卡都要寫明輔助哪個大招、適合哪些技法（沒有就明講沒有）
+            if (!['heal', 'meritBag'].includes(c.id)) expect(/大招材料|適合的技法|所有大招都要|沒有搭配/.test(c.link), `法具卡沒有寫明大招／技法連結：${JSON.stringify(c)}`);
             if (c.id === 'ghostfire') {
               sawWeapon = true;
               expect(c.weapon && /主武器/.test(c.tag), `主武器卡沒有標示：${JSON.stringify(c)}`);

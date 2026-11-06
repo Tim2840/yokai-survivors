@@ -48,6 +48,8 @@ export async function run(browser) {
         // 力量 凡 +10%、良 +12%（稀有度 ×1.2）→ Lv2、累計 +22%；強健 珍 = 20 × 1.5 = +30
         expect(/力量 Lv2\/5/.test(info.rows.power) && /\+22%/.test(info.rows.power), `力量的等級或累計效果不對：${info.rows.power}`);
         expect(/強健 Lv1\/5/.test(info.rows.hp) && /\+30/.test(info.rows.hp), `強健不對：${info.rows.hp}`);
+        // 使用者 2026-11-06：能力面板每個法具也要寫明大招材料／適合的技法
+        for (const [id, row] of Object.entries(info.rows)) expect(/大招材料|適合的技法|所有大招都要|沒有搭配/.test(row), `能力面板的 ${id} 沒寫明大招／技法連結：${row}`);
         const slots = await page.locator('#sum-slots').innerText();
         expect(/5\/6/.test(slots), `道具欄應該是 5/6：${slots}`);
         expect(info.rows.volley && info.rows.splash && info.rows.armor, `少了卡片：${Object.keys(info.rows)}`);

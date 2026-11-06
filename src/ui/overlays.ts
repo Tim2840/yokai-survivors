@@ -3,6 +3,7 @@ import type { I18nKey } from '../i18n/zh-TW';
 import { CARD_FORMAT, type StatId } from '../data/stats';
 import { setWeaponTextFormatter, type BuildSummary } from '../game/buildSummary';
 import { isUltCard, ultHints, ultOfCard } from '../data/ultimates';
+import { cardLinks } from '../data/links';
 import { DIFFICULTY } from '../data/difficulty';
 import { TECH_CARD_PREFIX, TECH_KEEP, TECH_LEVELS, TECH_SWAP_PREFIX, isTechCard, techById, techMix } from '../data/techniques';
 import { ITEM_RARITY_MULT } from '../data/items';
@@ -146,6 +147,17 @@ function techCardHtml(cardId: string, rarity: Rarity, owned: readonly string[], 
   return `<span class="rname">${tag}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="ctech">${t('tech.likes', { items: likes })}</span>${mixText ? `<span class="ctech mix">${mixText}</span>` : ''}`;
 }
 
+/** 法具連結：它是哪些大招的材料、適合哪些技法（沒有就明講沒有）。選卡與能力面板共用 */
+export function cardLinkLines(cardId: string, yokai: string): string[] {
+  const l = cardLinks(cardId, yokai);
+  if (cardById(cardId).kind === 'fallback') return [];
+  if (l.weapon) return [t('card.link.weapon')];
+  const out: string[] = [];
+  if (l.ults.length) out.push(t('card.link.ult', { list: l.ults.map((u) => t('card.link.ultItem', { name: t(`ult.${u.id}` as I18nKey), lv: u.level })).join('、') }));
+  if (l.techs.length) out.push(t('card.link.tech', { list: l.techs.map((x) => techName(x)).join('、') }));
+  return out.length ? out : [t('card.link.none')];
+}
+
 export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => void) {
   const o = overlay(parent, 'levelup', `<div class="panel"><h2 id="lv-title"></h2><div class="cards" id="cards"></div><p class="hint" id="lv-pending"></p></div>`);
   const cardsEl = o.el.querySelector<HTMLElement>('#cards')!;
@@ -197,7 +209,7 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
           .map((h) => `<span class="csyn ulthint${h.completes ? ' ready' : ''}">${h.completes ? t('card.ult.completes', { name: t(`ult.${h.id}` as I18nKey) }) : t('card.ult.need', { name: t(`ult.${h.id}` as I18nKey), have: h.have, need: h.need })}</span>`)
           .join('');
         b.innerHTML = `<span class="shape ${SHAPES[c.rarity]}" aria-hidden="true"></span>
-          <span class="rname">${kind === 'weapon' ? t('card.weaponTag') : kind === 'fallback' ? '' : cardById(c.cardId).rarityScales ? t(`rarity.${c.rarity}` as I18nKey) : ''}</span><b>${d.name}</b><span class="clv">${d.level}</span><span class="cdesc">${d.desc}</span>${ultLines}`;
+          <span class="rname">${kind === 'weapon' ? t('card.weaponTag') : kind === 'fallback' ? '' : cardById(c.cardId).rarityScales ? t(`rarity.${c.rarity}` as I18nKey) : ''}</span><b>${d.name}</b><span class="clv">${d.level}</span><span class="cdesc">${d.desc}</span>${cardLinkLines(c.cardId, ult.yokai).map((x) => `<span class="csyn clink">${x}</span>`).join('')}${ultLines}`;
         b.addEventListener('click', () => onPick(i));
         cardsEl.appendChild(b);
       });
@@ -372,7 +384,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
         const li = document.createElement('li');
         li.dataset.card = c.id;
         const chips = (['common', 'rare', 'epic', 'legend'] as const).map((r) => `<i class="chip r-${r}"></i>`.repeat(c.byRarity[r])).join('');
-        li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), lv: c.level, max: c.maxLevel })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}${c.kind === 'weapon' && sum.techs.length > 0 ? `<br>${t('pause.techs', { list: sum.techs.map((x) => (x.level > 1 ? `${techName(x.id)} Lv${x.level}` : techName(x.id))).join('、') })}` : ''}</em>`;
+        li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), lv: c.level, max: c.maxLevel })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}${cardLinkLines(c.id, sum.yokai).map((x) => `<br><span class="clink">${x}</span>`).join('')}${c.kind === 'weapon' && sum.techs.length > 0 ? `<br>${t('pause.techs', { list: sum.techs.map((x) => (x.level > 1 ? `${techName(x.id)} Lv${x.level}` : techName(x.id))).join('、') })}` : ''}</em>`;
         cards.appendChild(li);
       }
       const ult = q('sum-ult');
