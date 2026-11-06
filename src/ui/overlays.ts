@@ -5,7 +5,9 @@ import { setWeaponTextFormatter, type BuildSummary } from '../game/buildSummary'
 import { SYNERGIES, synergyHints } from '../data/synergies';
 import { isUltCard, ultHints, ultOfCard } from '../data/ultimates';
 import { DIFFICULTY } from '../data/difficulty';
-import { TECH_CARD_PREFIX, TECH_KEEP, TECH_LEVELS, TECH_SWAP_PREFIX, TECH_UP_PREFIX, isTechCard, techById, techMix } from '../data/techniques';
+import { TECH_CARD_PREFIX, TECH_KEEP, TECH_LEVELS, TECH_SWAP_PREFIX, isTechCard, techById, techMix } from '../data/techniques';
+import { ITEM_RARITY_MULT } from '../data/items';
+import type { Rarity } from '../data/rarity';
 import { cardById, type CardOffer } from '../systems/cards';
 import { WEAPON_LEVELS, itemDown, itemValue, type WeaponLevel } from '../data/items';
 import { PLAYABLE_YOKAI, STARTER_YOKAI } from '../data/yokai';
@@ -139,12 +141,13 @@ export interface PickerContext {
 const techName = (id: string): string => t(`tech.${id}` as I18nKey);
 
 /** 技法卡的內容（HTML）：標籤、名稱、玩法說明、適合的道具、和已有技法的混搭 */
-function techCardHtml(cardId: string, owned: readonly string[], levels: readonly number[]): string {
+function techCardHtml(cardId: string, rarity: Rarity, owned: readonly string[], levels: readonly number[]): string {
   if (cardId === TECH_KEEP) return `<span class="rname">${t('card.techTag')}</span><b>${t('tech.keep')}</b><span class="cdesc">${t('tech.keep.desc')}</span>`;
-  if (cardId.startsWith(TECH_UP_PREFIX)) {
-    const id = cardId.slice(TECH_UP_PREFIX.length);
+  // 已有的技法：升一級（D49：最高 TECH_LEVELS.max 級，效果吃這張卡的稀有度）
+  if (cardId.startsWith(TECH_CARD_PREFIX) && owned.includes(cardId.slice(TECH_CARD_PREFIX.length))) {
+    const id = cardId.slice(TECH_CARD_PREFIX.length);
     const lv = levels[owned.indexOf(id)] ?? 1;
-    return `<span class="rname">${t('tech.up.tag', { a: lv, b: lv + 1 })}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="csyn">${t('tech.up.fx', { v: Math.round(TECH_LEVELS.perLevel * 100) })}</span>`;
+    return `<span class="rname">${t(`rarity.${rarity}` as I18nKey)}・${t('tech.up.tag', { a: lv, b: lv + 1, max: TECH_LEVELS.max })}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="csyn">${t('tech.up.fx', { v: Math.round(TECH_LEVELS.perLevel * ITEM_RARITY_MULT[rarity] * 100) })}</span>`;
   }
   let id: string;
   let tag: string;
@@ -156,7 +159,7 @@ function techCardHtml(cardId: string, owned: readonly string[], levels: readonly
     rest = owned.filter((x) => x !== from);
   } else {
     id = cardId.slice(TECH_CARD_PREFIX.length);
-    tag = `${t('card.techTag')}・${t(`tech.family.${techById(id).family}` as I18nKey)}`;
+    tag = `${t(`rarity.${rarity}` as I18nKey)}・${t('card.techTag')}・${t(`tech.family.${techById(id).family}` as I18nKey)}`;
   }
   const d = techById(id);
   const likes = d.likes.map((x) => t(`card.${x}` as I18nKey)).join('、');
@@ -172,7 +175,7 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
   const pending = o.el.querySelector<HTMLElement>('#lv-pending')!;
   return Object.assign(o, {
     render(offer: CardOffer[], more: number, kind: 'levelup' | 'offering' | 'chest' | 'tech' | 'fusion' = 'levelup', ult: PickerContext = { yokai: '', counts: new Map(), fused: [] }) {
-      title.textContent = t(kind === 'tech' ? (ult.techMode === 'swap' ? 'levelup.dosojin' : ult.techMode === 'up' ? 'levelup.techUp' : 'levelup.tech') : kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? 'levelup.offering' : kind === 'fusion' ? 'levelup.fusion' : 'levelup.chest');
+      title.textContent = t(kind === 'tech' ? (ult.techMode === 'swap' ? 'levelup.dosojin' : 'levelup.tech') : kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? 'levelup.offering' : kind === 'fusion' ? 'levelup.fusion' : 'levelup.chest');
       pending.textContent = more > 1 ? t('levelup.pending', { n: more - 1 }) : '';
       cardsEl.innerHTML = '';
       offer.forEach((c, i) => {
@@ -197,7 +200,8 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
           b.className = 'card r-variant';
           b.dataset.card = c.cardId;
           b.dataset.index = String(i);
-          b.innerHTML = techCardHtml(c.cardId, owned, ult.techLevels ?? []);
+          b.innerHTML = techCardHtml(c.cardId, c.rarity, owned, ult.techLevels ?? []);
+          b.dataset.rarity = c.rarity;
           b.addEventListener('click', () => onPick(i));
           cardsEl.appendChild(b);
           return;

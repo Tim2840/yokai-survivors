@@ -4,8 +4,8 @@ import { MOVE } from '../data/movement';
 import { PLAYABLE_YOKAI, YOKAI, type YokaiDef } from '../data/yokai';
 import { CARD_CHOICES, PROGRESSION, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
 import { FUSE, DOSOJIN } from '../data/elements';
-import { ITEM_POOL, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById } from '../data/items';
-import { TECH_CARD_PREFIX, TECH_KEEP, TECH_PICK_LEVELS, TECH_SWAP_PREFIX, TECH_UP_PREFIX, techsFor } from '../data/techniques';
+import { ITEM_POOL, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById } from '../data/items';
+import { TECH_CARD_PREFIX, TECH_KEEP, TECH_OFFER, TECH_SWAP_PREFIX, isTechCard } from '../data/techniques';
 import { Techniques } from './techniques';
 import { RARITY_MULT } from '../data/rarity';
 import { STAGE, stagesForMap, bossHpMult, isBigBossStage } from '../data/stage';
@@ -154,10 +154,10 @@ export class Run {
   cooldownMult = 1;
   /** 技法（D48）：這一局拿到的技法與它們的狀態（docs/15 第 8.5 節） */
   readonly tech: Techniques;
-  /** 還沒開的技法選擇（主武器到 4／7 級、過關畫面）；開面板時依「還沒拿滿」決定是新技法或加深 */
-  private techPending = 0;
-  /** 現在的技法面板在選什麼：new = 新技法、up = 加深、swap = 道祖神換一個 */
-  techMode: 'new' | 'up' | 'swap' = 'new';
+  /** 現在的技法面板：swap = 道祖神換一個（D49 起技法卡混在升級選卡裡，只有道祖神會開專用的技法面板） */
+  techMode: 'new' | 'swap' = 'new';
+  /** 開發與測試：下一次升級選卡一定換進一張技法卡（不看機率與等級） */
+  private forceTechCard = false;
   /** 道祖神（D47）：這一關什麼時候放（clock；Infinity = 還沒有技法或這一關放過了） */
   private dosojinAt = Infinity;
   /** 最近一次在道祖神換了技法（HUD 提示用） */
@@ -921,6 +921,34 @@ export class Run {
   private makeOffer(): void {
     this.dealer.playerLevel = this.level;
     this.offer = this.dealer.deal(this.level, this.stats.value.luck, this.cardCounts);
+    this.mixTechCard(this.offer);
+  }
+
+  /**
+   * 技法卡（D49）：每次升級有 TECH_OFFER.chance 的機率，把三張裡隨機一張換成技法卡（沒拿過的或已有的下一級）；
+   * 玩家 TECH_OFFER.minLevel 級起。稀有度和升級卡同一套抽法。
+   */
+  private mixTechCard(offer: CardOffer[]): void {
+    const roll = this.rngCards.next();
+    const forced = this.forceTechCard;
+    this.forceTechCard = false;
+    if (!forced && (this.level < TECH_OFFER.minLevel || roll >= TECH_OFFER.chance)) return;
+    const id = this.tech.pickCard(this.rngCards);
+    if (!id || offer.length === 0) return;
+    const at = Math.floor(this.rngCards.next() * offer.length);
+    offer[at] = { cardId: TECH_CARD_PREFIX + id, rarity: this.dealer.rollRarity(this.level, this.stats.value.luck) };
+  }
+
+  /** 選了升級卡裡的技法卡：沒有就學會、有就升一級（效果吃那張卡的稀有度） */
+  private applyTechCard(o: CardOffer): void {
+    const id = o.cardId.slice(TECH_CARD_PREFIX.length);
+    const mult = ITEM_RARITY_MULT[o.rarity];
+    if (this.tech.has(id)) {
+      this.tech.levelUp(id, mult);
+      return;
+    }
+    const first = this.tech.owned.length === 0;
+    if (this.tech.add(id, mult) && first) this.dosojinAt = this.clock + DOSOJIN.appearDelay;
   }
 
   /** 玩家選了第 index 張卡。回傳是否還有下一次待選（UI 繼續開著面板） */
@@ -982,45 +1010,18 @@ export class Run {
       this.bonusLeft--;
       return this.continueOffers();
     }
-    this.applyCard(o);
+    if (isTechCard(o.cardId)) this.applyTechCard(o);
+    else this.applyCard(o);
     this.bus.emit('cardChosen', { cardId: o.cardId, rarity: o.rarity });
     if (this.offerKind !== 'levelup') this.bonusLeft--;
     else this.pendingPicks--;
-    // 主武器剛到技法等級：先選技法，選完再回到原本的選卡
-    if (this.techPending > 0 && this.offer !== null) {
-      this.resumeKind = this.offerKind as typeof this.resumeKind;
-      this.offer = null;
-      if (this.maybeOpenTech()) return true;
-    }
     return this.continueOffers();
   }
 
-  /** 有待選的技法就開面板（拿滿了改成「加深」；沒有候選就丟掉這一次）。回傳有沒有開 */
-  private maybeOpenTech(): boolean {
-    while (this.techPending > 0 && this.offer === null) {
-      this.techPending--;
-      const mode = this.tech.owned.length < this.tech.max ? 'new' : 'up';
-      const ids = mode === 'new' ? this.tech.offerNew(this.rngCards) : this.tech.offerUp(this.rngCards);
-      if (ids.length === 0) continue;
-      this.techMode = mode;
-      this.offer = ids.map((id) => ({ cardId: (mode === 'new' ? TECH_CARD_PREFIX : TECH_UP_PREFIX) + id, rarity: 'common' as const }));
-      this.offerKind = 'tech';
-      return true;
-    }
-    return false;
-  }
-
-  /** 選了技法面板的一張：新技法、加深、道祖神換一個，或維持現狀 */
+  /** 道祖神的技法面板：換掉一個，或維持現狀 */
   private chooseTech(o: CardOffer): boolean {
     const id = o.cardId;
-    if (id.startsWith(TECH_CARD_PREFIX)) {
-      const t = id.slice(TECH_CARD_PREFIX.length);
-      const first = this.tech.owned.length === 0;
-      this.tech.add(t);
-      if (first) this.dosojinAt = this.clock + DOSOJIN.appearDelay;
-    } else if (id.startsWith(TECH_UP_PREFIX)) {
-      this.tech.levelUp(id.slice(TECH_UP_PREFIX.length));
-    } else if (id.startsWith(TECH_SWAP_PREFIX)) {
+    if (id.startsWith(TECH_SWAP_PREFIX)) {
       const [from, to] = id.slice(TECH_SWAP_PREFIX.length).split('>');
       if (this.tech.replace(from, to)) {
         this.lastTechChange = { from, to, at: this.clock };
@@ -1059,7 +1060,6 @@ export class Run {
       return true;
     }
     this.offer = null;
-    if (this.maybeOpenTech()) return true;
     return false;
   }
 
@@ -1078,7 +1078,6 @@ export class Run {
     this.ownedCards.add(d.id);
     this.cardCounts.set(d.id, lv + 1);
     if (d.kind === 'weapon') {
-      if (TECH_PICK_LEVELS.includes(lv + 1) && techsFor(d.id).length > 0 && this.tech.owned.length + this.techPending < this.tech.max) this.techPending++;
       const step = WEAPON_LEVELS[d.id]?.[lv - 1];
       if (step) {
         this.weaponDamageBonus += step.damage ?? 0;
@@ -1224,11 +1223,11 @@ export class Run {
   /** 測試與開發介面：直接給一張卡（不經選卡） */
   give(cardId: string, rarity: keyof typeof RARITY_MULT): void {
     this.applyCard({ cardId, rarity });
-    // 主武器到了技法等級：開三選一面板（和真的升級一樣）
-    if (this.techPending > 0 && this.offer === null && this.phase === 'combat') {
-      this.resumeKind = 'levelup';
-      if (this.maybeOpenTech()) this.bus.emit('levelUp', { level: this.level, pending: 1 });
-    }
+  }
+
+  /** 開發與測試：下一次升級選卡一定有一張技法卡 */
+  devTechNext(): void {
+    this.forceTechCard = true;
   }
 
   /** 開發與測試：直接給技法（不經面板；可以給好幾個，不受 TECH_MAX 以外的限制） */
@@ -1324,12 +1323,6 @@ export class Run {
       return;
     }
     this.phase = 'intermission';
-    // 過關畫面的技法選擇（D48）：沒拿滿 → 新技法；拿滿了 → 加深。選卡面板疊在過關畫面上
-    this.techPending++;
-    if (this.offer === null && this.maybeOpenTech()) {
-      this.resumeKind = 'levelup';
-      this.bus.emit('levelUp', { level: this.level, pending: 1 });
-    }
   }
 
   /** 放棄這一局（過關畫面或暫停選單）：局外獎勵照 50% 結算 */

@@ -75,17 +75,8 @@ const RARITY_SCORE: Record<string, number> = { common: 1, rare: 1.6, epic: 2.4, 
 
 function choose(run: Run, strategy: string, rnd: () => number): number {
   const offer = run.offer!;
-  if (run.offerKind === 'tech') {
-    // 道祖神的換法：機器人不換（維持現狀）；加深：第一張；新技法：依偏好
-    if (run.techMode === 'swap') return Math.max(0, offer.findIndex((o) => o.cardId === 'tech-keep'));
-    if (run.techMode === 'up' || strategy === 'random' && !TECH_PREF) return Math.floor(rnd() * offer.length);
-    const pref = TECH_PREF ? TECH_PREF.split(',') : TECH_BY_STRATEGY[strategy] ?? [];
-    for (const id of pref) {
-      const i = offer.findIndex((o) => o.cardId === 'tech:' + id);
-      if (i >= 0) return i;
-    }
-    return Math.floor(rnd() * offer.length);
-  }
+  // 道祖神的技法面板：機器人不換（維持現狀）
+  if (run.offerKind === 'tech') return Math.max(0, offer.findIndex((o) => o.cardId === 'tech-keep'));
   if (strategy === 'random') return Math.floor(rnd() * offer.length);
   // 寶箱裡的融合卡（D30 第二步）：會玩的人一定拿
   const fuse = offer.findIndex((o) => o.cardId.startsWith('ult:'));
@@ -93,8 +84,15 @@ function choose(run: Run, strategy: string, rnd: () => number): number {
   const sc = SCORES[strategy === 'ult' ? 'dps' : strategy];
   let best = 0;
   let bestV = -1;
+  const pref = TECH_PREF ? TECH_PREF.split(',') : TECH_BY_STRATEGY[strategy] ?? [];
   offer.forEach((o, i) => {
     let v = (sc[o.cardId] ?? 1) * RARITY_SCORE[o.rarity];
+    // 技法卡（D49：機率混在升級卡裡）：會玩的人看到想要的技法幾乎都會拿；已有的下一級也很有價值
+    if (o.cardId.startsWith('tech:')) {
+      const id = o.cardId.slice(5);
+      const rank = pref.indexOf(id);
+      v = (run.tech.has(id) ? 3 : rank < 0 ? 2 : 4 - rank * 0.15) * RARITY_SCORE[o.rarity];
+    }
     // 「ult」策略：追大招配方——這張卡是還沒融合的大招的材料就加分，選了就融合加更多
     if (strategy === 'ult') {
       for (const h of ultHints(o.cardId, run.yokai.id, run.cardCounts, run.fused)) v += h.completes ? 12 : h.have < h.need ? 3 : 0;
@@ -424,7 +422,7 @@ function summarize(rs: Result[]): string {
     `等級 ${avg(rs.map((r) => r.level)).toFixed(1)}`,
     `用掉要素 ${avg(rs.map((r) => r.elementsUsed)).toFixed(1)}`,
     `融合大招 ${avg(rs.map((r) => r.fused)).toFixed(1)} 個、發動 ${avg(rs.map((r) => r.casts)).toFixed(1)} 次`,
-    `技法 ${[...new Set(rs.map((r) => r.variant))].slice(0, 6).join('/')}`,
+    `技法平均 ${avg(rs.map((r) => (r.variant === '-' ? 0 : r.variant.split('+').length))).toFixed(1)} 個（${[...new Set(rs.map((r) => r.variant))].slice(0, 4).join('/')}…）`,
     `補給品 ${avg(rs.map((r) => r.pickups)).toFixed(1)} 個`,
     `聯動初 ${((rs.filter((r) => r.synT1 >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.synT1 >= 0).map((r) => r.synT1), 50)?.toFixed(0) ?? '-'} 秒）、極 ${((rs.filter((r) => r.synT2 >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.synT2 >= 0).map((r) => r.synT2), 50)?.toFixed(0) ?? '-'} 秒）`,
     `死在召喚後 ${rs.filter((r) => r.diedAfterSummon >= 0).length} 局（中位 ${pct(rs.filter((r) => r.diedAfterSummon >= 0).map((r) => r.diedAfterSummon), 50)?.toFixed(0) ?? '-'} 秒）`,

@@ -1,5 +1,5 @@
 import { COMBAT } from '../data/combat';
-import { TECHS, TECH_CHOICES, TECH_DEEPEN, TECH_FAMILIES, TECH_LEVELS, TECH_MAX, TECH_RULES, techById, techsFor, type TechDef, type TechFamily, type TechMechanic } from '../data/techniques';
+import { TECHS, TECH_CHOICES, TECH_DEEPEN, TECH_FAMILIES, TECH_LEVELS, TECH_MAX, TECH_OFFER, TECH_RULES, techById, techsFor, type TechDef, type TechFamily, type TechMechanic } from '../data/techniques';
 import type { WeaponDef } from '../data/yokai';
 import type { Rng } from '../lib/random';
 import type { Run } from './run';
@@ -26,6 +26,8 @@ export class Techniques {
   /** 擁有的技法（拿到的順序）與各自的技法等級（1～TECH_LEVELS.max） */
   readonly owned: string[] = [];
   readonly levels: number[] = [];
+  /** 各技法累積的稀有度倍率（每拿一次加上那張卡的倍率；效果倍率 = 1 + perLevel × (累積 − 1)） */
+  readonly points: number[] = [];
   /** 現在作用中的技法（依機制；沒有 = null） */
   readonly act: Record<TechMechanic, TechDef | null> = { kitsunebi: null, bounce: null, homing: null, rain: null, ring: null, ward: null, satellite: null, lamp: null, hellfire: null, seed: null, pillar: null, oil: null };
   /** 每系「多拿了幾個」（同系 N 個 → N − 1） */
@@ -124,13 +126,22 @@ export class Techniques {
   /** 技法等級的效果倍率 */
   private pw(m: TechMechanic): number {
     const d = this.act[m];
-    return d ? 1 + TECH_LEVELS.perLevel * (this.levelOf(d.id) - 1) : 1;
+    if (!d) return 1;
+    const i = this.owned.indexOf(d.id);
+    return 1 + TECH_LEVELS.perLevel * (this.points[i] - 1);
+  }
+  /** 效果倍率（畫面、測試用） */
+  powerOf(id: string): number {
+    const i = this.owned.indexOf(id);
+    return i < 0 ? 0 : 1 + TECH_LEVELS.perLevel * (this.points[i] - 1);
   }
 
-  add(id: string): boolean {
+  /** 學會一個技法（rarityMult = 那張卡的稀有度倍率） */
+  add(id: string, rarityMult = 1): boolean {
     if (this.has(id) || this.owned.length >= this.max) return false;
     this.owned.push(id);
     this.levels.push(1);
+    this.points.push(rarityMult);
     this.recompute();
     return true;
   }
@@ -140,13 +151,15 @@ export class Techniques {
     if (i < 0 || this.has(newId)) return false;
     this.owned[i] = newId;
     this.levels[i] = 1;
+    this.points[i] = 1;
     this.recompute();
     return true;
   }
-  levelUp(id: string): boolean {
+  levelUp(id: string, rarityMult = 1): boolean {
     const i = this.owned.indexOf(id);
     if (i < 0 || this.levels[i] >= TECH_LEVELS.max) return false;
     this.levels[i]++;
+    this.points[i] += rarityMult;
     this.recompute();
     return true;
   }
@@ -194,6 +207,34 @@ export class Techniques {
     while (out.length < n && pool.length > 0) out.push(pool.splice(Math.floor(rng.next() * pool.length), 1)[0]);
     return out;
   }
+  /**
+   * 升級卡裡的那一張技法卡（D49）：沒拿過的（還有空位、不互斥）權重 fresh，已有的下一級（沒到上限）權重 owned。
+   * 回傳 id；沒有可以出的 = null。
+   */
+  pickCard(rng: Rng): string | null {
+    const ids: string[] = [];
+    const w: number[] = [];
+    if (this.owned.length < this.max) {
+      for (const t of techsFor(this.run.weaponItemId)) {
+        if (this.has(t.id) || !this.canOffer(t.id)) continue;
+        ids.push(t.id);
+        w.push(TECH_OFFER.fresh);
+      }
+    }
+    this.owned.forEach((id, i) => {
+      if (this.levels[i] >= TECH_LEVELS.max) return;
+      ids.push(id);
+      w.push(TECH_OFFER.owned);
+    });
+    if (ids.length === 0) return null;
+    let t = rng.next() * w.reduce((a, b) => a + b, 0);
+    for (let k = 0; k < ids.length; k++) {
+      t -= w[k];
+      if (t < 0) return ids[k];
+    }
+    return ids[ids.length - 1];
+  }
+
   /** 加深的候選（還沒到技法等級上限的，最多 n 個） */
   offerUp(rng: Rng, n: number = TECH_CHOICES): string[] {
     const pool = this.owned.filter((_, i) => this.levels[i] < TECH_LEVELS.max);

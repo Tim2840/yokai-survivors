@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { tuning, resetTuning } from '../../src/data/tuning';
-import { TECHS, TECH_CHOICES, TECH_DEEPEN, TECH_FAMILIES, TECH_LEVELS, TECH_MAX, TECH_PICK_LEVELS, techById, techMix, techsFor } from '../../src/data/techniques';
+import { TECHS, TECH_DEEPEN, TECH_FAMILIES, TECH_LEVELS, TECH_OFFER, techById, techMix, techsFor } from '../../src/data/techniques';
 import { ITEM_POOL } from '../../src/data/items';
 import { kindIndex } from '../../src/systems/enemies';
 import { Rng } from '../../src/lib/random';
@@ -29,20 +29,12 @@ function stepN(run: Run, n: number) {
     run.step(DT);
   }
 }
-/** 主武器升到 level 級；技法面板選 pick（沒指定就選第一張），回傳選過的 id */
-function levelWeapon(run: Run, level: number, pick?: string): string[] {
-  const chosen: string[] = [];
+/** 主武器升到 level 級（中途跳出的選卡選第一張） */
+function levelWeapon(run: Run, level: number): void {
   while (run.weaponLevel < level) {
     run.give('ghostfire', 'common');
-    while (run.awaitingPick) {
-      if (run.offerKind === 'tech') {
-        const i = pick ? run.offer!.findIndex((c) => c.cardId === 'tech:' + pick) : 0;
-        chosen.push(run.offer![Math.max(0, i)].cardId);
-        run.chooseCard(Math.max(0, i));
-      } else run.chooseCard(0);
-    }
+    while (run.awaitingPick) run.chooseCard(0);
   }
-  return chosen;
 }
 
 describe('技法池（資料全掃）', () => {
@@ -60,7 +52,8 @@ describe('技法池（資料全掃）', () => {
       const blocks = [t.split, t.bounce, t.homing, t.rain, t.orbit, t.ward, t.satellite, t.lamp, t.burn, t.seed, t.pillar, t.oil].filter(Boolean);
       expect(blocks, `${t.id} 的機制資料`).toHaveLength(1);
     }
-    expect(TECH_PICK_LEVELS.every((l) => l >= 2)).toBe(true);
+    expect(TECH_OFFER.chance).toBeGreaterThan(0);
+    expect(TECH_OFFER.chance).toBeLessThan(1);
     expect(techsFor('ghostfire').length).toBe(TECHS.length);
   });
   it('混搭提示：命中效果 × 出手方式 → hit；同系 → family；沒關係 → null', () => {
@@ -72,138 +65,97 @@ describe('技法池（資料全掃）', () => {
   });
 });
 
-describe('技法怎麼拿', () => {
-  it('主武器到 4、7 級各跳一次三選一（隨機抽 3 個、互不相同）；選了就有，不會在別的等級跳', () => {
+/** 直接叫出一次升級選卡（不經過經驗值），回傳這次的三張 */
+function deal(run: Run): { cardId: string; rarity: string }[] {
+  (run as unknown as { makeOffer(): void }).makeOffer();
+  return run.offer!.map((o) => ({ ...o }));
+}
+
+describe('技法怎麼拿（D49：機率出現在升級卡裡、8 級、分稀有度）', () => {
+  it('不再固定跳出技法面板：主武器 1→8 級、過關畫面都不會開技法面板', () => {
     const run = make(5);
-    for (let lv = 2; lv <= 3; lv++) run.give('ghostfire', 'common');
-    expect(run.offer).toBeNull();
-    run.give('ghostfire', 'common');
-    expect(run.weaponLevel).toBe(TECH_PICK_LEVELS[0]);
-    expect(run.offerKind).toBe('tech');
-    expect(run.techMode).toBe('new');
-    expect(run.offer).toHaveLength(TECH_CHOICES);
-    expect(new Set(run.offer!.map((o) => o.cardId)).size).toBe(TECH_CHOICES);
-    const first = run.offer![1].cardId.slice('tech:'.length);
-    run.chooseCard(1);
-    expect(run.tech.owned).toEqual([first]);
-    expect(run.offer).toBeNull();
-    run.give('ghostfire', 'common');
-    run.give('ghostfire', 'common');
-    expect(run.offer, '5、6 級不該跳').toBeNull();
-    run.give('ghostfire', 'common');
-    expect(run.weaponLevel).toBe(TECH_PICK_LEVELS[1]);
-    expect(run.offerKind).toBe('tech');
-    run.chooseCard(0);
-    expect(run.tech.owned).toHaveLength(2);
-    expect(new Set(run.tech.owned).size).toBe(2);
-  });
-  it('固定種子可以重現；不同種子抽到的不一樣（不是每局同樣三張）', () => {
-    const offers = (seed: number) => {
-      const run = make(seed);
-      levelWeapon(run, 3);
+    for (let lv = 2; lv <= 8; lv++) {
       run.give('ghostfire', 'common');
-      return run.offer!.map((o) => o.cardId).join(',');
-    };
-    expect(offers(11)).toBe(offers(11));
-    const seen = new Set<string>();
-    for (let s = 1; s <= 12; s++) seen.add(offers(s));
-    expect(seen.size, '12 個種子的第一次三選一都一樣').toBeGreaterThan(3);
+      expect(run.offerKind === 'tech' && run.awaitingPick, `主武器 ${lv} 級跳出技法面板`).toBe(false);
+      while (run.awaitingPick) run.chooseCard(0);
+    }
+    run.devClearStage();
+    expect(run.offerKind === 'tech' && run.offer !== null, '過關畫面跳出技法面板').toBe(false);
   });
-  it('在升級選卡中途升到 4 級：技法面板插進來，選完繼續剩下的升級，沒有卡住', () => {
+  it('玩家 minLevel 級以前一張技法卡都不會出現；之後大約 chance 的機率出現一張（一次最多一張）', () => {
     const run = make(6);
-    run.give('ghostfire', 'common');
-    run.give('ghostfire', 'common');
-    run.addXp(500);
-    let guard = 0;
-    let sawTech = false;
-    while (run.offer && guard++ < 300) {
-      if (run.offerKind === 'tech') {
-        sawTech = true;
-        run.chooseCard(0);
-        continue;
-      }
-      const gi = run.offer.findIndex((o) => o.cardId === 'ghostfire');
-      run.chooseCard(gi >= 0 ? gi : 0);
+    run.level = TECH_OFFER.minLevel - 1;
+    for (let k = 0; k < 2000; k++) expect(deal(run).some((c) => c.cardId.startsWith('tech:'))).toBe(false);
+    run.level = 10;
+    let hit = 0;
+    const N = 4000;
+    for (let k = 0; k < N; k++) {
+      const n = deal(run).filter((c) => c.cardId.startsWith('tech:')).length;
+      expect(n).toBeLessThanOrEqual(1);
+      hit += n;
     }
-    expect(run.offer).toBeNull();
-    expect(sawTech || run.weaponLevel < TECH_PICK_LEVELS[0]).toBe(true);
+    expect(hit / N).toBeGreaterThan(TECH_OFFER.chance - 0.03);
+    expect(hit / N).toBeLessThan(TECH_OFFER.chance + 0.03);
   });
-  it('一局最多 TECH_MAX 個：大關（3 關）的過關畫面先補新技法；拿滿之後改成「加深」（技法等級）', () => {
-    const run = make(7, 3);
-    levelWeapon(run, 7);
-    expect(run.tech.owned).toHaveLength(2);
-    // 第 1 關過關 → 第 3 個；第 2 關過關 → 第 4 個
-    for (const want of [3, 4]) {
-      run.devClearStage();
-      expect(run.phase).toBe('intermission');
-      expect(run.offerKind).toBe('tech');
-      expect(run.techMode).toBe('new');
-      run.chooseCard(0);
-      expect(run.tech.owned).toHaveLength(want);
-      expect(run.offer).toBeNull();
-      run.continueFromIntermission();
-    }
-    expect(run.tech.owned).toHaveLength(TECH_MAX);
-    // 拿滿之後：加深（用新的一局直接給 4 個，再過關）
-    const full = make(7, 3);
-    full.devAddTech(...run.tech.owned);
-    full.devClearStage();
-    expect(full.tech.owned).toHaveLength(TECH_MAX);
-    expect(full.offerKind).toBe('tech');
-    expect(full.techMode).toBe('up');
-    const id = full.offer![0].cardId.slice('tech-up:'.length);
-    full.chooseCard(0);
-    expect(full.tech.levelOf(id)).toBe(2);
-    expect(full.tech.owned).toHaveLength(TECH_MAX);
-  });
-  it('一般地圖（2 關）：只有第 1 關的過關畫面有技法選擇，第 2 關過關就是通關', () => {
+  it('技法卡分稀有度（只有已解鎖的）；選了學會、再選同一個升一級，稀有度越高效果越強；到 8 級就不再出現', () => {
     const run = make(7);
-    run.devClearStage();
-    expect(run.offerKind).toBe('tech');
-    run.chooseCard(0);
-    run.continueFromIntermission();
-    run.devClearStage();
-    expect(run.phase).toBe('ended');
-    expect(run.offer).toBeNull();
+    run.level = 10;
+    const seen = new Set<string>();
+    for (let k = 0; k < 3000; k++) for (const c of deal(run)) if (c.cardId.startsWith('tech:')) seen.add(c.rarity);
+    expect([...seen].every((r) => ['common', 'rare'].includes(r)), `出現了沒解鎖的稀有度：${[...seen]}`).toBe(true);
+    expect(seen.size).toBeGreaterThan(1);
+    // 學會（凡）→ 良升一級
+    const a = make(8);
+    a.devTechNext();
+    a.addXp(a.xpNeeded);
+    const i = a.offer!.findIndex((c) => c.cardId.startsWith('tech:'));
+    expect(i, '指定的下一次升級沒有技法卡').toBeGreaterThanOrEqual(0);
+    const id = a.offer![i].cardId.slice('tech:'.length);
+    a.offer![i].rarity = 'common';
+    a.chooseCard(i);
+    expect(a.tech.levelOf(id)).toBe(1);
+    expect(a.tech.powerOf(id)).toBeCloseTo(1, 5);
+    a.tech.levelUp(id, 1.2);
+    expect(a.tech.levelOf(id)).toBe(2);
+    expect(a.tech.powerOf(id)).toBeCloseTo(1 + TECH_LEVELS.perLevel * 1.2, 5);
+    for (let k = 0; k < 20; k++) a.tech.levelUp(id, 1);
+    expect(a.tech.levelOf(id)).toBe(TECH_LEVELS.max);
+    // 到上限的那個不會再被抽到
+    const rng = new Rng(3);
+    for (let k = 0; k < 300; k++) expect(a.tech.pickCard(rng)).not.toBe(id);
   });
-  it('過關畫面有待選的技法時不能直接出發（面板擋著）；選完才能出發', () => {
-    const run = make(8);
-    run.devClearStage();
-    expect(run.offer).not.toBeNull();
-    run.continueFromIntermission();
-    expect(run.phase, '還沒選就出發了').toBe('intermission');
-    run.chooseCard(0);
-    run.continueFromIntermission();
-    expect(run.phase).toBe('combat');
+  it('拿滿 TECH_MAX 個之後只會出現已有的下一級；互斥照舊（燈籠環在身上不出彈跳／歸巢）', () => {
+    const rng = new Rng(9);
+    const full = make(9);
+    full.devAddTech('ring', 'ward', 'hellfire', 'seed');
+    for (let k = 0; k < 500; k++) expect(full.tech.owned).toContain(full.tech.pickCard(rng));
+    const r = make(9);
+    r.devAddTech('ring');
+    for (let k = 0; k < 500; k++) expect(['bounce', 'homing']).not.toContain(r.tech.pickCard(rng));
   });
-  it('過關時收進來的魂火連升好幾級：一般升級卡和技法面板一張接一張出現，全部選完才能出發，沒有卡住（回歸 v1 曾因此偶爾超時）', () => {
-    const run = make(31);
-    run.orbs.spawn(run.px + 3, run.pz, 5000); // 過關時會收進來
-    run.devClearStage();
-    expect(run.phase).toBe('intermission');
-    const kinds: string[] = [];
-    let guard = 0;
-    while (run.offer && guard++ < 100) {
-      kinds.push(run.offerKind);
-      // 主武器升級會多出 4／7 級的技法選擇；這裡只測過關那一次，所以避開主武器
-      const i = run.offer.findIndex((c) => c.cardId !== 'ghostfire');
-      run.chooseCard(Math.max(0, i));
-    }
-    expect(kinds.filter((k) => k === 'levelup').length, '應該有好幾次一般升級').toBeGreaterThan(1);
-    expect(kinds.filter((k) => k === 'tech'), '技法面板只出現一次').toHaveLength(1);
+  it('固定種子可以重現；不同種子出現的技法卡不一樣', () => {
+    const seq = (seed: number) => {
+      const run = make(seed);
+      run.level = 10;
+      const out: string[] = [];
+      for (let k = 0; k < 80; k++) for (const c of deal(run)) if (c.cardId.startsWith('tech:')) out.push(c.cardId + c.rarity);
+      return out.join(',');
+    };
+    expect(seq(11)).toBe(seq(11));
+    expect(seq(11)).not.toBe(seq(12));
+  });
+  it('一般升級裡選了技法卡：這次升級就用掉了（不會多一次選卡）、選完繼續剩下的升級', () => {
+    const run = make(10);
+    run.devTechNext();
+    run.addXp(run.xpNeeded * 3);
+    const before = (run as unknown as { pendingPicks: number }).pendingPicks;
+    const i = run.offer!.findIndex((c) => c.cardId.startsWith('tech:'));
+    run.chooseCard(i);
     expect(run.tech.owned).toHaveLength(1);
+    expect((run as unknown as { pendingPicks: number }).pendingPicks).toBe(before - 1);
+    let guard = 0;
+    while (run.offer && guard++ < 50) run.chooseCard(0);
     expect(run.awaitingPick).toBe(false);
-    run.continueFromIntermission();
-    expect(run.phase).toBe('combat');
-  });
-  it('互斥：拿了燈籠環就不會再抽到彈跳／歸巢；拿了彈跳就不會抽到燈籠環', () => {
-    const rng = new Rng(1);
-    const a = make(9);
-    a.devAddTech('ring');
-    for (let i = 0; i < 40; i++) for (const id of a.tech.offerNew(rng, 9)) expect(['bounce', 'homing']).not.toContain(id);
-    const b = make(9);
-    b.devAddTech('bounce');
-    for (let i = 0; i < 40; i++) expect(b.tech.offerNew(rng, 9)).not.toContain('ring');
   });
 });
 
@@ -527,12 +479,12 @@ describe('同系加深、技法等級、滿級加強', () => {
     expect(b.tech.deep.split).toBe(0);
     expect(b.tech.deep.burn).toBe(0);
   });
-  it('技法等級：加深一次 → 效果乘 1 + perLevel；到上限不再加', () => {
+  it('技法等級：升一級 → 效果乘 1 + perLevel × 稀有度；到上限（8 級）不再加', () => {
     const run = make(23);
     run.devAddTech('hellfire');
     expect(run.tech.levelUp('hellfire')).toBe(true);
     expect(run.tech.levelOf('hellfire')).toBe(2);
-    run.tech.levelUp('hellfire');
+    for (let k = 2; k < TECH_LEVELS.max; k++) run.tech.levelUp('hellfire');
     expect(run.tech.levelUp('hellfire')).toBe(false);
     expect(run.tech.levelOf('hellfire')).toBe(TECH_LEVELS.max);
     const a = make(23);

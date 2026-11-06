@@ -87,6 +87,11 @@ export class CardDealer {
     return out;
   }
 
+  /** 抽一個稀有度（和升級卡同一套權重；技法卡用，D49） */
+  rollRarity(level: number, luck: number): Rarity {
+    return pickRarity(this.rng, cardRarityWeights(level, luck, [...this.unlocked]));
+  }
+
   /** 固定稀有度的三選一（賽錢箱、寶箱）：會吃稀有度的卡全部是 rarity 階 */
   dealRarity(rarity: Rarity, levels: ReadonlyMap<string, number> = new Map(), n: number = CARD_CHOICES): CardOffer[] {
     return this.pickIds(levels, n).map((id) => ({ cardId: id, rarity: itemById(id).rarityScales ? rarity : 'common' }));

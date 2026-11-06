@@ -1,9 +1,11 @@
 /**
  * 技法池（D48，使用者：「分三條路有點過於單調」「一局選兩次太少」「可以把技法池變大」；取代 D31 的「3 種變化、整局固定」）。
- * 設計稿 docs/15 第 8.5 節。每隻妖怪一池技法（三個系各幾種），一局最多 TECH_MAX 個：
- *  - 主武器 TECH_PICK_LEVELS 級（戰鬥中，同一個選卡面板）、每關過關畫面各一次，每次從池子隨機抽 TECH_CHOICES 個選 1；
- *  - 拿滿之後，過關畫面改成「加深已有的技法」（技法等級，每級 +TECH_LEVELS.perLevel 的效果）；
- *  - 道祖神（D47）：換掉一個技法。
+ * 設計稿 docs/15 第 8.5 節。每隻妖怪一池技法（三個系各幾種），一局最多 TECH_MAX 個。
+ * D49（使用者 2026-11-06：「技法太容易取得」「不要是升級的選項，整場遊戲都機率出現在升級卡片中」「技法也有 8 級」）：
+ *  - 不再有「主武器 4／7 級、過關畫面」固定跳出的技法面板；改成**每次升級選卡有 TECH_OFFER.chance 的機率，三張卡裡換進一張技法卡**
+ *    （玩家 TECH_OFFER.minLevel 級起；沒拿過的與已有的下一級都可能出現，已有的權重高一點）；
+ *  - 技法和道具一樣分凡／良／珍／極（稀有度跟升級卡同一套抽法），最高 TECH_LEVELS.max 級；每拿一次 = 升一級，效果 × (1 + perLevel × 累積的稀有度倍率)；
+ *  - 道祖神（D47）：換掉一個技法（新的從 1 級開始）。
  * 混搭靠「掛勾」自動發生：
  *  - 出手方式（delivery：燈籠環，取代發射；extra：衛星燈、鬼火柱，額外的）；
  *  - 命中效果（onHit）：任何出手方式「打中人類」都會觸發全部命中效果（每隻人類有冷卻，避免繞身的高頻判定爆量）。
@@ -11,9 +13,14 @@
  * 數字為起始提案，用 npm run sim -- --techs 全掃組合校準（docs/02 變更紀錄）。
  */
 export const TECH_MAX = 4;
-/** 主武器到這幾級時跳出技法三選一（戰鬥中） */
-export const TECH_PICK_LEVELS: readonly number[] = [4, 7];
+/** 道祖神換法提案用的抽選數（舊的三選一面板已拿掉） */
 export const TECH_CHOICES = 3;
+/**
+ * 技法卡出現在升級選卡裡的規則（D49）：每次升級（不含賽錢箱、寶箱）有 chance 的機率把三張裡的一張換成技法卡；
+ * 玩家 minLevel 級以前不會出現；沒拿過的技法權重 fresh、已有的（下一級）權重 owned。
+ * 起始提案，sim 校準（docs/02 變更紀錄）。
+ */
+export const TECH_OFFER = { chance: 0.15, minLevel: 4, fresh: 1, owned: 1.3 } as const;
 
 export const TECH_FAMILIES = ['split', 'orbit', 'burn'] as const;
 export type TechFamily = (typeof TECH_FAMILIES)[number];
@@ -192,8 +199,8 @@ export const TECH_DEEPEN = {
   burn: { damage: 1.25 },
 } as const;
 
-/** 技法等級（拿滿 TECH_MAX 之後，過關畫面「加深」）：每級 + perLevel 倍的傷害／持續效果 */
-export const TECH_LEVELS = { max: 3, perLevel: 0.25 } as const;
+/** 技法等級（D49）：最高 max 級；每拿一次升一級，傷害與持續效果 × (1 + perLevel × (累積的稀有度倍率 − 1))（凡 1.0／良 1.2／珍 1.5／極 2.0，第一次拿的也算） */
+export const TECH_LEVELS = { max: 8, perLevel: 0.12 } as const;
 
 /** 其他規則 */
 export const TECH_RULES = {
@@ -205,11 +212,10 @@ export const TECH_RULES = {
 
 /** 技法卡在選卡面板裡的 id 前綴（和法具的 id 分開） */
 export const TECH_CARD_PREFIX = 'tech:';
-/** 加深：tech-up:<id>；道祖神換技法：tech-swap:<舊>><新>；道祖神維持現狀：tech-keep */
-export const TECH_UP_PREFIX = 'tech-up:';
+/** 升級卡裡的技法卡：tech:<id>（沒有 = 學會、已有 = 升一級）；道祖神換技法：tech-swap:<舊>><新>；道祖神維持現狀：tech-keep */
 export const TECH_SWAP_PREFIX = 'tech-swap:';
 export const TECH_KEEP = 'tech-keep';
-export const isTechCard = (id: string): boolean => id.startsWith(TECH_CARD_PREFIX) || id.startsWith(TECH_UP_PREFIX) || id.startsWith(TECH_SWAP_PREFIX) || id === TECH_KEEP;
+export const isTechCard = (id: string): boolean => id.startsWith(TECH_CARD_PREFIX) || id.startsWith(TECH_SWAP_PREFIX) || id === TECH_KEEP;
 
 /** 兩個技法放在一起會怎樣（選卡提示用）：命中效果 × 出手方式 → 出手方式打中人類也會觸發命中效果；同系 → 加深 */
 export type TechMix = { kind: 'hit'; via: string; hit: string } | { kind: 'family'; family: TechFamily };

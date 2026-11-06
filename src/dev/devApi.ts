@@ -9,7 +9,7 @@ import type { RarityLike } from './rarityLike';
 
 /**
  * 開發模式介面 window.__game（CLAUDE.md「開發模式介面」）。主網址（build:single:main）與正式 build 不含這個檔。
- * 已有：state／seed／paused／simTime／quality／audio／perf／screens／run／camera／offer／advance／render／spawn／setTime／killBoss／clearStage／summonBoss／forcePickup／dropOrbs／giveTech／give／addXp／god／teleport。
+ * 已有：state／seed／paused／simTime／quality／audio／perf／screens／run／camera／offer／advance／render／spawn／setTime／killBoss／clearStage／summonBoss／forcePickup／dropOrbs／giveTech／techNext／give／addXp／god／teleport。
  * 還沒有（隨系統加入）：forceElement。
  */
 export interface DevContext {
@@ -188,6 +188,8 @@ export function installDevApi(ctx: DevContext): void {
       for (let i = 0; i < o.high; i++) if (o.alive[i] && !o.pulled[i] && Math.hypot(o.x[i] - r.px, o.z[i] - r.pz) > dist) n++;
       return n;
     },
+    /** 下一次升級選卡一定有一張技法卡（D49：平常是機率；回歸用真的點擊拿技法） */
+    techNext: () => run()?.devTechNext(),
     /** 直接給技法（不經面板，D48；給 TECH_MAX 以內） */
     giveTech: (...ids: string[]) => {
       const r = run();
