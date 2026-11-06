@@ -2,7 +2,6 @@ import { t } from '../i18n';
 import type { I18nKey } from '../i18n/zh-TW';
 import { CARD_FORMAT, type StatId } from '../data/stats';
 import { setWeaponTextFormatter, type BuildSummary } from '../game/buildSummary';
-import { isUltCard, ultHints, ultOfCard } from '../data/ultimates';
 import { cardLinks } from '../data/links';
 import { DIFFICULTY } from '../data/difficulty';
 import { TECH_CARD_PREFIX, TECH_KEEP, TECH_LEVELS, TECH_SWAP_PREFIX, isTechCard, techById, techMix } from '../data/techniques';
@@ -41,7 +40,7 @@ function overlay(parent: HTMLElement, name: string, html: string): Overlay {
 const btn = (id: string, key: I18nKey, cls = '') => `<button class="btn ${cls}" id="${id}" type="button">${t(key)}</button>`;
 
 // ── 選妖怪 ──
-export function buildSetup(parent: HTMLElement, onStart: (yokaiId: string) => void, onBack: () => void) {
+export function buildSetup(parent: HTMLElement, onStart: (yokaiId: string) => void, onBack: () => void, onChoose: (yokaiId: string) => void = () => {}) {
   const cards = STARTER_YOKAI.map((id) => {
     const ok = PLAYABLE_YOKAI.includes(id);
     return `<button class="yokai-card${ok ? '' : ' locked'}" type="button" data-yokai="${id}" ${ok ? '' : 'disabled'}>
@@ -51,6 +50,7 @@ export function buildSetup(parent: HTMLElement, onStart: (yokaiId: string) => vo
     </button>`;
   }).join('');
   const o = overlay(parent, 'setup', `<div class="panel"><h2>${t('setup.title')}</h2><div class="yokai-row">${cards}</div>
+    <p id="setup-ult"></p>
     <div class="row">${btn('btn-setup-back', 'setup.back', 'secondary')}${btn('btn-setup-go', 'setup.go')}</div></div>`);
   let chosen = PLAYABLE_YOKAI[0];
   const mark = () => o.el.querySelectorAll<HTMLElement>('.yokai-card').forEach((c) => c.classList.toggle('selected', c.dataset.yokai === chosen));
@@ -58,12 +58,102 @@ export function buildSetup(parent: HTMLElement, onStart: (yokaiId: string) => vo
     c.addEventListener('click', () => {
       chosen = c.dataset.yokai!;
       mark();
+      onChoose(chosen);
     }),
   );
   mark();
   o.el.querySelector('#btn-setup-go')!.addEventListener('click', () => onStart(chosen));
   o.el.querySelector('#btn-setup-back')!.addEventListener('click', onBack);
-  return o;
+  return Object.assign(o, {
+    /** 選到的妖怪裝配的大招（在神社更換） */
+    setUltLine(text: string) {
+      o.el.querySelector('#setup-ult')!.textContent = text;
+    },
+  });
+}
+
+// ── 神社（D52：目前只有大招的解鎖、升級、裝配；之後局外商店的其他分頁都放這裡）──
+export interface ShrineUlt {
+  id: string;
+  unlocked: boolean;
+  equipped: boolean;
+  level: number;
+  maxLevel: number;
+  unlockPrice: number;
+  upPrice: number;
+  mods: { power: number; radius: number; cooldown: number; charge: number };
+  next: { power?: number; radius?: number; cooldown?: number; charge?: number } | null;
+}
+export interface ShrineView {
+  merit: number;
+  yokai: { id: string; ults: ShrineUlt[] }[];
+}
+export interface ShrineActions {
+  onBack(): void;
+  onEquip(yokai: string, ult: string): void;
+  onBuy(ult: string): void;
+  onUpgrade(ult: string): void;
+  /** 只有測試頁給：功德 +1000 */
+  onCheat?: () => void;
+}
+
+function ultStepText(st: NonNullable<ShrineUlt['next']>): string {
+  const parts: string[] = [];
+  if (st.power) parts.push(t('ult.step.power', { v: fix(st.power * 100, 0) }));
+  if (st.radius) parts.push(t('ult.step.radius', { v: fix(st.radius * 100, 0) }));
+  if (st.cooldown) parts.push(t('ult.step.cooldown', { v: fix(st.cooldown, 0) }));
+  if (st.charge) parts.push(t('ult.step.charge', { v: fix(st.charge * 100, 0) }));
+  return parts.join('、');
+}
+
+export function buildShrine(parent: HTMLElement, a: ShrineActions) {
+  const o = overlay(
+    parent,
+    'shrine',
+    `<div class="panel shrine-panel"><h2>${t('shrine.title')}</h2><p id="shrine-merit"></p>
+      <div class="shrine-body" id="shrine-body"></div>
+      <div class="row">${a.onCheat ? btn('btn-shrine-cheat', 'shrine.cheat', 'secondary') : ''}${btn('btn-shrine-back', 'shrine.back')}</div></div>`,
+  );
+  o.el.querySelector('#btn-shrine-back')!.addEventListener('click', a.onBack);
+  o.el.querySelector('#btn-shrine-cheat')?.addEventListener('click', () => a.onCheat?.());
+  const body = o.el.querySelector<HTMLElement>('#shrine-body')!;
+  body.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-act]');
+    if (!b || b.disabled) return;
+    const row = b.closest<HTMLElement>('[data-ult]')!;
+    const act = b.dataset.act;
+    if (act === 'equip') a.onEquip(row.dataset.yokai!, row.dataset.ult!);
+    else if (act === 'buy') a.onBuy(row.dataset.ult!);
+    else if (act === 'up') a.onUpgrade(row.dataset.ult!);
+  });
+  return Object.assign(o, {
+    render(v: ShrineView) {
+      o.el.querySelector('#shrine-merit')!.textContent = t('shrine.merit', { n: v.merit });
+      body.innerHTML = v.yokai
+        .map(
+          (y) => `<section class="shrine-yokai"><h3>${t(`yokai.${y.id}` as I18nKey)}：${t('shrine.ults')}</h3>${y.ults
+            .map((u) => {
+              const equip = !u.unlocked
+                ? `<button class="btn secondary" type="button" data-act="buy" ${v.merit >= u.unlockPrice ? '' : 'disabled'}>${t('shrine.buy', { n: u.unlockPrice })}</button>`
+                : u.equipped
+                  ? `<span class="badge">${t('shrine.equipped')}</span>`
+                  : `<button class="btn secondary" type="button" data-act="equip">${t('shrine.equip')}</button>`;
+              const up = !u.unlocked
+                ? ''
+                : u.next
+                  ? `<button class="btn secondary" type="button" data-act="up" ${v.merit >= u.upPrice ? '' : 'disabled'}>${t('shrine.up', { n: u.upPrice })}</button>`
+                  : `<span class="badge">${t('shrine.max')}</span>`;
+              return `<div class="shrine-ult${u.equipped ? ' equipped' : ''}${u.unlocked ? '' : ' locked'}" data-ult="${u.id}" data-yokai="${y.id}">
+                <b>${t(`ult.${u.id}` as I18nKey)} ${u.unlocked ? t('ult.level', { lv: u.level, max: u.maxLevel }) : `<em>${t('shrine.locked')}</em>`}</b>
+                <span class="d">${t(`ult.${u.id}.desc` as I18nKey)}</span>
+                <span class="m">${ultModsText(u.mods)}${u.unlocked && u.next ? `<br>${t('shrine.next', { text: ultStepText(u.next) })}` : ''}</span>
+                <span class="acts">${equip}${up}</span></div>`;
+            })
+            .join('')}</section>`,
+        )
+        .join('');
+    },
+  });
 }
 
 // ── 升級選卡 ──
@@ -111,7 +201,6 @@ export function downText(stat: StatId, v: number): string {
 export interface PickerContext {
   yokai: string;
   counts: ReadonlyMap<string, number>;
-  fused: readonly string[];
   techs?: readonly string[];
   techLevels?: readonly number[];
   techMode?: 'new' | 'up' | 'swap';
@@ -147,15 +236,18 @@ function techCardHtml(cardId: string, rarity: Rarity, owned: readonly string[], 
   return `<span class="rname">${tag}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="ctech">${t('tech.likes', { items: likes })}</span>${mixText ? `<span class="ctech mix">${mixText}</span>` : ''}`;
 }
 
-/** 法具連結：它是哪些大招的材料、適合哪些技法（沒有就明講沒有）。選卡與能力面板共用 */
+/** 大招的局外升級累計（能力面板用）：「威力 ×1.1、範圍 ×1.08、冷卻 23 秒、充能 ×1.1」 */
+export function ultModsText(m: { power: number; radius: number; cooldown: number; charge: number }): string {
+  return `${t('ult.mods', { power: fix(m.power, 2), radius: fix(m.radius, 2) })}、${t('ult.mods2', { cooldown: fix(m.cooldown, 0), charge: fix(m.charge, 2) })}`;
+}
+
+/** 法具連結：它適合哪些技法（沒有就明講沒有）。選卡與能力面板共用 */
 export function cardLinkLines(cardId: string, yokai: string): string[] {
   const l = cardLinks(cardId, yokai);
   if (cardById(cardId).kind === 'fallback') return [];
   if (l.weapon) return [t('card.link.weapon')];
-  const out: string[] = [];
-  if (l.ults.length) out.push(t('card.link.ult', { list: l.ults.map((u) => t('card.link.ultItem', { name: t(`ult.${u.id}` as I18nKey), lv: u.level })).join('、') }));
-  if (l.techs.length) out.push(t('card.link.tech', { list: l.techs.map((x) => techName(x)).join('、') }));
-  return out.length ? out : [t('card.link.none')];
+  if (!l.techs.length) return [t('card.link.none')];
+  return [t('card.link.tech', { list: l.techs.map((x) => techName(x)).join('、') })];
 }
 
 export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => void) {
@@ -164,24 +256,11 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
   const title = o.el.querySelector<HTMLElement>('#lv-title')!;
   const pending = o.el.querySelector<HTMLElement>('#lv-pending')!;
   return Object.assign(o, {
-    render(offer: CardOffer[], more: number, kind: 'levelup' | 'offering' | 'chest' | 'tech' | 'fusion' = 'levelup', ult: PickerContext = { yokai: '', counts: new Map(), fused: [] }) {
-      title.textContent = t(kind === 'tech' ? (ult.techMode === 'swap' ? 'levelup.dosojin' : 'levelup.tech') : kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? 'levelup.offering' : kind === 'fusion' ? 'levelup.fusion' : 'levelup.chest');
+    render(offer: CardOffer[], more: number, kind: 'levelup' | 'offering' | 'chest' | 'tech' = 'levelup', ult: PickerContext = { yokai: '', counts: new Map() }) {
+      title.textContent = t(kind === 'tech' ? (ult.techMode === 'swap' ? 'levelup.dosojin' : 'levelup.tech') : kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? 'levelup.offering' : 'levelup.chest');
       pending.textContent = more > 1 ? t('levelup.pending', { n: more - 1 }) : '';
       cardsEl.innerHTML = '';
       offer.forEach((c, i) => {
-        if (isUltCard(c.cardId)) {
-          // 寶箱裡的融合卡（D30 第二步：進化式）
-          const u = ultOfCard(c.cardId);
-          const b = document.createElement('button');
-          b.type = 'button';
-          b.className = 'card r-ult';
-          b.dataset.card = c.cardId;
-          b.dataset.index = String(i);
-          b.innerHTML = `<span class="rname">${t('card.ultTag')}</span><b>${t(`ult.${u.id}` as I18nKey)}</b><span class="cdesc">${t(`ult.${u.id}.desc` as I18nKey)}</span>`;
-          b.addEventListener('click', () => onPick(i));
-          cardsEl.appendChild(b);
-          return;
-        }
         if (isTechCard(c.cardId)) {
           // 技法（D48）：新技法／加深／道祖神換一個／維持現狀
           const owned = ult.techs ?? [];
@@ -204,12 +283,8 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
         b.dataset.card = c.cardId;
         b.dataset.rarity = c.rarity;
         b.dataset.index = String(i);
-        // 大招配方：這張卡是哪個大招的材料、目前進度；選了就湊齊的特別標出
-        const ultLines = ultHints(c.cardId, ult.yokai, ult.counts, ult.fused)
-          .map((h) => `<span class="csyn ulthint${h.completes ? ' ready' : ''}">${h.completes ? t('card.ult.completes', { name: t(`ult.${h.id}` as I18nKey) }) : t('card.ult.need', { name: t(`ult.${h.id}` as I18nKey), have: h.have, need: h.need })}</span>`)
-          .join('');
         b.innerHTML = `<span class="shape ${SHAPES[c.rarity]}" aria-hidden="true"></span>
-          <span class="rname">${kind === 'weapon' ? t('card.weaponTag') : kind === 'fallback' ? '' : cardById(c.cardId).rarityScales ? t(`rarity.${c.rarity}` as I18nKey) : ''}</span><b>${d.name}</b><span class="clv">${d.level}</span><span class="cdesc">${d.desc}</span>${cardLinkLines(c.cardId, ult.yokai).map((x) => `<span class="csyn clink">${x}</span>`).join('')}${ultLines}`;
+          <span class="rname">${kind === 'weapon' ? t('card.weaponTag') : kind === 'fallback' ? '' : cardById(c.cardId).rarityScales ? t(`rarity.${c.rarity}` as I18nKey) : ''}</span><b>${d.name}</b><span class="clv">${d.level}</span><span class="cdesc">${d.desc}</span>${cardLinkLines(c.cardId, ult.yokai).map((x) => `<span class="csyn clink">${x}</span>`).join('')}`;
         b.addEventListener('click', () => onPick(i));
         cardsEl.appendChild(b);
       });
@@ -392,9 +467,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
         ? `<h3>${t('pause.ultimates')}</h3><ul class="sum-ult">${sum.ultimates
             .map(
               (u) =>
-                `<li data-ult="${u.id}" class="${u.fused ? 'fused' : ''}"><b>${t(`ult.${u.id}` as I18nKey)}${u.fused ? ' ✓' : ''}</b><em>${t(`ult.${u.id}.desc` as I18nKey)}</em><span>${u.ingredients
-                  .map((g) => `<i class="${g.have >= g.need ? 'ok' : ''}">${t(`card.${g.card}` as I18nKey)} ${g.have}/${g.need}</i>`)
-                  .join('')}</span></li>`,
+                `<li data-ult="${u.id}"><b>${t(`ult.${u.id}` as I18nKey)} ${t('ult.level', { lv: u.level, max: u.maxLevel })}</b><em>${t(`ult.${u.id}.desc` as I18nKey)}</em><span>${ultModsText(u.mods)}</span></li>`,
             )
             .join('')}</ul>`
         : '';

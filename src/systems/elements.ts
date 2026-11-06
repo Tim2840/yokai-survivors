@@ -24,7 +24,6 @@ import {
   CHEST_HOLD_SECONDS,
   ELEMENT_PER_KIND,
   FOX,
-  FUSE,
   DOSOJIN,
   OFFERING,
   OFFERING_HOLD_SECONDS,
@@ -37,7 +36,7 @@ import {
 } from '../data/elements';
 
 /** 一定要放得下、不會被擠掉的特殊要素 */
-const SPECIAL: ReadonlySet<ElementKind> = new Set<ElementKind>(['summon', 'fuse', 'dosojin']);
+const SPECIAL: ReadonlySet<ElementKind> = new Set<ElementKind>(['summon', 'dosojin']);
 
 /** 給要素系統用的「玩家端」介面：只做它需要的事，不讓它碰整個 Run */
 export interface ElementHost {
@@ -50,9 +49,7 @@ export interface ElementHost {
   /** 賽錢箱：生命夠不夠付（付完至少剩 1 點）、付、開三選一面板（rarity 階的卡、連選 picks 次） */
   canPayHpFrac(frac: number): boolean;
   payHpFrac(frac: number): void;
-  openPick(rarity: Rarity, picks: number, kind: 'offering' | 'chest' | 'fusion'): void;
-  /** 合魂祠：現在有沒有湊齊、還沒融合的大招 */
-  canFuse(): boolean;
+  openPick(rarity: Rarity, picks: number, kind: 'offering' | 'chest'): void;
   /** 道祖神（D47）：重新跳一次招式變化三選一 */
   rechooseVariant(): void;
   addMerit(n: number): void;
@@ -116,7 +113,7 @@ export interface AltarEffect {
 
 const USED_FADE = 0.7;
 /** 各要素按住幾秒（結界石不用按住） */
-const HOLD: Partial<Record<ElementKind, number>> = { jizo: JIZO_HOLD_SECONDS, altar: ALTAR_HOLD_SECONDS, offering: OFFERING_HOLD_SECONDS, omikuji: OMIKUJI_HOLD_SECONDS, chest: CHEST_HOLD_SECONDS, summon: STAGE.summon.holdSeconds, fuse: FUSE.holdSeconds, dosojin: DOSOJIN.holdSeconds };
+const HOLD: Partial<Record<ElementKind, number>> = { jizo: JIZO_HOLD_SECONDS, altar: ALTAR_HOLD_SECONDS, offering: OFFERING_HOLD_SECONDS, omikuji: OMIKUJI_HOLD_SECONDS, chest: CHEST_HOLD_SECONDS, summon: STAGE.summon.holdSeconds, dosojin: DOSOJIN.holdSeconds };
 
 function blankSlot(): ElementSlot {
   const n = FOX.offers;
@@ -273,7 +270,7 @@ export class Elements {
       }
       const near = dist <= ELEMENT_RULES.useRadius && vertical;
       s.inside = near;
-      s.blocked = (s.kind === 'offering' && !this.host.canPayHpFrac(OFFERING[s.rarity].costFrac)) || (s.kind === 'fuse' && !this.host.canFuse());
+      s.blocked = (s.kind === 'offering' && !this.host.canPayHpFrac(OFFERING[s.rarity].costFrac));
       if (near && !s.blocked) {
         const hold = HOLD[s.kind] ?? JIZO_HOLD_SECONDS;
         s.progress = Math.min(1, s.progress + dt / hold);
@@ -406,8 +403,6 @@ export class Elements {
       this.host.openPick(o.reward, o.picks, 'offering');
     } else if (s.kind === 'chest') {
       this.host.openPick(s.rarity, 1, 'chest');
-    } else if (s.kind === 'fuse') {
-      this.host.openPick(s.rarity, 1, 'fusion');
     } else if (s.kind === 'dosojin') {
       this.host.rechooseVariant();
     } else if (s.kind === 'omikuji') lines.push(...this.drawOmikuji(s));
@@ -597,18 +592,13 @@ export class Elements {
     return this.placeSpecial('summon', px, pz, STAGE.summon.ringMin, STAGE.summon.ringMax);
   }
 
-  /** 合魂祠（大招材料齊了才出現）：離玩家 ringMin～ringMax 公尺；不會過期，沒有可以融合的大招時由 Run 收掉 */
-  placeFuse(px: number, pz: number): ElementSlot | null {
-    return this.placeSpecial('fuse', px, pz, FUSE.ringMin, FUSE.ringMax);
-  }
-
   /** 道祖神（D47，選了招式變化之後每關一座）：離玩家 ringMin～ringMax 公尺；不會過期 */
   placeDosojin(px: number, pz: number): ElementSlot | null {
     return this.placeSpecial('dosojin', px, pz, DOSOJIN.ringMin, DOSOJIN.ringMax);
   }
 
-  /** 特殊要素（召喚祭壇、合魂祠、道祖神）：一定要放得下（池滿了擠掉最舊的一般要素），找不到位置就放寬距離 */
-  private placeSpecial(kind: 'summon' | 'fuse' | 'dosojin', px: number, pz: number, ringMin: number, ringMax: number): ElementSlot | null {
+  /** 特殊要素（召喚祭壇、道祖神）：一定要放得下（池滿了擠掉最舊的一般要素），找不到位置就放寬距離 */
+  private placeSpecial(kind: 'summon' | 'dosojin', px: number, pz: number, ringMin: number, ringMax: number): ElementSlot | null {
     let i = this.freeSlot();
     if (i < 0) {
       let oldest = -1;
@@ -634,7 +624,7 @@ export class Elements {
     return null;
   }
 
-  /** 收掉還沒用的某種要素（合魂祠：沒有可以融合的大招了） */
+  /** 收掉還沒用的某種要素 */
   removeKind(kind: ElementKind): void {
     for (let i = 0; i < this.slots.length; i++) if (this.slots[i].active && this.slots[i].kind === kind && this.slots[i].usedAge < 0) this.free(i);
   }
@@ -642,12 +632,6 @@ export class Elements {
   /** 道祖神還在、還沒用（HUD 箭頭用） */
   get dosojinSlot(): ElementSlot | null {
     for (const s of this.slots) if (s.active && s.kind === 'dosojin' && s.usedAge < 0) return s;
-    return null;
-  }
-
-  /** 合魂祠還在、還沒用（HUD 箭頭用） */
-  get fuseSlot(): ElementSlot | null {
-    for (const s of this.slots) if (s.active && s.kind === 'fuse' && s.usedAge < 0) return s;
     return null;
   }
 

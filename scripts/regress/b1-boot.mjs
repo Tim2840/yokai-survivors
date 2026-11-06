@@ -34,19 +34,16 @@ export async function run(browser) {
         });
         expect(inView, `選單超出畫面（${vp.name}）`);
       });
-      await step(`${vp.name} 點神社：提示泡泡出現、不蓋到選單`, async () => {
+      await step(`${vp.name} 點神社：神社畫面出現、整個在畫面內、按返回回到主選單`, async () => {
         await press(ctx, '#btn-shrine');
-        await ctx.page.waitForFunction(() => {
-          const t = document.getElementById('toast');
-          return t && !t.classList.contains('hidden') && t.textContent.length > 0;
-        }, null, { timeout: 10000 });
-        // 提示泡泡不能蓋到選單（舊版橫式手機會壓到選單底部）
-        const overlap = await ctx.page.evaluate(() => {
-          const a = document.getElementById('toast').getBoundingClientRect();
-          const b = document.querySelector('.menu').getBoundingClientRect();
-          return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+        await ctx.page.waitForFunction(() => window.__game.screens.includes('shrine'), null, { timeout: 10000 });
+        const inView = await ctx.page.evaluate(() => {
+          const r = document.querySelector('.shrine-panel').getBoundingClientRect();
+          return r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight + 1 && r.right <= innerWidth + 1;
         });
-        expect(!overlap, `提示泡泡蓋到選單（${vp.name}）`);
+        expect(inView, `神社面板超出畫面（${vp.name}）`);
+        await press(ctx, '#btn-shrine-back');
+        await ctx.page.waitForFunction(() => window.__game.screens.includes('menu') && !window.__game.screens.includes('shrine'), null, { timeout: 10000 });
       });
       await step(`${vp.name} 點開始：進選妖怪畫面`, async () => {
         await press(ctx, '#btn-start');

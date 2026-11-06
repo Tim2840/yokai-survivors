@@ -12,7 +12,6 @@ import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { resetTuning, tuning } from '../../src/data/tuning';
 import { TECHS } from '../../src/data/techniques';
-import { ultHints } from '../../src/data/ultimates';
 import { PROGRESSION } from '../../src/data/progression';
 import { WAVES } from '../../src/data/waves';
 import { STAGE } from '../../src/data/stage';
@@ -31,7 +30,10 @@ const RUNS = Number(arg('runs', '24'));
 const SECONDS = Number(arg('seconds', '600'));
 const STAGES = Number(arg('stages', '1'));
 const SEED0 = Number(arg('seeds', '1'));
-const ONLY = arg('only', 'random,dps,survive,ult').split(',');
+const ONLY = arg('only', 'random,dps,survive').split(',');
+/** --ult infernoLantern|ghostfireDance、--ultLevel 0～5：這一局裝配的大招與局外升級等級（D52；沒給 = 一開始就有的那一招 Lv0） */
+const ULT_ID = arg('ult', '');
+const ULT_LV = Number(arg('ultLevel', '0'));
 /** --summonAt 0.5：機器人在關卡進行到這個比例之後才去開召喚祭壇（D34；越晚頭目越強） */
 const SUMMON_AT = Number(arg('summonAt', '0.5'));
 const ELEMENTS = arg('elements', 'both'); // on | off | both
@@ -50,7 +52,6 @@ const MOBILE = process.argv.includes('--mobile');
 const TECH_BY_STRATEGY: Record<string, string[]> = {
   dps: ['kitsunebi', 'bounce', 'rain', 'pillar', 'oil', 'seed', 'satellite', 'hellfire', 'lamp', 'homing', 'ring', 'ward'],
   survive: ['ring', 'ward', 'lamp', 'satellite', 'hellfire', 'pillar', 'oil', 'seed', 'kitsunebi', 'rain', 'bounce', 'homing'],
-  ult: ['hellfire', 'seed', 'oil', 'pillar', 'kitsunebi', 'rain', 'satellite', 'lamp', 'bounce', 'ring', 'homing', 'ward'],
 };
 /** --tune countScale=3,hpScale=1.2,xp.needPerLevel=4,w.hpPerWave=0.2：臨時改旋鈕比較（不改檔案）；xp. 開頭是 PROGRESSION、w. 開頭是 WAVES */
 const TUNE = arg('tune', '');
@@ -80,10 +81,7 @@ function choose(run: Run, strategy: string, rnd: () => number): number {
   // 道祖神的技法面板：機器人不換（維持現狀）
   if (run.offerKind === 'tech') return Math.max(0, offer.findIndex((o) => o.cardId === 'tech-keep'));
   if (strategy === 'random') return Math.floor(rnd() * offer.length);
-  // 寶箱裡的融合卡（D30 第二步）：會玩的人一定拿
-  const fuse = offer.findIndex((o) => o.cardId.startsWith('ult:'));
-  if (fuse >= 0) return fuse;
-  const sc = SCORES[strategy === 'ult' ? 'dps' : strategy];
+  const sc = SCORES[strategy];
   let best = 0;
   let bestV = -1;
   const pref = TECH_PREF ? TECH_PREF.split(',') : TECH_BY_STRATEGY[strategy] ?? [];
@@ -94,10 +92,6 @@ function choose(run: Run, strategy: string, rnd: () => number): number {
       const id = o.cardId.slice(5);
       const rank = pref.indexOf(id);
       v = (run.tech.has(id) ? 3 : rank < 0 ? 2 : 4 - rank * 0.15) * RARITY_SCORE[o.rarity];
-    }
-    // 「ult」策略：追大招配方——這張卡是還沒融合的大招的材料就加分，選了就融合加更多
-    if (strategy === 'ult') {
-      for (const h of ultHints(o.cardId, run.yokai.id, run.cardCounts, run.fused)) v += h.completes ? 12 : h.have < h.need ? 3 : 0;
     }
     if (v > bestV) {
       bestV = v;
@@ -127,7 +121,6 @@ interface Result {
   elementsUsed: number;
   cards: Record<string, number>;
   curseTotal: number;
-  fused: number;
   casts: number;
   variant: string;
   summonedAt: number;
@@ -149,7 +142,7 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   applyTune();
   const rnd = lcg(seed * 7919);
   tuning.stageSeconds = SECONDS;
-  const run = new Run({ seed, bus: new EventBus(), mapNumber: 1, mobile: MOBILE });
+  const run = new Run({ seed, bus: new EventBus(), mapNumber: 1, mobile: MOBILE, ults: ULT_ID ? [ULT_ID] : undefined, ultLevels: ULT_ID ? { [ULT_ID]: ULT_LV } : undefined });
   if (TECH_MAX_ARG) run.tech.max = Number(TECH_MAX_ARG);
   if (GIVE) run.devAddTech(...GIVE.split(','));
   if (GIVE_SETS > 0) {
@@ -215,10 +208,6 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     if (chest) {
       // 寶箱（小頭目、精英掉的，或地圖上的）：先開再走
       [mx, mz] = steer(run, chest.x, chest.z);
-    } else if (run.elements.fuseSlot && run.elements.fuseSlot.announce <= 0 && strategy !== 'random') {
-      // 合魂祠：大招材料齊了就去融合（亂選的機器人不特別去）
-      const f = run.elements.fuseSlot;
-      [mx, mz] = steer(run, f.x, f.z);
     } else if (run.portal.active) {
       [mx, mz] = steer(run, run.portal.x, run.portal.z);
     } else if (altar && altar.announce <= 0 && run.time >= SUMMON_AT * run.director.duration) {
@@ -278,7 +267,6 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     level: run.level,
     elementsUsed: used,
     cards,
-    fused: run.fused.length,
     variant: run.tech.owned.join('+') || '-',
     casts,
     summonedAt,
@@ -409,7 +397,7 @@ function foxChoice(run: Run, offers: readonly string[], blocked: readonly boolea
   const ok = offers.map((_, k) => k).filter((k) => !blocked[k]);
   if (ok.length === 0) return -1;
   if (strategy === 'random') return ok[Math.abs(Math.floor(salt * 7)) % ok.length];
-  const sc = SCORES[strategy === 'ult' ? 'dps' : strategy];
+  const sc = SCORES[strategy];
   let best = -1;
   let bv = 1.5;
   for (const k of ok) {
@@ -440,7 +428,7 @@ function summarize(rs: Result[]): string {
     `擊殺 ${avg(rs.map((r) => r.kills)).toFixed(0)}`,
     `等級 ${avg(rs.map((r) => r.level)).toFixed(1)}`,
     `用掉要素 ${avg(rs.map((r) => r.elementsUsed)).toFixed(1)}`,
-    `融合大招 ${avg(rs.map((r) => r.fused)).toFixed(1)} 個、發動 ${avg(rs.map((r) => r.casts)).toFixed(1)} 次`,
+    `大招 ${ULT_ID || '預設'} Lv${ULT_LV}、發動 ${avg(rs.map((r) => r.casts)).toFixed(1)} 次`,
     `技法平均 ${avg(rs.map((r) => (r.variant === '-' ? 0 : r.variant.split('+').length))).toFixed(1)} 個（${[...new Set(rs.map((r) => r.variant))].slice(0, 4).join('/')}…）`,
     `補給品 ${avg(rs.map((r) => r.pickups)).toFixed(1)} 個`,
     `主武器 4 級中位第 ${pct(rs.filter((r) => r.weapon4At >= 0).map((r) => r.weapon4At), 50)?.toFixed(0) ?? '-'} 秒、滿級 ${((rs.filter((r) => r.weaponMaxAt >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.weaponMaxAt >= 0).map((r) => r.weaponMaxAt), 50)?.toFixed(0) ?? '-'} 秒）、結束時平均 ${avg(rs.map((r) => r.weaponLv)).toFixed(1)} 級`,

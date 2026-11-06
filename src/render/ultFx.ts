@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { palette } from '../art/palette';
-import { ULT_RECIPES } from '../data/ultimates';
+import { ultById } from '../data/ultimates';
 import type { Run } from '../game/run';
 
 const LIFE = 0.7;
@@ -71,12 +71,13 @@ export class UltFx {
     if (c && c.at !== this.seen) {
       this.seen = c.at;
       for (const id of c.ids) {
-        const e = ULT_RECIPES.find((r) => r.id === id)!.effect;
+        const e = ultById(id).effect;
+        const rm = run.ultModsView.radius;
         const y = run.map.heightAt(c.x, c.z);
         void y;
-        if (e.type === 'nova' || e.type === 'bulwark') this.spawn(e.type, c.x, c.z, c.dx, c.dz, e.radius * run.stats.value.area);
+        if (e.type === 'nova' || e.type === 'bulwark') this.spawn(e.type, c.x, c.z, c.dx, c.dz, e.radius * rm * run.stats.value.area);
         else if (e.type === 'frenzy') this.spawn('frenzy', c.x, c.z, c.dx, c.dz, 3);
-        else this.spawn('beam', c.x, c.z, c.dx, c.dz, e.length);
+        else this.spawn('beam', c.x, c.z, c.dx, c.dz, e.length * rm);
       }
     }
     for (const f of this.fx) {

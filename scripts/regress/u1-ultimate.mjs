@@ -1,8 +1,10 @@
-// u1：終極技（大招，D29；D30 第二步改進化式）。湊齊配方（含鬼火滿級）→「材料齊了」提示、還沒有大招鈕 → 走去開寶箱 → 寶箱裡的融合卡（真的點）→ 融合提示 → 大招鈕出現、量表沒滿按了沒反應 → 量表滿了鈕發亮 → 真的點鈕（桌面也試 F 鍵）→ 範圍內的敵人被打倒、量表歸零。
-// 「能力」面板列出配方進度；選卡畫面的卡片寫出大招材料進度。三種畫面，卡住偵測。量表用開發介面 chargeUlt 充滿（等殺敵充能太久），其餘全是真實操作。
-import { openPage, startRun, press, step, expect, shot, reportErrors, walkOnto, hudTopOk, VIEWPORTS } from './lib.mjs';
+// u1：大招（D52：局外裝配；取消卡片融合）。開局就帶著裝配的大招（選妖怪畫面寫出來）→ 大招鈕在、量表沒滿按了沒反應 →
+// 量表滿了鈕發亮 → 真的按（按鈕／F 鍵）→ 打倒周圍敵人、量表歸零、進入冷卻倒數 → 「能力」面板寫出大招與升級累計。
+// 再走一遍神社：打開神社 → 領測試功德 → 裝配第 2 招、升一級 → page.reload() 之後還在 → 開局帶的是第 2 招、放出來真的有效果。
+// 三種畫面，卡住偵測。量表用開發介面 chargeUlt 充滿（等殺敵充能太久），其餘全是真實操作。
+import { openPage, press, step, expect, shot, reportErrors, waitState, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'u1', desc: '大招：湊齊配方（鬼火滿級）→材料齊提示→走去開寶箱、跟著箭頭去合魂祠→點融合卡→融合提示→大招鈕→冷卻倒數→量表滿了才能放→真的按鈕／F 鍵→打倒周圍敵人→能力面板與選卡提示（三種畫面）', max: 300, stall: 50 };
+export const meta = { id: 'u1', desc: '大招：開局就有裝配的大招→量表沒滿沒反應→滿了鈕發亮→按鈕／F 鍵放→打倒敵人、冷卻倒數→能力面板；神社裝配第 2 招、升級、重載後還在、開局帶那一招（三種畫面）', max: 360, stall: 60 };
 
 const overlap = (a, b) => a && b && a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
@@ -12,140 +14,59 @@ export async function run(browser) {
     const ctx = await openPage(browser, vp, '?q=4&seed=51');
     const { page } = ctx;
     try {
-      await step(`${vp.name} 開局`, () => startRun(ctx), 40);
-      await page.evaluate(() => (window.__game.god = true));
+      await waitState(page, 'MENU');
+      await step(`${vp.name} 選妖怪畫面寫出裝配的大招（預設炎獄燈 Lv0）；開局`, async () => {
+        await press(ctx, '#btn-start');
+        await page.waitForFunction(() => window.__game.screens.includes('setup'), null, { timeout: 10000 });
+        const line = await page.locator('#setup-ult').innerText();
+        expect(/炎獄燈/.test(line) && /Lv0/.test(line), `選妖怪畫面沒寫出裝配的大招：${line}`);
+        await press(ctx, '#btn-setup-go');
+        await waitState(page, 'COMBAT');
+        await page.evaluate(() => (window.__game.god = true));
+      }, 40);
       const ult = () => page.evaluate(() => window.__game.run.ult);
       const dismiss = async () => {
         while ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await page.locator('.overlay[data-screen="levelup"] .card').first().click();
       };
 
-      await step(`${vp.name} 還沒融合：沒有大招鈕`, async () => {
-        expect(!(await page.locator('#btn-ult').isVisible()), `還沒融合就出現大招鈕（${vp.name}）`);
-      });
-
-      await step(`${vp.name} 選卡畫面：卡片上寫出大招材料進度`, async () => {
-        // 先給一張鬼火增殖（鬼火亂舞的材料），再連續升級直到卡片上出現「大招」那一行
-        await page.evaluate(() => { window.__game.give('volley', 'common'); });
-        let saw = false;
-        let sawComplete = false;
-        for (let k = 0; k < 25 && !saw; k++) {
-          for (let g = 0; g < 40 && !(await page.evaluate(() => window.__game.screens)).includes('levelup'); g++) await page.evaluate(() => window.__game.addXp(20));
-          const lines = await page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card .csyn.ulthint, .overlay[data-screen="levelup"] .card .csyn.ult')].map((e) => {
-            // 提示必須在自己那張卡裡面（曾經被大招鈕的樣式套到，飛到畫面右下角）
-            const r = e.getBoundingClientRect();
-            const c = e.closest('.card').getBoundingClientRect();
-            const inside = r.left >= c.left - 1 && r.right <= c.right + 1 && r.top >= c.top - 1 && r.bottom <= c.bottom + 1;
-            return { t: e.textContent, ready: e.classList.contains('ready'), inside, pos: getComputedStyle(e).position };
-          }));
-          for (const l of lines) {
-            expect(/大招/.test(l.t), `大招提示文字不對：${l.t}`);
-            expect(l.inside && l.pos !== 'absolute', `大招提示跑出卡片外（${vp.name}）：${JSON.stringify(l)}`);
-            saw = true;
-            if (l.ready) sawComplete = true;
-          }
-          if (saw) files.push(await shot(ctx, 'u1-pick'));
-          await dismiss();
-        }
-        expect(saw, `連續升級 25 次都沒在卡片上看到大招材料提示（${vp.name}）`);
-        void sawComplete;
-      }, 60);
-
-      await step(`${vp.name} 湊齊「鬼火亂舞」「炎獄燈」配方（鬼火升到 8 級，Lv4 時點選技法）→「材料齊了」提示，但還沒融合`, async () => {
-        await dismiss();
-        for (let k = 0; k < 12; k++) {
-          const lv = (await ult()).counts.ghostfire ?? 1;
-          if (lv >= 8) break;
-          await page.evaluate(() => window.__game.give('ghostfire', 'common'));
-          // 主武器到 Lv4：同一個面板跳出技法三選一，真的點「狐火分裂」
-          if ((await page.evaluate(() => window.__game.screens)).includes('levelup')) {
-            const v = page.locator('.overlay[data-screen="levelup"] .card.r-variant[data-card="tech:kitsunebi"]');
-            if (await v.count()) await v.click();
-            else await dismiss();
-          }
-        }
-        expect(((await ult()).counts.ghostfire ?? 0) === 8, `鬼火沒升到 8 級：${JSON.stringify((await ult()).counts)}`);
-        await page.evaluate(() => {
-          const g = window.__game;
-          const c = g.run.ult.counts;
-          const want = { volley: 2, atkSpeed: 2, splash: 2, area: 2, power: 1 };
-          for (const [id, n] of Object.entries(want)) for (let i = c[id] ?? 0; i < n; i++) g.give(id, 'common');
-          g.advance(0.2); g.render();
-        });
+      await step(`${vp.name} 開局就有大招鈕（不用湊配方、不用融合）；不蓋到其他操作；量表沒滿`, async () => {
         const u = await ult();
-        expect(u.fused.length === 0, `湊齊就自動融合了（應該要開寶箱）：${JSON.stringify(u)}`);
-        expect(u.fusable.includes('ghostfireDance') && u.fusable.includes('infernoLantern'), `配方沒湊齊：${JSON.stringify(u)}`);
-        expect(!(await page.locator('#btn-ult').isVisible()), `還沒融合就有大招鈕（${vp.name}）`);
-        const txt = await page.locator('#synergy-box').innerText();
-        expect(/材料齊了，開寶箱融合/.test(txt), `材料齊的提示不對：${txt}`);
-      }, 60);
-
-      await step(`${vp.name} 走去開寶箱 → 面板最前面是融合卡 → 真的點 → 融合成功、大招鈕`, async () => {
-        // 第 1 個用寶箱融合；第 2 個用地圖上的合魂祠（材料齊了才出現，HUD 箭頭指過去）
-        for (let round = 0; round < 2; round++) {
-          let spot;
-          if (round === 0) {
-            spot = await page.evaluate(() => window.__game.forceElement('chest', 'common'));
-            expect(spot, `放不下寶箱（${vp.name}）`);
-          } else {
-            for (let i = 0; i < 16 && !(await page.evaluate(() => window.__game.run.elements.some((e) => e.kind === 'fuse' && !e.used && e.announce <= 0))); i++) {
-              await page.evaluate(() => window.__game.advance(0.5));
-              await dismiss();
-            }
-            spot = (await page.evaluate(() => window.__game.run.elements)).find((e) => e.kind === 'fuse' && !e.used);
-            expect(spot, `材料齊了但地圖上沒有合魂祠（${vp.name}）`);
-            await page.evaluate(([x, z]) => { window.__game.teleport(x + 12, z); window.__game.advance(0.1); window.__game.render(); }, [spot.x, spot.z]);
-            const arrow = await page.locator('#portal-text').innerText();
-            expect(/合魂祠 \d+ 公尺/.test(arrow), `合魂祠的箭頭不對：${arrow}`);
-            await hudTopOk(ctx, '・合魂祠提示');
-            files.push(await shot(ctx, 'u1-shrine'));
-          }
-          for (let tries = 0; tries < 3 && !(await walkOnto(ctx, spot.x, spot.z)); tries++) await dismiss();
-          for (let i = 0; i < 12 && !(await page.evaluate(() => window.__game.screens)).includes('levelup'); i++) await page.evaluate(() => window.__game.advance(0.25));
-          await page.evaluate(() => window.__game.render());
-          const title = await page.locator('#lv-title').innerText();
-          expect(round === 0 ? /寶箱/.test(title) : /合魂祠/.test(title), `開出來的面板不對（第 ${round + 1} 個）：${title}`);
-          const cards = await page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card')].map((c) => {
-            const r = c.getBoundingClientRect();
-            return { id: c.dataset.card, ult: c.classList.contains('r-ult'), t: c.innerText.replace(/\s+/g, ' '), r: { x: r.x, y: r.y, w: r.width, h: r.height } };
-          }));
-          expect(cards[0] && cards[0].ult, `寶箱第一張不是融合卡：${JSON.stringify(cards)}`);
-          expect(/融合大招/.test(cards[0].t), `融合卡沒有標示：${cards[0].t}`);
-          for (const c of cards) expect(c.r.x >= 0 && c.r.y >= 0 && c.r.x + c.r.w <= vp.width + 1 && c.r.y + c.r.h <= vp.height + 1, `卡片超出畫面（${vp.name}）：${JSON.stringify(c)}`);
-          if (round === 0) files.push(await shot(ctx, 'u1-chest'));
-          await page.locator('.overlay[data-screen="levelup"] .card.r-ult').first().click();
-          await dismiss();
-          await page.evaluate(() => { window.__game.advance(0.2); window.__game.render(); });
-          if (round === 0) {
-            expect(await page.locator('#synergy-box').isVisible(), `融合後沒有提示（${vp.name}）`);
-            const txt = await page.locator('#synergy-box').innerText();
-            expect(/融合成功/.test(txt), `融合提示文字不對：${txt}`);
-          }
-        }
-        const u = await ult();
-        expect(u.fused.includes('ghostfireDance') && u.fused.includes('infernoLantern'), `沒有融合：${JSON.stringify(u)}`);
-        expect(await page.locator('#btn-ult').isVisible(), `融合後沒有大招鈕（${vp.name}）`);
+        expect(u.equipped.length === 1 && u.equipped[0] === 'infernoLantern', `開局沒帶裝配的大招：${JSON.stringify(u)}`);
+        expect(await page.locator('#btn-ult').isVisible(), `開局沒有大招鈕（${vp.name}）`);
+        expect(!u.ready, '量表不該已經滿了');
         const b = await page.locator('#btn-ult').boundingBox();
         for (const sel of ['#btn-jump', '#stick-base', '#btn-pause', '#btn-abilities']) {
           const o = await page.locator(sel).first().boundingBox();
           expect(!overlap(b, o), `大招鈕蓋住 ${sel}（${vp.name}）：${JSON.stringify(b)} vs ${JSON.stringify(o)}`);
         }
         expect(b.x >= 0 && b.y >= 0 && b.x + b.width <= vp.width && b.y + b.height <= vp.height, `大招鈕超出畫面（${vp.name}）：${JSON.stringify(b)}`);
-        files.push(await shot(ctx, 'u1-fused'));
+        files.push(await shot(ctx, 'u1-start'));
       });
+
+      await step(`${vp.name} 選卡畫面不再出現大招材料、融合卡；法具卡只寫適合的技法`, async () => {
+        for (let k = 0; k < 6; k++) {
+          for (let g = 0; g < 60 && !(await page.evaluate(() => window.__game.screens)).includes('levelup'); g++) await page.evaluate(() => window.__game.addXp(10));
+          const info = await page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card')].map((c) => ({ id: c.dataset.card, ult: c.classList.contains('r-ult') || !!c.querySelector('.ulthint'), t: c.innerText.replace(/\s+/g, ' ') })));
+          for (const c of info) {
+            expect(!c.ult && !/融合|大招材料|材料/.test(c.t), `選卡還有大招融合的字樣：${JSON.stringify(c)}`);
+          }
+          await page.locator('.overlay[data-screen="levelup"] .card').first().click();
+          await dismiss();
+        }
+      }, 60);
 
       await step(`${vp.name} 量表沒滿按下去沒有反應`, async () => {
         await page.evaluate(() => { window.__game.spawn('villager', 12); window.__game.advance(0.3); });
         await dismiss();
-        const before = await page.evaluate(() => ({ k: window.__game.run.kills, u: window.__game.run.ult }));
-        expect(!before.u.ready, '量表不該已經滿了');
+        const before = await page.evaluate(() => window.__game.run.ult);
+        expect(!before.ready, '量表不該已經滿了');
         await press(ctx, '#btn-ult');
         await page.evaluate(() => window.__game.advance(0.1));
         const after = await page.evaluate(() => window.__game.run.ult);
-        expect(after.charge >= before.u.charge, `量表沒滿卻發動了：${before.u.charge} → ${after.charge}`);
+        expect(after.charge >= before.charge, `量表沒滿卻發動了：${before.charge} → ${after.charge}`);
       });
 
-      await step(`${vp.name} 量表滿 → 鈕發亮 → 真的按 → 敵人被打倒、量表歸零`, async () => {
-        // 人類生在身邊 8 公尺（大招範圍內）；鬼火會把人類擊退，所以生完馬上放
+      await step(`${vp.name} 量表滿 → 鈕發亮 → 真的按 → 敵人被打倒、量表歸零、冷卻倒數`, async () => {
         await page.evaluate(() => { window.__game.spawn('villager', 12); window.__game.chargeUlt(); window.__game.advance(0.05); window.__game.render(); });
         expect(await page.locator('#btn-ult.ready').count() === 1, `量表滿了鈕沒有發亮（${vp.name}）`);
         const e0 = await page.evaluate(() => window.__game.run.enemies);
@@ -158,18 +79,15 @@ export async function run(browser) {
         expect(r1.kills > k0, `按了大招沒有打倒敵人：${k0} → ${r1.kills}`);
         expect(r1.ult.charge < 5, `發動後量表沒有歸零：${r1.ult.charge}`);
         expect(await page.locator('#btn-ult.ready').count() === 0, `發動後鈕還在發亮（${vp.name}）`);
-        // 冷卻：鈕上寫倒數秒數；冷卻中按了沒反應
         expect(await page.locator('#btn-ult.cooling').count() === 1, `發動後沒有進入冷卻（${vp.name}）`);
         const cd = await page.locator('#ult-key').innerText();
         expect(/^\d+ 秒$/.test(cd), `冷卻倒數文字不對：${cd}`);
-        const k1 = await page.evaluate(() => window.__game.run.kills);
         await page.evaluate(() => { window.__game.spawn('villager', 6); window.__game.advance(0.3); });
         await dismiss();
         if (!vp.hasTouch) await page.keyboard.press('KeyF');
         else await press(ctx, '#btn-ult');
         await page.evaluate(() => window.__game.advance(0.1));
-        expect((await page.evaluate(() => window.__game.run.ult.charge)) < 5, `冷卻中量表在充能：${(await page.evaluate(() => window.__game.run.ult.charge))}`);
-        void k1;
+        expect((await page.evaluate(() => window.__game.run.ult.charge)) < 5, `冷卻中量表在充能`);
         files.push(await shot(ctx, 'u1-cast'));
       });
 
@@ -184,24 +102,91 @@ export async function run(browser) {
         });
       }
 
-      await step(`${vp.name} 「能力」面板：配方進度與已融合標記`, async () => {
+      await step(`${vp.name} 「能力」面板：寫出裝配的大招、等級與升級累計`, async () => {
         await dismiss();
         await press(ctx, '#btn-abilities');
         await page.waitForFunction(() => window.__game.screens.includes('pause'));
-        const info = await page.evaluate(() => [...document.querySelectorAll('#sum-ult li')].map((li) => ({ id: li.dataset.ult, fused: li.classList.contains('fused'), t: li.innerText.replace(/\s+/g, ' ') })));
-        expect(info.length === 4, `應列出 4 個配方：${JSON.stringify(info)}`);
-        expect(info.find((x) => x.id === 'infernoLantern').fused, `炎獄燈沒標示已融合`);
-        const th = info.find((x) => x.id === 'thunderSpear');
-        const cn = (await ult()).counts;
-        expect(/鬼火 8\/8/.test(th.t), `雷火槍的配方沒列出鬼火滿級：${th.t}`);
-        expect(new RegExp(`穿透 ${Math.min(2, cn.pierce ?? 0)}/2`).test(th.t) && new RegExp(`力量 ${Math.min(2, cn.power ?? 0)}/2`).test(th.t), `雷火槍的進度和實際拿到的卡對不上：${th.t} vs ${JSON.stringify(cn)}`);
-        files.push(await shot(ctx, 'u1-recipes'));
+        const info = await page.evaluate(() => [...document.querySelectorAll('#sum-ult li')].map((li) => ({ id: li.dataset.ult, t: li.innerText.replace(/\s+/g, ' ') })));
+        expect(info.length === 1 && info[0].id === 'infernoLantern', `應只列出裝配的那一招：${JSON.stringify(info)}`);
+        expect(/炎獄燈/.test(info[0].t) && /Lv0\/5/.test(info[0].t) && /威力 ×1/.test(info[0].t) && /冷卻 25 秒/.test(info[0].t), `大招的等級或升級累計不對：${info[0].t}`);
+        files.push(await shot(ctx, 'u1-pause'));
         await press(ctx, '#btn-pause-resume');
         await page.waitForFunction(() => !window.__game.screens.includes('pause'));
       });
       reportErrors(ctx);
     } finally {
       await ctx.close();
+    }
+
+    // ── 神社：裝配、升級、存檔 → 重載 → 還在、開局真的帶那一招 ──
+    const ctx2 = await openPage(browser, vp, '?q=4&seed=52');
+    const p2 = ctx2.page;
+    try {
+      await waitState(p2, 'MENU');
+      const shrineInfo = () =>
+        p2.evaluate(() => ({
+          merit: document.querySelector('#shrine-merit').innerText,
+          rows: [...document.querySelectorAll('.shrine-ult')].map((r) => ({ id: r.dataset.ult, equipped: r.classList.contains('equipped'), t: r.innerText.replace(/\s+/g, ' ') })),
+        }));
+      await step(`${vp.name} 神社：列出 2 招、預設裝配炎獄燈；領測試功德、裝配鬼火亂舞、升一級`, async () => {
+        await press(ctx2, '#btn-shrine');
+        await p2.waitForFunction(() => window.__game.screens.includes('shrine'), null, { timeout: 10000 });
+        let info = await shrineInfo();
+        expect(info.rows.length === 2 && info.rows[0].id === 'infernoLantern' && info.rows[0].equipped && info.rows[1].id === 'ghostfireDance', `神社的大招列表不對：${JSON.stringify(info)}`);
+        files.push(await shot(ctx2, 'u1-shrine'));
+        await press(ctx2, '#btn-shrine-cheat');
+        info = await shrineInfo();
+        expect(/功德 1000/.test(info.merit), `領了功德沒變：${info.merit}`);
+        await p2.locator('.shrine-ult[data-ult="ghostfireDance"] button[data-act="equip"]').click();
+        await p2.locator('.shrine-ult[data-ult="ghostfireDance"] button[data-act="up"]').click();
+        info = await shrineInfo();
+        const d = info.rows.find((r) => r.id === 'ghostfireDance');
+        expect(d.equipped && /Lv1\/5/.test(d.t), `裝配或升級沒生效：${d.t}`);
+        expect(!info.rows.find((r) => r.id === 'infernoLantern').equipped, '炎獄燈還標示已裝配');
+        expect(/功德 9\d\d/.test(info.merit) && !/功德 1000/.test(info.merit), `升級沒扣功德：${info.merit}`);
+        // 面板在畫面內、按鈕夠大、可捲動
+        const box = await p2.evaluate(() => {
+          const r = document.querySelector('.shrine-panel').getBoundingClientRect();
+          const bs = [...document.querySelectorAll('.shrine-ult button')].map((b) => b.getBoundingClientRect().height);
+          return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, minBtn: Math.min(...bs) };
+        });
+        expect(box.top >= 0 && box.left >= 0 && box.bottom <= vp.height + 1 && box.right <= vp.width + 1, `神社面板超出畫面（${vp.name}）：${JSON.stringify(box)}`);
+        expect(box.minBtn >= 36, `神社按鈕太小（${vp.name}）：${box.minBtn}`);
+        files.push(await shot(ctx2, 'u1-shrine2'));
+      });
+      await step(`${vp.name} 存檔 → 重新載入 → 神社還是鬼火亂舞 Lv1、功德還在`, async () => {
+        await p2.reload({ waitUntil: 'load' });
+        await waitState(p2, 'MENU');
+        await press(ctx2, '#btn-shrine');
+        await p2.waitForFunction(() => window.__game.screens.includes('shrine'), null, { timeout: 10000 });
+        const info = await shrineInfo();
+        const d = info.rows.find((r) => r.id === 'ghostfireDance');
+        expect(d.equipped && /Lv1\/5/.test(d.t), `重載後裝配／等級不見了：${JSON.stringify(info)}`);
+        expect(/功德 9\d\d/.test(info.merit), `重載後功德不見了：${info.merit}`);
+        await press(ctx2, '#btn-shrine-back');
+        await p2.waitForFunction(() => !window.__game.screens.includes('shrine'));
+      });
+      await step(`${vp.name} 開局帶的是鬼火亂舞 Lv1：選妖怪畫面寫出來、放出去攻擊力真的變高、升級的幅度比 Lv0 大`, async () => {
+        await press(ctx2, '#btn-start');
+        await p2.waitForFunction(() => window.__game.screens.includes('setup'), null, { timeout: 10000 });
+        const line = await p2.locator('#setup-ult').innerText();
+        expect(/鬼火亂舞/.test(line) && /Lv1/.test(line), `選妖怪畫面沒寫出鬼火亂舞 Lv1：${line}`);
+        await press(ctx2, '#btn-setup-go');
+        await waitState(p2, 'COMBAT');
+        await p2.evaluate(() => (window.__game.god = true));
+        const u = await p2.evaluate(() => window.__game.run.ult);
+        expect(u.equipped[0] === 'ghostfireDance' && Math.abs(u.mods.power - 1.1) < 1e-9, `開局沒帶鬼火亂舞 Lv1：${JSON.stringify(u)}`);
+        const p0 = await p2.evaluate(() => window.__game.run.stats.power);
+        await p2.evaluate(() => { window.__game.chargeUlt(); window.__game.advance(0.05); });
+        if (!vp.hasTouch) await p2.keyboard.press('KeyF');
+        else await press(ctx2, '#btn-ult');
+        await p2.evaluate(() => window.__game.advance(0.2));
+        const p1 = await p2.evaluate(() => window.__game.run.stats.power);
+        expect(p1 > p0 * 1.3, `鬼火亂舞沒有加攻擊力：${p0} → ${p1}`);
+      }, 60);
+      reportErrors(ctx2);
+    } finally {
+      await ctx2.close();
     }
   }
   return files;

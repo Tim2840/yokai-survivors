@@ -16,6 +16,8 @@ export interface SaveData {
   /** 局外修行等級：id → 等級 */
   training: Record<string, number>;
   unlocked: { cards: string[]; elements: string[]; yokai: string[]; maps: string[] };
+  /** 大招（D52）：已用功德解鎖的（價格 0 的一開始就有，不存）、各招的升級等級、每隻妖怪出發時裝配的那一招 */
+  ult: { unlocked: string[]; levels: Record<string, number>; equipped: Record<string, string> };
   /** 圖鑑：人類 id → 擊敗數 */
   codex: { humans: Record<string, number> };
   maxNightDepth: number;
@@ -36,6 +38,7 @@ export function defaultSave(): SaveData {
       yokai: ['chochin-kozo', 'kappa', 'aka-oni'],
       maps: ['village-field'],
     },
+    ult: { unlocked: [], levels: {}, equipped: {} },
     codex: { humans: {} },
     maxNightDepth: 0,
     settings: { sfx: 0.8, music: 0.6, quality: 'auto', lang: 'zh-TW' },

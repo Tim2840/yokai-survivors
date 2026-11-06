@@ -50,7 +50,7 @@
 
 ## 開發模式介面
 
-`window.__game`：`state`（目前狀態機）、`seed`、`advance(dt)`、`render()`、`spawn(id, n)`、`setWave(n)`、`give(cardId, rarity)`、`god`（無敵，測試用）、`teleport(x, z)`、`forceElement(id, rarity)`（強制生出某個地圖要素）。目前（M2-1）已有：`state`、`seed`、`paused`、`simTime`、`quality`、`audio`、`perf`（draw call 等）、`screens`（畫面上看得到的畫面名稱，卡住偵測用）、`run`（這一局的快照）、`map`（台地、丘、水池）、`camera`（yaw、pitch、距離、鏡頭離地）、`offer`、`advance`、`render`、`settle`（不畫圖讓鏡頭追上）、`spawn`、`setTime`（跳到關卡的某一秒）、`killBoss`、`give`、`addXp`、`god`、`teleport`；`forceElement(kind, rarity)`（`ELEMENT_KINDS` 全部，含 dosojin）、`chargeUlt()`（大招量表充滿）、`summonBoss()`（直接召喚小頭目，D34；`run.summon` 看祭壇）、`forcePickup(kind)`（補給品，D39）、`dropOrbs(n, dist)`／`orbsLooseBeyond(d)`（魂火，k1）、`setHp(v)`；其餘隨系統加入；`window.__loop` 是 `advance`／`render` 的別名。**主網址不帶測試工具**（`build:single:main` 拿掉）。
+`window.__game`：`state`（目前狀態機）、`seed`、`advance(dt)`、`render()`、`spawn(id, n)`、`setWave(n)`、`give(cardId, rarity)`、`god`（無敵，測試用）、`teleport(x, z)`、`forceElement(id, rarity)`（強制生出某個地圖要素）。目前（M2-1）已有：`state`、`seed`、`paused`、`simTime`、`quality`、`audio`、`perf`（draw call 等）、`screens`（畫面上看得到的畫面名稱，卡住偵測用）、`run`（這一局的快照）、`map`（台地、丘、水池）、`camera`（yaw、pitch、距離、鏡頭離地）、`offer`、`advance`、`render`、`settle`（不畫圖讓鏡頭追上）、`spawn`、`setTime`（跳到關卡的某一秒）、`killBoss`、`give`、`addXp`、`god`、`teleport`；`forceElement(kind, rarity)`（`ELEMENT_KINDS` 全部，含 dosojin）、`chargeUlt()`（大招量表充滿）、`setUlt(id, level)`（換成指定大招與升級等級，D52）、`summonBoss()`（直接召喚小頭目，D34；`run.summon` 看祭壇）、`forcePickup(kind)`（補給品，D39）、`dropOrbs(n, dist)`／`orbsLooseBeyond(d)`（魂火，k1）、`setHp(v)`；其餘隨系統加入；`window.__loop` 是 `advance`／`render` 的別名。**主網址不帶測試工具**（`build:single:main` 拿掉）。
 
 ## 檢查
 

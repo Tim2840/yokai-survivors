@@ -211,3 +211,20 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 .card.r-variant b { font-size: 22px; }
 .card.r-variant.is-current { box-shadow: 0 0 0 2px var(--rc) inset; }
 .card .cur-tag { margin-left: 0.5em; padding: 0 0.4em; border-radius: 0.6em; background: var(--rc); color: var(--bg); font-style: normal; font-size: 0.85em; }
+
+/* 神社（D52：大招解鎖、升級、裝配） */
+.overlay[data-screen='shrine'] { z-index: 22; }
+.shrine-panel { box-sizing: border-box; width: min(94vw, 640px); max-height: calc(100dvh - 24px); overflow: hidden; }
+.shrine-panel .shrine-body { overflow-y: auto; flex: 1 1 auto; min-height: 0; width: 100%; display: grid; gap: 10px; -webkit-overflow-scrolling: touch; text-align: left; }
+.shrine-panel .row { flex: 0 0 auto; }
+.shrine-yokai h3 { margin: 0 0 6px; font-size: 15px; color: var(--accent); letter-spacing: 0.08em; }
+.shrine-ult { display: grid; gap: 4px; padding: 10px 12px; margin-bottom: 8px; border-radius: 14px; background: rgba(255,255,255,0.06); border: 2px solid transparent; }
+.shrine-ult.equipped { border-color: var(--accent); background: rgba(255,179,92,0.14); }
+.shrine-ult.locked { opacity: 0.85; }
+.shrine-ult b { font-size: 17px; }
+.shrine-ult b em { font-style: normal; font-size: 12px; color: var(--accent); margin-left: 6px; }
+.shrine-ult .d, .shrine-ult .m { font-size: 13px; color: var(--text-dim); }
+.shrine-ult .acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+.shrine-ult .acts .btn { padding: 8px 14px; font-size: 14px; min-height: 40px; }
+.shrine-ult .badge { font-size: 13px; color: #9fe8a0; padding: 4px 8px; }
+.shrine-ult .acts .btn[disabled] { opacity: 0.45; cursor: default; }

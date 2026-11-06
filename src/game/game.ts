@@ -8,10 +8,14 @@ import { Run, subSeed } from './run';
 import type { GameStateMachine } from './stateMachine';
 import { RunView } from '../render/runView';
 import { buildHud, type Hud } from '../ui/hud';
-import { buildMenu, toast } from '../ui/menu';
+import { buildMenu } from '../ui/menu';
 import { summarizeBuild } from './buildSummary';
-import { buildCardPicker, buildIntermission, buildPause, buildResultCard, buildRunEnd, buildSetup, type PickerContext } from '../ui/overlays';
+import { buildCardPicker, buildIntermission, buildPause, buildResultCard, buildRunEnd, buildSetup, buildShrine, type PickerContext, type ShrineView } from '../ui/overlays';
+import { ULT_UPGRADE, ultMods, ultUpgradePrice, ultsOf } from '../data/ultimates';
+import { PLAYABLE_YOKAI } from '../data/yokai';
+import { buyUlt, equipUlt, equippedUlt, isUltUnlocked, loadoutFor, ultLevel, upgradeUlt } from './ultLoadout';
 import { t } from '../i18n';
+import type { I18nKey } from '../i18n/zh-TW';
 import { tuning } from '../data/tuning';
 import { CAMERA } from '../data/camera';
 import type { buildTuningPanel } from '../ui/tuningPanel';
@@ -53,6 +57,7 @@ export class Game {
   private readonly hud: Hud;
   private readonly menuEl: HTMLElement;
   private readonly setup;
+  private readonly shrine;
   private readonly picker;
   private readonly resultCard;
   private readonly inter;
@@ -86,7 +91,7 @@ export class Game {
     this.menuEl = buildMenu(
       ui,
       () => this.go('RUN_SETUP'),
-      () => this.notReady(),
+      () => this.go('META_SHOP'),
       tune ? [tune.button(() => (this.audio.sfx('click'), tune.show()))] : [],
     );
     this.setup = buildSetup(
@@ -97,7 +102,26 @@ export class Game {
         this.go('COMBAT');
       },
       () => this.go('MENU'),
+      (id) => this.setup.setUltLine(this.ultLine(id)),
     );
+    this.shrine = buildShrine(ui, {
+      onBack: () => this.go('MENU'),
+      onEquip: (y, u) => {
+        if (equipUlt(this.save, y, u, this.unlockAll)) this.afterShrine('confirm');
+      },
+      onBuy: (u) => {
+        if (buyUlt(this.save, u)) this.afterShrine('confirm');
+      },
+      onUpgrade: (u) => {
+        if (upgradeUlt(this.save, u, this.unlockAll)) this.afterShrine('confirm');
+      },
+      onCheat: tune
+        ? () => {
+            this.save.merit += 1000;
+            this.afterShrine('confirm');
+          }
+        : undefined,
+    });
     this.picker = buildCardPicker(ui, (i) => this.pickCard(i));
     this.resultCard = buildResultCard(ui, () => this.closeResult());
     this.inter = buildIntermission(
@@ -112,7 +136,7 @@ export class Game {
       ui,
       () => this.go('RUN_SETUP'),
       () => this.go('MENU'),
-      () => this.notReady(),
+      () => this.go('META_SHOP'),
     );
     this.pause = buildPause(ui, () => this.closePause(), () => this.quitRun());
     this.hud = buildHud(ui);
@@ -143,9 +167,48 @@ export class Game {
     this.b.emit('request:state', { to });
   }
 
-  private notReady(): void {
-    this.audio.sfx('click');
-    toast(t('menu.notReady'));
+  /** 測試頁（有試玩調整面板的那份）大招一律全開（D40：「我測試時請都保持原樣」） */
+  private get unlockAll(): boolean {
+    return !!this.d.tuneUi;
+  }
+
+  /** 選妖怪畫面上寫的：這隻妖怪裝配的大招 */
+  private ultLine(yokai: string): string {
+    const id = equippedUlt(this.save, yokai, this.unlockAll);
+    return id ? t('setup.ult', { name: t(`ult.${id}` as I18nKey), lv: ultLevel(this.save, id) }) : '';
+  }
+
+  private shrineView(): ShrineView {
+    const all = this.unlockAll;
+    return {
+      merit: this.save.merit,
+      yokai: PLAYABLE_YOKAI.filter((y) => ultsOf(y).length > 0).map((y) => {
+        const eq = equippedUlt(this.save, y, all);
+        return {
+          id: y,
+          ults: ultsOf(y).map((u) => {
+            const lv = ultLevel(this.save, u.id);
+            return {
+              id: u.id,
+              unlocked: isUltUnlocked(this.save, u.id, all),
+              equipped: eq === u.id,
+              level: lv,
+              maxLevel: ULT_UPGRADE.maxLevel,
+              unlockPrice: u.price,
+              upPrice: ultUpgradePrice(lv),
+              mods: ultMods(lv),
+              next: lv < ULT_UPGRADE.maxLevel ? ULT_UPGRADE.steps[lv] : null,
+            };
+          }),
+        };
+      }),
+    };
+  }
+
+  private afterShrine(sfx: 'confirm' | 'click'): void {
+    writeSave(this.save);
+    this.audio.sfx(sfx);
+    this.shrine.render(this.shrineView());
   }
 
   // ── 狀態 ──
@@ -162,6 +225,7 @@ export class Game {
     f.register('RUN_SETUP', {
       enter: () => {
         this.disposeRun();
+        this.setup.setUltLine(this.ultLine(this.selectedYokai));
         this.setup.show();
         this.audio.setMusic({ theme: 'title' });
       },
@@ -212,7 +276,14 @@ export class Game {
       },
       exit: () => this.end.hide(),
     });
-    f.register('META_SHOP', {});
+    f.register('META_SHOP', {
+      enter: () => {
+        this.shrine.render(this.shrineView());
+        this.shrine.show();
+        this.audio.setMusic({ theme: 'title' });
+      },
+      exit: () => this.shrine.hide(),
+    });
   }
 
   private startRun(): void {
@@ -220,7 +291,7 @@ export class Game {
     this.d.backdrop.visible = false;
     this.renderer.rig.reset();
     const seed = subSeed(this.d.seed, this.runIndex++);
-    this.run = new Run({ seed, yokaiId: this.selectedYokai, mobile: this.d.mobile, bus: this.b, meritStat: 0 });
+    this.run = new Run({ seed, yokaiId: this.selectedYokai, mobile: this.d.mobile, bus: this.b, meritStat: 0, ...loadoutFor(this.save, this.selectedYokai, this.unlockAll) });
     this.view = new RunView(this.run, this.renderer);
     this.lastKills = 0;
     this.lastXp = 0;
@@ -287,7 +358,7 @@ export class Game {
 
   /** 選卡面板要用的玩家狀態 */
   private pickerCtx(run: Run): PickerContext {
-    return { yokai: run.yokai.id, counts: run.cardCounts, fused: run.fused, techs: run.tech.owned, techLevels: run.tech.levels, techMode: run.techMode };
+    return { yokai: run.yokai.id, counts: run.cardCounts, techs: run.tech.owned, techLevels: run.tech.levels, techMode: run.techMode };
   }
 
   private pickCard(i: number): void {

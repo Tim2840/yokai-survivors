@@ -21,8 +21,6 @@ interface SlotView {
   omikuji: THREE.Group;
   chest: THREE.Group;
   summon: THREE.Group;
-  fuse: THREE.Group;
-  fuseOrbs: THREE.Mesh[];
   dosojin: THREE.Group;
   dosojinLight: THREE.Mesh;
   orb: THREE.Mesh;
@@ -91,14 +89,6 @@ export class ElementsView {
     const gToriiBeam = roundedCylinder(0.13, 0.13, 2.5, 0.06, 12).translate(0, -1.25, 0).rotateZ(Math.PI / 2);
     const gOrb = ball(0.32, 18, 12);
     this.disposables.push(torii, ember, gPlat, gToriiPost, gToriiBeam, gOrb);
-    // 合魂祠：圓石台＋金色淺碗＋碗裡的青白魂火＋三顆繞著轉的魂火（材料齊了才出現）
-    const soul = glow(palette.fire.soul, 2.6);
-    const bowlGold = glow(palette.pickup.gold, 1.2);
-    const gFuseBase = roundedCylinder(0.8, 0.95, 0.5, 0.14, 24);
-    const gBowl = new THREE.TorusGeometry(0.5, 0.11, 10, 28).rotateX(Math.PI / 2);
-    const gSoulFlame = teardrop(0.28, 0.75, { bulge: 0.4 });
-    const gSoulOrb = ball(0.13, 12, 8);
-    this.disposables.push(soul, bowlGold, gFuseBase, gBowl, gSoulFlame, gSoulOrb);
     // 道祖神（D47）：苔綠的圓頂石碑（正面浮雕兩尊並肩的小石像）＋往兩邊指的木牌（岔路、換方向）＋上方一顆紫光
     const stele = soft(palette.dosojin.stele);
     const moss = soft(palette.dosojin.moss);
@@ -204,19 +194,6 @@ export class ElementsView {
       const orb = new THREE.Mesh(gOrb, ember);
       orb.position.y = 1.2;
       summon.add(top, mid, orb);
-      const fuse = new THREE.Group();
-      const fb = new THREE.Mesh(gFuseBase, stoneDark);
-      const bowl = new THREE.Mesh(gBowl, bowlGold);
-      bowl.position.y = 0.58;
-      const sf = new THREE.Mesh(gSoulFlame, soul);
-      sf.position.y = 0.5;
-      fuse.add(fb, bowl, sf);
-      const fuseOrbs: THREE.Mesh[] = [];
-      for (let k = 0; k < 3; k++) {
-        const o = new THREE.Mesh(gSoulOrb, soul);
-        fuse.add(o);
-        fuseOrbs.push(o);
-      }
       const dosojin = new THREE.Group();
       const dBase = new THREE.Mesh(gSteleBase, moss);
       const dStele = new THREE.Mesh(gStele, stele);
@@ -295,10 +272,10 @@ export class ElementsView {
       zone.renderOrder = 2;
       zone.visible = false;
       this.disposables.push(ringMat, fillMat, beamMat, zg, zoneMat);
-      root.add(jizo, barrier, altar, offering, omikuji, chest, summon, fuse, dosojin, fox, ...foxRings, ...foxFills, ring, fill, beam);
+      root.add(jizo, barrier, altar, offering, omikuji, chest, summon, dosojin, fox, ...foxRings, ...foxFills, ring, fill, beam);
       root.visible = false;
       this.group.add(root, zone);
-      this.views.push({ root, jizo, barrier, altar, offering, omikuji, chest, summon, orb, fuse, fuseOrbs, dosojin, dosojinLight, fox, foxRings, foxFills, beam, beamMat, ring, ringMat, fill, fillMat, zone, zoneMat, flame, zx: NaN, zz: NaN });
+      this.views.push({ root, jizo, barrier, altar, offering, omikuji, chest, summon, orb, dosojin, dosojinLight, fox, foxRings, foxFills, beam, beamMat, ring, ringMat, fill, fillMat, zone, zoneMat, flame, zx: NaN, zz: NaN });
     }
   }
 
@@ -341,7 +318,6 @@ export class ElementsView {
       v.omikuji.visible = s.kind === 'omikuji';
       v.chest.visible = s.kind === 'chest';
       v.summon.visible = s.kind === 'summon';
-      v.fuse.visible = s.kind === 'fuse';
       v.dosojin.visible = s.kind === 'dosojin';
       v.fox.visible = s.kind === 'fox';
       v.ringMat.color.copy(c);
@@ -360,16 +336,8 @@ export class ElementsView {
       v.omikuji.scale.setScalar(g);
       v.chest.scale.setScalar(g);
       v.summon.scale.setScalar(g);
-      v.fuse.scale.setScalar(g);
       v.dosojin.scale.setScalar(g);
       if (s.kind === 'dosojin') v.dosojinLight.position.y = 2.1 + Math.sin(t * 1.8) * 0.1 + s.progress * 0.3;
-      if (s.kind === 'fuse') {
-        for (let k = 0; k < v.fuseOrbs.length; k++) {
-          const a = t * 1.6 + (k / v.fuseOrbs.length) * Math.PI * 2;
-          const r = 0.75 - s.progress * 0.45; // 按住時魂火往中間收
-          v.fuseOrbs[k].position.set(Math.cos(a) * r, 1.0 + Math.sin(t * 2 + k) * 0.12, Math.sin(a) * r);
-        }
-      }
       v.fox.scale.setScalar(g);
       // 狐面商：面向兩個圈的中間；兩個圈貼在各自的地面上，填色 = 站立進度
       const isFox = s.kind === 'fox' && !ann && !used;

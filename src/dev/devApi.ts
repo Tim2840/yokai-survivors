@@ -96,7 +96,7 @@ export function installDevApi(ctx: DevContext): void {
         stats: { ...r.stats.value },
         elements: r.elements.slots.filter((s) => s.active).map((s) => ({ kind: s.kind, rarity: s.rarity, x: s.x, y: s.y, z: s.z, announce: s.announce, progress: s.progress, used: s.usedAge >= 0, effects: s.effects.slice(0, s.effectCount).map((f) => ({ ...f })), offers: [...s.offers], rings: s.offers.map((_, k) => ({ x: s.ringX[k], z: s.ringZ[k], progress: s.ringProgress[k], blocked: s.ringBlocked[k] })) })),
         curse: { ...r.curse },
-        ult: { fused: [...r.fused], fusable: r.fusable, charge: r.ultCharge, ready: r.ultReady, counts: Object.fromEntries(r.cardCounts), volleyBonus: r.volleyBonus },
+        ult: { equipped: [...r.ults], mods: { ...r.ultModsView }, charge: r.ultCharge, ready: r.ultReady, counts: Object.fromEntries(r.cardCounts), volleyBonus: r.volleyBonus },
         difficulty: r.difficulty,
         pickups: Array.from({ length: r.pickups.capacity }, (_, i) => i).filter((i) => r.pickups.alive[i]).map((i) => ({ kind: PICKUP_KINDS[r.pickups.kind[i]], x: r.pickups.x[i], z: r.pickups.z[i] })),
         frozen: r.frozenEnemies,
@@ -157,6 +157,8 @@ export function installDevApi(ctx: DevContext): void {
     },
     /** 大招量表直接充滿（測試用；發動仍要真的按大招鈕或 F 鍵） */
     chargeUlt: () => run()?.devChargeUlt(),
+    /** 換成指定的大招（可帶升級等級） */
+    setUlt: (id: string, level = 0) => run()?.devSetUlt(id, level),
     /** 頭目現在就倒下（走正常的擊殺流程，傳送門會開） */
     killBoss: () => run()?.devKillBoss() ?? false,
     /** 現在就過關（走正常流程：進過關畫面；一般地圖第 1 關過關會跳技法面板，D48） */

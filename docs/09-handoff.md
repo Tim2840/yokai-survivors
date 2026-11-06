@@ -27,7 +27,7 @@
 - **2026-11-04 手感調整（使用者：太簡單）**：試玩預設改成數量 ×2、起步 2 顆、濺射 0.8、傷害 ×1；新增武器卡「鬼火增殖」「爆裂」（`src/data/weaponCards.ts`）。依據與數字在 docs/02 變更紀錄。
 - **卡片聯動（D28／D37）已在 D51（2026-11-06）刪除**：`synergies.ts`、`checkSynergies`、選卡提示、能力面板區塊、回歸 `s1` 都沒了；`#synergy-box` 這個 HUD 提示框 id 保留給補給品／大招提示用。
 - **工作方式（D33）**：使用者提的新項目先評估、寫文件、排程；明確說「開始」才做。
-- **大招冷卻＋合魂祠（D41，2026-11-05）**：`ULT.cooldown`、`Run.ultCooling`／`ultCooldownLeft`；合魂祠是要素種類 `fuse`（`FUSE`、`Elements.placeFuse`／`fuseSlot`／`removeKind`，`Run.refreshFusable` 在材料齊時記時間、沒得融合時收掉），面板種類 `offerKind = 'fusion'`。HUD 頂端：長提示改成浮在頂端列下方、難度另起一行（`#wave-diff`），回歸 `hudTopOk` 檢查「能力」鈕不換行、血條夠長。
+- **大招改局外裝配（D52，2026-11-06）**：取消融合（配方、寶箱融合卡、合魂祠＝要素 `fuse`、「材料齊了」提示全部移除）。`src/data/ultimates.ts`（`ULTS`、`ULT_UPGRADE`、`ultMods`、`ultUpgradePrice`）、`src/game/ultLoadout.ts`（解鎖／升級／裝配的純函式，單元測試 `ultLoadout.test.ts`）、`save.ult`、`RunOptions.ults／ultLevels`、`Run.ults／ultLevels／ultModsView／devSetUlt`、神社畫面 `buildShrine`（META_SHOP；測試頁全開＋「測試：功德 +1000」）、選妖怪畫面寫出裝配的大招。冷卻 `ULT.cooldown`（D41）仍在，升級可縮短。
 - **技法取得改版（D49，2026-11-06）**：拿掉 `techPending`／`maybeOpenTech`／過關畫面的技法面板；`Run.mixTechCard`（`makeOffer` 之後，依 `TECH_OFFER` 機率換進一張技法卡）、`applyTechCard`（學會或升一級，吃稀有度 `ITEM_RARITY_MULT`）、`devTechNext`（開發介面 `techNext()`）；`Techniques.pickCard`（沒拿過 fresh／已有 owned 權重）、`points`（累積稀有度倍率）、`powerOf`；`CardDealer.rollRarity`；`TECH_LEVELS.max = 8`。技法面板（`offerKind = 'tech'`）只剩道祖神的換法。
 - **技法池第一步（D48，2026-11-05）**：取代 D31 的招式變化（`variants.ts`、`variantFx.ts`、`Run.variant`、`devSetVariant` 都拿掉了）。資料 `src/data/techniques.ts`（`TECHS`、`TECH_MAX`、`TECH_PICK_LEVELS`、`TECH_DEEPEN`、`TECH_LEVELS`、`techMix`）；引擎 `src/game/techniques.ts`（`Techniques`：擁有、抽選 `offerNew`／`offerUp`／`offerSwap`、每步 `update`、命中效果掛勾 `hitFx`、`onWeaponKill`（火種）、`tryWard`、燃燒地／火種／火柱／爆炸圈的池）；`Run.tech`、`Run.weaponHit`（所有武器傷害的出口，頭目不被擊退、通知火種）、`Run.techPending`／`maybeOpenTech`（4、7 級與過關畫面）／`chooseTech`／`openRechoose`（道祖神）、`offerKind = 'tech'`＋`techMode`（new／up／swap）；過關畫面的選擇在 `clearStage` 末端（`continueFromIntermission` 在有面板時不動）。投射物新增 `gen 3`（彈跳）、`chain`、`homing`（歸巢折返，目標是玩家位置）。畫面 `src/render/techFx.ts`（繞身鬼火與衛星、燃燒地、火種、火柱、護身火環、爆炸圈）。介面：卡片 `techCardHtml`（標籤、適合、混搭提示 `techMix`）、`PickerContext`。開發介面 `giveTech(...ids)`、`clearStage()`；sim `--techs`、`--give`、`--techMax`、`--giveSets`。單元 `techniques.test.ts`、`dosojin.test.ts`；回歸 `v1`。**第二步（2026-11-06）已做**：鬼火雨 `rainFrom`、開路燈 `lampStep`（燈籠位置跟著 `Run.facing`）、燈油 `ignite`／`oilStep`／`spreadOil`（每隻人類一個燒著的計時，下標是敵人編號）；`Run.rand()`；畫面 `techFx` 加開路燈（併進繞身鬼火）、燈油（頭上小火）、鬼火雨（爆炸圈）。燈籠環環內護身（D46）、道祖神（D47，現在換技法）都在這裡面。
 - **碎火（D43）＋鬼火增殖變難拿（D45）（2026-11-05）**：道具 `splash` 的改造種類是 `shards`（`SHARDS`、`Run.shardsExact`／`emitShards`，投射物 `gen` 0 主彈／1 碎火或分裂／2 再分裂，畫面縮到 0.55）；狐火分裂 `split.shardBonus`／`reSplit`；聯動欄位 `shardCount`／`shardDamage`。`ItemDef.weight`／`minLevel`（`CardDealer.playerLevel` 由 Run 在發牌前設定）。單元 `shards.test.ts`、`volley.test.ts`。
@@ -37,15 +37,14 @@
 - **D30 第二步＋召喚祭壇（D34）已完成（2026-11-05）**：
   - 召喚祭壇：地圖要素種類 `summon`（`Elements.placeSummon`／`summonSlot`），`Run` 在 30% 放、`StageDirector.summonBoss()`（越晚越強 `summonMult`）、`autoBoss` 只在大頭目那一關（`isBigBossStage`）；HUD 共用傳送門箭頭（`data-kind`）。
   - 寶箱掉落：`Run.onKill` → `reachableNear`（細格 BFS `src/systems/reach.ts`，玩家走得到才放）→ `Elements.dropChest`；寶箱離傳送門 ≥ 4.5 公尺。
-  - 大招進化式：配方含 `ghostfire: 8`；`Run.fusable`／`lastReady`（「材料齊了」提示）、寶箱面板 `dealBonus()` 把 `ult:<id>` 卡排最前面、`chooseCard` 選了才 `fuse()`。
   - 取捨道具：`ItemDef.down`（不吃稀有度）；卡片與能力面板「，但…」。難度 %：`Run.difficulty`（`src/data/difficulty.ts`），HUD「第 2 關・難度 +50%」、能力面板列分配；`STAGE.hpPerStage` 已刪。
   - 開發介面：`summonBoss()`、`run.summon`、`run.difficulty`、`run.ult.fusable`。sim：`--summonAt`、`--tune summon.*／drops.*`、`--noTrade`、機器人會尋路與開寶箱。
   - **下一個平衡項目**：亂選與貪生存的中位存活約 2 分鐘（開場太硬或防禦卡太弱，改版前就有）。
 - **收集與活動（D32）已定案、排程在 M3／M4／M6／M8**：百鬼帖、降伏儀式、御朱印帳為主體；抽卡（百鬼御籤）只放外觀、永遠不賣錢；活動上線前後加。研究與細節在 docs/16。
 - **招式變化（D31）已被技法池（D48）取代**：見上一條。
 - **D30 第一步已完成（2026-11-05）**：法具（`src/data/items.ts`：主武器 8 級表、屬性道具 5 級、道具欄 6 格、備用獎勵）、稀有度倍率 1.0／1.2／1.5／2.0＋里程碑、經驗曲線 round(0.35×(L+3)²)；`CardDealer` 依等級與欄位發牌；選卡顯示「新！／Lv a→b」；能力面板顯示等級與道具欄；回歸 `l1`。D30 第二步也已完成（見上）。
-- **終極技（大招，D29）已加入**：`src/data/ultimates.ts`（4 個提燈小僧大招）、`Run.castUltimate`／`checkFusion`、`src/render/ultFx.ts`、HUD 大招鈕（暫用號令鈕的位置：F 鍵）、能力面板的配方進度、選卡提示；回歸 `u1`；sim 有 `--only ult`、`--cast on|off`。河童／赤鬼大招草案在 docs/04 第 1.4 節。
-- **能力面板**：暫停畫面（或 HUD「能力」鈕、C 鍵）顯示已拿到的卡、累計效果、已觸發聯動、目前所有屬性與鬼火數值、詛咒；資料來自 `summarizeBuild`（src/game/buildSummary.ts）；回歸 `a1`。
+- **終極技（大招，D29）**：外觀 `src/render/ultFx.ts`、HUD 大招鈕；裝配方式見上面的 D52。
+- **能力面板**：暫停畫面（或 HUD「能力」鈕、C 鍵）顯示已拿到的卡（含「適合的技法」）、累計效果、裝配的大招與升級累計、目前所有屬性與鬼火數值、詛咒；資料來自 `summarizeBuild`（src/game/buildSummary.ts）；回歸 `a1`。
 - **`npm run sim` v1 已建立**（docs/07 第 4 節）；改數字前後都要跑。第一輪發現與目標見 docs/02 變更紀錄（防禦流派 0% 過關、要素強度、敵人強度已調）。M2-3（小妖、號令、更多卡）要在 sim 上比較前後。
 - **卡片平衡調整（2026-11-04）**：數字與依據見 docs/02 變更紀錄；探針 `card-dps-probe`（較乾淨）、`card-value-probe`（含機器人，雜訊大）。完整平衡仍等 `npm run sim`（M2-4）。
 - **M2-2 完成**（賽錢箱、神籤、寶箱）。

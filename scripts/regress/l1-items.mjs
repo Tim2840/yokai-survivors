@@ -27,7 +27,7 @@ export async function run(browser) {
           for (const c of cs) {
             expect(/新！|Lv\d+ → \d+|^$/.test(c.lv), `卡片等級文字不對：${JSON.stringify(c)}`);
             // 使用者 2026-11-06：每張法具卡都要寫明輔助哪個大招、適合哪些技法（沒有就明講沒有）
-            if (!['heal', 'meritBag'].includes(c.id)) expect(/大招材料|適合的技法|所有大招都要|沒有搭配/.test(c.link), `法具卡沒有寫明大招／技法連結：${JSON.stringify(c)}`);
+            if (!['heal', 'meritBag'].includes(c.id)) expect(/適合的技法|所有技法都靠它出手|沒有搭配/.test(c.link), `法具卡沒有寫明大招／技法連結：${JSON.stringify(c)}`);
             if (c.id === 'ghostfire') {
               sawWeapon = true;
               expect(c.weapon && /主武器/.test(c.tag), `主武器卡沒有標示：${JSON.stringify(c)}`);

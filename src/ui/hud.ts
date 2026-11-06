@@ -121,11 +121,10 @@ export function buildHud(parent: HTMLElement): Hud {
         timer.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
       }
       const altar = run.elements.summonSlot;
-      const shrine = run.elements.fuseSlot;
       // 道祖神（D47）：只在出現後 hintSeconds 秒內提示、指路（不想換的人不會一直被叫過去）
       const dslot = run.elements.dosojinSlot;
       const dosojin = dslot && dslot.announce <= 0 && dslot.age < DOSOJIN.hintSeconds ? dslot : null;
-      const noteText = run.director.swarm ? t('hud.swarm') : run.portal.active ? t('hud.bossDown') : altar ? t('hud.summonNote') : shrine ? t('hud.fuseNote') : dosojin ? t('hud.dosojinNote') : '';
+      const noteText = run.director.swarm ? t('hud.swarm') : run.portal.active ? t('hud.bossDown') : altar ? t('hud.summonNote') : dosojin ? t('hud.dosojinNote') : '';
       if (noteText !== lastNote) {
         lastNote = noteText;
         note.textContent = noteText;
@@ -141,10 +140,10 @@ export function buildHud(parent: HTMLElement): Hud {
       if (bossAlive) bossFill.style.width = `${Math.max(0, run.enemies.hp[bi] / run.enemies.maxHp[bi]) * 100}%`;
       // 傳送門箭頭：相對鏡頭的方向與距離
       // 傳送門優先；還沒開的召喚祭壇也用同一個箭頭（D34）
-      // 箭頭：傳送門 > 召喚祭壇 > 合魂祠 > 道祖神；走到旁邊就不顯示
+      // 箭頭：傳送門 > 召喚祭壇 > 道祖神；走到旁邊就不顯示
       const near = (e: { x: number; z: number; announce: number } | null) => !!e && e.announce <= 0 && Math.hypot(e.x - run.px, e.z - run.pz) > ALTAR_ARROW_HIDE;
-      const arrowKind = run.portal.active ? 'portal' : near(altar) ? 'summon' : near(shrine) ? 'fuse' : near(dosojin) ? 'dosojin' : '';
-      const target = arrowKind === 'portal' ? run.portal : arrowKind === 'summon' ? altar : arrowKind === 'fuse' ? shrine : arrowKind === 'dosojin' ? dosojin : null;
+      const arrowKind = run.portal.active ? 'portal' : near(altar) ? 'summon' : near(dosojin) ? 'dosojin' : '';
+      const target = arrowKind === 'portal' ? run.portal : arrowKind === 'summon' ? altar : arrowKind === 'dosojin' ? dosojin : null;
       if (target) {
         portalBox.classList.remove('hidden');
         portalBox.dataset.kind = arrowKind;
@@ -153,17 +152,17 @@ export function buildHud(parent: HTMLElement): Hud {
         const right = Math.cos(yaw) * dx - Math.sin(yaw) * dz;
         const fwd = -Math.sin(yaw) * dx - Math.cos(yaw) * dz;
         portalArrow.style.transform = `rotate(${Math.round((Math.atan2(right, fwd) * 180) / Math.PI)}deg)`;
-        const kindNo = arrowKind === 'portal' ? 0 : arrowKind === 'summon' ? 1 : arrowKind === 'fuse' ? 2 : 3;
+        const kindNo = arrowKind === 'portal' ? 0 : arrowKind === 'summon' ? 1 : 2;
         const m = Math.round(Math.hypot(dx, dz)) * 4 + kindNo;
         if (m !== lastPortal) {
           lastPortal = m;
-          portalText.textContent = t((['hud.portal', 'hud.summon', 'hud.fuse', 'hud.dosojin'] as const)[kindNo], { m: m >> 2 });
+          portalText.textContent = t((['hud.portal', 'hud.summon', 'hud.dosojin'] as const)[kindNo], { m: m >> 2 });
         }
       } else if (lastPortal !== -1) {
         lastPortal = -1;
         portalBox.classList.add('hidden');
       }
-      // 提示框：補給品、大招材料齊、大招融合，誰最近發生就顯示誰（4 秒；不是彈窗，不暫停）
+      // 提示框：補給品、技法換了，誰最近發生就顯示誰（4 秒；不是彈窗，不暫停）
       let synText = '';
       let synAt = -1;
       // 神籤的結果改由結果卡顯示（D36），這裡不再重複
@@ -172,23 +171,13 @@ export function buildHud(parent: HTMLElement): Hud {
         synAt = pk.at;
         synText = t('hud.pickup', { name: t(`pickup.${pk.kind}` as I18nKey), fx: t(`pickup.fx.${PICKUPS[pk.kind].type}` as I18nKey, { v: Math.round(pk.v) }) });
       }
-      const rd = run.lastReady;
-      if (rd && run.clock - rd.at < 6 && rd.at >= synAt && !run.fused.includes(rd.id)) {
-        synAt = rd.at;
-        synText = t('hud.fusionReady', { name: t(`ult.${rd.id}` as I18nKey) });
-      }
       const vc = run.lastTechChange;
       if (vc && run.clock - vc.at < 4 && vc.at >= synAt) {
         synAt = vc.at;
         synText = t('hud.techChanged', { name: t(`tech.${vc.to}` as I18nKey) });
       }
-      const fu = run.lastFuse;
-      if (fu && run.clock - fu.at < 6 && fu.at >= synAt) {
-        synAt = fu.at;
-        synText = t('hud.fusion', { name: t(`ult.${fu.id}` as I18nKey) });
-      }
-      // 大招鈕：有融合過才顯示；量表滿了會發亮
-      const hasUlt = run.fused.length > 0;
+      // 大招鈕：有裝配大招才顯示；量表滿了會發亮
+      const hasUlt = run.ults.length > 0;
       // 冷卻中：鈕上顯示倒數秒數（D：大招冷卻）
       const cool = Math.ceil(run.ultCooldownLeft);
       const ultState = `${hasUlt}|${run.ultReady}|${cool}`;
@@ -221,7 +210,7 @@ export function buildHud(parent: HTMLElement): Hud {
           elBox.classList.remove('hidden');
           elBox.dataset.rarity = f.rarity;
           elTitle.textContent = `${t(`rarity.${f.rarity}`)}・${t(`element.${f.kind}`)}`;
-          elDesc.textContent = f.kind === 'summon' ? t('element.summon.desc', { mult: mult.toFixed(1) }) : f.kind === 'fox' ? describeFox(f, run.cardCounts) : f.kind === 'fuse' ? t(f.blocked ? 'element.fuse.none' : 'element.fuse.desc') : f.kind === 'dosojin' ? t('element.dosojin.desc') : describeElement(f);
+          elDesc.textContent = f.kind === 'summon' ? t('element.summon.desc', { mult: mult.toFixed(1) }) : f.kind === 'fox' ? describeFox(f, run.cardCounts) : f.kind === 'dosojin' ? t('element.dosojin.desc') : describeElement(f);
           elAct.textContent = f.kind === 'barrier' ? t('element.stand') : f.kind === 'fox' ? t('element.fox.act') : t('element.hold');
         }
         elFill.style.width = `${f.kind === 'barrier' ? (f.inside ? 100 : 0) : Math.round(f.progress * 100)}%`;

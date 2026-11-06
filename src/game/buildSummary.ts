@@ -7,7 +7,7 @@ import { type StatId } from '../data/stats';
 import { STAT_IDS } from '../data/stats';
 import { ALTAR_CURSE_IDS, type CurseId } from '../data/altar';
 import { tuning } from '../data/tuning';
-import { ULT, ULT_RECIPES, recipeProgress } from '../data/ultimates';
+import { ULT, ULT_UPGRADE } from '../data/ultimates';
 
 /** 暫停畫面「能力」面板的資料（純資料，不含文字；文字由介面層用 i18n 組） */
 export interface BuildSummary {
@@ -30,8 +30,8 @@ export interface BuildSummary {
   difficulty: number;
   /** 護甲換算的承受傷害倍率 */
   damageTaken: number;
-  /** 這隻妖怪的大招配方與進度 */
-  ultimates: { id: string; fused: boolean; ingredients: { card: string; have: number; need: number }[] }[];
+  /** 這一局裝配的大招（D52）與它的局外升級等級、累計的威力／範圍／冷卻／充能 */
+  ultimates: { id: string; level: number; maxLevel: number; mods: { power: number; radius: number; cooldown: number; charge: number } }[];
   /** 大招量表 0～1 */
   ultCharge: number;
   /** 目前生命與等級 */
@@ -102,7 +102,7 @@ export function summarizeBuild(run: Run): BuildSummary {
     },
     curses,
     difficulty: run.difficulty,
-    ultimates: ULT_RECIPES.filter((r) => r.yokai === run.yokai.id).map((r) => ({ id: r.id, fused: run.fused.includes(r.id), ingredients: recipeProgress(r, run.cardCounts) })),
+    ultimates: run.ults.map((id) => ({ id, level: run.ultLevels.get(id) ?? 0, maxLevel: ULT_UPGRADE.maxLevel, mods: run.ultModsView })),
     ultCharge: run.ultCharge / ULT.max,
     damageTaken: armorMult(s.armor),
     hp: run.hp,
