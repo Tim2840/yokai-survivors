@@ -470,6 +470,7 @@ describe('一局的模擬（無頭）', () => {
     let snap = new Map<number, [number, number, number]>();
     let stuck = 0;
     let compared = 0;
+    const nbBuf = new Int32Array(512);
     for (let k = 0; k < 60 * 70; k++) {
       if (run.awaitingPick) run.chooseCard(0);
       else run.step(DT);
@@ -486,7 +487,9 @@ describe('一局的模擬（無頭）', () => {
             const moved = Math.hypot(e.x[i] - prev[0], e.z[i] - prev[1]);
             const far = Math.hypot(e.x[i] - run.px, e.z[i] - run.pz) > 3;
             const hit = e.hp[i] < prev[2] - 1e-6;
-            if (moved < 0.5 && far && e.kx[i] < 0.1 && !hit) stuck++;
+            // 擠在人群裡（1.3 公尺內有 3 隻以上）的不算：D50 敵人變多之後，站著不動會被圍到上限，外圈被內圈擋住是正常的，不是尋路卡住
+            const crowded = e.within(e.x[i], e.z[i], 1.3, nbBuf) > 3;
+            if (moved < 0.5 && far && e.kx[i] < 0.1 && !hit && !crowded) stuck++;
           }
         }
         snap = next;

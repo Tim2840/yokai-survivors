@@ -13,7 +13,7 @@ export const WAVES = {
    */
   countScale: 1,
   /** 單隻 HP 的額外倍率（改數量時等比下調用）；?hp= */
-  hpScale: 1.5,
+  hpScale: 0.75, // D50：1.5 → 0.75（敵人更多、更脆）
   /** 每波分幾批湧入、湧入佔波長的比例（最後一段留給收尾） */
   batches: 5,
   spawnSpan: 0.8,

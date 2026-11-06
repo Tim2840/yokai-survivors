@@ -20,9 +20,11 @@ const DT = 1 / 60;
 function pickSafe(run: Run): void {
   const o = run.offer!;
   // 只選不影響要素測試量的卡（主武器、改造、備用；或不碰護甲與最大生命的屬性道具）
-  let i = o.findIndex((c) => ['weapon', 'mod', 'fallback'].includes(itemById(c.cardId).kind));
+  // 技法卡（D49：機率混在升級卡裡）不是法具，跳過
+  const item = (id: string) => !id.startsWith('tech:');
+  let i = o.findIndex((c) => item(c.cardId) && ['weapon', 'mod', 'fallback'].includes(itemById(c.cardId).kind));
   const TESTED = ['armor', 'maxHp', 'regen', 'power', 'atkSpeed', 'area', 'speed'];
-  if (i < 0) i = o.findIndex((c) => { const d = itemById(c.cardId); return !TESTED.includes(d.stat ?? '') && !TESTED.includes(d.down?.stat ?? ''); });
+  if (i < 0) i = o.findIndex((c) => { if (!item(c.cardId)) return false; const d = itemById(c.cardId); return !TESTED.includes(d.stat ?? '') && !TESTED.includes(d.down?.stat ?? ''); });
   run.chooseCard(Math.max(0, i));
 }
 function make(seed = 3) {

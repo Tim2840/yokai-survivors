@@ -128,10 +128,24 @@ describe('技法怎麼拿（D49：機率出現在升級卡裡、8 級、分稀�
     const rng = new Rng(9);
     const full = make(9);
     full.devAddTech('ring', 'ward', 'hellfire', 'seed');
+    full.level = 30;
     for (let k = 0; k < 500; k++) expect(full.tech.owned).toContain(full.tech.pickCard(rng));
     const r = make(9);
     r.devAddTech('ring');
     for (let k = 0; k < 500; k++) expect(['bounce', 'homing']).not.toContain(r.tech.pickCard(rng));
+  });
+  it('養成門檻（D50）：已有的技法下一級要玩家等級 ≥ minLevel + levelGap × 目前技法等級（舊版會紅）', () => {
+    const rng = new Rng(21);
+    const run = make(21);
+    run.devAddTech('ring', 'ward', 'hellfire', 'seed'); // 拿滿：只剩下一級可以出
+    const gate = (lv: number) => TECH_OFFER.minLevel + TECH_OFFER.levelGap * lv;
+    run.level = gate(1) - 1;
+    for (let k = 0; k < 200; k++) expect(run.tech.pickCard(rng), '等級不夠還出現下一級').toBeNull();
+    run.level = gate(1);
+    expect(run.tech.pickCard(rng)).not.toBeNull();
+    // 升到 2 級之後，要再高一點才會出第 3 級
+    run.tech.levelUp('ring');
+    for (let k = 0; k < 300; k++) expect(run.tech.pickCard(rng), '2 級的燈籠環太早出第 3 級').not.toBe('ring');
   });
   it('固定種子可以重現；不同種子出現的技法卡不一樣', () => {
     const seq = (seed: number) => {
@@ -299,6 +313,7 @@ describe('出手方式與命中效果', () => {
   });
   it('業火：命中處留下燃燒地，持續燒、時間到消失；鬼火變慢變重', () => {
     const run = make(9);
+    run.director.active = false; // 只看自己放的人類（D50 敵人變多，移走之後新湧出的又會被打出燃燒地）
     run.devAddTech('hellfire');
     const a = placeEnemy(run, 4, 0);
     stepN(run, 60);

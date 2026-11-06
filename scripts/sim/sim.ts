@@ -45,6 +45,8 @@ const GIVE = arg('give', '');
 const TECH_MAX_ARG = arg('techMax', '');
 /** --giveSets N：每局隨機（固定種子）給一組四個合法技法，用來全掃「真的一局會拿到的組合」；報告各技法的平均過關率 */
 const GIVE_SETS = Number(arg('giveSets', '0'));
+/** --mobile：用手機的敵人上限（WAVES.maxEnemiesMobile） */
+const MOBILE = process.argv.includes('--mobile');
 const TECH_BY_STRATEGY: Record<string, string[]> = {
   dps: ['kitsunebi', 'bounce', 'rain', 'pillar', 'oil', 'seed', 'satellite', 'hellfire', 'lamp', 'homing', 'ring', 'ward'],
   survive: ['ring', 'ward', 'lamp', 'satellite', 'hellfire', 'pillar', 'oil', 'seed', 'kitsunebi', 'rain', 'bounce', 'homing'],
@@ -132,6 +134,13 @@ interface Result {
   /** 第一個聯動到「初」「極」的時間（秒；沒到 = -1） */
   /** 撿到幾個補給品 */
   pickups: number;
+  /** 主武器滿級（8 級）的時間（秒；沒到 = -1）、結束時主武器等級、技法等級總和、場上敵人數（每秒取樣的平均與最大） */
+  weaponMaxAt: number;
+  weaponLv: number;
+  weapon4At: number;
+  techLvSum: number;
+  aliveAvg: number;
+  alivePeak: number;
   synT1: number;
   synT2: number;
   /** 死在召喚之後幾秒（沒死或沒召喚 = -1） */
@@ -143,7 +152,7 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   applyTune();
   const rnd = lcg(seed * 7919);
   tuning.stageSeconds = SECONDS;
-  const run = new Run({ seed, bus: new EventBus(), mapNumber: 1 });
+  const run = new Run({ seed, bus: new EventBus(), mapNumber: 1, mobile: MOBILE });
   if (TECH_MAX_ARG) run.tech.max = Number(TECH_MAX_ARG);
   if (GIVE) run.devAddTech(...GIVE.split(','));
   if (GIVE_SETS > 0) {
@@ -172,6 +181,12 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   let summonedAt = -1;
   let synT1 = -1;
   let pickups = 0;
+  let weaponMaxAt = -1;
+  let weapon4At = -1;
+  let aliveSum = 0;
+  let aliveN = 0;
+  let alivePeak = 0;
+  let sampleT = 0;
   bus.on('pickup', () => pickups++);
   let synT2 = -1;
   bus.on('synergy', (e) => {
@@ -243,6 +258,15 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     }
     if (run.director.bossIndex >= 0) bossSeen = true;
     run.step(DT);
+    if (weapon4At < 0 && run.weaponLevel >= 4) weapon4At = totalTime + run.time;
+    if (weaponMaxAt < 0 && run.weaponMaxed) weaponMaxAt = totalTime + run.time;
+    sampleT += DT;
+    if (sampleT >= 1) {
+      sampleT -= 1;
+      aliveSum += run.enemies.aliveCount;
+      aliveN++;
+      alivePeak = Math.max(alivePeak, run.enemies.aliveCount);
+    }
     t += DT;
     if (run.time > SECONDS + 150) break;
   }
@@ -268,6 +292,12 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     casts,
     summonedAt,
     pickups,
+    weaponMaxAt,
+    weapon4At,
+    weaponLv: run.weaponLevel,
+    techLvSum: run.tech.levels.reduce((a, b) => a + b, 0),
+    aliveAvg: aliveN ? aliveSum / aliveN : 0,
+    alivePeak,
     synT1,
     synT2,
     diedAfterSummon: run.phase === 'ended' && run.result === 'death' && summonedAt >= 0 && run.director.bossSpawned ? run.time - summonedAt : -1,
@@ -424,6 +454,9 @@ function summarize(rs: Result[]): string {
     `融合大招 ${avg(rs.map((r) => r.fused)).toFixed(1)} 個、發動 ${avg(rs.map((r) => r.casts)).toFixed(1)} 次`,
     `技法平均 ${avg(rs.map((r) => (r.variant === '-' ? 0 : r.variant.split('+').length))).toFixed(1)} 個（${[...new Set(rs.map((r) => r.variant))].slice(0, 4).join('/')}…）`,
     `補給品 ${avg(rs.map((r) => r.pickups)).toFixed(1)} 個`,
+    `主武器 4 級中位第 ${pct(rs.filter((r) => r.weapon4At >= 0).map((r) => r.weapon4At), 50)?.toFixed(0) ?? '-'} 秒、滿級 ${((rs.filter((r) => r.weaponMaxAt >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.weaponMaxAt >= 0).map((r) => r.weaponMaxAt), 50)?.toFixed(0) ?? '-'} 秒）、結束時平均 ${avg(rs.map((r) => r.weaponLv)).toFixed(1)} 級`,
+    `技法等級合計 ${avg(rs.map((r) => r.techLvSum)).toFixed(1)}`,
+    `場上敵人 平均 ${avg(rs.map((r) => r.aliveAvg)).toFixed(0)}、最多 ${avg(rs.map((r) => r.alivePeak)).toFixed(0)}`,
     `聯動初 ${((rs.filter((r) => r.synT1 >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.synT1 >= 0).map((r) => r.synT1), 50)?.toFixed(0) ?? '-'} 秒）、極 ${((rs.filter((r) => r.synT2 >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.synT2 >= 0).map((r) => r.synT2), 50)?.toFixed(0) ?? '-'} 秒）`,
     `死在召喚後 ${rs.filter((r) => r.diedAfterSummon >= 0).length} 局（中位 ${pct(rs.filter((r) => r.diedAfterSummon >= 0).map((r) => r.diedAfterSummon), 50)?.toFixed(0) ?? '-'} 秒）`,
     `召喚頭目 ${((rs.filter((r) => r.summonedAt >= 0).length / rs.length) * 100).toFixed(0)}%（平均第 ${avg(rs.filter((r) => r.summonedAt >= 0).map((r) => r.summonedAt)).toFixed(0)} 秒）`,

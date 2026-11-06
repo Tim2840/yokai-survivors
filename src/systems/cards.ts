@@ -62,6 +62,8 @@ export class CardDealer {
       const lv = levels.get(id) ?? 0;
       if (lv >= d.maxLevel) return false;
       if (d.minLevel !== undefined && this.playerLevel < d.minLevel) return false;
+      // 養成門檻（D50）：下一級要玩家等級 ≥ levelGate × 目前等級
+      if (d.levelGate !== undefined && lv > 0 && this.playerLevel < d.levelGate * lv) return false;
       if (lv > 0 || d.kind === 'weapon') return true;
       return free;
     });

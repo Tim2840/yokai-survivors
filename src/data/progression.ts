@@ -4,7 +4,7 @@ export const PROGRESSION = {
   needScale: 0.35,
   needOffset: 3,
   /** 魂火顆的數值 = 威脅點數 × 這個 */
-  orbPerPoint: 1,
+  orbPerPoint: 0.5, // D50：敵人變成兩倍多、一半血，每隻給的魂火也減半（升級速度不變快）
   /** 魂火被吸向玩家的速度（公尺/秒）與加速度 */
   orbMagnetSpeed: 11,
   orbIdleDrift: 0,

@@ -20,7 +20,8 @@ export const TECH_CHOICES = 3;
  * 玩家 minLevel 級以前不會出現；沒拿過的技法權重 fresh、已有的（下一級）權重 owned。
  * 起始提案，sim 校準（docs/02 變更紀錄）。
  */
-export const TECH_OFFER = { chance: 0.15, minLevel: 4, fresh: 1, owned: 1.3 } as const;
+/** D50（使用者：「技法的養成速度太快」）：chance 0.15 → 0.12；已有的技法下一級要玩家等級 ≥ minLevel + levelGap × 目前技法等級 */
+export const TECH_OFFER = { chance: 0.12, minLevel: 4, fresh: 1, owned: 1.3, levelGap: 3 } as const;
 
 export const TECH_FAMILIES = ['split', 'orbit', 'burn'] as const;
 export type TechFamily = (typeof TECH_FAMILIES)[number];

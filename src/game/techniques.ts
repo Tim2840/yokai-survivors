@@ -223,6 +223,8 @@ export class Techniques {
     }
     this.owned.forEach((id, i) => {
       if (this.levels[i] >= TECH_LEVELS.max) return;
+      // 養成門檻（D50）：下一級要玩家等級 ≥ minLevel + levelGap × 目前技法等級
+      if (this.run.level < TECH_OFFER.minLevel + TECH_OFFER.levelGap * this.levels[i]) return;
       ids.push(id);
       w.push(TECH_OFFER.owned);
     });
