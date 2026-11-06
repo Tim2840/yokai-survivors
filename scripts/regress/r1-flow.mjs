@@ -126,31 +126,17 @@ export async function run(browser) {
       });
 
       await step(`${vp.name} 走進傳送門（真的按鍵／推搖桿）→ 過關畫面`, async () => {
-        // 站在傳送門旁 3 公尺處（挑一個沒被岩石或水擋住的方向；鏡頭沒轉，所以螢幕方向 = 世界方向），再用真實輸入走進去
-        const sides = [[-3, 0, 'KeyD', 1, 0], [3, 0, 'KeyA', -1, 0], [0, -3, 'KeyS', 0, 1], [0, 3, 'KeyW', 0, -1]];
-        let side = null;
-        for (const sd of sides) {
-          const ok = await page.evaluate(([dx, dz]) => { const p = window.__game.run.portal; return window.__game.teleport(p.x + dx, p.z + dz); }, [sd[0], sd[1]]);
-          if (ok) { side = sd; break; }
-        }
-        expect(side !== null, `傳送門四周都被擋住，傳送不進去（${vp.name}）`);
-        await page.evaluate(() => window.__game.advance(0.2));
-        if (!vp.hasTouch) await page.keyboard.down(side[2]);
-        else {
-          const box = await page.locator('#stick-base').boundingBox();
-          const sx = box.x + box.width / 2, sy = box.y + box.height / 2;
-          await page.mouse.move(sx, sy);
-          await page.mouse.down();
-          await page.mouse.move(sx + side[3] * 40, sy + side[4] * 40, { steps: 4 });
-        }
-        for (let i = 0; i < 24; i++) {
-          await page.evaluate(() => window.__game.advance(0.25));
-          // 升級選卡會讓模擬暫停（D15）：玩家要先選完卡才會繼續走（打包檔的種子是隨機的，偶爾剛好在這時升級）
+        // 站在傳送門旁 3 公尺處，用真實輸入（鍵盤／搖桿）走進去（walkOnto）。途中升級（D15 暫停）的話：
+        // 選完卡、手指放回搖桿再走一次（以前選卡會放開搖桿、之後沒再按，敵人變多後升級變頻繁就偶爾卡在這步）
+        for (let tries = 0; tries < 5 && (await page.evaluate(() => window.__game.state)) !== 'INTERMISSION'; tries++) {
           if ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await dismissLevelUps();
-          if ((await page.evaluate(() => window.__game.state)) === 'INTERMISSION') break;
+          const pt = await page.evaluate(() => window.__game.run.portal);
+          await walkOnto(pt.x, pt.z);
+          for (let i = 0; i < 8 && (await page.evaluate(() => window.__game.state)) !== 'INTERMISSION'; i++) {
+            if ((await page.evaluate(() => window.__game.screens)).includes('levelup')) break;
+            await page.evaluate(() => window.__game.advance(0.25));
+          }
         }
-        if (!vp.hasTouch) await page.keyboard.up(side[2]);
-        else await page.mouse.up();
         await page.waitForFunction(() => window.__game.state === 'INTERMISSION' && window.__game.screens.includes('intermission'), null, { timeout: 15000 });
         const txt = await page.evaluate(() => document.querySelector('.overlay[data-screen="intermission"]').innerText);
         expect(/第 1 關完成/.test(txt), `過關畫面文字不對：${txt}`);
