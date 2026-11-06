@@ -10,6 +10,7 @@ const FIELDS: { key: keyof typeof M1_PLAYTEST; label: I18nKey; step: string }[] 
   { key: 'volley', label: 'tune.volley', step: '1' },
   { key: 'splash', label: 'tune.splash', step: '0.1' },
   { key: 'stageSeconds', label: 'tune.stage', step: '30' },
+  { key: 'techChance', label: 'tune.techChance', step: '0.05' },
 ];
 
 export function buildTuningPanel(parent: HTMLElement) {

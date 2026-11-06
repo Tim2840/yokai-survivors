@@ -936,7 +936,7 @@ export class Run {
     const roll = this.rngCards.next();
     const forced = this.forceTechCard;
     this.forceTechCard = false;
-    if (!forced && (this.level < TECH_OFFER.minLevel || roll >= TECH_OFFER.chance)) return;
+    if (!forced && (this.level < TECH_OFFER.minLevel || roll >= tuning.techChance)) return;
     const id = this.tech.pickCard(this.rngCards);
     if (!id || offer.length === 0) return;
     const at = Math.floor(this.rngCards.next() * offer.length);

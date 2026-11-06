@@ -343,6 +343,7 @@ export const zhTW = {
   'tune.count': '敵人數量倍率',
   'tune.hp': '敵人生命倍率',
   'tune.dmg': '我方傷害倍率',
+  'tune.techChance': '技法卡機率（0～1）',
   'tune.volley': '一次發射幾發',
   'tune.splash': '濺射半徑（公尺）',
   'tune.stage': '關卡長度（秒）',

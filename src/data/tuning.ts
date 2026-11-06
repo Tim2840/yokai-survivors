@@ -1,5 +1,6 @@
 import { WAVES } from './waves';
 import { STAGE } from './stage';
+import { TECH_OFFER } from './techniques';
 
 /**
  * 可調的旋鈕（D18：敵人數量先做成可調）。預設值取自資料表；只有開發模式與測試頁會用網址參數覆寫
@@ -17,7 +18,7 @@ import { STAGE } from './stage';
  * 起步 1 顆、無濺射太弱（×1.5 平均 201 秒、×2.5 平均 49 秒，機器人撐不過前幾分鐘）。
  */
 /** D50（使用者：「敵人同時出現數量過少」）：數量 ×3 → ×6（使用者「或許過多了點」→ ×4.5）、單隻 HP 1.5 → 0.75（更多、更脆；魂火每點也減半，見 PROGRESSION.orbPerPoint） */
-export const M1_PLAYTEST = { countScale: 4.5, hpScale: WAVES.hpScale as number, damageScale: 1, volley: 2, splash: 0.8, stageSeconds: STAGE.duration as number };
+export const M1_PLAYTEST = { countScale: 4.5, hpScale: WAVES.hpScale as number, damageScale: 1, volley: 2, splash: 0.8, stageSeconds: STAGE.duration as number, techChance: TECH_OFFER.chance as number };
 
 export const tuning = {
   /** 敵人數量倍率（見 WAVES.countScale） */
@@ -31,6 +32,8 @@ export const tuning = {
   splash: M1_PLAYTEST.splash as number,
   /** 關卡長度（秒，D22；G1b 試玩調） */
   stageSeconds: M1_PLAYTEST.stageSeconds as number,
+  /** 每次升級選卡換進一張技法卡的機率（0～1，D53 加：想快點看到技法進化就調高） */
+  techChance: M1_PLAYTEST.techChance as number,
 };
 
 const STORE_KEY = 'yokai-survivors-tuning';
