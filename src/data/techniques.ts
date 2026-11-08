@@ -239,12 +239,13 @@ export const BASE_TECH_LIKES: readonly string[] = ['power', 'atkSpeed', 'volley'
 
 /**
  * 技法進化（D53，使用者 2026-11-06：「技法進化要做，一開始的鬼火也要是一個技法，納入招式進化的名單，融合時兩招都要等級 8」）：
- * 配方 = 兩個技法（其中一個可以是主武器鬼火 `ghostfire`）都練到 TECH_LEVELS.max 級。湊齊後到**合魂祠**（地圖上出現）或**開寶箱**選進化卡。
+ * 配方 = 兩個技法（其中一個可以是主武器鬼火 `ghostfire`）都練到 EVO.minLevel（5）級。湊齊後到**合魂祠**（地圖上出現）或**開寶箱**選進化卡。
  * 進化後兩個技法併成一個（技法欄位少佔一格；有鬼火的不省格）、效果倍率 × EVO.power，並套用 `set`（把兩個技法的參數換成更強的值，
  * 只寫要換的欄位）；有鬼火的另外給主武器 `weapon` 加成。一個技法一局只能進化一次。
  * 名稱先用暫名（使用者要保留「九尾」給之後的角色）。
  */
-export const EVO = { power: 1.25 } as const;
+/** minLevel：兩個材料都要練到幾級（D54，使用者 2026-11-08：「進化材料降到 5 級」；原本 8 級，sim 20 分鐘幾乎碰不到） */
+export const EVO = { power: 1.25, minLevel: 5 } as const;
 
 type Block = Record<string, number>;
 export interface EvoDef {

@@ -100,15 +100,25 @@ describe('每一次升級卡都有稀有度（D53）', () => {
   });
 });
 
-describe('進化（D53：兩招都 8 級、不限次數）', () => {
-  it('材料沒到 8 級不能進化；到了才出現在 evolvable；鬼火要主武器滿級', () => {
+describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
+  it('材料要到 EVO.minLevel（5）級才能進化：差一級不行、到了才出現在 evolvable；鬼火要主武器到 5 級（舊版 8 級會紅）', () => {
+    expect(EVO.minLevel).toBe(5);
     const run = make(21);
     run.devAddTech('kitsunebi');
     expect(run.tech.evolvable).toHaveLength(0);
-    run.devTechLevel('kitsunebi', TECH_LEVELS.max);
-    expect(run.tech.evolvable.map((e) => e.id), '鬼火還沒滿級').toEqual([]);
-    run.devTechLevel(BASE_TECH_ID, TECH_LEVELS.max);
+    run.devTechLevel('kitsunebi', EVO.minLevel);
+    run.devTechLevel(BASE_TECH_ID, EVO.minLevel - 1);
+    expect(run.tech.evolvable.map((e) => e.id), '鬼火差一級').toEqual([]);
+    run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
     expect(run.tech.evolvable.map((e) => e.id)).toEqual(['evoSplit']);
+    // 技法差一級也不行
+    const r2 = make(22);
+    r2.devAddTech('ring', 'satellite');
+    r2.devTechLevel('ring', EVO.minLevel);
+    r2.devTechLevel('satellite', EVO.minLevel - 1);
+    expect(r2.tech.evolvable).toHaveLength(0);
+    r2.devTechLevel('satellite', EVO.minLevel);
+    expect(r2.tech.evolvable.map((e) => e.id)).toEqual(['evoArray']);
   });
 
   it('進化：兩個技法併成一格、效果 × EVO.power、參數換成進化後的值；只能進化一次', () => {
@@ -132,23 +142,23 @@ describe('進化（D53：兩招都 8 級、不限次數）', () => {
     const run = make(23);
     expect(TECH_MAX).toBe(3);
     run.devAddTech('ring', 'satellite', 'ward');
-    run.devTechLevel('ring', 8);
-    run.devTechLevel('satellite', 8);
+    run.devTechLevel('ring', EVO.minLevel);
+    run.devTechLevel('satellite', EVO.minLevel);
     run.tech.evolve('evoArray');
     expect(run.tech.slotsUsed).toBe(2);
     run.devAddTech('lamp');
     expect(run.tech.owned).toContain('lamp');
     expect(run.tech.slotsUsed).toBe(3);
-    run.devTechLevel('ward', 8);
-    run.devTechLevel('lamp', 8);
-    run.devTechLevel(BASE_TECH_ID, 8);
+    run.devTechLevel('ward', EVO.minLevel);
+    run.devTechLevel('lamp', EVO.minLevel);
+    run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
     expect(run.tech.evolvable.map((e) => e.id)).toContain('evoWatch');
     run.tech.evolve('evoWatch');
     expect(run.tech.slotsUsed).toBe(2);
     expect(run.tech.evolved).toEqual(['evoArray', 'evoWatch']);
     // 鬼火＋狐火分裂、鬼火＋火種：鬼火不會被用掉，兩個都能進化（不省格）
     run.devAddTech('kitsunebi');
-    run.devTechLevel('kitsunebi', 8);
+    run.devTechLevel('kitsunebi', EVO.minLevel);
     expect(run.tech.evolve('evoSplit')).toBe(true);
     expect(run.tech.isEvolved(BASE_TECH_ID)).toBe(false);
     expect(run.tech.evolve('evoSoul'), '火種沒拿到').toBe(false);
@@ -160,8 +170,8 @@ describe('進化（D53：兩招都 8 級、不限次數）', () => {
     const run = make(24);
     run.devAddTech('kitsunebi');
     const d0 = run.shotDamage(false);
-    run.devTechLevel('kitsunebi', 8);
-    run.devTechLevel(BASE_TECH_ID, 8);
+    run.devTechLevel('kitsunebi', EVO.minLevel);
+    run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
     const d1 = run.shotDamage(false);
     run.tech.evolve('evoSplit');
     const w = evoById('evoSplit').weapon!;
@@ -173,8 +183,8 @@ describe('進化（D53：兩招都 8 級、不限次數）', () => {
   it('道祖神換掉進化過的技法：進化跟著拆掉', () => {
     const run = make(25);
     run.devAddTech('ring', 'satellite');
-    run.devTechLevel('ring', 8);
-    run.devTechLevel('satellite', 8);
+    run.devTechLevel('ring', EVO.minLevel);
+    run.devTechLevel('satellite', EVO.minLevel);
     run.tech.evolve('evoArray');
     run.tech.replace('ring', 'ward');
     expect(run.tech.evolved).toEqual([]);
@@ -185,8 +195,8 @@ describe('進化（D53：兩招都 8 級、不限次數）', () => {
     const run = make(26);
     run.director.active = false;
     run.devAddTech('ring', 'satellite');
-    run.devTechLevel('ring', 8);
-    run.devTechLevel('satellite', 8);
+    run.devTechLevel('ring', EVO.minLevel);
+    run.devTechLevel('satellite', EVO.minLevel);
     expect(run.tech.evolvable).toHaveLength(1);
     // 合魂祠
     for (let i = 0; i < 60 * (FUSE.appearDelay + 2) && !run.elements.fuseSlot; i++) {
@@ -210,8 +220,8 @@ describe('進化（D53：兩招都 8 級、不限次數）', () => {
 
     // 寶箱：再湊一組（燃燒系），寶箱第一張是進化卡
     run.devAddTech('hellfire', 'oil');
-    run.devTechLevel('hellfire', 8);
-    run.devTechLevel('oil', 8);
+    run.devTechLevel('hellfire', EVO.minLevel);
+    run.devTechLevel('oil', EVO.minLevel);
     const s = run.elements.devForce('chest', 'common', run.px, run.pz)!;
     run.devTeleport(s.x, s.z);
     for (let i = 0; i < 60 * (CHEST_HOLD_SECONDS + 1) && !(run.awaitingPick && run.offerKind === 'chest'); i++) {
@@ -228,9 +238,9 @@ describe('進化（D53：兩招都 8 級、不限次數）', () => {
     const events: string[] = [];
     bus.on('evolveReady', (e) => events.push(e.id));
     run.devAddTech('ring', 'satellite');
-    run.devTechLevel('ring', 8);
-    run.devTechLevel('satellite', 8);
-    run.devTechLevel('ring', 8);
+    run.devTechLevel('ring', EVO.minLevel);
+    run.devTechLevel('satellite', EVO.minLevel);
+    run.devTechLevel('ring', EVO.minLevel);
     expect(events).toEqual(['evoArray']);
   });
 });

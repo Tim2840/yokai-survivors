@@ -5,7 +5,7 @@ import { setWeaponTextFormatter, type BuildSummary } from '../game/buildSummary'
 import { cardLinks } from '../data/links';
 import { BASE_TECH_ID } from '../data/techniques';
 import { DIFFICULTY } from '../data/difficulty';
-import { TECH_CARD_PREFIX, TECH_KEEP, TECH_LEVELS, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard, techById, techMix } from '../data/techniques';
+import { EVO, TECH_CARD_PREFIX, TECH_KEEP, TECH_LEVELS, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard, techById, techMix } from '../data/techniques';
 import { ITEM_RARITY_MULT } from '../data/items';
 import type { Rarity } from '../data/rarity';
 import { cardById, type CardOffer } from '../systems/cards';
@@ -214,7 +214,7 @@ const techName = (id: string): string => t(`tech.${id}` as I18nKey);
 function evoCardHtml(cardId: string): string {
   const e = evoOfCard(cardId);
   const [a, b] = e.from;
-  return `<span class="rname">${t('card.evoTag')}</span><b>${t(`evo.${e.id}` as I18nKey)}</b><span class="cdesc">${t(`evo.${e.id}.desc` as I18nKey)}</span><span class="ctech">${t('card.evoFrom', { a: techName(a), la: TECH_LEVELS.max, b: techName(b), lb: TECH_LEVELS.max })}</span>`;
+  return `<span class="rname">${t('card.evoTag')}</span><b>${t(`evo.${e.id}` as I18nKey)}</b><span class="cdesc">${t(`evo.${e.id}.desc` as I18nKey)}</span><span class="ctech">${t('card.evoFrom', { a: techName(a), la: EVO.minLevel, b: techName(b), lb: EVO.minLevel })}</span>`;
 }
 
 /** 技法卡的內容（HTML）：標籤、名稱、玩法說明、適合的道具、和已有技法的混搭 */
@@ -506,7 +506,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
             .map(
               (e) =>
                 `<li data-evo="${e.id}" class="${e.done ? 'fused' : ''}"><b>${t(`evo.${e.id}` as I18nKey)}${e.done ? ' ✓' : ''}</b><em>${t(`evo.${e.id}.desc` as I18nKey)}</em><span>${e.from
-                  .map((m) => `<i class="${m.level >= TECH_LEVELS.max ? 'ok' : ''}">${t('pause.evoPart', { name: techName(m.id), lv: Math.min(m.level, TECH_LEVELS.max), max: TECH_LEVELS.max })}</i>`)
+                  .map((m) => `<i class="${m.level >= EVO.minLevel ? 'ok' : ''}">${t('pause.evoPart', { name: techName(m.id), lv: Math.min(m.level, EVO.minLevel), max: EVO.minLevel })}</i>`)
                   .join('')}${e.ready ? `<i class="ok">${t('pause.evoReady')}</i>` : ''}</span></li>`,
             )
             .join('')}</ul>`

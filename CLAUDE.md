@@ -13,7 +13,7 @@
 | 任何數字（屬性、卡片、稀有度、地圖要素、局外商店、經濟） | `docs/02-balance.md`（**改數字要同步改 `src/data/` 與這份**） |
 | 地形、高低差、各地圖設計、妖怪在各地形的效果 | `docs/03-terrain-maps.md` |
 | 妖怪（玩家方）、人類（敵方）、頭目、圖鑑與收集 | `docs/04-yokai-and-enemies.md` |
-| 開發進度、里程碑、關卡門檻 | `docs/05-schedule.md` |
+| 開發進度、里程碑、關卡門檻 | `docs/05-schedule.md`；M2-3 設計稿（河童、赤鬼、小妖／號令、成長與化身、圖示）`docs/17-m2-3-design.md` |
 | 程式架構、狀態機、資料格式、效能預算 | `docs/06-tech-architecture.md` |
 | 測試、驗收、回歸、卡住偵測 | `docs/07-test-qa-plan.md` |
 | 美術、音效、音樂、介面 | `docs/08-art-audio-ui.md` |

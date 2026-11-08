@@ -1,9 +1,9 @@
-// v2：技法進化（D53）。兩個技法都練到 8 級 → 「可以進化」提示 → 合魂祠出現（箭頭指過去）→ 走過去按住 → 進化面板（只列進化）→ 真的點進化卡 →
+// v2：技法進化（D53）。兩個技法都練到 5 級 → 「可以進化」提示 → 合魂祠出現（箭頭指過去）→ 走過去按住 → 進化面板（只列進化）→ 真的點進化卡 →
 // HUD「進化成功」→ 能力面板的「技法進化」列出已進化 → 少佔一格。另外：選卡畫面的技法卡帶詞條（條數看稀有度）、法具卡只寫會影響的現有招式。三種畫面，卡住偵測。
-// 用開發介面 giveTech／techLevel 直接把技法練到 8 級（真的練要很久），其餘全是真實操作。
+// 用開發介面 giveTech／techLevel 直接把技法練到 5 級（真的練要很久），其餘全是真實操作。
 import { openPage, startRun, press, step, expect, shot, reportErrors, walkOnto, hudTopOk, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'v2', desc: '技法進化：兩招 8 級→提示→合魂祠出現、箭頭→走過去按住→進化面板→點進化卡→HUD 進化成功→能力面板列出進化、少佔一格；技法卡帶詞條、不再有適合加成（三種畫面）', max: 240, stall: 60 };
+export const meta = { id: 'v2', desc: '技法進化：兩招 5 級→提示→合魂祠出現、箭頭→走過去按住→進化面板→點進化卡→HUD 進化成功→能力面板列出進化、少佔一格；技法卡帶詞條、不再有適合加成（三種畫面）', max: 240, stall: 60 };
 
 const inViewOf = (vp) => (c) => c.r.x >= 0 && c.r.y >= 0 && c.r.x + c.r.w <= vp.width + 1 && c.r.y + c.r.h <= vp.height + 1;
 
@@ -38,12 +38,12 @@ export async function run(browser) {
         await dismiss();
       }, 60);
 
-      await step(`${vp.name} 兩招都練到 8 級：HUD 提示「材料齊了」、合魂祠出現、箭頭指過去`, async () => {
+      await step(`${vp.name} 兩招都練到 5 級：HUD 提示「材料齊了」、合魂祠出現、箭頭指過去`, async () => {
         await page.evaluate(() => {
           const g = window.__game;
           g.giveTech('ring', 'satellite');
-          g.techLevel('ring', 8);
-          g.techLevel('satellite', 8);
+          g.techLevel('ring', 5);
+          g.techLevel('satellite', 5);
           g.advance(0.1);
           g.render();
         });
@@ -77,7 +77,7 @@ export async function run(browser) {
         await page.evaluate(() => window.__game.render());
         expect(await open(), `按住合魂祠沒有開進化面板`);
         const cs = await cardsInfo();
-        expect(cs.length === 1 && cs[0].id === 'evo:evoArray' && /進化/.test(cs[0].t) && /燈籠環 Lv8/.test(cs[0].t) && /衛星燈 Lv8/.test(cs[0].t), `進化卡不對：${JSON.stringify(cs)}`);
+        expect(cs.length === 1 && cs[0].id === 'evo:evoArray' && /進化/.test(cs[0].t) && /燈籠環 Lv5/.test(cs[0].t) && /衛星燈 Lv5/.test(cs[0].t), `進化卡不對：${JSON.stringify(cs)}`);
         for (const c of cs) expect(inView(c), `進化卡超出畫面（${vp.name}）：${JSON.stringify(c.r)}`);
         files.push(await shot(ctx, 'v2-pick'));
         const used0 = await page.evaluate(() => window.__game.run.techs.length);
@@ -98,9 +98,9 @@ export async function run(browser) {
         await press(ctx, '#btn-abilities');
         await page.waitForFunction(() => window.__game.screens.includes('pause'));
         const evo = await page.evaluate(() => [...document.querySelectorAll('#sum-evo li')].map((li) => ({ id: li.dataset.evo, done: li.classList.contains('fused'), t: li.innerText.replace(/\s+/g, ' ') })));
-        expect(evo.some((e) => e.id === 'evoArray' && e.done && /燈籠環 Lv8\/8/.test(e.t)), `能力面板沒列出已進化：${JSON.stringify(evo)}`);
+        expect(evo.some((e) => e.id === 'evoArray' && e.done && /燈籠環 Lv5\/5/.test(e.t)), `能力面板沒列出已進化：${JSON.stringify(evo)}`);
         const txt = await page.locator('#sum-cards li[data-card="ghostfire"]').innerText();
-        expect(/技法 燈籠環 Lv8：適合 .+/.test(txt) && /技法 鬼火 Lv\d：適合 .+/.test(txt), `技法列沒寫出適合的法具（詳細在暫停頁）：${txt}`);
+        expect(/技法 燈籠環 Lv5：適合 .+/.test(txt) && /技法 鬼火 Lv\d：適合 .+/.test(txt), `技法列沒寫出適合的法具（詳細在暫停頁）：${txt}`);
         files.push(await shot(ctx, 'v2-pause'));
         await press(ctx, '#btn-pause-resume');
         await page.waitForFunction(() => !window.__game.screens.includes('pause'));

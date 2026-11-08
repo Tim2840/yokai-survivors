@@ -151,9 +151,9 @@ export class Techniques {
   techLevel(id: string): number {
     return id === BASE_TECH_ID ? this.run.weaponLevel : this.levelOf(id);
   }
-  /** 材料都到 TECH_LEVELS.max 級、還沒進化、而且沒有被別的進化用掉的進化 */
+  /** 材料都到 EVO.minLevel 級、還沒進化、而且沒有被別的進化用掉的進化 */
   get evolvable(): EvoDef[] {
-    return EVOS.filter((e) => !this.evolved.includes(e.id) && e.from.every((m) => !this.isEvolved(m) && this.techLevel(m) >= TECH_LEVELS.max));
+    return EVOS.filter((e) => !this.evolved.includes(e.id) && e.from.every((m) => !this.isEvolved(m) && this.techLevel(m) >= EVO.minLevel));
   }
   /** 進化：兩個技法併成一個 */
   evolve(id: string): boolean {
