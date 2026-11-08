@@ -149,7 +149,8 @@ export async function run(browser) {
         const spot = await approach('barrier', 'rare');
         await page.evaluate(() => window.__game.advance(0.3));
         const s1 = await stats();
-        expect(Math.abs(s1.power / s0.power - 1.32) < 1e-6, `結界圈內攻擊力不對：${s0.power} → ${s1.power}`);
+        // 能力值 =（基礎 + 加算）×（1 + 百分比總和）：結界的 +32% 是加進百分比總和，所以攻擊力（基礎 1）多 0.32；前面的祭壇可能已經給過攻擊力，不能假設 s0 = 1
+        expect(Math.abs(s1.power - s0.power - 0.32) < 1e-6, `結界圈內攻擊力不對：${s0.power} → ${s1.power}（應該多 0.32）`);
         await leave(spot);
         const s2 = await stats();
         expect(Math.abs(s2.power - s0.power) < 1e-6, `走出圈外攻擊力沒恢復：${s2.power}`);
