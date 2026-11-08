@@ -2,11 +2,14 @@ import { RARITIES, cardRarityWeights, type Rarity } from '../data/rarity';
 import { CARD_CHOICES, PITY_LEVELUPS } from '../data/progression';
 import { FALLBACK_ITEMS, ITEM_SLOTS, ITEM_WEIGHT, itemById, milestoneRarity, type ItemDef } from '../data/items';
 import type { Rng } from '../lib/random';
+import type { Affix } from '../data/affixes';
 
 /** 一張發給玩家的卡：哪個法具、什麼稀有度（不吃稀有度的法具一律 common） */
 export interface CardOffer {
   cardId: string;
   rarity: Rarity;
+  /** 技法卡帶的詞條（D53；發牌時抽好，選了就加在身上） */
+  affixes?: Affix[];
 }
 
 /** 舊名稱保留：卡 = 法具 */

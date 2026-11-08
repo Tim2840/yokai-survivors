@@ -95,7 +95,7 @@ export async function run(browser) {
         await press(ctx, '#btn-abilities');
         await page.waitForFunction(() => window.__game.screens.includes('pause'));
         const txt = await page.locator('#sum-cards li[data-card="ghostfire"]').innerText();
-        expect(/技法：/.test(txt), `能力面板沒寫技法：${txt}`);
+        expect(/技法 \S+ Lv\d：適合/.test(txt), `能力面板沒寫技法：${txt}`);
         await press(ctx, '#btn-pause-resume');
         await page.waitForFunction(() => !window.__game.screens.includes('pause'));
       });
@@ -171,7 +171,7 @@ export async function run(browser) {
         await press(ctx, '#btn-abilities');
         await page.waitForFunction(() => window.__game.screens.includes('pause'));
         const txt = await page.locator('#sum-cards li[data-card="ghostfire"]').innerText();
-        expect(/技法：/.test(txt), `換了之後能力面板沒有技法：${txt}`);
+        expect(/技法 \S+ Lv\d：適合/.test(txt), `換了之後能力面板沒有技法：${txt}`);
         await press(ctx, '#btn-pause-resume');
         await page.waitForFunction(() => !window.__game.screens.includes('pause'));
         for (let i = 0; i < 50; i++) {

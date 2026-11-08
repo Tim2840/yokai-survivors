@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { tuning, resetTuning } from '../../src/data/tuning';
-import { BASE_TECH_ID, BASE_TECH_LIKES, EVO, EVOS, TECHS, TECH_FIT, TECH_LEVELS, TECH_MAX, evoById, techById } from '../../src/data/techniques';
+import { BASE_TECH_ID, EVO, EVOS, TECHS, TECH_LEVELS, TECH_MAX, evoById, techById } from '../../src/data/techniques';
 import { ITEMS } from '../../src/data/items';
 import { FUSE } from '../../src/data/elements';
 import { CHEST_HOLD_SECONDS } from '../../src/data/elements';
@@ -56,36 +56,19 @@ describe('技法進化資料（D53）', () => {
   });
 });
 
-describe('適合加成（D53：適合可有加成）', () => {
-  it('適合的法具練到 minLevel 才算；每件 +perItem；技法與鬼火都有；沒到門檻不加', () => {
-    const run = make(11);
-    run.devAddTech('kitsunebi');
-    const likes = techById('kitsunebi').likes;
-    expect(run.tech.fitOf('kitsunebi')).toMatchObject({ n: 0, total: likes.length, mult: 1 });
-    const p0 = run.tech.powerOf('kitsunebi');
-    for (let k = 0; k < TECH_FIT.minLevel - 1; k++) run.give('power', 'common');
-    expect(run.tech.fitOf('kitsunebi').n, '差一級不算').toBe(0);
-    run.give('power', 'common');
-    expect(run.tech.fitOf('kitsunebi').n).toBe(1);
-    expect(run.tech.powerOf('kitsunebi')).toBeCloseTo(p0 * (1 + TECH_FIT.perItem));
-    for (let k = 0; k < TECH_FIT.minLevel; k++) run.give('atkSpeed', 'common');
-    expect(run.tech.fitOf('kitsunebi').mult).toBeCloseTo(1 + 2 * TECH_FIT.perItem);
-    // 不適合的法具不算（廣域不在狐火分裂的適合清單）
-    for (let k = 0; k < TECH_FIT.minLevel; k++) run.give('area', 'common');
-    expect(likes).not.toContain('area');
-    expect(run.tech.fitOf('kitsunebi').n).toBe(2);
-    // 鬼火自己：力量、迅捷到門檻 → 主鬼火傷害變大
-    expect(run.tech.fitOf(BASE_TECH_ID).n).toBe(2);
-    expect(BASE_TECH_LIKES).toContain('power');
-  });
-  it('主鬼火傷害隨適合加成變大（舊版沒有加成會紅）', () => {
-    const a = make(12);
-    const b = make(12);
-    for (let k = 0; k < TECH_FIT.minLevel; k++) a.give('power', 'common');
-    // b 用同樣的力量，但把鬼火的適合加成關掉來比（baseFit 重設為 1）
-    for (let k = 0; k < TECH_FIT.minLevel; k++) b.give('power', 'common');
-    b.tech.baseFit = 1;
-    expect(a.shotDamage(false)).toBeCloseTo(b.shotDamage(false) * (1 + TECH_FIT.perItem));
+describe('適合沒有加成（使用者 2026-11-06：「不要再有適合加成」）', () => {
+  it('法具練到高等級也不會讓技法或主鬼火變強（舊版有適合加成會紅）', () => {
+    const a = make(11);
+    const b = make(11);
+    a.devAddTech('kitsunebi');
+    b.devAddTech('kitsunebi');
+    const p0 = a.tech.powerOf('kitsunebi');
+    const d0 = a.shotDamage(false);
+    for (const id of ['atkSpeed', 'volley']) for (let k = 0; k < 3; k++) a.give(id, 'common');
+    // 力量以外的屬性不影響鬼火傷害；技法的效果倍率只看技法等級
+    expect(a.tech.powerOf('kitsunebi')).toBeCloseTo(p0);
+    expect(a.shotDamage(false)).toBeCloseTo(d0 + 0, 6);
+    expect(b.tech.powerOf('kitsunebi')).toBeCloseTo(p0);
   });
 });
 

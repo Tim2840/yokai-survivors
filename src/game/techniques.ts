@@ -1,5 +1,5 @@
 import { COMBAT } from '../data/combat';
-import { BASE_TECH_ID, BASE_TECH_LIKES, EVO, EVOS, TECHS, TECH_CHOICES, TECH_DEEPEN, TECH_FAMILIES, TECH_FIT, TECH_LEVELS, TECH_MAX, TECH_OFFER, TECH_RULES, evoById, techById, techsFor, type EvoDef, type TechDef, type TechFamily, type TechMechanic } from '../data/techniques';
+import { BASE_TECH_ID, EVO, EVOS, TECHS, TECH_CHOICES, TECH_DEEPEN, TECH_FAMILIES, TECH_LEVELS, TECH_MAX, TECH_OFFER, TECH_RULES, evoById, techById, techsFor, type EvoDef, type TechDef, type TechFamily, type TechMechanic } from '../data/techniques';
 import type { WeaponDef } from '../data/yokai';
 import type { Rng } from '../lib/random';
 import type { Run } from './run';
@@ -30,12 +30,6 @@ export class Techniques {
   readonly points: number[] = [];
   /** 已進化的配方 id（D53）：兩個材料技法併成一個，效果 × EVO.power、參數換成進化後的值 */
   readonly evolved: string[] = [];
-  /** 各技法目前的「適合」加成倍率（D53；依法具等級，recompute 時算好，每步不重算）與適合的件數 */
-  private readonly fitMult: number[] = [];
-  private readonly fitN: number[] = [];
-  /** 鬼火（主武器）自己的適合件數、傷害倍率 */
-  baseFitN = 0;
-  baseFit = 1;
   /** 現在作用中的技法（依機制；沒有 = null） */
   readonly act: Record<TechMechanic, TechDef | null> = { kitsunebi: null, bounce: null, homing: null, rain: null, ring: null, ward: null, satellite: null, lamp: null, hellfire: null, seed: null, pillar: null, oil: null };
   /** 每系「多拿了幾個」（同系 N 個 → N − 1） */
@@ -131,30 +125,19 @@ export class Techniques {
     const i = this.owned.indexOf(id);
     return i < 0 ? 0 : this.levels[i];
   }
-  /** 技法的效果倍率：技法等級 × 適合加成（D53）× 進化（D53） */
+  /** 技法的效果倍率：技法等級 × 進化（D53） */
   private pw(m: TechMechanic): number {
     const d = this.act[m];
     if (!d) return 1;
     return this.powerAt(this.owned.indexOf(d.id));
   }
   private powerAt(i: number): number {
-    return (1 + TECH_LEVELS.perLevel * (this.points[i] - 1)) * this.fitMult[i] * (this.isEvolved(this.owned[i]) ? EVO.power : 1);
+    return (1 + TECH_LEVELS.perLevel * (this.points[i] - 1)) * (this.isEvolved(this.owned[i]) ? EVO.power : 1);
   }
   /** 效果倍率（畫面、測試用） */
   powerOf(id: string): number {
     const i = this.owned.indexOf(id);
     return i < 0 ? 0 : this.powerAt(i);
-  }
-  /** 適合的法具有幾件到了門檻（畫面、測試用）；總共幾件適合 */
-  fitOf(id: string): { n: number; total: number; mult: number } {
-    if (id === BASE_TECH_ID) return { n: this.baseFitN, total: BASE_TECH_LIKES.length, mult: this.baseFit };
-    const i = this.owned.indexOf(id);
-    return { n: i < 0 ? 0 : this.fitN[i], total: techById(id).likes.length, mult: i < 0 ? 1 : this.fitMult[i] };
-  }
-  private countFit(likes: readonly string[]): number {
-    let n = 0;
-    for (const l of likes) if ((this.run.cardCounts.get(l) ?? 0) >= TECH_FIT.minLevel) n++;
-    return n;
   }
 
   // ── 進化（D53）──
@@ -211,8 +194,6 @@ export class Techniques {
     this.owned.push(id);
     this.levels.push(1);
     this.points.push(rarityMult);
-    this.fitMult.push(1);
-    this.fitN.push(0);
     this.recompute();
     return true;
   }
@@ -249,19 +230,15 @@ export class Techniques {
     return true;
   }
 
-  /** 重算作用中的技法、適合加成、進化的參數（技法或法具變動時呼叫） */
+  /** 重算作用中的技法與進化的參數（技法變動時呼叫） */
   recompute(): void {
     for (const k of Object.keys(this.act) as TechMechanic[]) this.act[k] = null;
     const fam: Record<TechFamily, number> = { split: 0, orbit: 0, burn: 0 };
-    this.owned.forEach((id, i) => {
+    this.owned.forEach((id) => {
       const d = techById(id);
       this.act[id as TechMechanic] = this.withEvo(d);
       fam[d.family]++;
-      this.fitN[i] = this.countFit(d.likes);
-      this.fitMult[i] = 1 + TECH_FIT.perItem * this.fitN[i];
     });
-    this.baseFitN = this.countFit(BASE_TECH_LIKES);
-    this.baseFit = 1 + TECH_FIT.perItem * this.baseFitN;
     for (const f of TECH_FAMILIES) this.deep[f] = Math.max(0, fam[f] - 1);
     // 拿掉的技法留下的東西清掉
     if (!this.act.hellfire) this.zoneLife.fill(0);

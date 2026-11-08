@@ -26,8 +26,9 @@ export async function run(browser) {
           const cs = await cards();
           for (const c of cs) {
             expect(/新！|Lv\d+ → \d+|^$/.test(c.lv), `卡片等級文字不對：${JSON.stringify(c)}`);
-            // 使用者 2026-11-06：每張法具卡都要寫明輔助哪個大招、適合哪些技法（沒有就明講沒有）
-            if (!['heal', 'meritBag'].includes(c.id)) expect(/適合的技法|所有技法都靠它出手|沒有搭配/.test(c.link), `法具卡沒有寫明大招／技法連結：${JSON.stringify(c)}`);
+            // 使用者 2026-11-06：升級卡上只顯示「會影響的現有招式」（詳細在暫停頁）：這裡沒拿任何技法，所以最多只會寫鬼火，不會列出沒拿到的技法
+            expect(!/狐火分裂|彈跳|歸巢|鬼火雨|燈籠環|護身火|衛星燈|開路燈|業火|火種|鬼火柱|燈油|適合的技法/.test(c.link), `法具卡列出了還沒拿到的技法：${JSON.stringify(c)}`);
+            if (c.link) expect(/^會影響：鬼火$/.test(c.link), `法具卡的招式連結文字不對：${JSON.stringify(c)}`);
             if (c.id === 'ghostfire') {
               sawWeapon = true;
               expect(c.weapon && /主武器/.test(c.tag), `主武器卡沒有標示：${JSON.stringify(c)}`);

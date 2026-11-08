@@ -2,6 +2,7 @@ import { bus as defaultBus, type EventBus } from '../core/bus';
 import { COMBAT } from '../data/combat';
 import { MOVE } from '../data/movement';
 import { PLAYABLE_YOKAI, YOKAI, type YokaiDef } from '../data/yokai';
+import { rollAffixes } from '../data/affixes';
 import { CARD_CHOICES, PROGRESSION, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
 import { DOSOJIN, FUSE } from '../data/elements';
 import { ITEM_POOL, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById, scaleWeaponStep } from '../data/items';
@@ -940,13 +941,16 @@ export class Run {
     const id = this.tech.pickCard(this.rngCards);
     if (!id || offer.length === 0) return;
     const at = Math.floor(this.rngCards.next() * offer.length);
-    offer[at] = { cardId: TECH_CARD_PREFIX + id, rarity: this.dealer.rollRarity(this.level, this.stats.value.luck) };
+    const rarity = this.dealer.rollRarity(this.level, this.stats.value.luck);
+    offer[at] = { cardId: TECH_CARD_PREFIX + id, rarity, affixes: rollAffixes(this.rngCards, rarity) };
   }
 
   /** 選了升級卡裡的技法卡：沒有就學會、有就升一級（效果吃那張卡的稀有度） */
   private applyTechCard(o: CardOffer): void {
     const id = o.cardId.slice(TECH_CARD_PREFIX.length);
     const mult = ITEM_RARITY_MULT[o.rarity];
+    // 詞條（D53）：技法卡帶的能力值加成，選了就永久加在身上
+    for (const a of o.affixes ?? []) this.applyStat(a.stat, a.value);
     if (this.tech.has(id)) {
       this.tech.levelUp(id, mult);
       return;
@@ -1065,6 +1069,14 @@ export class Run {
   }
 
 
+  /** 加一項能力值（卡片單位）；最大生命增加時，現有生命同步增加（不會「變成扣血」） */
+  private applyStat(stat: import('../data/stats').StatId, v: number): void {
+    const before = this.maxHp;
+    this.stats.addCard(stat, v);
+    if (this.maxHp > before) this.hp += this.maxHp - before;
+    this.hp = Math.min(this.hp, this.maxHp);
+  }
+
   /** 套用一張卡（法具升一級；D30） */
   private applyCard(o: CardOffer): void {
     const d = cardById(o.cardId);
@@ -1095,15 +1107,9 @@ export class Run {
       else if (d.mod === 'pierce') this.pierceBonus += v;
       else this.shardBonus += v;
     } else if (d.stat) {
-      const before = this.maxHp;
-      this.stats.addCard(d.stat, itemValue(d, o.rarity));
-      if (d.down) this.stats.addCard(d.down.stat, -itemDown(d, o.rarity));
-      // 最大生命增加時，現有生命同步增加（不會「變成扣血」）
-      if (this.maxHp > before) this.hp += this.maxHp - before;
-      this.hp = Math.min(this.hp, this.maxHp);
+      this.applyStat(d.stat, itemValue(d, o.rarity));
+      if (d.down) this.applyStat(d.down.stat, -itemDown(d, o.rarity));
     }
-    // 適合的法具等級變了：技法的「適合」加成跟著重算（D53）
-    this.tech.recompute();
   }
 
   get ultReady(): boolean {
@@ -1258,7 +1264,7 @@ export class Run {
   /** 一發鬼火的基礎傷害（主武器傷害＋升級加值、攻擊力、暴擊） */
   shotDamage(crit: boolean): number {
     const s = this.stats.value;
-    return (this.yokai.weapon.damage + this.weaponDamageBonus) * s.power * tuning.damageScale * (crit ? s.critDmg : 1) * this.tech.baseFit * this.tech.evoWeaponDamage;
+    return (this.yokai.weapon.damage + this.weaponDamageBonus) * s.power * tuning.damageScale * (crit ? s.critDmg : 1) * this.tech.evoWeaponDamage;
   }
 
   /** 平均每次命中的碎火片數（狐火分裂時有碎火就 +shardBonus） */

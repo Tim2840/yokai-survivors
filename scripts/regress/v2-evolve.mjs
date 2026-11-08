@@ -1,9 +1,9 @@
 // v2：技法進化（D53）。兩個技法都練到 8 級 → 「可以進化」提示 → 合魂祠出現（箭頭指過去）→ 走過去按住 → 進化面板（只列進化）→ 真的點進化卡 →
-// HUD「進化成功」→ 能力面板的「技法進化」列出已進化 → 少佔一格。另外：選卡畫面的技法卡寫出「適合 n/m」。三種畫面，卡住偵測。
+// HUD「進化成功」→ 能力面板的「技法進化」列出已進化 → 少佔一格。另外：選卡畫面的技法卡帶詞條（條數看稀有度）、法具卡只寫會影響的現有招式。三種畫面，卡住偵測。
 // 用開發介面 giveTech／techLevel 直接把技法練到 8 級（真的練要很久），其餘全是真實操作。
 import { openPage, startRun, press, step, expect, shot, reportErrors, walkOnto, hudTopOk, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'v2', desc: '技法進化：兩招 8 級→提示→合魂祠出現、箭頭→走過去按住→進化面板→點進化卡→HUD 進化成功→能力面板列出進化、少佔一格；技法卡寫出「適合 n/m」（三種畫面）', max: 240, stall: 60 };
+export const meta = { id: 'v2', desc: '技法進化：兩招 8 級→提示→合魂祠出現、箭頭→走過去按住→進化面板→點進化卡→HUD 進化成功→能力面板列出進化、少佔一格；技法卡帶詞條、不再有適合加成（三種畫面）', max: 240, stall: 60 };
 
 const inViewOf = (vp) => (c) => c.r.x >= 0 && c.r.y >= 0 && c.r.x + c.r.w <= vp.width + 1 && c.r.y + c.r.h <= vp.height + 1;
 
@@ -21,15 +21,18 @@ export async function run(browser) {
       };
       const cardsInfo = () => page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card')].map((c) => {
         const r = c.getBoundingClientRect();
-        return { id: c.dataset.card, t: c.innerText.replace(/\s+/g, ' '), r: { x: r.x, y: r.y, w: r.width, h: r.height } };
+        return { id: c.dataset.card, rarity: c.dataset.rarity, aff: Number(c.querySelector('.caffix')?.dataset.affixes ?? 0), t: c.innerText.replace(/\s+/g, ' '), r: { x: r.x, y: r.y, w: r.width, h: r.height } };
       }));
 
-      await step(`${vp.name} 選卡畫面：技法卡寫出「適合 n/m」`, async () => {
+      await step(`${vp.name} 選卡畫面：技法卡帶詞條（條數 = 稀有度）、沒有「適合 n/m」`, async () => {
         await page.evaluate(() => { window.__game.techNext(); });
         for (let g = 0; g < 60 && !(await page.evaluate(() => window.__game.screens)).includes('levelup'); g++) await page.evaluate(() => window.__game.addXp(10));
         const cs = await cardsInfo();
         const tech = cs.find((c) => c.id.startsWith('tech:'));
-        expect(tech && /適合 \d\/\d（效果 \+\d+%）/.test(tech.t), `技法卡沒寫出適合加成：${JSON.stringify(cs.map((c) => c.t))}`);
+        expect(tech, `沒有技法卡：${JSON.stringify(cs.map((c) => c.t))}`);
+        const want = { common: 1, rare: 2, epic: 3, legend: 4 }[tech.rarity];
+        expect(tech.aff === want && /詞條：/.test(tech.t), `技法卡的詞條條數不對（${tech.rarity} 應該 ${want} 條）：${JSON.stringify(tech)}`);
+        expect(!/適合 \d\/\d|效果 \+\d+%/.test(tech.t), `技法卡還有適合加成：${tech.t}`);
         files.push(await shot(ctx, 'v2-fit'));
         await page.locator(`.overlay[data-screen="levelup"] .card[data-card="${tech.id}"]`).click();
         await dismiss();
@@ -90,14 +93,14 @@ export async function run(browser) {
         expect(!(await page.evaluate(() => window.__game.run.fuseSlot)), '進化後合魂祠還在');
       }, 90);
 
-      await step(`${vp.name} 「能力」面板：技法進化列出已進化、技法列出適合加成`, async () => {
+      await step(`${vp.name} 「能力」面板：技法進化列出已進化、技法列出適合的法具`, async () => {
         await dismiss();
         await press(ctx, '#btn-abilities');
         await page.waitForFunction(() => window.__game.screens.includes('pause'));
         const evo = await page.evaluate(() => [...document.querySelectorAll('#sum-evo li')].map((li) => ({ id: li.dataset.evo, done: li.classList.contains('fused'), t: li.innerText.replace(/\s+/g, ' ') })));
         expect(evo.some((e) => e.id === 'evoArray' && e.done && /燈籠環 Lv8\/8/.test(e.t)), `能力面板沒列出已進化：${JSON.stringify(evo)}`);
         const txt = await page.locator('#sum-cards li[data-card="ghostfire"]').innerText();
-        expect(/技法：.*燈籠環 Lv8（適合 \d\/\d，\+\d+%）/.test(txt) && /鬼火（適合 \d\/\d/.test(txt), `技法列沒寫出適合加成：${txt}`);
+        expect(/技法 燈籠環 Lv8：適合 .+/.test(txt) && /技法 鬼火 Lv\d：適合 .+/.test(txt), `技法列沒寫出適合的法具（詳細在暫停頁）：${txt}`);
         files.push(await shot(ctx, 'v2-pause'));
         await press(ctx, '#btn-pause-resume');
         await page.waitForFunction(() => !window.__game.screens.includes('pause'));

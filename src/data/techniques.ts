@@ -233,13 +233,7 @@ export function techMix(candidate: string, owned: readonly string[]): TechMix | 
   return family;
 }
 
-/**
- * 「適合」加成（D53，使用者 2026-11-06：「適合可有加成」）：技法每有一件「適合」的法具（`TechDef.likes`）練到 minLevel 級以上，
- * 那個技法的效果倍率 + perItem（可以和技法等級的倍率相乘）。卡上寫「適合 2/4」。起始提案，sim 校準（docs/02 變更紀錄）。
- */
-export const TECH_FIT = { minLevel: 3, perItem: 0.1 } as const;
-
-/** 主武器（鬼火）也是一個技法（D53）：它的等級就是主武器等級，適合的法具如下（效果 = 主武器傷害） */
+/** 主武器（鬼火）也是一個技法（D53）：它的等級就是主武器等級；適合的法具只是選卡提示（使用者 2026-11-06：「不要再有適合加成」，適合沒有加成） */
 export const BASE_TECH_ID = 'ghostfire';
 export const BASE_TECH_LIKES: readonly string[] = ['power', 'atkSpeed', 'volley', 'pierce', 'splash'];
 

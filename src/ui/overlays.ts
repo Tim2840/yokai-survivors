@@ -3,11 +3,13 @@ import type { I18nKey } from '../i18n/zh-TW';
 import { CARD_FORMAT, type StatId } from '../data/stats';
 import { setWeaponTextFormatter, type BuildSummary } from '../game/buildSummary';
 import { cardLinks } from '../data/links';
+import { BASE_TECH_ID } from '../data/techniques';
 import { DIFFICULTY } from '../data/difficulty';
-import { TECH_CARD_PREFIX, TECH_FIT, TECH_KEEP, TECH_LEVELS, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard, techById, techMix } from '../data/techniques';
+import { TECH_CARD_PREFIX, TECH_KEEP, TECH_LEVELS, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard, techById, techMix } from '../data/techniques';
 import { ITEM_RARITY_MULT } from '../data/items';
 import type { Rarity } from '../data/rarity';
 import { cardById, type CardOffer } from '../systems/cards';
+import type { Affix } from '../data/affixes';
 import { WEAPON_LEVELS, itemDown, itemValue, scaleWeaponStep, type WeaponLevel } from '../data/items';
 import { PLAYABLE_YOKAI, STARTER_YOKAI } from '../data/yokai';
 import { CARD_EFFECT } from '../data/stats';
@@ -208,13 +210,6 @@ export interface PickerContext {
 
 const techName = (id: string): string => t(`tech.${id}` as I18nKey);
 
-/** 「適合」加成的文字（D53）：適合的法具有幾件到了門檻、效果加多少 */
-function fitText(id: string, counts: ReadonlyMap<string, number>): string {
-  const likes = techById(id).likes;
-  const n = likes.filter((l) => (counts.get(l) ?? 0) >= TECH_FIT.minLevel).length;
-  return t('card.fit', { n, m: likes.length, pct: Math.round(n * TECH_FIT.perItem * 100) });
-}
-
 /** 進化卡的內容（HTML）：標籤、名稱、說明、材料 */
 function evoCardHtml(cardId: string): string {
   const e = evoOfCard(cardId);
@@ -223,13 +218,20 @@ function evoCardHtml(cardId: string): string {
 }
 
 /** 技法卡的內容（HTML）：標籤、名稱、玩法說明、適合的道具、和已有技法的混搭 */
-function techCardHtml(cardId: string, rarity: Rarity, owned: readonly string[], levels: readonly number[], counts: ReadonlyMap<string, number>): string {
+/** 詞條（D53）的文字：「力量 +10%、迅捷 +8%」；沒有詞條就空字串 */
+export function affixHtml(affixes: readonly Affix[] | undefined): string {
+  if (!affixes || affixes.length === 0) return '';
+  const list = affixes.map((a) => t(`card.fmt.${CARD_FORMAT[a.stat]}` as I18nKey, { name: t(`stat.${a.stat}` as I18nKey), v: num(a.value, 1) })).join('、');
+  return `<span class="ctech caffix" data-affixes="${affixes.length}">${t('card.affix', { list })}</span>`;
+}
+
+function techCardHtml(cardId: string, rarity: Rarity, owned: readonly string[], levels: readonly number[], affixes?: readonly Affix[]): string {
   if (cardId === TECH_KEEP) return `<span class="rname">${t('card.techTag')}</span><b>${t('tech.keep')}</b><span class="cdesc">${t('tech.keep.desc')}</span>`;
   // 已有的技法：升一級（D49：最高 TECH_LEVELS.max 級，效果吃這張卡的稀有度）
   if (cardId.startsWith(TECH_CARD_PREFIX) && owned.includes(cardId.slice(TECH_CARD_PREFIX.length))) {
     const id = cardId.slice(TECH_CARD_PREFIX.length);
     const lv = levels[owned.indexOf(id)] ?? 1;
-    return `<span class="rname">${t(`rarity.${rarity}` as I18nKey)}・${t('tech.up.tag', { a: lv, b: lv + 1, max: TECH_LEVELS.max })}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="ctech">${t('tech.up.fx', { v: Math.round(TECH_LEVELS.perLevel * ITEM_RARITY_MULT[rarity] * 100) })}</span><span class="ctech fit">${fitText(id, counts)}</span>`;
+    return `<span class="rname">${t(`rarity.${rarity}` as I18nKey)}・${t('tech.up.tag', { a: lv, b: lv + 1, max: TECH_LEVELS.max })}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="ctech">${t('tech.up.fx', { v: Math.round(TECH_LEVELS.perLevel * ITEM_RARITY_MULT[rarity] * 100) })}</span>${affixHtml(affixes)}`;
   }
   let id: string;
   let tag: string;
@@ -243,11 +245,9 @@ function techCardHtml(cardId: string, rarity: Rarity, owned: readonly string[], 
     id = cardId.slice(TECH_CARD_PREFIX.length);
     tag = `${t(`rarity.${rarity}` as I18nKey)}・${t('card.techTag')}・${t(`tech.family.${techById(id).family}` as I18nKey)}`;
   }
-  const d = techById(id);
-  const likes = d.likes.map((x) => t(`card.${x}` as I18nKey)).join('、');
   const mix = techMix(id, rest);
   const mixText = !mix ? '' : mix.kind === 'hit' ? t('tech.mix.hit', { via: techName(mix.via), hit: techName(mix.hit) }) : t('tech.mix.family', { family: t(`tech.family.${mix.family}` as I18nKey) });
-  return `<span class="rname">${tag}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="ctech">${t('tech.likes', { items: likes })}</span><span class="ctech fit">${fitText(id, counts)}</span>${mixText ? `<span class="ctech mix">${mixText}</span>` : ''}`;
+  return `<span class="rname">${tag}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span>${affixHtml(affixes)}${mixText ? `<span class="ctech mix">${mixText}</span>` : ''}`;
 }
 
 /** 大招的局外升級累計（能力面板用）：「威力 ×1.1、範圍 ×1.08、冷卻 23 秒、充能 ×1.1」 */
@@ -255,10 +255,18 @@ export function ultModsText(m: { power: number; radius: number; cooldown: number
   return `${t('ult.mods', { power: fix(m.power, 2), radius: fix(m.radius, 2) })}、${t('ult.mods2', { cooldown: fix(m.cooldown, 0), charge: fix(m.charge, 2) })}`;
 }
 
-/** 法具連結：它適合哪些技法（沒有就明講沒有）。選卡與能力面板共用 */
-export function cardLinkLines(cardId: string, yokai: string): string[] {
+/**
+ * 法具連結：它適合哪些技法。
+ * - 能力面板（詳細，使用者 2026-11-06：「詳細在暫停頁那邊」）：列出全部適合的技法，沒有就明講沒有。
+ * - 選卡畫面（只給 owned）：**只列「會影響的現有招式」**（玩家現在有的技法與鬼火）；沒有就不顯示。
+ */
+export function cardLinkLines(cardId: string, yokai: string, owned?: readonly string[]): string[] {
   const l = cardLinks(cardId, yokai);
   if (cardById(cardId).kind === 'fallback') return [];
+  if (owned) {
+    const mine = l.techs.filter((x) => x === BASE_TECH_ID || owned.includes(x));
+    return mine.length ? [t('card.link.owned', { list: mine.map((x) => techName(x)).join('、') })] : [];
+  }
   if (l.weapon) return [t('card.link.weapon')];
   if (!l.techs.length) return [t('card.link.none')];
   return [t('card.link.tech', { list: l.techs.map((x) => techName(x)).join('、') })];
@@ -295,7 +303,7 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
           b.className = 'card r-variant';
           b.dataset.card = c.cardId;
           b.dataset.index = String(i);
-          b.innerHTML = techCardHtml(c.cardId, c.rarity, owned, ult.techLevels ?? [], ult.counts);
+          b.innerHTML = techCardHtml(c.cardId, c.rarity, owned, ult.techLevels ?? [], c.affixes);
           b.dataset.rarity = c.rarity;
           b.addEventListener('click', () => onPick(i));
           cardsEl.appendChild(b);
@@ -310,7 +318,7 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
         b.dataset.rarity = c.rarity;
         b.dataset.index = String(i);
         b.innerHTML = `<span class="shape ${SHAPES[c.rarity]}" aria-hidden="true"></span>
-          <span class="rname">${kind === 'weapon' ? `${t(`rarity.${c.rarity}` as I18nKey)}・${t('card.weaponTag')}` : kind === 'fallback' ? '' : cardById(c.cardId).rarityScales ? t(`rarity.${c.rarity}` as I18nKey) : ''}</span><b>${d.name}</b><span class="clv">${d.level}</span><span class="cdesc">${d.desc}</span>${cardLinkLines(c.cardId, ult.yokai).map((x) => `<span class="csyn clink">${x}</span>`).join('')}`;
+          <span class="rname">${kind === 'weapon' ? `${t(`rarity.${c.rarity}` as I18nKey)}・${t('card.weaponTag')}` : kind === 'fallback' ? '' : cardById(c.cardId).rarityScales ? t(`rarity.${c.rarity}` as I18nKey) : ''}</span><b>${d.name}</b><span class="clv">${d.level}</span><span class="cdesc">${d.desc}</span>${cardLinkLines(c.cardId, ult.yokai, ult.techs ?? []).map((x) => `<span class="csyn clink">${x}</span>`).join('')}`;
         b.addEventListener('click', () => onPick(i));
         cardsEl.appendChild(b);
       });
@@ -485,7 +493,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
         const li = document.createElement('li');
         li.dataset.card = c.id;
         const chips = (['common', 'rare', 'epic', 'legend'] as const).map((r) => `<i class="chip r-${r}"></i>`.repeat(c.byRarity[r])).join('');
-        li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), lv: c.level, max: c.maxLevel })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}${cardLinkLines(c.id, sum.yokai).map((x) => `<br><span class="clink">${x}</span>`).join('')}${c.kind === 'weapon' ? `<br>${t('pause.baseFit', { n: sum.baseFit.n, m: sum.baseFit.total, pct: sum.baseFit.pct })}` : ''}${c.kind === 'weapon' && sum.techs.length > 0 ? `<br>${t('pause.techs', { list: sum.techs.map((x) => t('pause.techRow', { name: techName(x.id), lv: x.level, n: x.fitN, m: x.fitTotal, pct: x.pct })).join('、') })}` : ''}</em>`;
+        li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), lv: c.level, max: c.maxLevel })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}${cardLinkLines(c.id, sum.yokai).map((x) => `<br><span class="clink">${x}</span>`).join('')}${c.kind === 'weapon' ? `<br>${t('pause.techRow', { name: techName(BASE_TECH_ID), lv: c.level, items: sum.baseLikes.map((x) => t(`card.${x}` as I18nKey)).join('、') })}` : ''}${c.kind === 'weapon' ? sum.techs.map((x) => `<br>${t('pause.techRow', { name: techName(x.id), lv: x.level, items: x.likes.map((l) => t(`card.${l}` as I18nKey)).join('、') })}`).join('') : ''}</em>`;
         cards.appendChild(li);
       }
       const evo = q('sum-evo');
