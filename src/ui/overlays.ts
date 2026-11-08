@@ -356,6 +356,8 @@ export function resultLineText(l: ResultLine, levels: ReadonlyMap<string, number
       const d = describeCard({ cardId: l.cardId, rarity: l.rarity }, new Map([...levels, [l.cardId, l.level - 1]]));
       return t('result.item', { name: d.name, lv: l.level, desc: d.desc });
     }
+    case 'trial':
+      return l.tier >= 0 ? t('result.trial.win', { k: l.kills, n: l.tier + 1, r: t(`rarity.${l.reward}` as I18nKey) }) : t('result.trial.lose', { k: l.kills });
   }
 }
 

@@ -15,6 +15,8 @@ export type ResultLine =
   | { t: 'omikuji'; id: OmikujiResult }
   | { t: 'merit'; v: number }
   | { t: 'summon'; mult: number }
+  /** 百鬼試煉碑的成績：打倒幾隻、達到第幾段（-1 = 沒達到，什麼都沒有）、寶箱的稀有度（沒達到時沒有意義） */
+  | { t: 'trial'; kills: number; tier: number; reward: Rarity }
   | { t: 'item'; cardId: string; rarity: Rarity; level: number };
 
 export interface ElementResult {
@@ -25,5 +27,5 @@ export interface ElementResult {
 
 /** 這一行對玩家是好事嗎（介面上色用）：詛咒、召喚頭目算「要注意」 */
 export function lineIsGood(l: ResultLine): boolean {
-  return l.t !== 'curse' && l.t !== 'summon';
+  return l.t !== 'curse' && l.t !== 'summon' && !(l.t === 'trial' && l.tier < 0);
 }

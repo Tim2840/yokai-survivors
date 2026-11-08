@@ -1,7 +1,7 @@
 import type { Rarity } from './rarity';
 
 /** 地圖要素（docs/02 第 6 節）。M2 先做石地藏、結界石、詛咒祭壇；其餘隨後加入。 */
-export const ELEMENT_KINDS = ['jizo', 'barrier', 'altar', 'offering', 'omikuji', 'chest', 'summon', 'fox', 'fuse', 'dosojin'] as const;
+export const ELEMENT_KINDS = ['jizo', 'barrier', 'altar', 'offering', 'omikuji', 'chest', 'summon', 'fox', 'fuse', 'dosojin', 'trial'] as const;
 export type ElementKind = (typeof ELEMENT_KINDS)[number];
 
 /** 出現規則（docs/02 第 6.3 節，改成連續關卡：用「關卡經過比例」取代「整備」） */
@@ -30,9 +30,9 @@ export const ELEMENT_RULES = {
 } as const;
 
 /** 要素種類權重（地圖可覆寫） */
-export const ELEMENT_WEIGHTS: Record<ElementKind, number> = { jizo: 1, barrier: 1, altar: 1, offering: 1, omikuji: 1, chest: 0.6, summon: 0, fox: 0.8, fuse: 0, dosojin: 0 };
+export const ELEMENT_WEIGHTS: Record<ElementKind, number> = { jizo: 1, barrier: 1, altar: 1, offering: 1, omikuji: 1, chest: 0.6, summon: 0, fox: 0.8, fuse: 0, dosojin: 0, trial: 0.8 };
 /** 同種同時最多幾個（沒寫的用 ELEMENT_RULES.perKind） */
-export const ELEMENT_PER_KIND: Partial<Record<ElementKind, number>> = { chest: 1, omikuji: 1, summon: 1, fox: 1, fuse: 1, dosojin: 1 };
+export const ELEMENT_PER_KIND: Partial<Record<ElementKind, number>> = { chest: 1, omikuji: 1, summon: 1, fox: 1, fuse: 1, dosojin: 1, trial: 1 };
 
 /** 稀有度權重（依虛擬波數；docs/02 第 6.3 節）。波數落在哪一列取最後一個 from <= n */
 export const ELEMENT_RARITY_BY_WAVE: readonly { from: number; w: Record<Rarity, number> }[] = [
@@ -129,3 +129,34 @@ export const FUSE = { appearDelay: 3, ringMin: 15, ringMax: 28, holdSeconds: 1.5
  */
 export const DOSOJIN = { appearDelay: 20, ringMin: 15, ringMax: 28, holdSeconds: 1.5, hintSeconds: 15 } as const;
 
+/**
+ * 百鬼試煉碑（E1，docs/15 第 10.4 節；參考黑帝斯的挑戰房、RoR2 的戰鬥神殿）：站上去按住 holdSeconds 秒啟動 →
+ * 限時 seconds 秒內，在碑周圍 radius 公尺的圈內打倒的人類越多越好（打倒的位置在圈內才算）→ 時間到依成績給寶箱：
+ * 達到第 1／2／3 段門檻給第 1／2／3 階的寶箱，連第 1 段都沒達到什麼都沒有（沒有懲罰）。
+ * 試煉中敵人湧出變快（spawnMult），不然圈裡沒有人可以打。
+ * 門檻 = 基礎 × 稀有度倍率 ×（1 + growth × 關卡經過比例）：後面敵人多、火力強，門檻也跟著漲
+ * （探針：站著不動的機器人 30 秒在圈內打倒 第 30 秒 約 150、第 120 秒 約 265、第 240 秒 約 430、第 420 秒 約 680 隻）。
+ * 碑的稀有度越高，門檻越高、寶箱越好。數字為起始提案，sim 校準（docs/02 變更紀錄）。
+ */
+export const TRIAL = {
+  holdSeconds: 1.2,
+  seconds: 30,
+  radius: 9,
+  spawnMult: 1.6,
+  baseNeeds: [60, 110, 170] as readonly [number, number, number],
+  needMult: { common: 1, rare: 1.25, epic: 1.6, legend: 2 } as Record<Rarity, number>,
+  growth: 3,
+  /** 稀有度 → 三階寶箱 */
+  rewards: {
+    common: ['common', 'rare', 'epic'],
+    rare: ['rare', 'epic', 'epic'],
+    epic: ['rare', 'epic', 'legend'],
+    legend: ['epic', 'legend', 'legend'],
+  } as Record<Rarity, readonly [Rarity, Rarity, Rarity]>,
+} as const;
+
+/** 這座碑現在的三段門檻（progress = 關卡經過比例 0～1） */
+export function trialNeeds(rarity: Rarity, progress: number): [number, number, number] {
+  const m = TRIAL.needMult[rarity] * (1 + TRIAL.growth * Math.min(1, Math.max(0, progress)));
+  return [Math.round(TRIAL.baseNeeds[0] * m), Math.round(TRIAL.baseNeeds[1] * m), Math.round(TRIAL.baseNeeds[2] * m)];
+}

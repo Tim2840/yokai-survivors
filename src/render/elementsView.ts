@@ -3,7 +3,7 @@ import { palette } from '../art/palette';
 import { glow, soft } from '../art/materials';
 import { ball, roundedCylinder, teardrop } from '../art/shapes';
 import { RARITIES, type Rarity } from '../data/rarity';
-import { BARRIER_RADIUS, ELEMENT_RULES, FOX } from '../data/elements';
+import { BARRIER_RADIUS, ELEMENT_RULES, FOX, TRIAL } from '../data/elements';
 import type { ElementSlot, Elements } from '../systems/elements';
 import type { TerrainMap } from '../world/terrainMap';
 
@@ -25,6 +25,8 @@ interface SlotView {
   fuseOrbs: THREE.Mesh[];
   dosojin: THREE.Group;
   dosojinLight: THREE.Mesh;
+  trial: THREE.Group;
+  trialOrb: THREE.Mesh;
   orb: THREE.Mesh;
   fox: THREE.Group;
   foxRings: THREE.Mesh[];
@@ -41,6 +43,7 @@ interface SlotView {
   /** 上一次建立結界圈時的位置（變了才重算頂點） */
   zx: number;
   zz: number;
+  zr: number;
 }
 
 /** 地圖要素的外觀（石地藏、結界石、詛咒祭壇）：只讀 Elements.slots，每幀不配置 */
@@ -241,6 +244,17 @@ export class ElementsView {
       const dosojinLight = new THREE.Mesh(gDLight, dLight);
       dosojinLight.position.y = 2.1;
       dosojin.add(dosojinLight);
+      // 百鬼試煉碑（E1）：圓石台＋黑石碑＋纏著的注連繩＋頂上一顆赤紅的魂火
+      const trial = new THREE.Group();
+      const tBase = new THREE.Mesh(gAltarBase, stoneDark);
+      const tPillar = new THREE.Mesh(gPillar, stoneDark);
+      tPillar.position.y = 0.3;
+      const tRope = new THREE.Mesh(gRope, rope);
+      tRope.position.y = 1.2;
+      tRope.scale.set(1.15, 1, 1.15);
+      const trialOrb = new THREE.Mesh(gOrb, ember);
+      trialOrb.position.y = 2.7;
+      trial.add(tBase, tPillar, tRope, trialOrb);
       const fox = new THREE.Group();
       const fRobe = new THREE.Mesh(gRobe, robe);
       const fHead = new THREE.Mesh(gFoxHead, robe);
@@ -295,20 +309,20 @@ export class ElementsView {
       zone.renderOrder = 2;
       zone.visible = false;
       this.disposables.push(ringMat, fillMat, beamMat, zg, zoneMat);
-      root.add(jizo, barrier, altar, offering, omikuji, chest, summon, fuse, dosojin, fox, ...foxRings, ...foxFills, ring, fill, beam);
+      root.add(jizo, barrier, altar, offering, omikuji, chest, summon, fuse, dosojin, trial, fox, ...foxRings, ...foxFills, ring, fill, beam);
       root.visible = false;
       this.group.add(root, zone);
-      this.views.push({ root, jizo, barrier, altar, offering, omikuji, chest, summon, orb, fuse, fuseOrbs, dosojin, dosojinLight, fox, foxRings, foxFills, beam, beamMat, ring, ringMat, fill, fillMat, zone, zoneMat, flame, zx: NaN, zz: NaN });
+      this.views.push({ root, jizo, barrier, altar, offering, omikuji, chest, summon, orb, fuse, fuseOrbs, dosojin, dosojinLight, trial, trialOrb, fox, foxRings, foxFills, beam, beamMat, ring, ringMat, fill, fillMat, zone, zoneMat, flame, zx: NaN, zz: NaN, zr: NaN });
     }
   }
 
-  private buildZone(v: SlotView, s: ElementSlot): void {
+  private buildZone(v: SlotView, s: ElementSlot, radius: number): void {
     const att = v.zone.geometry.getAttribute('position') as THREE.BufferAttribute;
     const arr = att.array as Float32Array;
     for (let k = 0; k <= SEG; k++) {
       const a = (k / SEG) * Math.PI * 2;
       for (let side = 0; side < 2; side++) {
-        const r = side === 0 ? BARRIER_RADIUS - 0.14 : BARRIER_RADIUS;
+        const r = side === 0 ? radius - 0.14 : radius;
         const x = s.x + Math.cos(a) * r;
         const z = s.z + Math.sin(a) * r;
         const o = (k * 2 + side) * 3;
@@ -320,6 +334,7 @@ export class ElementsView {
     att.needsUpdate = true;
     v.zx = s.x;
     v.zz = s.z;
+    v.zr = radius;
   }
 
   update(t: number): void {
@@ -343,6 +358,7 @@ export class ElementsView {
       v.summon.visible = s.kind === 'summon';
       v.fuse.visible = s.kind === 'fuse';
       v.dosojin.visible = s.kind === 'dosojin';
+      v.trial.visible = s.kind === 'trial';
       v.fox.visible = s.kind === 'fox';
       v.ringMat.color.copy(c);
       v.fillMat.color.copy(c);
@@ -362,6 +378,7 @@ export class ElementsView {
       v.summon.scale.setScalar(g);
       v.fuse.scale.setScalar(g);
       v.dosojin.scale.setScalar(g);
+      v.trial.scale.setScalar(g);
       if (s.kind === 'dosojin') v.dosojinLight.position.y = 2.1 + Math.sin(t * 1.8) * 0.1 + s.progress * 0.3;
       if (s.kind === 'fuse') {
         for (let k = 0; k < v.fuseOrbs.length; k++) {
@@ -395,15 +412,26 @@ export class ElementsView {
       v.beamMat.opacity = (ann ? 0.26 : 0.08 + 0.03 * Math.sin(t * 2 + i)) * fade;
       // 結界石的環是範圍；狐面商用自己的兩個圈；其他是互動圈
       const isBarrier = s.kind === 'barrier';
-      const ownRing = !isBarrier && s.kind !== 'fox' && !ann;
+      const ownRing = !isBarrier && s.kind !== 'fox' && !ann && !(s.kind === 'trial' && this.elements.trial.active);
       v.ring.visible = ownRing;
       v.fill.visible = ownRing;
       v.fill.scale.setScalar(Math.max(0.001, s.progress * g));
-      v.zone.visible = isBarrier && !ann;
+      const trialOn = s.kind === 'trial' && this.elements.trial.active && this.elements.trial.slot === i;
+      v.zone.visible = (isBarrier || trialOn) && !ann;
       if (isBarrier) {
-        if (v.zx !== s.x || v.zz !== s.z) this.buildZone(v, s);
+        if (v.zx !== s.x || v.zz !== s.z || v.zr !== BARRIER_RADIUS) this.buildZone(v, s, BARRIER_RADIUS);
         v.zoneMat.color.copy(c);
         v.zoneMat.opacity = (s.inside ? 0.6 : 0.34) * fade;
+      }
+      if (trialOn) {
+        // 試煉的範圍圈：朱紅色，快沒時間時閃一下
+        if (v.zx !== s.x || v.zz !== s.z || v.zr !== TRIAL.radius) this.buildZone(v, s, TRIAL.radius);
+        v.zoneMat.color.set('#ff5a3c');
+        v.zoneMat.opacity = (0.4 + (this.elements.trial.left < 5 ? 0.25 * Math.sin(t * 10) : 0)) * fade;
+      }
+      if (s.kind === 'trial') {
+        v.trialOrb.position.y = 2.7 + Math.sin(t * 2.4) * 0.12;
+        v.trialOrb.scale.setScalar(trialOn ? 1.3 + 0.15 * Math.sin(t * 8) : 1);
       }
       if (s.kind === 'summon') {
         v.orb.position.y = 1.2 + Math.sin(t * 2.2) * 0.12;

@@ -26,6 +26,8 @@ import {
   FOX,
   FUSE,
   DOSOJIN,
+  TRIAL,
+  trialNeeds,
   OFFERING,
   OFFERING_HOLD_SECONDS,
   OMIKUJI_EFFECT,
@@ -116,7 +118,7 @@ export interface AltarEffect {
 
 const USED_FADE = 0.7;
 /** 各要素按住幾秒（結界石不用按住） */
-const HOLD: Partial<Record<ElementKind, number>> = { jizo: JIZO_HOLD_SECONDS, altar: ALTAR_HOLD_SECONDS, offering: OFFERING_HOLD_SECONDS, omikuji: OMIKUJI_HOLD_SECONDS, chest: CHEST_HOLD_SECONDS, summon: STAGE.summon.holdSeconds, fuse: FUSE.holdSeconds, dosojin: DOSOJIN.holdSeconds };
+const HOLD: Partial<Record<ElementKind, number>> = { trial: TRIAL.holdSeconds, jizo: JIZO_HOLD_SECONDS, altar: ALTAR_HOLD_SECONDS, offering: OFFERING_HOLD_SECONDS, omikuji: OMIKUJI_HOLD_SECONDS, chest: CHEST_HOLD_SECONDS, summon: STAGE.summon.holdSeconds, fuse: FUSE.holdSeconds, dosojin: DOSOJIN.holdSeconds };
 
 function blankSlot(): ElementSlot {
   const n = FOX.offers;
@@ -145,11 +147,15 @@ export class Elements {
   focus: ElementSlot | null = null;
   /** 玩家在結界圈內時，敵人湧出速率的倍率（給 StageDirector） */
   spawnMult = 1;
+  /** 百鬼試煉碑（E1）：進行中的試煉（一次只有一場）。kills 只算倒在圈內的 */
+  readonly trial = { active: false, slot: -1, x: 0, z: 0, left: 0, kills: 0, tier: -1, needs: [0, 0, 0] as number[], rewards: ['common', 'rare', 'epic'] as Rarity[] };
   private nextDrop = 0;
   private drops = 0;
   private readonly timed: { key: string; until: number; curse?: boolean }[] = [];
   private luck = 0;
   private clock = 0;
+  /** 關卡經過比例 0～1（試煉門檻用） */
+  private progress = 0;
 
   constructor(
     private readonly rng: Rng,
@@ -167,6 +173,7 @@ export class Elements {
     }
     this.focus = null;
     this.spawnMult = 1;
+    this.trial.active = false;
     this.drops = 0;
     this.nextDrop = ELEMENT_RULES.everyFrac * duration;
     this.clearAllMods();
@@ -178,6 +185,7 @@ export class Elements {
     this.clearAllMods();
     for (const s of this.slots) s.active = false;
     this.spawnMult = 1;
+    this.trial.active = false;
     this.focus = null;
   }
 
@@ -205,6 +213,7 @@ export class Elements {
 
   update(dt: number, t: number, duration: number, virtualWave: number, luck: number, px: number, py: number, pz: number): void {
     this.clock = t;
+    this.progress = duration > 0 ? t / duration : 0;
     this.luck = luck;
     // 限時效果到期
     for (let i = this.timed.length - 1; i >= 0; i--) {
@@ -234,6 +243,12 @@ export class Elements {
       }
       if (s.announce > 0) {
         s.announce -= dt;
+        continue;
+      }
+      if (s.kind === 'trial' && this.trial.active && this.trial.slot === i) {
+        // 試煉進行中：計時、不會被收掉；時間到結算
+        this.updateTrial(i, dt);
+        if (this.trial.active) mult = Math.max(mult, TRIAL.spawnMult);
         continue;
       }
       s.life -= dt;
@@ -408,6 +423,9 @@ export class Elements {
       this.host.openPick(s.rarity, 1, 'chest');
     } else if (s.kind === 'fuse') {
       this.host.openPick(s.rarity, 1, 'fusion');
+    } else if (s.kind === 'trial') {
+      this.startTrial(i);
+      return; // 碑留在原地到試煉結束才收掉
     } else if (s.kind === 'dosojin') {
       this.host.rechooseVariant();
     } else if (s.kind === 'omikuji') lines.push(...this.drawOmikuji(s));
@@ -419,6 +437,49 @@ export class Elements {
     s.progress = 1;
     this.host.emitUsed(s.kind, s.rarity);
     if (lines.length > 0) this.host.showResult({ kind: s.kind, rarity: s.rarity, lines });
+  }
+
+  /** 百鬼試煉碑：開始一場試煉 */
+  private startTrial(i: number): void {
+    const s = this.slots[i];
+    const t = this.trial;
+    t.active = true;
+    t.slot = i;
+    t.x = s.x;
+    t.z = s.z;
+    t.left = TRIAL.seconds;
+    t.kills = 0;
+    t.tier = -1;
+    t.needs = trialNeeds(s.rarity, this.progress);
+    t.rewards = [...TRIAL.rewards[s.rarity]];
+    s.life = Infinity;
+    s.progress = 1;
+    this.host.emitUsed('trial', s.rarity);
+  }
+
+  /** 試煉計時；時間到：依打倒的數量給寶箱（沒達到第 1 段什麼都沒有），顯示結果卡，碑消失 */
+  private updateTrial(i: number, dt: number): void {
+    const t = this.trial;
+    const s = this.slots[i];
+    t.left -= dt;
+    let tier = -1;
+    for (let k = 0; k < 3; k++) if (t.kills >= t.needs[k]) tier = k;
+    t.tier = tier;
+    if (t.left > 0) return;
+    t.active = false;
+    t.left = 0;
+    const reward = t.rewards[Math.max(0, tier)];
+    if (tier >= 0) this.dropChest(t.x, t.z, reward);
+    s.usedAge = 0;
+    s.progress = 1;
+    this.host.showResult({ kind: 'trial', rarity: s.rarity, lines: [{ t: 'trial', kills: t.kills, tier, reward }] });
+  }
+
+  /** 人類被打倒（Run.onKill 呼叫）：倒在試煉圈內的才算 */
+  noteKill(x: number, z: number): void {
+    const t = this.trial;
+    if (!t.active) return;
+    if (Math.hypot(x - t.x, z - t.z) <= TRIAL.radius) t.kills++;
   }
 
   /** 神籤：依稀有度與幸運抽結果（幸運把凶類權重乘以 1/(1+luck/100)），套用限時效果 */

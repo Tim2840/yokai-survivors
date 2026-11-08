@@ -95,6 +95,7 @@ export function installDevApi(ctx: DevContext): void {
         picked: r.picked.length,
         stats: { ...r.stats.value },
         elements: r.elements.slots.filter((s) => s.active).map((s) => ({ kind: s.kind, rarity: s.rarity, x: s.x, y: s.y, z: s.z, announce: s.announce, progress: s.progress, used: s.usedAge >= 0, effects: s.effects.slice(0, s.effectCount).map((f) => ({ ...f })), offers: [...s.offers], rings: s.offers.map((_, k) => ({ x: s.ringX[k], z: s.ringZ[k], progress: s.ringProgress[k], blocked: s.ringBlocked[k] })) })),
+        trial: { ...r.elements.trial, needs: [...r.elements.trial.needs] },
         curse: { ...r.curse },
         ult: { equipped: [...r.ults], mods: { ...r.ultModsView }, charge: r.ultCharge, ready: r.ultReady, counts: Object.fromEntries(r.cardCounts), volleyBonus: r.volleyBonus },
         difficulty: r.difficulty,

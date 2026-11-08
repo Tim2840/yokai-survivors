@@ -8,7 +8,7 @@ import type { ElementSlot } from '../systems/elements';
 import { ULT } from '../data/ultimates';
 import { STAGE } from '../data/stage';
 import { PICKUPS } from '../data/pickups';
-import { BARRIER, DOSOJIN, JIZO, JIZO_ARMOR_SECONDS, OFFERING } from '../data/elements';
+import { BARRIER, DOSOJIN, TRIAL, JIZO, JIZO_ARMOR_SECONDS, OFFERING, trialNeeds } from '../data/elements';
 
 
 /**
@@ -43,6 +43,7 @@ export function buildHud(parent: HTMLElement): Hud {
     </div>
     <div class="hud-boss hidden" id="boss-bar"><span>${t('hud.boss')}</span><div class="bar"><i id="boss-fill"></i></div></div>
     <div class="hud-element hidden" id="element-box"><b id="element-title"></b><span id="element-desc"></span><div class="bar"><i id="element-fill"></i></div><em id="element-act"></em></div>
+    <div class="hud-trial hidden" id="trial-box"></div>
     <div class="hud-synergy hidden" id="synergy-box"></div>
     <div class="hud-portal hidden" id="portal-box"><b id="portal-arrow">▲</b><span id="portal-text"></span></div>
     <div class="hud-bottom">
@@ -75,6 +76,8 @@ export function buildHud(parent: HTMLElement): Hud {
   const ultKey = q('ult-key');
   let lastUlt = '';
   const synBox = q('synergy-box');
+  const trialBox = q('trial-box');
+  let lastTrial = '';
   let lastSyn = '';
   let lastEl = '';
   const xpFill = q('xp-fill');
@@ -187,6 +190,14 @@ export function buildHud(parent: HTMLElement): Hud {
         synAt = ev.at;
         synText = t('hud.evolve', { name: t(`evo.${ev.id}` as I18nKey) });
       }
+      // 百鬼試煉碑（E1）：進行中顯示打倒數與剩餘秒數（每秒或數字變了才改字）
+      const tr = run.elements.trial;
+      const trText = tr.active ? t('hud.trial', { k: tr.kills, n: tr.needs.find((x) => x > tr.kills) ?? tr.needs[2], s: Math.ceil(tr.left) }) : '';
+      if (trText !== lastTrial) {
+        lastTrial = trText;
+        trialBox.textContent = trText;
+        trialBox.classList.toggle('hidden', trText === '');
+      }
       // 大招鈕：有裝配大招才顯示；量表滿了會發亮
       const hasUlt = run.ults.length > 0;
       // 冷卻中：鈕上顯示倒數秒數（D：大招冷卻）
@@ -221,7 +232,7 @@ export function buildHud(parent: HTMLElement): Hud {
           elBox.classList.remove('hidden');
           elBox.dataset.rarity = f.rarity;
           elTitle.textContent = `${t(`rarity.${f.rarity}`)}・${t(`element.${f.kind}`)}`;
-          elDesc.textContent = f.kind === 'summon' ? t('element.summon.desc', { mult: mult.toFixed(1) }) : f.kind === 'fox' ? describeFox(f, run.cardCounts) : f.kind === 'fuse' ? t(f.blocked ? 'element.fuse.none' : 'element.fuse.desc') : f.kind === 'dosojin' ? t('element.dosojin.desc') : describeElement(f);
+          elDesc.textContent = f.kind === 'summon' ? t('element.summon.desc', { mult: mult.toFixed(1) }) : f.kind === 'fox' ? describeFox(f, run.cardCounts) : f.kind === 'fuse' ? t(f.blocked ? 'element.fuse.none' : 'element.fuse.desc') : f.kind === 'dosojin' ? t('element.dosojin.desc') : f.kind === 'trial' ? trialHint(f.rarity, run.time / run.director.duration) : describeElement(f);
           elAct.textContent = f.kind === 'barrier' ? t('element.stand') : f.kind === 'fox' ? t('element.fox.act') : t('element.hold');
         }
         elFill.style.width = `${f.kind === 'barrier' ? (f.inside ? 100 : 0) : Math.round(f.progress * 100)}%`;
@@ -258,6 +269,13 @@ function summonMultNow(run: Run): number {
 }
 
 /** 要素的效果說明（數字全部來自資料表） */
+/** 試煉碑的提示：玩法＋現在的三段門檻與寶箱 */
+function trialHint(rarity: ElementSlot['rarity'], progress: number): string {
+  const n = trialNeeds(rarity, progress);
+  const r = TRIAL.rewards[rarity].map((x) => t(`rarity.${x}` as I18nKey));
+  return t('element.trial.desc', { s: TRIAL.seconds }) + t('element.trial.hint', { a: n[0], b: n[1], c: n[2], r1: r[0], r2: r[1], r3: r[2] });
+}
+
 function describeElement(f: ElementSlot): string {
   if (f.kind === 'jizo') {
     const j = JIZO[f.rarity];

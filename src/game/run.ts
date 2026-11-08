@@ -777,6 +777,7 @@ export class Run {
     const isBoss = this.enemies.variant[e] === 2;
     const isElite = this.enemies.variant[e] === 1;
     if (!this.orbs.spawn(x, z, value)) this.addXp(value);
+    this.elements.noteKill(x, z);
     this.enemies.kill(e);
     if (isBoss) {
       // 寶箱與傳送門放在玩家走得到的地方（敵人會擠進玩家去不了的凹地；D34 試算時發現）

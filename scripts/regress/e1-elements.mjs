@@ -1,9 +1,9 @@
 // e1：地圖要素（M2-1）。真的走進去、按住不動：石地藏（護甲）、詛咒祭壇（一升一降）、結界石（圈內加成、走出去消失）。
 // D36：集滿後跳結果卡（模擬停住、列出拿到什麼、防誤觸、真的點「繼續」或按 Enter；同時升級時先結果卡再選卡）。
 // 要素用開發介面放到玩家身邊（隨機落下的位置不固定），其餘（走路、HUD 提示、效果）全用真實輸入與畫面。三種畫面各一次，卡住偵測。
-import { openPage, startRun, step, expect, shot, reportErrors, snapshotOf, walkOnto, VIEWPORTS } from './lib.mjs';
+import { openPage, startRun, step, expect, shot, reportErrors, snapshotOf, walkOnto, hudTopOk, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'e1', desc: '地圖要素：走近→提示→按住→結果卡（停住、列出拿到什麼、防誤觸、點繼續）→效果（石地藏、詛咒祭壇、結界石、賽錢箱、寶箱、神籤、狐面商走進紅圈收下）三種畫面', max: 600, stall: 60 };
+export const meta = { id: 'e1', desc: '地圖要素：走近→提示→按住→結果卡（停住、列出拿到什麼、防誤觸、點繼續）→效果（石地藏、詛咒祭壇、結界石、賽錢箱、寶箱、神籤、百鬼試煉碑、狐面商走進紅圈收下）三種畫面', max: 600, stall: 60 };
 
 const SIDES = [[0, 3, 'KeyW', 0, -1], [0, -3, 'KeyS', 0, 1], [-3, 0, 'KeyD', 1, 0], [3, 0, 'KeyA', -1, 0]];
 
@@ -203,7 +203,8 @@ export async function run(browser) {
       await step(`${vp.name} 狐面商：走近 → 提示寫出紅圈、藍圈兩個提案 → 真的走進紅圈站 1 秒 → 結果卡寫出拿到的取捨道具`, async () => {
         const spot = await page.evaluate(() => window.__game.forceElement('fox', 'rare'));
         expect(spot, `放不下狐面商（${vp.name}）`);
-        const fox = (await el()).find((e) => e.kind === 'fox');
+        // 自然落下的狐面商也可能在場：只看剛剛強制放的那一個（離 spot 最近的）
+        const fox = (await el()).filter((e) => e.kind === 'fox').sort((p, q) => Math.hypot(p.x - spot.x, p.z - spot.z) - Math.hypot(q.x - spot.x, q.z - spot.z))[0];
         expect(fox && fox.offers.length === 2 && fox.rings.length === 2, `狐面商的提案或圈不對：${JSON.stringify(fox)}`);
         // 先站到商人旁邊看提示
         await page.evaluate(([x, z]) => { window.__game.teleport(x + 0.5, z); window.__game.advance(0.2); window.__game.render(); }, [spot.x, spot.z]);
@@ -232,6 +233,49 @@ export async function run(browser) {
         expect(after === before + 1, `紅圈的道具沒有升一級：${before} → ${after}`);
         await leave(spot);
       }, 60);
+
+      // 試煉要跑 30 秒、期間升級選卡會把道具欄填滿，所以放在狐面商（要有空欄位）之後
+      await step(`${vp.name} 百鬼試煉碑：走近 → 提示寫出三段門檻與寶箱 → 按住啟動 → HUD 倒數與打倒數 → 放大招打倒的算進去 → 時間到結果卡寫出成績與寶箱`, async () => {
+        const spot = await approach('trial', 'rare');
+        await page.evaluate(() => { window.__game.advance(0.2); window.__game.render(); });
+        const title = await page.locator('#element-title').innerText();
+        expect(title === '良・百鬼試煉碑', `提示標題不對：${title}`);
+        const desc = await page.locator('#element-desc').innerText();
+        const m = /打倒 (\d+)／(\d+)／(\d+) 隻/.exec(desc);
+        expect(/按住開始/.test(desc) && m && +m[1] < +m[2] && +m[2] < +m[3] && +m[1] >= 75, `提示沒寫出門檻（良階碑第 1 段至少 75 隻）：${desc}`);
+        const need0 = +m[1];
+        for (let i = 0; i < 12 && !(await page.evaluate(() => window.__game.run.trial.active)); i++) await page.evaluate(() => window.__game.advance(0.25));
+        expect(await page.evaluate(() => window.__game.run.trial.active), `按住之後試煉沒有開始（${vp.name}）`);
+        await page.evaluate(() => { window.__game.advance(0.3); window.__game.render(); });
+        expect(await page.locator('#trial-box').isVisible(), `試煉中沒有 HUD 倒數（${vp.name}）`);
+        const box0 = await page.locator('#trial-box').innerText();
+        const mb = /^試煉 \d+／(\d+)・剩 \d+ 秒$/.exec(box0);
+        expect(mb && +mb[1] >= need0 && +mb[1] <= need0 + 3, `HUD 文字不對（第 1 段約 ${need0}）：${box0}`);
+        await hudTopOk(ctx, '・試煉中');
+        files.push(await shot(ctx, 'e1-trial'));
+        // 圈內放人、放大招打倒 → 數字增加
+        await page.evaluate(() => { window.__game.spawn('villager', 10); window.__game.chargeUlt(); window.__game.advance(0.1); });
+        if (!vp.hasTouch) await page.keyboard.press('KeyF');
+        else await page.locator('#btn-ult').click();
+        await page.evaluate(() => { window.__game.advance(0.3); window.__game.render(); });
+        const k = await page.evaluate(() => window.__game.run.trial.kills);
+        expect(k > 0, `打倒的人類沒有算進試煉：${k}`);
+        const box1 = await page.locator('#trial-box').innerText();
+        expect(new RegExp(`^試煉 ${k}／`).test(box1), `HUD 沒跟著更新：${box1}（kills ${k}）`);
+        // 跑到時間結束
+        for (let i = 0; i < 40 && !(await screens()).includes('result'); i++) {
+          await page.evaluate(() => window.__game.advance(1));
+          await dismiss();
+        }
+        const card = await waitResult('試煉碑');
+        expect(card.title === '良・百鬼試煉碑', `結果卡標題不對：${card.title}`);
+        expect(card.lines[0].t === 'trial' && /打倒 \d+ 隻/.test(card.lines[0].text) && /寶箱|什麼都沒有/.test(card.lines[0].text), `試煉結果文字不對：${JSON.stringify(card.lines)}`);
+        files.push(await shot(ctx, 'e1-trial-result'));
+        await closeResult();
+        await dismiss();
+        expect(!(await page.locator('#trial-box').isVisible()), `試煉結束 HUD 還在（${vp.name}）`);
+        await leave(spot);
+      }, 90);
 
       await step(`${vp.name} 結果卡防誤觸：剛出現的 0.4 秒內點「繼續」不會關`, async () => {
         const spot = await page.evaluate(() => window.__game.forceElement('jizo', 'common'));
