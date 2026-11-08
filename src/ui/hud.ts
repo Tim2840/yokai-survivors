@@ -8,7 +8,7 @@ import type { ElementSlot } from '../systems/elements';
 import { ULT } from '../data/ultimates';
 import { STAGE } from '../data/stage';
 import { PICKUPS } from '../data/pickups';
-import { BARRIER, DOSOJIN, TRIAL, JIZO, JIZO_ARMOR_SECONDS, OFFERING, trialNeeds } from '../data/elements';
+import { BARRIER, DOSOJIN, TRIAL, JIZO, JIZO_ARMOR_SECONDS, OFFERING, trialNeeds, SUMMIT } from '../data/elements';
 
 
 /**
@@ -125,10 +125,13 @@ export function buildHud(parent: HTMLElement): Hud {
       }
       const altar = run.elements.summonSlot;
       const shrine = run.elements.fuseSlot;
+      // 山頂神社（E2）：頭目出現前、還沒用過才指路；開局前 15 秒另外在頂端提示一次
+      const sslot = run.elements.summitSlot;
+      const summit = sslot && sslot.announce <= 0 && !run.director.bossSpawned ? sslot : null;
       // 道祖神（D47）：只在出現後 hintSeconds 秒內提示、指路（不想換的人不會一直被叫過去）
       const dslot = run.elements.dosojinSlot;
       const dosojin = dslot && dslot.announce <= 0 && dslot.age < DOSOJIN.hintSeconds ? dslot : null;
-      const noteText = run.director.swarm ? t('hud.swarm') : run.portal.active ? t('hud.bossDown') : altar ? t('hud.summonNote') : shrine ? t('hud.fuseNote') : dosojin ? t('hud.dosojinNote') : '';
+      const noteText = run.director.swarm ? t('hud.swarm') : run.portal.active ? t('hud.bossDown') : altar ? t('hud.summonNote') : shrine ? t('hud.fuseNote') : dosojin ? t('hud.dosojinNote') : summit && run.time < 15 ? t('hud.summitNote') : '';
       if (noteText !== lastNote) {
         lastNote = noteText;
         note.textContent = noteText;
@@ -144,10 +147,10 @@ export function buildHud(parent: HTMLElement): Hud {
       if (bossAlive) bossFill.style.width = `${Math.max(0, run.enemies.hp[bi] / run.enemies.maxHp[bi]) * 100}%`;
       // 傳送門箭頭：相對鏡頭的方向與距離
       // 傳送門優先；還沒開的召喚祭壇也用同一個箭頭（D34）
-      // 箭頭：傳送門 > 召喚祭壇 > 合魂祠 > 道祖神；走到旁邊就不顯示
+      // 箭頭：傳送門 > 召喚祭壇 > 合魂祠 > 道祖神 > 山頂神社；走到旁邊就不顯示
       const near = (e: { x: number; z: number; announce: number } | null) => !!e && e.announce <= 0 && Math.hypot(e.x - run.px, e.z - run.pz) > ALTAR_ARROW_HIDE;
-      const arrowKind = run.portal.active ? 'portal' : near(altar) ? 'summon' : near(shrine) ? 'fuse' : near(dosojin) ? 'dosojin' : '';
-      const target = arrowKind === 'portal' ? run.portal : arrowKind === 'summon' ? altar : arrowKind === 'fuse' ? shrine : arrowKind === 'dosojin' ? dosojin : null;
+      const arrowKind = run.portal.active ? 'portal' : near(altar) ? 'summon' : near(shrine) ? 'fuse' : near(dosojin) ? 'dosojin' : near(summit) ? 'summit' : '';
+      const target = arrowKind === 'portal' ? run.portal : arrowKind === 'summon' ? altar : arrowKind === 'fuse' ? shrine : arrowKind === 'dosojin' ? dosojin : arrowKind === 'summit' ? summit : null;
       if (target) {
         portalBox.classList.remove('hidden');
         portalBox.dataset.kind = arrowKind;
@@ -156,11 +159,11 @@ export function buildHud(parent: HTMLElement): Hud {
         const right = Math.cos(yaw) * dx - Math.sin(yaw) * dz;
         const fwd = -Math.sin(yaw) * dx - Math.cos(yaw) * dz;
         portalArrow.style.transform = `rotate(${Math.round((Math.atan2(right, fwd) * 180) / Math.PI)}deg)`;
-        const kindNo = arrowKind === 'portal' ? 0 : arrowKind === 'summon' ? 1 : arrowKind === 'fuse' ? 2 : 3;
-        const m = Math.round(Math.hypot(dx, dz)) * 4 + kindNo;
+        const kindNo = arrowKind === 'portal' ? 0 : arrowKind === 'summon' ? 1 : arrowKind === 'fuse' ? 2 : arrowKind === 'dosojin' ? 3 : 4;
+        const m = Math.round(Math.hypot(dx, dz)) * 8 + kindNo; // 低 3 位放種類、其餘是公尺數（種類最多 8 種）
         if (m !== lastPortal) {
           lastPortal = m;
-          portalText.textContent = t((['hud.portal', 'hud.summon', 'hud.fuse', 'hud.dosojin'] as const)[kindNo], { m: m >> 2 });
+          portalText.textContent = t((['hud.portal', 'hud.summon', 'hud.fuse', 'hud.dosojin', 'hud.summit'] as const)[kindNo], { m: m >> 3 });
         }
       } else if (lastPortal !== -1) {
         lastPortal = -1;
@@ -232,7 +235,7 @@ export function buildHud(parent: HTMLElement): Hud {
           elBox.classList.remove('hidden');
           elBox.dataset.rarity = f.rarity;
           elTitle.textContent = `${t(`rarity.${f.rarity}`)}・${t(`element.${f.kind}`)}`;
-          elDesc.textContent = f.kind === 'summon' ? t('element.summon.desc', { mult: mult.toFixed(1) }) : f.kind === 'fox' ? describeFox(f, run.cardCounts) : f.kind === 'fuse' ? t(f.blocked ? 'element.fuse.none' : 'element.fuse.desc') : f.kind === 'dosojin' ? t('element.dosojin.desc') : f.kind === 'trial' ? trialHint(f.rarity, run.time / run.director.duration) : describeElement(f);
+          elDesc.textContent = f.kind === 'summon' ? t('element.summon.desc', { mult: mult.toFixed(1) }) : f.kind === 'fox' ? describeFox(f, run.cardCounts) : f.kind === 'fuse' ? t(f.blocked ? 'element.fuse.none' : 'element.fuse.desc') : f.kind === 'dosojin' ? t('element.dosojin.desc') : f.kind === 'summit' ? t(f.blocked ? 'element.summit.none' : 'element.summit.desc', { m: SUMMIT.bossMult, n: SUMMIT.extraChests }) : f.kind === 'trial' ? trialHint(f.rarity, run.time / run.director.duration) : describeElement(f);
           elAct.textContent = f.kind === 'barrier' ? t('element.stand') : f.kind === 'fox' ? t('element.fox.act') : t('element.hold');
         }
         elFill.style.width = `${f.kind === 'barrier' ? (f.inside ? 100 : 0) : Math.round(f.progress * 100)}%`;

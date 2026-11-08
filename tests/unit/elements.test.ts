@@ -58,7 +58,7 @@ function stubElements(seed: number) {
   const stats = new Stats();
   const start = map.def.playerStart;
   flow.update(start.x, start.z, true);
-  const el = new Elements(new Rng(seed), map, flow, { stats, healFrac: () => 0, canPayHpFrac: () => true, payHpFrac: () => {}, openPick: () => {}, addMerit: () => {}, notifyOmikuji: () => {}, setCurse: () => {}, clearCurse: () => {}, emitSpawn: () => {}, emitUsed: () => {}, summonBoss: () => 0, showResult: () => {}, foxCandidates: () => TRADE_ITEMS, canTakeItem: () => true, grantItem: () => 1 });
+  const el = new Elements(new Rng(seed), map, flow, { stats, healFrac: () => 0, canPayHpFrac: () => true, payHpFrac: () => {}, openPick: () => {}, addMerit: () => {}, notifyOmikuji: () => {}, setCurse: () => {}, clearCurse: () => {}, emitSpawn: () => {}, emitUsed: () => {}, canFuse: () => false, walkable: () => true, canSummit: () => true, activateSummit: () => ({ mult: 1, chests: 0 }), summonBoss: () => 0, showResult: () => {}, foxCandidates: () => TRADE_ITEMS, canTakeItem: () => true, grantItem: () => 1 });
   return { map, flow, stats, el, start };
 }
 

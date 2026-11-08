@@ -37,6 +37,8 @@ export interface GameEvents {
   /** 地圖要素落下／被用掉／消失（低頻） */
   /** 合魂祠出現了、可以進化了、進化成功（低頻，D53） */
   fuseShrine: { stage: number };
+  /** 山頂神社啟動了（E2） */
+  summit: { stage: number; mult: number; chests: number };
   evolveReady: { id: string };
   evolve: { id: string };
   /** 大招發動（低頻） */

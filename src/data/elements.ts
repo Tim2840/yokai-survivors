@@ -1,7 +1,7 @@
 import type { Rarity } from './rarity';
 
 /** 地圖要素（docs/02 第 6 節）。M2 先做石地藏、結界石、詛咒祭壇；其餘隨後加入。 */
-export const ELEMENT_KINDS = ['jizo', 'barrier', 'altar', 'offering', 'omikuji', 'chest', 'summon', 'fox', 'fuse', 'dosojin', 'trial'] as const;
+export const ELEMENT_KINDS = ['jizo', 'barrier', 'altar', 'offering', 'omikuji', 'chest', 'summon', 'fox', 'fuse', 'dosojin', 'trial', 'summit'] as const;
 export type ElementKind = (typeof ELEMENT_KINDS)[number];
 
 /** 出現規則（docs/02 第 6.3 節，改成連續關卡：用「關卡經過比例」取代「整備」） */
@@ -30,9 +30,9 @@ export const ELEMENT_RULES = {
 } as const;
 
 /** 要素種類權重（地圖可覆寫） */
-export const ELEMENT_WEIGHTS: Record<ElementKind, number> = { jizo: 1, barrier: 1, altar: 1, offering: 1, omikuji: 1, chest: 0.6, summon: 0, fox: 0.8, fuse: 0, dosojin: 0, trial: 0.8 };
+export const ELEMENT_WEIGHTS: Record<ElementKind, number> = { jizo: 1, barrier: 1, altar: 1, offering: 1, omikuji: 1, chest: 0.6, summon: 0, fox: 0.8, fuse: 0, dosojin: 0, trial: 0.8, summit: 0 };
 /** 同種同時最多幾個（沒寫的用 ELEMENT_RULES.perKind） */
-export const ELEMENT_PER_KIND: Partial<Record<ElementKind, number>> = { chest: 1, omikuji: 1, summon: 1, fox: 1, fuse: 1, dosojin: 1, trial: 1 };
+export const ELEMENT_PER_KIND: Partial<Record<ElementKind, number>> = { chest: 1, omikuji: 1, summon: 1, fox: 1, fuse: 1, dosojin: 1, trial: 1, summit: 1 };
 
 /** 稀有度權重（依虛擬波數；docs/02 第 6.3 節）。波數落在哪一列取最後一個 from <= n */
 export const ELEMENT_RARITY_BY_WAVE: readonly { from: number; w: Record<Rarity, number> }[] = [
@@ -160,3 +160,13 @@ export function trialNeeds(rarity: Rarity, progress: number): [number, number, n
   const m = TRIAL.needMult[rarity] * (1 + TRIAL.growth * Math.min(1, Math.max(0, progress)));
   return [Math.round(TRIAL.baseNeeds[0] * m), Math.round(TRIAL.baseNeeds[1] * m), Math.round(TRIAL.baseNeeds[2] * m)];
 }
+
+/**
+ * 用地形（E2，docs/15 第 10.4 節；參考 RoR2 的山之神殿＋我們獨有的 3D 台地）：
+ * ① 一部分落下的要素放在**高處**：比玩家現在的位置高 minRise 公尺以上、而且走得到（要沿坡繞上去或跳上去），機率 chance；找不到就放一般的地方。
+ * ② **山頂神社**：每關在地圖最高的、走得到的平地放一座（比出生點至少高 minRise 公尺才放）；站上去按住 holdSeconds 秒 →
+ * 這一關的**頭目生命 × bossMult**，但**打倒頭目多掉 extraChests 個寶箱**（和頭目的寶箱同階）。要在頭目出現前啟動。數字為起始提案，sim 校準。
+ */
+export const ELEVATED = { chance: 0.35, minRise: 2 } as const;
+export const SUMMIT = { holdSeconds: 2, bossMult: 1.5, extraChests: 1, minRise: 3, minFromStart: 12 } as const;
+

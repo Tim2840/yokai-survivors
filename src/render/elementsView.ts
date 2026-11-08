@@ -27,6 +27,8 @@ interface SlotView {
   dosojinLight: THREE.Mesh;
   trial: THREE.Group;
   trialOrb: THREE.Mesh;
+  summit: THREE.Group;
+  summitOrb: THREE.Mesh;
   orb: THREE.Mesh;
   fox: THREE.Group;
   foxRings: THREE.Mesh[];
@@ -244,6 +246,19 @@ export class ElementsView {
       const dosojinLight = new THREE.Mesh(gDLight, dLight);
       dosojinLight.position.y = 2.1;
       dosojin.add(dosojinLight);
+      // 山頂神社（E2）：小石台＋兩根朱紅柱＋橫樑＋金色魂火（比召喚祭壇小、顏色不同）
+      const summit = new THREE.Group();
+      summit.add(new THREE.Mesh(gPlat, stoneDark));
+      for (const side of [-1, 1]) {
+        const post = new THREE.Mesh(gToriiPost, torii);
+        post.position.set(side * 0.95, 0.3, 0);
+        summit.add(post);
+      }
+      const sTop = new THREE.Mesh(gToriiBeam, torii);
+      sTop.position.y = 2.55;
+      const summitOrb = new THREE.Mesh(gOrb, gold);
+      summitOrb.position.y = 1.4;
+      summit.add(sTop, summitOrb);
       // 百鬼試煉碑（E1）：圓石台＋黑石碑＋纏著的注連繩＋頂上一顆赤紅的魂火
       const trial = new THREE.Group();
       const tBase = new THREE.Mesh(gAltarBase, stoneDark);
@@ -309,10 +324,10 @@ export class ElementsView {
       zone.renderOrder = 2;
       zone.visible = false;
       this.disposables.push(ringMat, fillMat, beamMat, zg, zoneMat);
-      root.add(jizo, barrier, altar, offering, omikuji, chest, summon, fuse, dosojin, trial, fox, ...foxRings, ...foxFills, ring, fill, beam);
+      root.add(jizo, barrier, altar, offering, omikuji, chest, summon, fuse, dosojin, trial, summit, fox, ...foxRings, ...foxFills, ring, fill, beam);
       root.visible = false;
       this.group.add(root, zone);
-      this.views.push({ root, jizo, barrier, altar, offering, omikuji, chest, summon, orb, fuse, fuseOrbs, dosojin, dosojinLight, trial, trialOrb, fox, foxRings, foxFills, beam, beamMat, ring, ringMat, fill, fillMat, zone, zoneMat, flame, zx: NaN, zz: NaN, zr: NaN });
+      this.views.push({ root, jizo, barrier, altar, offering, omikuji, chest, summon, orb, fuse, fuseOrbs, dosojin, dosojinLight, trial, trialOrb, summit, summitOrb, fox, foxRings, foxFills, beam, beamMat, ring, ringMat, fill, fillMat, zone, zoneMat, flame, zx: NaN, zz: NaN, zr: NaN });
     }
   }
 
@@ -359,6 +374,7 @@ export class ElementsView {
       v.fuse.visible = s.kind === 'fuse';
       v.dosojin.visible = s.kind === 'dosojin';
       v.trial.visible = s.kind === 'trial';
+      v.summit.visible = s.kind === 'summit';
       v.fox.visible = s.kind === 'fox';
       v.ringMat.color.copy(c);
       v.fillMat.color.copy(c);
@@ -379,6 +395,7 @@ export class ElementsView {
       v.fuse.scale.setScalar(g);
       v.dosojin.scale.setScalar(g);
       v.trial.scale.setScalar(g);
+      v.summit.scale.setScalar(g);
       if (s.kind === 'dosojin') v.dosojinLight.position.y = 2.1 + Math.sin(t * 1.8) * 0.1 + s.progress * 0.3;
       if (s.kind === 'fuse') {
         for (let k = 0; k < v.fuseOrbs.length; k++) {
@@ -409,7 +426,7 @@ export class ElementsView {
         }
         v.fox.rotation.y = Math.atan2(mx, mz);
       }
-      v.beamMat.opacity = (ann ? 0.26 : 0.08 + 0.03 * Math.sin(t * 2 + i)) * fade;
+      v.beamMat.opacity = (ann ? 0.26 : (s.kind === 'summit' ? 0.2 : 0.08) + 0.03 * Math.sin(t * 2 + i)) * fade; // 山頂神社的光柱亮一點，遠遠看得到
       // 結界石的環是範圍；狐面商用自己的兩個圈；其他是互動圈
       const isBarrier = s.kind === 'barrier';
       const ownRing = !isBarrier && s.kind !== 'fox' && !ann && !(s.kind === 'trial' && this.elements.trial.active);
@@ -428,6 +445,10 @@ export class ElementsView {
         if (v.zx !== s.x || v.zz !== s.z || v.zr !== TRIAL.radius) this.buildZone(v, s, TRIAL.radius);
         v.zoneMat.color.set('#ff5a3c');
         v.zoneMat.opacity = (0.4 + (this.elements.trial.left < 5 ? 0.25 * Math.sin(t * 10) : 0)) * fade;
+      }
+      if (s.kind === 'summit') {
+        v.summitOrb.position.y = 1.4 + Math.sin(t * 2) * 0.15;
+        v.summitOrb.scale.setScalar(1 + s.progress * 0.8);
       }
       if (s.kind === 'trial') {
         v.trialOrb.position.y = 2.7 + Math.sin(t * 2.4) * 0.12;

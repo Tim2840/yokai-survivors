@@ -4,7 +4,7 @@ import { MOVE } from '../data/movement';
 import { PLAYABLE_YOKAI, YOKAI, type YokaiDef } from '../data/yokai';
 import { rollAffixes } from '../data/affixes';
 import { CARD_CHOICES, PROGRESSION, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
-import { DOSOJIN, FUSE } from '../data/elements';
+import { DOSOJIN, FUSE, SUMMIT } from '../data/elements';
 import { ITEM_POOL, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById, scaleWeaponStep } from '../data/items';
 import { EVO_CARD_PREFIX, TECH_CARD_PREFIX, TECH_KEEP, TECH_OFFER, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard } from '../data/techniques';
 import { Techniques } from './techniques';
@@ -326,6 +326,14 @@ export class Run {
       },
       openPick: (rarity, picks, kind) => this.openBonusPick(rarity, picks, kind),
       canFuse: () => this.hasEvolvable,
+      walkable: (x, z) => this.walkableFromPlayer(x, z),
+      canSummit: () => !this.director.bossSpawned,
+      activateSummit: () => {
+        this.director.summitMult = SUMMIT.bossMult;
+        this.summitChests = SUMMIT.extraChests;
+        this.bus.emit('summit', { stage: this.stageNumber, mult: SUMMIT.bossMult, chests: SUMMIT.extraChests });
+        return { mult: SUMMIT.bossMult, chests: SUMMIT.extraChests };
+      },
       addMerit: (n) => {
         this.bonusMerit += n;
       },
@@ -401,8 +409,10 @@ export class Run {
       hpMult: 1 + this.difficulty * DIFFICULTY.hp,
     });
     this.summonPlaced = false;
+    this.summitChests = 0;
     this.dosojinAt = this.tech.owned.length > 0 ? this.clock + DOSOJIN.appearDelay : Infinity;
     this.elements.start(this.px, this.pz, this.director.duration, this.director.virtualWave(), this.stats.value.luck);
+    this.elements.placeSummit(); // 山頂神社（E2）：每關一座，放在地圖最高的、走得到的平地
     this.fireCd = 0.3;
     this.bus.emit('stageStart', { stage: this.stageNumber });
   }
@@ -788,6 +798,11 @@ export class Run {
       // 寶箱離傳送門夠遠：走去開寶箱時不會先踩進傳送門過關
       this.reachableNear(sx, sz, sx, sz, STAGE.chestFromPortal);
       this.elements.dropChest(this.spot[0], this.spot[1], STAGE.drops.bossChest);
+      // 山頂神社（E2）：啟動過的話多掉幾個寶箱（同階）
+      for (let k = 0; k < this.summitChests; k++) {
+        this.reachableNear(sx + (k + 1) * 1.5, sz, sx, sz, STAGE.chestFromPortal);
+        this.elements.dropChest(this.spot[0], this.spot[1], STAGE.drops.bossChest);
+      }
     } else if (isElite && this.rngCombat.next() < STAGE.drops.eliteChestChance) {
       this.reachableNear(x, z);
       this.elements.dropChest(this.spot[0], this.spot[1], STAGE.drops.eliteChest);
@@ -859,6 +874,28 @@ export class Run {
   private readonly spot = new Float32Array(2);
   private reach: PlayerReach | null = null;
   private reachMap: TerrainMap | null = null;
+  /** 山頂神社啟動後：打倒頭目多掉幾個寶箱（每關重設） */
+  summitChests = 0;
+  private reachAt = -Infinity;
+  private reachX = 0;
+  private reachZ = 0;
+
+  /** 玩家用走的到不到得了 (x,z)（高處的要素、山頂神社用；同一刻同一個位置的結果共用，不重算） */
+  private walkableFromPlayer(x: number, z: number): boolean {
+    const m = this.map;
+    if (!this.reach || this.reachMap !== m) {
+      this.reach = new PlayerReach(m);
+      this.reachMap = m;
+      this.reachAt = -Infinity;
+    }
+    if (this.clock !== this.reachAt || this.reachX !== this.px || this.reachZ !== this.pz) {
+      this.reach.compute(this.px, this.pz);
+      this.reachAt = this.clock;
+      this.reachX = this.px;
+      this.reachZ = this.pz;
+    }
+    return this.reach.ok(x, z);
+  }
   /** (x,z) 附近玩家走得到、不擋路的位置（由近到遠找；可要求離 avoid 至少 minDist），寫進 this.spot；都找不到就放在玩家旁邊 */
   private reachableNear(x: number, z: number, avoidX = 0, avoidZ = 0, minDist = 0): void {
     const m = this.map;

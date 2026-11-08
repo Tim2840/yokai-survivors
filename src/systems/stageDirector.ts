@@ -54,6 +54,8 @@ export class StageDirector {
   autoBoss = true;
   /** 召喚越晚越強：召喚當下決定的倍率 */
   summonMult = 1;
+  /** 山頂神社（E2）啟動後：這一關頭目生命倍率（沒啟動 = 1） */
+  summitMult = 1;
 
   /** stage = 第幾關（0 起）；hpMult = 難度帶來的敵人生命倍率（含關卡）；bossMult = 大頭目倍率 */
   start(stage: number, bossMult = 1, opts: { autoBoss?: boolean; hpMult?: number } = {}): void {
@@ -62,6 +64,7 @@ export class StageDirector {
     this.bossMult = bossMult;
     this.autoBoss = opts.autoBoss ?? true;
     this.summonMult = 1;
+    this.summitMult = 1;
     this.time = 0;
     this.active = true;
     this.pending = 0;
@@ -124,7 +127,7 @@ export class StageDirector {
 
   private spawnOne(kind: number, variant: number, px: number, pz: number, night: number): number {
     if (!this.findSpot(px, pz)) return -1;
-    return this.enemies.spawn(kind, this.spot[0], this.spot[1], this.virtualWave(), night, this.rng.range(0, Math.PI * 2), variant, (variant === 2 ? this.stageMult * this.bossMult * this.summonMult : this.stageMult) * this.hpCurse);
+    return this.enemies.spawn(kind, this.spot[0], this.spot[1], this.virtualWave(), night, this.rng.range(0, Math.PI * 2), variant, (variant === 2 ? this.stageMult * this.bossMult * this.summonMult * this.summitMult : this.stageMult) * this.hpCurse);
   }
 
   update(dt: number, px: number, pz: number, night: number, bossDefeated: boolean): void {

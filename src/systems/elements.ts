@@ -28,6 +28,8 @@ import {
   DOSOJIN,
   TRIAL,
   trialNeeds,
+  ELEVATED,
+  SUMMIT,
   OFFERING,
   OFFERING_HOLD_SECONDS,
   OMIKUJI_EFFECT,
@@ -39,7 +41,7 @@ import {
 } from '../data/elements';
 
 /** 一定要放得下、不會被擠掉的特殊要素 */
-const SPECIAL: ReadonlySet<ElementKind> = new Set<ElementKind>(['summon', 'fuse', 'dosojin']);
+const SPECIAL: ReadonlySet<ElementKind> = new Set<ElementKind>(['summon', 'fuse', 'dosojin', 'summit']);
 
 /** 給要素系統用的「玩家端」介面：只做它需要的事，不讓它碰整個 Run */
 export interface ElementHost {
@@ -55,6 +57,11 @@ export interface ElementHost {
   openPick(rarity: Rarity, picks: number, kind: 'offering' | 'chest' | 'fusion'): void;
   /** 合魂祠：現在有沒有湊齊、還沒融合的大招 */
   canFuse(): boolean;
+  /** 玩家用走的到不到得了這裡（E2：高處的要素、山頂神社要走得到） */
+  walkable(x: number, z: number): boolean;
+  /** 山頂神社（E2）：現在能不能啟動（頭目出現前才行）、啟動：回傳這一關頭目生命倍率與多掉的寶箱數 */
+  canSummit(): boolean;
+  activateSummit(): { mult: number; chests: number };
   /** 道祖神（D47）：重新跳一次招式變化三選一 */
   rechooseVariant(): void;
   addMerit(n: number): void;
@@ -118,7 +125,7 @@ export interface AltarEffect {
 
 const USED_FADE = 0.7;
 /** 各要素按住幾秒（結界石不用按住） */
-const HOLD: Partial<Record<ElementKind, number>> = { trial: TRIAL.holdSeconds, jizo: JIZO_HOLD_SECONDS, altar: ALTAR_HOLD_SECONDS, offering: OFFERING_HOLD_SECONDS, omikuji: OMIKUJI_HOLD_SECONDS, chest: CHEST_HOLD_SECONDS, summon: STAGE.summon.holdSeconds, fuse: FUSE.holdSeconds, dosojin: DOSOJIN.holdSeconds };
+const HOLD: Partial<Record<ElementKind, number>> = { summit: SUMMIT.holdSeconds, trial: TRIAL.holdSeconds, jizo: JIZO_HOLD_SECONDS, altar: ALTAR_HOLD_SECONDS, offering: OFFERING_HOLD_SECONDS, omikuji: OMIKUJI_HOLD_SECONDS, chest: CHEST_HOLD_SECONDS, summon: STAGE.summon.holdSeconds, fuse: FUSE.holdSeconds, dosojin: DOSOJIN.holdSeconds };
 
 function blankSlot(): ElementSlot {
   const n = FOX.offers;
@@ -156,6 +163,8 @@ export class Elements {
   private clock = 0;
   /** 關卡經過比例 0～1（試煉門檻用） */
   private progress = 0;
+  /** 玩家現在的腳高（高處的要素要比這個高） */
+  private playerY = 0;
 
   constructor(
     private readonly rng: Rng,
@@ -214,6 +223,7 @@ export class Elements {
   update(dt: number, t: number, duration: number, virtualWave: number, luck: number, px: number, py: number, pz: number): void {
     this.clock = t;
     this.progress = duration > 0 ? t / duration : 0;
+    this.playerY = py;
     this.luck = luck;
     // 限時效果到期
     for (let i = this.timed.length - 1; i >= 0; i--) {
@@ -288,7 +298,7 @@ export class Elements {
       }
       const near = dist <= ELEMENT_RULES.useRadius && vertical;
       s.inside = near;
-      s.blocked = (s.kind === 'offering' && !this.host.canPayHpFrac(OFFERING[s.rarity].costFrac)) || (s.kind === 'fuse' && !this.host.canFuse());
+      s.blocked = (s.kind === 'offering' && !this.host.canPayHpFrac(OFFERING[s.rarity].costFrac)) || (s.kind === 'fuse' && !this.host.canFuse()) || (s.kind === 'summit' && !this.host.canSummit());
       if (near && !s.blocked) {
         const hold = HOLD[s.kind] ?? JIZO_HOLD_SECONDS;
         s.progress = Math.min(1, s.progress + dt / hold);
@@ -423,6 +433,9 @@ export class Elements {
       this.host.openPick(s.rarity, 1, 'chest');
     } else if (s.kind === 'fuse') {
       this.host.openPick(s.rarity, 1, 'fusion');
+    } else if (s.kind === 'summit') {
+      const r = this.host.activateSummit();
+      lines.push({ t: 'summit', mult: r.mult, chests: r.chests });
     } else if (s.kind === 'trial') {
       this.startTrial(i);
       return; // 碑留在原地到試煉結束才收掉
@@ -548,7 +561,7 @@ export class Elements {
     return ELEMENT_KINDS[0];
   }
 
-  private findSpot(px: number, pz: number, out: { x: number; z: number }, kind: ElementKind = 'jizo'): boolean {
+  private findSpot(px: number, pz: number, out: { x: number; z: number }, kind: ElementKind = 'jizo', minY = -Infinity): boolean {
     const m = this.map;
     const R = ELEMENT_RULES;
     const start = m.def.playerStart;
@@ -560,6 +573,7 @@ export class Elements {
       if (x < m.minX + R.edgeMargin || x > m.maxX - R.edgeMargin || z < m.minZ + R.edgeMargin || z > m.maxZ - R.edgeMargin) continue;
       if (Math.hypot(x - start.x, z - start.z) < R.minFromStart) continue;
       if (!this.spotOk(x, z)) continue;
+      if (minY > -Infinity && (m.heightAt(x, z) < minY || !this.host.walkable(x, z))) continue;
       if (kind === 'fox' && !this.foxRingsOk(x, z, px, pz)) continue;
       out.x = x;
       out.z = z;
@@ -593,7 +607,9 @@ export class Elements {
     const kind = this.pickKind();
     if (!kind) return false;
     const spot = { x: 0, z: 0 };
-    if (!this.findSpot(px, pz, spot, kind)) return false;
+    // 高處（E2）：一部分要素放在比玩家高的、走得到的地方（狐面商要兩個平地圈，不放高處）；找不到就放一般的地方
+    const high = kind !== 'fox' && this.rng.next() < ELEVATED.chance && this.findSpot(px, pz, spot, kind, this.playerY + ELEVATED.minRise);
+    if (!high && !this.findSpot(px, pz, spot, kind)) return false;
     const rarity = pickRarity(this.rng, elementRarityWeights(virtualWave, luck));
     this.place(i, kind, rarity, spot.x, spot.z, announce, px, pz);
     return true;
@@ -732,6 +748,44 @@ export class Elements {
         return this.slots[i];
       }
     }
+    return null;
+  }
+
+  /**
+   * 山頂神社（E2）：這一關放一座在地圖最高的、走得到的平地（比出生點至少高 minRise 公尺、離出生點夠遠）；沒有這種地方就不放。
+   * 每關開局呼叫一次。回傳放下的那一格（沒放 = null）
+   */
+  placeSummit(): ElementSlot | null {
+    const m = this.map;
+    const st = m.def.playerStart;
+    const base = m.heightAt(st.x, st.z);
+    let best: { x: number; z: number; y: number } | null = null;
+    for (let z = m.minZ + ELEMENT_RULES.edgeMargin; z <= m.maxZ - ELEMENT_RULES.edgeMargin; z += 3) {
+      for (let x = m.minX + ELEMENT_RULES.edgeMargin; x <= m.maxX - ELEMENT_RULES.edgeMargin; x += 3) {
+        const y = m.heightAt(x, z);
+        if (y < base + SUMMIT.minRise || (best && y <= best.y)) continue;
+        if (Math.hypot(x - st.x, z - st.z) < SUMMIT.minFromStart) continue;
+        if (!this.spotOk(x, z) || !this.host.walkable(x, z)) continue;
+        best = { x, z, y };
+      }
+    }
+    if (!best) return null;
+    let i = this.freeSlot();
+    if (i < 0) {
+      let oldest = -1;
+      for (let k = 0; k < this.slots.length; k++) if (!SPECIAL.has(this.slots[k].kind) && (oldest < 0 || this.slots[k].age > this.slots[oldest].age)) oldest = k;
+      if (oldest < 0) return null;
+      this.free(oldest);
+      i = oldest;
+    }
+    this.place(i, 'summit', 'legend', best.x, best.z, 0);
+    this.slots[i].life = Infinity;
+    return this.slots[i];
+  }
+
+  /** 山頂神社還在、還沒用（HUD 箭頭用） */
+  get summitSlot(): ElementSlot | null {
+    for (const s of this.slots) if (s.active && s.kind === 'summit' && s.usedAge < 0) return s;
     return null;
   }
 
