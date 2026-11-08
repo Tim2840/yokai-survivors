@@ -11,7 +11,7 @@ import { writeFileSync } from 'node:fs';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { resetTuning, tuning } from '../../src/data/tuning';
-import { TECHS } from '../../src/data/techniques';
+import { TECHS, TECH_OFFER } from '../../src/data/techniques';
 import { PROGRESSION } from '../../src/data/progression';
 import { WAVES } from '../../src/data/waves';
 import { STAGE } from '../../src/data/stage';
@@ -53,7 +53,7 @@ const TECH_BY_STRATEGY: Record<string, string[]> = {
   dps: ['kitsunebi', 'bounce', 'rain', 'pillar', 'oil', 'seed', 'satellite', 'hellfire', 'lamp', 'homing', 'ring', 'ward'],
   survive: ['ring', 'ward', 'lamp', 'satellite', 'hellfire', 'pillar', 'oil', 'seed', 'kitsunebi', 'rain', 'bounce', 'homing'],
 };
-/** --tune countScale=3,hpScale=1.2,xp.needPerLevel=4,w.hpPerWave=0.2：臨時改旋鈕比較（不改檔案）；xp. 開頭是 PROGRESSION、w. 開頭是 WAVES */
+/** --tune countScale=3,hpScale=1.2,xp.needPerLevel=4,w.hpPerWave=0.2,tech.levelGap=2：臨時改旋鈕比較（不改檔案）；xp. 開頭是 PROGRESSION、w. 開頭是 WAVES、tech. 開頭是 TECH_OFFER */
 const TUNE = arg('tune', '');
 function applyTune(): void {
   // --noTrade：不出狐面商（取捨道具只在狐面商拿得到，D38；對照組）
@@ -63,6 +63,7 @@ function applyTune(): void {
     if (k.startsWith('summon.')) (STAGE.summon as unknown as Record<string, number>)[k.slice(7)] = Number(v);
     else if (k.startsWith('drops.')) (STAGE.drops as unknown as Record<string, number>)[k.slice(6)] = Number(v);
     else if (k.startsWith('w.')) (WAVES as unknown as Record<string, number>)[k.slice(2)] = Number(v);
+    else if (k.startsWith('tech.')) (TECH_OFFER as unknown as Record<string, number>)[k.slice(5)] = Number(v);
     else if (k.startsWith('xp.')) (PROGRESSION as unknown as Record<string, number>)[k.slice(3)] = Number(v);
     else (tuning as unknown as Record<string, number>)[k] = Number(v);
   }
