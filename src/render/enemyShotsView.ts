@@ -3,6 +3,7 @@ import { ENEMIES, ENEMY_IDS } from '../data/enemies';
 import type { Run } from '../game/run';
 import { ENEMY_SHOT_CAPACITY } from '../systems/enemyShots';
 import { setHugeBounds, writeMatrix } from './instancedLayer';
+import { markOverlay } from './overlay';
 
 const LINE_CAPACITY = 32;
 const LINE_WIDTH = 0.28;
@@ -48,6 +49,7 @@ export class EnemyShotsView {
     this.lines.count = 0;
     setHugeBounds(this.lines, 200);
     this.lines.renderOrder = 3;
+    markOverlay(this.lines); // 瞄準預告線：指示，不像素化
     this.group.add(this.lines);
     this.geos.push(arrowGeo, lg);
     this.mats.push(am, lm);

@@ -10,6 +10,7 @@ import { ENEMY_MODELS } from '../units/enemyModels';
 import { CHIBI } from '../units/humans';
 import { ENEMY_IDS } from '../data/enemies';
 import { EnemyShotsView } from './enemyShotsView';
+import { markOverlay } from './overlay';
 import { buildWorldView, type WorldView } from '../world/worldView';
 import { buildAmbienceView, type AmbienceView } from '../world/ambienceView';
 import { ambienceFor, timeOfDaySuffix, type AmbienceDef } from '../data/ambience';
@@ -178,6 +179,7 @@ export class RunView {
     this.aura = new THREE.Mesh(ag, am);
     this.aura.frustumCulled = false;
     this.aura.renderOrder = 2;
+    markOverlay(this.aura); // 玩家身上的光圈：指示範圍，不像素化
     this.group.add(this.aura);
     this.disposables.push(ag, am);
 
@@ -202,6 +204,7 @@ export class RunView {
     const bm2 = new THREE.MeshBasicMaterial({ color: palette.fire.soul, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
     this.portalBeam = new THREE.Mesh(bg2, bm2);
     this.portalBeam.position.y = 20;
+    markOverlay(this.portalBeam); // 傳送門光柱：不像素化
     this.portal = new THREE.Group();
     this.portal.add(this.portalRing, this.portalBeam);
     this.portal.visible = false;

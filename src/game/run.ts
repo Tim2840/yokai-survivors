@@ -3,6 +3,7 @@ import { COMBAT } from '../data/combat';
 import { MOVE } from '../data/movement';
 import { PLAYABLE_YOKAI, YOKAI, type YokaiDef } from '../data/yokai';
 import { rollAffixes } from '../data/affixes';
+import { mechOf, techById } from '../data/techniques';
 import { CARD_CHOICES, PROGRESSION, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
 import { DOSOJIN, FUSE, SUMMIT } from '../data/elements';
 import { itemPoolFor, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById, scaleWeaponStep } from '../data/items';
@@ -1101,21 +1102,24 @@ export class Run {
     if (!id || offer.length === 0) return;
     const at = Math.floor(this.rngCards.next() * offer.length);
     const rarity = this.dealer.rollRarity(this.level, this.stats.value.luck);
-    offer[at] = { cardId: TECH_CARD_PREFIX + id, rarity, affixes: rollAffixes(this.rngCards, rarity) };
+    offer[at] = { cardId: TECH_CARD_PREFIX + id, rarity, affixes: rollAffixes(this.rngCards, rarity, mechOf(techById(id))) };
   }
 
   /** 選了升級卡裡的技法卡：沒有就學會、有就升一級（效果吃那張卡的稀有度） */
   private applyTechCard(o: CardOffer): void {
     const id = o.cardId.slice(TECH_CARD_PREFIX.length);
     const mult = ITEM_RARITY_MULT[o.rarity];
-    // 詞條（D53）：技法卡帶的能力值加成，選了就永久加在身上
-    for (const a of o.affixes ?? []) this.applyStat(a.stat, a.value);
+    // 詞條（D53）：技法卡帶的詞條只強化這個技法本身，選了就永久加在它身上
     if (this.tech.has(id)) {
       this.tech.levelUp(id, mult);
+      this.tech.addAffixes(id, o.affixes ?? []);
       return;
     }
     const first = this.tech.owned.length === 0;
-    if (this.tech.add(id, mult) && first) this.dosojinAt = this.clock + DOSOJIN.appearDelay;
+    if (this.tech.add(id, mult)) {
+      this.tech.addAffixes(id, o.affixes ?? []);
+      if (first) this.dosojinAt = this.clock + DOSOJIN.appearDelay;
+    }
   }
 
   /** 玩家選了第 index 張卡。回傳是否還有下一次待選（UI 繼續開著面板） */

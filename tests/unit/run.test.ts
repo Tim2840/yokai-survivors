@@ -1,3 +1,4 @@
+import { ENEMIES, ENEMY_IDS } from '../../src/data/enemies';
 import { afterEach, describe, expect, it } from 'vitest';
 import { EventBus } from '../../src/core/bus';
 import { cardById } from '../../src/systems/cards';
@@ -491,7 +492,9 @@ describe('一局的模擬（無頭）', () => {
             const hit = e.hp[i] < prev[2] - 1e-6;
             // 擠在人群裡（1.3 公尺內有 3 隻以上）的不算：D50 敵人變多之後，站著不動會被圍到上限，外圈被內圈擋住是正常的，不是尋路卡住
             const crowded = e.within(e.x[i], e.z[i], 1.3, nbBuf) > 3;
-            if (moved < 0.5 && far && e.kx[i] < 0.1 && !hit && !crowded) stuck++;
+            // 弓手（遠程，E-1）停在 keep 公尺外射箭是設計：不是卡住
+            const archer = ENEMIES[ENEMY_IDS[e.kind[i]]].behavior === 'ranged';
+            if (moved < 0.5 && far && e.kx[i] < 0.1 && !hit && !crowded && !archer) stuck++;
           }
         }
         snap = next;

@@ -1,6 +1,7 @@
 import { COMBAT } from '../data/combat';
 import { EVO, FORM_LEVEL0, evosFor, mechOf, TECHS, TECH_CHOICES, TECH_DEEPEN, TECH_FAMILIES, TECH_LEVELS, TECH_MAX, TECH_OFFER, TECH_RULES, evoById, techById, techsFor, type EvoDef, type TechDef, type TechFamily, type TechMechanic } from '../data/techniques';
 import type { WeaponDef } from '../data/yokai';
+import { emptyAffixes, type Affix, type TechStat } from '../data/affixes';
 import type { Rng } from '../lib/random';
 import type { Run } from './run';
 
@@ -28,6 +29,8 @@ export class Techniques {
   readonly levels: number[] = [];
   /** 各技法累積的稀有度倍率（每拿一次加上那張卡的倍率；效果倍率 = 1 + perLevel × (累積 − 1)） */
   readonly points: number[] = [];
+  /** 各技法累積的詞條（D53 改：只強化這個技法自己）：威力、範圍、頻率、連鎖（比例，加總）；跟 owned 同一個順序 */
+  readonly afx: Record<TechStat, number>[] = [];
   /** 已進化的配方 id（D53）：兩個材料技法併成一個，效果 × EVO.power、參數換成進化後的值 */
   readonly evolved: string[] = [];
   /** 現在作用中的技法（依機制；沒有 = null） */
@@ -132,7 +135,47 @@ export class Techniques {
     return this.powerAt(this.owned.indexOf(d.id));
   }
   private powerAt(i: number): number {
-    return (1 + TECH_LEVELS.perLevel * (this.points[i] - 1)) * (this.isEvolved(this.owned[i]) ? EVO.power : 1);
+    return (1 + TECH_LEVELS.perLevel * (this.points[i] - 1)) * (this.isEvolved(this.owned[i]) ? EVO.power : 1) * (1 + this.afx[i].power);
+  }
+  /** 選了技法卡：卡上的詞條加在這個技法身上，並重算作用中的參數 */
+  addAffixes(id: string, list: readonly Affix[]): void {
+    const i = this.owned.indexOf(id);
+    if (i < 0) return;
+    for (const a of list) this.afx[i][a.stat] += a.value;
+    this.recompute();
+  }
+  /** 這個技法現在的詞條加總（畫面、測試用） */
+  affixesOf(id: string): Record<TechStat, number> {
+    const i = this.owned.indexOf(id);
+    return i < 0 ? emptyAffixes() : { ...this.afx[i] };
+  }
+  /** 連鎖詞條：這次連鎖多幾個（整數部分一定有，小數部分是機率；用戰鬥的固定種子亂數） */
+  private chainExtra(m: TechMechanic): number {
+    const d = this.act[m];
+    if (!d) return 0;
+    const c = this.afx[this.owned.indexOf(d.id)]?.chain ?? 0;
+    const whole = Math.floor(c);
+    return whole + (this.run.rand() < c - whole ? 1 : 0);
+  }
+  /** 把詞條（範圍、頻率）乘進技法的參數，回傳新的定義（沒有詞條就原樣回傳）。威力與連鎖在用到的地方另外算 */
+  private withAffix(d: TechDef, a: Record<TechStat, number>): TechDef {
+    if (a.area === 0 && a.rate === 0) return d;
+    const A = 1 + a.area;
+    const R = 1 + a.rate;
+    const out: TechDef = { ...d };
+    if (d.split) out.split = { ...d.split, range: d.split.range * A };
+    if (d.bounce) out.bounce = { ...d.bounce, range: d.bounce.range * A };
+    if (d.rain) out.rain = { ...d.rain, range: d.rain.range * A, radius: d.rain.radius * A };
+    if (d.homing) out.homing = { ...d.homing, speedMult: d.homing.speedMult * R };
+    if (d.orbit) out.orbit = { ...d.orbit, radius: d.orbit.radius * A, hitRadius: d.orbit.hitRadius * A, tick: d.orbit.tick / R };
+    if (d.ward) out.ward = { ...d.ward, burstRadius: d.ward.burstRadius * A, chargeSeconds: d.ward.chargeSeconds / R, atMaxChargeSeconds: d.ward.atMaxChargeSeconds / R };
+    if (d.satellite) out.satellite = { ...d.satellite, radius: d.satellite.radius * A, hitRadius: d.satellite.hitRadius * A, tick: d.satellite.tick / R };
+    if (d.lamp) out.lamp = { ...d.lamp, hitRadius: d.lamp.hitRadius * A, tick: d.lamp.tick / R };
+    if (d.oil) out.oil = { ...d.oil, spreadRange: d.oil.spreadRange * A, tick: d.oil.tick / R };
+    if (d.burn) out.burn = { ...d.burn, radius: d.burn.radius * A, tick: d.burn.tick / R };
+    if (d.seed) out.seed = { ...d.seed, radius: d.seed.radius * A, atMaxRadius: d.seed.atMaxRadius * A, delay: d.seed.delay / R };
+    if (d.pillar) out.pillar = { ...d.pillar, radius: d.pillar.radius * A, range: d.pillar.range * A, interval: d.pillar.interval / R };
+    return out;
   }
   /** 效果倍率（畫面、測試用） */
   powerOf(id: string): number {
@@ -198,6 +241,7 @@ export class Techniques {
     this.owned.push(id);
     this.levels.push(1);
     this.points.push(rarityMult);
+    this.afx.push(emptyAffixes());
     this.recompute();
     return true;
   }
@@ -208,6 +252,7 @@ export class Techniques {
     this.owned[i] = newId;
     this.levels[i] = 1;
     this.points[i] = 1;
+    this.afx[i] = emptyAffixes();
     // 換掉進化過的技法：進化跟著拆掉（兩個材料都要在才算）
     for (let k = this.evolved.length - 1; k >= 0; k--) if (evoById(this.evolved[k]).from.includes(oldId)) this.evolved.splice(k, 1);
     this.recompute();
@@ -240,7 +285,7 @@ export class Techniques {
     const fam: Record<TechFamily, number> = { chain: 0, near: 0, field: 0 };
     this.owned.forEach((id, i) => {
       const d = techById(id);
-      const ed = this.withEvo(d, this.levels[i]);
+      const ed = this.withAffix(this.withEvo(d, this.levels[i]), this.afx[i]);
       this.act[mechOf(d)] = ed;
       fam[d.family]++;
       // 進化形態到指定等級：併進來的舊招式（鬼火雨／衛星燈／燈油）開始作用（D57）
@@ -265,6 +310,8 @@ export class Techniques {
     const base = this.run.yokai.weapon;
     this.weapon = h ? { ...base, projectileSpeed: base.projectileSpeed * h.speedMult } : base;
     this.run.projectiles.homeReturnPierce = h ? h.returnPierce + this.deep.chain * TECH_DEEPEN.chain.homingPierce : 0;
+    const hi = this.act.homing ? this.owned.indexOf(this.act.homing.id) : -1;
+    this.run.projectiles.homeReturnDamage = hi >= 0 ? 1 + this.afx[hi].power : 1;
   }
 
   /** 套用進化：把進化指定的區塊欄位換成新值（回傳新的定義；沒有進化就回原本的） */
@@ -547,7 +594,7 @@ export class Techniques {
     if (a.kitsunebi?.split) this.splitFrom(a.kitsunebi.split, x, z, e, dmg * this.pw('kitsunebi'));
     if (a.bounce?.bounce) {
       const b = a.bounce.bounce;
-      const jumps = (this.run.weaponMaxed ? b.atMaxJumps : b.jumps) + this.deep.chain * TECH_DEEPEN.chain.targets;
+      const jumps = (this.run.weaponMaxed ? b.atMaxJumps : b.jumps) + this.deep.chain * TECH_DEEPEN.chain.targets + this.chainExtra('bounce');
       this.bounceFrom(b, x, z, e, dmg * b.damage * this.pw('bounce'), jumps);
     }
     if (a.hellfire?.burn) this.addZone(a.hellfire.burn, x, z, dmg * a.hellfire.burn.damage * this.pw('hellfire') * Math.pow(TECH_DEEPEN.field.damage, this.deep.field));
@@ -559,7 +606,7 @@ export class Techniques {
   private rainFrom(r: NonNullable<TechDef['rain']>, x: number, z: number, dmg: number): void {
     const run = this.run;
     const en = run.enemies;
-    const n = (run.weaponMaxed ? r.atMaxCount : r.count) + this.deep.chain * TECH_DEEPEN.chain.targets;
+    const n = (run.weaponMaxed ? r.atMaxCount : r.count) + this.deep.chain * TECH_DEEPEN.chain.targets + this.chainExtra('rain');
     for (let k = 0; k < n; k++) {
       const a = run.rand() * Math.PI * 2;
       const d = Math.sqrt(run.rand()) * r.range;
@@ -661,7 +708,7 @@ export class Techniques {
   private splitFrom(sp: NonNullable<TechDef['split']>, x: number, z: number, e: number, dmg: number): void {
     const run = this.run;
     const en = run.enemies;
-    const want = (run.weaponMaxed ? sp.atMaxChildren : sp.children) + this.deep.chain * TECH_DEEPEN.chain.targets;
+    const want = (run.weaponMaxed ? sp.atMaxChildren : sp.children) + this.deep.chain * TECH_DEEPEN.chain.targets + this.chainExtra('kitsunebi');
     const m = en.within(x, z, sp.range, this.pick);
     let made = 0;
     while (made < want) {

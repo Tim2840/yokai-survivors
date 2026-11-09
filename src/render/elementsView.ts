@@ -1,3 +1,4 @@
+import { markOverlay } from './overlay';
 import * as THREE from 'three';
 import { palette } from '../art/palette';
 import { glow, soft } from '../art/materials';
@@ -324,6 +325,7 @@ export class ElementsView {
       zone.renderOrder = 2;
       zone.visible = false;
       this.disposables.push(ringMat, fillMat, beamMat, zg, zoneMat);
+      for (const o of [ring, fill, beam, zone, ...foxRings, ...foxFills]) markOverlay(o); // 光圈、光柱、結界圈：不像素化
       root.add(jizo, barrier, altar, offering, omikuji, chest, summon, fuse, dosojin, trial, summit, fox, ...foxRings, ...foxFills, ring, fill, beam);
       root.visible = false;
       this.group.add(root, zone);

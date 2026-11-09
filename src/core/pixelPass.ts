@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+import { OVERLAY_LAYER, overlayUniforms } from '../render/overlay';
 
 /**
  * 像素化＋描線（日系 RPG 風格，D72，docs/23 第 8 節）：場景只畫一次（低解析度＋深度貼圖），
@@ -15,6 +16,7 @@ export class PixelPass extends Pass {
   private readonly quad: FullScreenQuad;
   private readonly mat: THREE.ShaderMaterial;
   private readonly res = new THREE.Vector2();
+  private readonly res2 = new THREE.Vector2();
 
   constructor(shortSide: number, scene: THREE.Scene, camera: THREE.Camera, edge: { strength: number; from: number; to: number; levels: number; dither: number }) {
     super();
@@ -102,6 +104,10 @@ export class PixelPass extends Pass {
   }
 
   render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget): void {
+    const cam0 = this.camera as THREE.PerspectiveCamera;
+    const saved = cam0.layers.mask;
+    // 第 0 層（地圖、角色、技能特效）畫在低解析度；第 1 層（光圈、光柱…不像素化的指示）等一下用完整解析度另外畫
+    cam0.layers.set(0);
     renderer.setRenderTarget(this.target);
     renderer.clear();
     renderer.render(this.scene, this.camera);
@@ -113,6 +119,26 @@ export class PixelPass extends Pass {
     renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
     if (this.clear) renderer.clear();
     this.quad.render(renderer);
+    // 指示圖層：完整解析度、不量化、不描線；靠低解析度的深度圖比較被擋住的部分
+    const out = this.renderToScreen ? null : writeBuffer;
+    const size = renderer.getDrawingBufferSize(this.res2);
+    overlayUniforms.uOvOn.value = 1;
+    overlayUniforms.uOvDepth.value = this.target.depthTexture;
+    overlayUniforms.uOvRes.value.set(out ? out.width : size.x, out ? out.height : size.y);
+    overlayUniforms.uOvNear.value = cam0.near;
+    overlayUniforms.uOvFar.value = cam0.far;
+    cam0.layers.set(OVERLAY_LAYER);
+    const bg = this.scene.background;
+    const auto = renderer.autoClear;
+    this.scene.background = null;
+    renderer.autoClear = false;
+    renderer.setRenderTarget(out);
+    renderer.clearDepth();
+    renderer.render(this.scene, this.camera);
+    renderer.autoClear = auto;
+    this.scene.background = bg;
+    cam0.layers.mask = saved;
+    overlayUniforms.uOvOn.value = 0;
   }
 
   dispose(): void {

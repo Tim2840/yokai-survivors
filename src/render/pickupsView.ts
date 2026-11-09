@@ -1,3 +1,4 @@
+import { markOverlay } from './overlay';
 import * as THREE from 'three';
 import { palette } from '../art/palette';
 import { glow, soft } from '../art/materials';
@@ -138,6 +139,7 @@ export class PickupsView {
     this.flash = new THREE.Mesh(gf, this.flashMat);
     this.flash.visible = false;
     this.flash.renderOrder = 3;
+    markOverlay(this.flash); // 雷鼓、雪女的吐息擴散的範圍環：指示範圍，不像素化
     this.group.add(this.flash);
     this.disposables.push(gf, this.flashMat);
   }

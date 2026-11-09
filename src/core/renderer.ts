@@ -5,6 +5,7 @@ import { palette } from '../art/palette';
 import { createPipeline, type Pipeline } from './postfx';
 import type { Quality } from './save';
 import type { AmbienceDef } from '../data/ambience';
+import { OVERLAY_LAYER } from '../render/overlay';
 
 /**
  * 渲染器與鏡頭。後製與畫質分級在 postfx.ts（從燈落之境搬來）。
@@ -31,6 +32,7 @@ export class Renderer {
     this.scene.fog = new THREE.Fog(palette.night.fog, 45, 140);
 
     this.camera = new THREE.PerspectiveCamera(CAMERA.baseFovDeg, 1, CAMERA.near, CAMERA.far);
+    this.camera.layers.enable(OVERLAY_LAYER); // 指示圖層（不像素化的光圈、光柱）；經典風格直接一起畫
 
     this.moon = new THREE.DirectionalLight(palette.moon, 2.6);
     this.moon.position.set(-8, 20, 6);

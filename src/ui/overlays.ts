@@ -220,7 +220,8 @@ function evoCardHtml(cardId: string): string {
 /** 詞條（D53）的文字：「力量 +10%、迅捷 +8%」；沒有詞條就空字串 */
 export function affixHtml(affixes: readonly Affix[] | undefined): string {
   if (!affixes || affixes.length === 0) return '';
-  const list = affixes.map((a) => t(`card.fmt.${CARD_FORMAT[a.stat]}` as I18nKey, { name: t(`stat.${a.stat}` as I18nKey), v: num(a.value, 1) })).join('、');
+  // 詞條只強化這個技法：威力／範圍／頻率／連鎖，一律用百分比顯示
+  const list = affixes.map((a) => t('card.affixItem', { name: t(`affix.${a.stat}` as I18nKey), v: Math.round(a.value * 100) })).join('、');
   return `<span class="ctech caffix" data-affixes="${affixes.length}">${t('card.affix', { list })}</span>`;
 }
 

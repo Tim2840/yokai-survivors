@@ -25,6 +25,8 @@ export class Projectiles {
   homeX = 0;
   homeZ = 0;
   homeReturnPierce = 0;
+  /** 歸巢：折返之後（回程）的傷害倍率（詞條「威力」；1 = 不變） */
+  homeReturnDamage = 1;
   high = 0;
   aliveCount = 0;
   /** 場上有沒有還沒回到玩家手上的回力投射物（飛出去或折返中；回力武器要等它回來才丟下一個） */
@@ -109,6 +111,7 @@ export class Projectiles {
           this.target[i] = -1;
           this.lastHit[i] = -1;
           this.pierceLeft[i] = Math.max(this.pierceLeft[i], 0) + this.homeReturnPierce;
+          this.damage[i] *= this.homeReturnDamage;
         } else {
           this.kill(i);
           continue;

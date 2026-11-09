@@ -121,6 +121,7 @@ describe('技法怎麼拿（D49：機率出現在升級卡裡、8 級、分稀�
     expect(i, '指定的下一次升級沒有技法卡').toBeGreaterThanOrEqual(0);
     const id = a.offer![i].cardId.slice('tech:'.length);
     a.offer![i].rarity = 'common';
+    a.offer![i].affixes = []; // 詞條會改變效果倍率（威力）；這個測試只看稀有度與等級
     a.chooseCard(i);
     expect(a.tech.levelOf(id)).toBe(1);
     expect(a.tech.powerOf(id)).toBeCloseTo(1, 5);
