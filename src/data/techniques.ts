@@ -29,7 +29,7 @@ export const TECH_CHOICES = 3;
 /** D50（使用者：「技法的養成速度太快」）：chance 0.15 → 0.12；已有的技法下一級要玩家等級 ≥ minLevel + levelGap × 目前技法等級。D59（使用者 2026-11-09：「放寬技法升級的玩家等級門檻，讓技法 6～8 級不用等到那麼晚」）：levelGap 3 → 2（6 級要玩家 16 級、7 級 18、8 級 20；原本 19／22／25） */
 export const TECH_OFFER = { chance: 0.35, minLevel: 4, fresh: 2, owned: 2.5, levelGap: 2, levelBias: 4 } as const;
 
-export const TECH_FAMILIES = ['split', 'orbit', 'burn'] as const;
+export const TECH_FAMILIES = ['chain', 'near', 'field'] as const;
 export type TechFamily = (typeof TECH_FAMILIES)[number];
 
 /** delivery：取代原本的發射；extra：照常發射，另外多一種出手方式；onHit：打中人類時多發生的事（出手方式打中也會觸發）；passive：自己運作，不吃也不給掛勾（歸巢、護身火） */
@@ -78,11 +78,11 @@ export interface TechDef {
 }
 
 export const TECHS: readonly TechDef[] = [
-  // ── 分裂系 ──
+  // ── 連鎖系（命中後延伸出去：分裂、彈跳、歸巢…）──
   {
     id: 'kitsunebi',
     weapon: 'ghostfire',
-    family: 'split',
+    family: 'chain',
     kind: 'onHit',
     likes: ['volley', 'splash', 'atkSpeed', 'power'],
     excludes: [],
@@ -93,7 +93,7 @@ export const TECHS: readonly TechDef[] = [
   {
     id: 'bounce',
     weapon: 'ghostfire',
-    family: 'split',
+    family: 'chain',
     kind: 'onHit',
     likes: ['volley', 'power', 'atkSpeed'],
     excludes: ['ring'],
@@ -102,17 +102,17 @@ export const TECHS: readonly TechDef[] = [
   {
     id: 'homing',
     weapon: 'ghostfire',
-    family: 'split',
+    family: 'chain',
     kind: 'passive',
     likes: ['pierce', 'volley', 'atkSpeed'],
     excludes: ['ring'],
     homing: { returnPierce: 2, speedMult: 1.15, atMaxPierce: 1 },
   },
-  // ── 環繞系 ──
+  // ── 近身系（貼著身體運作：繞身、護身、前導…）──
   {
     id: 'ring',
     weapon: 'ghostfire',
-    family: 'orbit',
+    family: 'near',
     kind: 'delivery',
     likes: ['area', 'hp', 'armor', 'atkSpeed'],
     excludes: ['bounce', 'homing'],
@@ -123,7 +123,7 @@ export const TECHS: readonly TechDef[] = [
   {
     id: 'ward',
     weapon: 'ghostfire',
-    family: 'orbit',
+    family: 'near',
     kind: 'passive',
     likes: ['armor', 'hp', 'regen', 'area'],
     excludes: [],
@@ -132,17 +132,17 @@ export const TECHS: readonly TechDef[] = [
   {
     id: 'lamp',
     weapon: 'ghostfire',
-    family: 'orbit',
+    family: 'near',
     kind: 'extra',
     likes: ['speed', 'area', 'atkSpeed'],
     excludes: [],
     lamp: { count: 1, atMaxCount: 2, ahead: 4, side: 1.6, hitRadius: 1.3, tick: 0.3, damage: 1.2, knockback: 4 },
   },
-  // ── 燃燒系 ──
+  // ── 佈置系（把效果放在場上：地面、種子、柱子…）──
   {
     id: 'hellfire',
     weapon: 'ghostfire',
-    family: 'burn',
+    family: 'field',
     kind: 'onHit',
     likes: ['area', 'power', 'atkSpeed'],
     excludes: [],
@@ -153,7 +153,7 @@ export const TECHS: readonly TechDef[] = [
   {
     id: 'seed',
     weapon: 'ghostfire',
-    family: 'burn',
+    family: 'field',
     kind: 'onHit',
     likes: ['power', 'area', 'volley'],
     excludes: [],
@@ -162,7 +162,7 @@ export const TECHS: readonly TechDef[] = [
   {
     id: 'pillar',
     weapon: 'ghostfire',
-    family: 'burn',
+    family: 'field',
     kind: 'extra',
     likes: ['power', 'area', 'atkSpeed'],
     excludes: [],
@@ -173,7 +173,7 @@ export const TECHS: readonly TechDef[] = [
     id: 'torrent',
     mech: 'bounce',
     weapon: 'waterdisc',
-    family: 'split',
+    family: 'chain',
     kind: 'onHit',
     likes: ['volley', 'power', 'atkSpeed'],
     excludes: ['whirl'],
@@ -183,7 +183,7 @@ export const TECHS: readonly TechDef[] = [
     id: 'splash',
     mech: 'kitsunebi',
     weapon: 'waterdisc',
-    family: 'split',
+    family: 'chain',
     kind: 'onHit',
     likes: ['volley', 'splash', 'atkSpeed', 'power'],
     excludes: [],
@@ -193,7 +193,7 @@ export const TECHS: readonly TechDef[] = [
     id: 'whirl',
     mech: 'ring',
     weapon: 'waterdisc',
-    family: 'orbit',
+    family: 'near',
     kind: 'delivery',
     likes: ['area', 'hp', 'armor', 'atkSpeed'],
     excludes: ['torrent'],
@@ -203,7 +203,7 @@ export const TECHS: readonly TechDef[] = [
     id: 'veil',
     mech: 'ward',
     weapon: 'waterdisc',
-    family: 'orbit',
+    family: 'near',
     kind: 'passive',
     likes: ['armor', 'hp', 'regen', 'area'],
     excludes: [],
@@ -213,7 +213,7 @@ export const TECHS: readonly TechDef[] = [
     id: 'pond',
     mech: 'hellfire',
     weapon: 'waterdisc',
-    family: 'burn',
+    family: 'field',
     kind: 'onHit',
     likes: ['area', 'power', 'atkSpeed'],
     excludes: [],
@@ -223,7 +223,7 @@ export const TECHS: readonly TechDef[] = [
     id: 'geyser',
     mech: 'pillar',
     weapon: 'waterdisc',
-    family: 'burn',
+    family: 'field',
     kind: 'extra',
     likes: ['power', 'area', 'atkSpeed'],
     excludes: [],
@@ -244,12 +244,12 @@ export const techById = (id: string): TechDef => {
 
 /** 同系拿兩個以上：每多一個，該系加深一次（效果各自讀 deep） */
 export const TECH_DEEPEN = {
-  /** 分裂系：狐火分裂多分 1 顆、彈跳多跳 1 次、歸巢回程多穿透 1 隻 */
-  split: { targets: 1, homingPierce: 1 },
-  /** 環繞系：繞身的燈籠環與衛星燈半徑 ×、燈籠環多 1 顆、護身火充能時間 × */
-  orbit: { radius: 1.15, orbs: 1, wardCharge: 0.8 },
-  /** 燃燒系：燃燒地、火種、鬼火柱的傷害 ×（每多一個再乘一次） */
-  burn: { damage: 1.25 },
+  /** 連鎖系：分裂多分 1 顆、彈跳多跳 1 次、歸巢回程多穿透 1 隻 */
+  chain: { targets: 1, homingPierce: 1 },
+  /** 近身系：繞身的環半徑 ×、環多 1 顆、護身充能時間 × */
+  near: { radius: 1.15, orbs: 1, wardCharge: 0.8 },
+  /** 佈置系：放在場上的地面、種子、柱子的傷害 ×（每多一個再乘一次） */
+  field: { damage: 1.25 },
 } as const;
 
 /** 技法等級（D49）：最高 max 級；每拿一次升一級，傷害與持續效果 × (1 + perLevel × (累積的稀有度倍率 − 1))（凡 1.0／良 1.2／珍 1.5／極 2.0，第一次拿的也算） */

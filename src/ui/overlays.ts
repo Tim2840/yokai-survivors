@@ -534,7 +534,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
         : '';
       const stats = q('sum-stats');
       const rows = sum.stats.map((s) => `<div data-stat="${s.id}"><dt>${t(`stat.${s.id}` as I18nKey)}</dt><dd>${statText(s.id, s.value, sum)}</dd></div>`);
-      rows.push(`<div class="weapon-head"><dt><b>${t('pause.weapon')}</b></dt><dd></dd></div>`);
+      rows.push(`<div class="weapon-head"><dt><b>${t(`card.${YOKAI[sum.yokai].weapon.id}` as I18nKey)}</b></dt><dd></dd></div>`);
       rows.push(`<div data-stat="volley"><dt>${t('sum.volley')}</dt><dd>${fix(sum.weapon.volley)}</dd></div>`);
       rows.push(`<div data-stat="splash"><dt>${t('sum.splash')}</dt><dd>${t('sum.meters', { v: fix(sum.weapon.splash, 1) })}</dd></div>`);
       rows.push(`<div data-stat="shards"><dt>${t('sum.shards')}</dt><dd>${t('sum.shardsVal', { v: fix(sum.weapon.shards, 1), d: fix(sum.weapon.shardDamage * 100, 0) })}</dd></div>`);

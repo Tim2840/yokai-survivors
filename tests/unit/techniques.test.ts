@@ -519,13 +519,13 @@ describe('同系加深、技法等級、滿級加強', () => {
     const n0 = a.orbitCount;
     const r0 = a.orbitRadius;
     a.devAddTech('ward');
-    expect(a.tech.deep.orbit).toBe(1);
-    expect(a.orbitCount).toBe(n0 + TECH_DEEPEN.orbit.orbs);
-    expect(a.orbitRadius).toBeCloseTo(r0 * TECH_DEEPEN.orbit.radius, 5);
+    expect(a.tech.deep.near).toBe(1);
+    expect(a.orbitCount).toBe(n0 + TECH_DEEPEN.near.orbs);
+    expect(a.orbitRadius).toBeCloseTo(r0 * TECH_DEEPEN.near.radius, 5);
     const b = make(22);
     b.devAddTech('kitsunebi', 'hellfire');
-    expect(b.tech.deep.split).toBe(0);
-    expect(b.tech.deep.burn).toBe(0);
+    expect(b.tech.deep.chain).toBe(0);
+    expect(b.tech.deep.field).toBe(0);
   });
   it('技法等級：升一級 → 效果乘 1 + perLevel × 稀有度；到上限（進化前 5 級）不再加', () => {
     const run = make(23);

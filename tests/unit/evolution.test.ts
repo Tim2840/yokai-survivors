@@ -290,7 +290,7 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
     run.step(DT);
     expect(run.elements.fuseSlot, '進化後合魂祠要收掉').toBeNull();
 
-    // 寶箱：再湊一組（燃燒系），寶箱第一張是進化卡
+    // 寶箱：再湊一組（佈置系），寶箱第一張是進化卡
     run.devAddTech('hellfire');
     run.devTechLevel('hellfire', EVO.minLevel);
     const s = run.elements.devForce('chest', 'common', run.px, run.pz)!;
