@@ -95,6 +95,9 @@ export async function run(browser) {
         await press(ctx, '#btn-abilities');
         await page.waitForFunction(() => window.__game.screens.includes('pause'));
         await leaks(page, '能力');
+        // 水盤本來就來回穿透：能力面板不該出現「穿透」（欄位、適合的法具都不列）
+        const paneText = await page.evaluate(() => document.querySelector('.overlay[data-screen="pause"]').innerText);
+        expect(!/穿透/.test(paneText), `河童的能力面板出現對水盤沒用的「穿透」：${paneText.match(/.{0,12}穿透.{0,8}/)?.[0]}`);
         const head = await page.locator('.weapon-head').innerText();
         expect(/水盤/.test(head), `能力面板的主武器標題不是水盤：${head}`);
         files.push(await shot(ctx, 'y1-pause'));

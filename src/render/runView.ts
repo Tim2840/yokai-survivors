@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { palette } from '../art/palette';
+import { fxOf, palette } from '../art/palette';
 import { glow } from '../art/materials';
 import { ball } from '../art/shapes';
 import type { Run } from '../game/run';
@@ -65,6 +65,8 @@ export class RunView {
     this.group.add(this.world.group);
 
     this.player = run.yokai.id === 'kappa' ? buildKappa() : buildLanternMonk();
+    // 玩家身上的光：跟著妖怪的色組（顏色是 uniform，換色不會重編著色器；光源數量不變）
+    renderer.playerLight.color.set(fxOf(run.yokai.id).light);
     this.group.add(this.player.root);
 
     // 敵人：單一幾何＋頂點色，頂點著色器做彈跳與傾斜（T2：頂點著色器動畫）
@@ -111,7 +113,7 @@ export class RunView {
 
     // 鬼火：發光小球
     const bg = ball(0.2, 12, 8);
-    const bm = glow(run.yokai.id === 'kappa' ? palette.fire.soul : palette.fire.ghost, 3.2);
+    const bm = glow(fxOf(run.yokai.id).mid, 3.2);
     this.diskShot = run.yokai.id === 'kappa';
     this.bulletMesh = new THREE.InstancedMesh(bg, bm, run.projectiles.capacity);
     this.bulletMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -139,7 +141,7 @@ export class RunView {
     ag.setAttribute('position', new THREE.BufferAttribute(ringPos, 3).setUsage(THREE.DynamicDrawUsage));
     ag.setIndex(ringIdx);
     ag.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 400);
-    const am = new THREE.MeshBasicMaterial({ color: palette.warm.amber, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide });
+    const am = new THREE.MeshBasicMaterial({ color: fxOf(run.yokai.id).aura, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide });
     this.aura = new THREE.Mesh(ag, am);
     this.aura.frustumCulled = false;
     this.aura.renderOrder = 2;

@@ -1,5 +1,6 @@
 import type { StatId } from './stats';
 import type { Rarity } from './rarity';
+import { YOKAI, type WeaponKind } from './yokai';
 
 /**
  * 法具（D30 第一步，docs/15 第 3 節；取代「無限重複的屬性卡」）。
@@ -99,8 +100,21 @@ export const ITEMS: readonly ItemDef[] = [
 ];
 
 /** 提燈小僧能拿到的道具（之後依局外解鎖與妖怪分開） */
-/** 這隻妖怪的選卡池：把池裡的主武器 'ghostfire' 換成它自己的主武器（D61） */
-export const itemPoolFor = (weaponId: string): readonly string[] => ITEM_POOL.map((id) => (id === 'ghostfire' ? weaponId : id));
+/**
+ * 這個法具對哪幾種出手方式有用（D65；沒寫 = 全部都有用）。**通用法具要先問「放到這隻妖怪的武器上有沒有效果」**：
+ * 多重（發射數）、碎裂（命中飛出碎片）只有會飛出去的武器用得到；穿透只有「命中即消失」的投射物用得到（回力水盤本來就來回穿透、揮擊沒有投射物）。
+ */
+export const ITEM_WEAPON_KINDS: Readonly<Record<string, readonly WeaponKind[]>> = {
+  volley: ['projectile', 'boomerang'],
+  splash: ['projectile', 'boomerang'],
+  pierce: ['projectile'],
+};
+
+/** 這隻妖怪的選卡池：把池裡的主武器 'ghostfire' 換成它自己的主武器（D61），並拿掉對它的武器沒有效果的法具（D65） */
+export const itemPoolFor = (weaponId: string): readonly string[] => {
+  const kind: WeaponKind = Object.values(YOKAI).find((y) => y.weapon.id === weaponId)?.weapon.kind ?? 'projectile';
+  return ITEM_POOL.filter((id) => (ITEM_WEAPON_KINDS[id] ?? [kind]).includes(kind)).map((id) => (id === 'ghostfire' ? weaponId : id));
+};
 export const ITEM_POOL: readonly string[] = ['ghostfire', 'power', 'atkSpeed', 'area', 'hp', 'speed', 'armor', 'regen', 'dodge', 'volley', 'splash', 'pierce'];
 /** 取捨道具（D38）：只有狐面商會給，已經拿到的下一級也只在狐面商 */
 export const TRADE_ITEMS: readonly string[] = ['cursedBlade', 'wildLantern', 'diamondBody'];

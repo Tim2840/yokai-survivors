@@ -19,6 +19,14 @@ export const palette = {
   /** 地形頂點色（docs/03 第 2 節各地形的外觀） */
   terrain: { grass: '#4f7a55', shallow: '#4c7f8f', deep: '#25506b', mud: '#5b4a3a', rock: '#7b7d82', bamboo: '#5d8a58', stone: '#9a9488', spring: '#7fb6b0' },
   water: { shallow: '#7cc4d8', deep: '#1c4e78' },
+  /** 技法與大招特效的色組（每隻妖怪一組：main = 主色、mid = 亮色、accent = 點綴）；通用特效不寫死火的顏色（D65） */
+  fx: {
+    'chochin-kozo': { main: '#ff9a3c', mid: '#ffc46b', accent: '#9fe8ff', aura: '#ffd27a', light: '#ffb35c' },
+    kappa: { main: '#3fb6de', mid: '#8fdcf0', accent: '#d6f5ff', aura: '#8fdcf0', light: '#8fd4ea' },
+  } as Record<string, { main: string; mid: string; accent: string; aura: string; light: string }>,
   fire: { ghost: '#ffc46b', soul: '#9fe8ff', torch: '#ff9a3c' },
   ui: { text: '#f5efe2', textDim: '#b9b2a4', panel: '#1a1d2ecc', accent: '#ffb35c' },
 } as const;
+
+/** 這隻妖怪的特效色組（沒有的用提燈小僧的） */
+export const fxOf = (yokaiId: string): { main: string; mid: string; accent: string; aura: string; light: string } => palette.fx[yokaiId] ?? palette.fx['chochin-kozo'];

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { palette } from '../art/palette';
+import { fxOf } from '../art/palette';
 import { glow } from '../art/materials';
 import { ball } from '../art/shapes';
 import type { Run } from '../game/run';
@@ -28,9 +28,9 @@ export class TechFx {
   private readonly flashes: THREE.InstancedMesh;
   private readonly m = new THREE.Matrix4();
   private readonly c = new THREE.Color();
-  private readonly fire = new THREE.Color(palette.fire.torch);
-  private readonly soul = new THREE.Color(palette.fire.soul);
-  private readonly ghost = new THREE.Color(palette.fire.ghost);
+  private readonly fire: THREE.Color;
+  private readonly soul: THREE.Color;
+  private readonly ghost: THREE.Color;
   private readonly disposables: { dispose(): void }[] = [];
   /** 燈籠環的環內護身：腳下一片淡光，推開人類時亮一下 */
   private readonly guard: THREE.Mesh;
@@ -43,8 +43,12 @@ export class TechFx {
   private lastT = 0;
 
   constructor(private readonly run: Run) {
+    const fx = fxOf(run.yokai.id);
+    this.fire = new THREE.Color(fx.main);
+    this.soul = new THREE.Color(fx.accent);
+    this.ghost = new THREE.Color(fx.mid);
     const og = ball(0.32, 14, 10);
-    const om = glow(palette.fire.ghost, 3);
+    const om = glow(fx.mid, 3);
     this.orbs = this.instanced(og, om, MAX_ORBS);
     const zg = new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2);
     const additive = (): THREE.MeshBasicMaterial => new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending });
@@ -52,10 +56,10 @@ export class TechFx {
     this.zones = this.instanced(zg, zm, MAX_ZONES, true);
     this.zones.renderOrder = 2;
     const sg = ball(0.2, 12, 8);
-    const sm = glow(palette.fire.torch, 3.2);
+    const sm = glow(fx.main, 3.2);
     this.seeds = this.instanced(sg, sm, MAX_SEEDS);
     const og2 = ball(0.2, 10, 8);
-    const om2 = glow(palette.fire.torch, 2.6);
+    const om2 = glow(fx.main, 2.6);
     this.oil = this.instanced(og2, om2, MAX_OIL);
     const pg = new THREE.CylinderGeometry(1, 1, 1, 18, 1, true);
     const pm = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
@@ -64,12 +68,12 @@ export class TechFx {
     const fm = additive();
     this.flashes = this.instanced(zg, fm, MAX_FLASHES, true);
     this.flashes.renderOrder = 3;
-    this.guardMat = new THREE.MeshBasicMaterial({ color: palette.fire.ghost, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+    this.guardMat = new THREE.MeshBasicMaterial({ color: fx.mid, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
     this.guard = new THREE.Mesh(zg, this.guardMat);
     this.guard.renderOrder = 2;
     this.guard.visible = false;
     const wg = new THREE.RingGeometry(0.9, 1.1, 36).rotateX(-Math.PI / 2);
-    this.wardMat = new THREE.MeshBasicMaterial({ color: palette.fire.soul, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+    this.wardMat = new THREE.MeshBasicMaterial({ color: fx.accent, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
     this.ward = new THREE.Mesh(wg, this.wardMat);
     this.ward.renderOrder = 3;
     this.ward.visible = false;

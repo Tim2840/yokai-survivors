@@ -22,6 +22,7 @@
 | 市場與同類遊戲研究（含來源） | `docs/13-market-research.md`；**同類肉鴿的系統與數值研究、改版提案：`docs/15-roguelike-research.md`** |
 | 收集、抽卡、活動系統的研究與排程 | `docs/16-collection-events.md` |
 | 還沒決定、等使用者點頭的事 | `docs/14-open-questions.md` |
+| **新增任何「所有角色共用」或「新角色」的內容前** | `docs/19-generalization.md`（舉一反三檢查表：已發生的錯、可預見的場景、5 個自問） |
 
 ## 架構鐵則（細節見 docs/06）
 

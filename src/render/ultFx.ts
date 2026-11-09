@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { palette } from '../art/palette';
+import { fxOf } from '../art/palette';
 import { ultById } from '../data/ultimates';
 import type { Run } from '../game/run';
 
 const LIFE = 0.7;
-const COLORS = { nova: palette.fire.torch, frenzy: palette.fire.ghost, bulwark: palette.fire.soul, beam: '#c08cff' } as const;
+type FxType = 'nova' | 'frenzy' | 'bulwark' | 'beam';
 
 interface Fx {
   mesh: THREE.Mesh;
   mat: THREE.MeshBasicMaterial;
-  type: keyof typeof COLORS;
+  type: FxType;
   at: number;
   x: number;
   z: number;
@@ -24,11 +24,15 @@ export class UltFx {
   private readonly fx: Fx[] = [];
   private readonly dome: THREE.Mesh;
   private readonly domeMat: THREE.MeshBasicMaterial;
+  /** 這隻妖怪的特效色（D65：通用特效不寫死火的顏色） */
+  private readonly colors: Record<FxType, string>;
   private seen = -1;
   private next = 0;
   private readonly disposables: { dispose(): void }[] = [];
 
   constructor(private readonly run: Run) {
+    const c = fxOf(run.yokai.id);
+    this.colors = { nova: c.main, frenzy: c.mid, bulwark: c.accent, beam: '#c08cff' };
     const ring = new THREE.RingGeometry(0.88, 1, 56).rotateX(-Math.PI / 2);
     const beam = new THREE.CylinderGeometry(0.5, 0.5, 1, 16, 1, true).rotateZ(Math.PI / 2).translate(0.5, 0, 0);
     this.disposables.push(ring, beam);
@@ -43,14 +47,14 @@ export class UltFx {
       this.fx.push({ mesh, mat, type: isBeam ? 'beam' : 'nova', at: -99, x: 0, z: 0, dx: 1, dz: 0, size: 1 });
     }
     const dg = new THREE.SphereGeometry(1.7, 20, 14);
-    this.domeMat = new THREE.MeshBasicMaterial({ color: palette.fire.soul, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending });
+    this.domeMat = new THREE.MeshBasicMaterial({ color: c.accent, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending });
     this.dome = new THREE.Mesh(dg, this.domeMat);
     this.dome.visible = false;
     this.group.add(this.dome);
     this.disposables.push(dg, this.domeMat);
   }
 
-  private spawn(type: keyof typeof COLORS, x: number, z: number, dx: number, dz: number, size: number): void {
+  private spawn(type: FxType, x: number, z: number, dx: number, dz: number, size: number): void {
     const isBeam = type === 'beam';
     const pool = isBeam ? [6, 7] : [0, 1, 2, 3, 4, 5];
     const f = this.fx[pool[this.next++ % pool.length]];
@@ -61,7 +65,7 @@ export class UltFx {
     f.dx = dx;
     f.dz = dz;
     f.size = size;
-    f.mat.color.set(COLORS[type]);
+    f.mat.color.set(this.colors[type]);
     f.mesh.visible = true;
   }
 

@@ -9,7 +9,7 @@ import { ITEM_RARITY_MULT } from '../data/items';
 import type { Rarity } from '../data/rarity';
 import { cardById, type CardOffer } from '../systems/cards';
 import type { Affix } from '../data/affixes';
-import { WEAPON_LEVELS, itemDown, itemValue, scaleWeaponStep, type WeaponLevel } from '../data/items';
+import { ITEM_WEAPON_KINDS, WEAPON_LEVELS, itemDown, itemValue, scaleWeaponStep, type WeaponLevel } from '../data/items';
 import { PLAYABLE_YOKAI, STARTER_YOKAI, YOKAI } from '../data/yokai';
 import { CARD_EFFECT } from '../data/stats';
 import { lineIsGood, type ElementResult, type ResultLine } from '../systems/elementResult';
@@ -535,10 +535,13 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
       const stats = q('sum-stats');
       const rows = sum.stats.map((s) => `<div data-stat="${s.id}"><dt>${t(`stat.${s.id}` as I18nKey)}</dt><dd>${statText(s.id, s.value, sum)}</dd></div>`);
       rows.push(`<div class="weapon-head"><dt><b>${t(`card.${YOKAI[sum.yokai].weapon.id}` as I18nKey)}</b></dt><dd></dd></div>`);
-      rows.push(`<div data-stat="volley"><dt>${t('sum.volley')}</dt><dd>${fix(sum.weapon.volley)}</dd></div>`);
-      rows.push(`<div data-stat="splash"><dt>${t('sum.splash')}</dt><dd>${t('sum.meters', { v: fix(sum.weapon.splash, 1) })}</dd></div>`);
-      rows.push(`<div data-stat="shards"><dt>${t('sum.shards')}</dt><dd>${t('sum.shardsVal', { v: fix(sum.weapon.shards, 1), d: fix(sum.weapon.shardDamage * 100, 0) })}</dd></div>`);
-      rows.push(`<div data-stat="pierce"><dt>${t('sum.pierce')}</dt><dd>${fix(sum.weapon.pierce)}</dd></div>`);
+      // 只列對這隻妖怪的武器有意義的欄位（回力水盤本來就來回穿透、揮擊沒有投射物：D65）
+      const wk = YOKAI[sum.yokai].weapon.kind ?? 'projectile';
+      const has = (id: string) => (ITEM_WEAPON_KINDS[id] ?? [wk]).includes(wk);
+      if (has('volley')) rows.push(`<div data-stat="volley"><dt>${t('sum.volley')}</dt><dd>${fix(sum.weapon.volley)}</dd></div>`);
+      if (has('splash')) rows.push(`<div data-stat="splash"><dt>${t('sum.splash')}</dt><dd>${t('sum.meters', { v: fix(sum.weapon.splash, 1) })}</dd></div>`);
+      if (has('splash')) rows.push(`<div data-stat="shards"><dt>${t('sum.shards')}</dt><dd>${t('sum.shardsVal', { v: fix(sum.weapon.shards, 1), d: fix(sum.weapon.shardDamage * 100, 0) })}</dd></div>`);
+      if (has('pierce')) rows.push(`<div data-stat="pierce"><dt>${t('sum.pierce')}</dt><dd>${fix(sum.weapon.pierce)}</dd></div>`);
       stats.innerHTML = rows.join('');
       const curse = q('sum-curse');
       const diff = sum.difficulty > 0 ? `<h3>${t('pause.difficulty', { d: fix(sum.difficulty * 100, 0) })}</h3><p class="sum-diff">${t('pause.difficultyDesc', { hp: fix(sum.difficulty * DIFFICULTY.hp * 100, 0), dmg: fix(sum.difficulty * DIFFICULTY.damage * 100, 0), n: fix(sum.difficulty * DIFFICULTY.spawn * 100, 0) })}</p>` : '';

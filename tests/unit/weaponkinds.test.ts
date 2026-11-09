@@ -3,7 +3,7 @@ import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { tuning, resetTuning } from '../../src/data/tuning';
 import { PLAYABLE_YOKAI, YOKAI, type WeaponDef, type YokaiDef } from '../../src/data/yokai';
-import { WEAPON_LEVELS, itemPoolFor, registerItem } from '../../src/data/items';
+import { ITEM_WEAPON_KINDS, WEAPON_LEVELS, itemPoolFor, registerItem } from '../../src/data/items';
 import { kindIndex } from '../../src/systems/enemies';
 
 /**
@@ -54,7 +54,11 @@ describe('選卡池跟著妖怪的主武器走（D61）', () => {
     const p = itemPoolFor('w-test-sweep');
     expect(p[0]).toBe('w-test-sweep');
     expect(p).not.toContain('ghostfire');
-    expect(p.slice(1)).toEqual(itemPoolFor('ghostfire').slice(1));
+    // 揮擊沒有投射物：多重、碎裂、穿透對它沒有效果，不放進選卡池（D65）
+    expect(p).not.toContain('volley');
+    expect(p).not.toContain('splash');
+    expect(p).not.toContain('pierce');
+    expect(p).toContain('power');
   });
   it('Run：假妖怪開局的主武器是自己的、發牌池裡也是', () => {
     const run = make('test-sweep');
@@ -136,5 +140,29 @@ describe('boomerang：飛到盡頭折返、來回都打', () => {
     for (let i = 0; i < 25; i++) run.step(DT);
     expect(run.projectiles.aliveCount).toBeGreaterThan(0);
     for (let i = 0; i < run.projectiles.capacity; i++) if (run.projectiles.alive[i]) expect(run.projectiles.homing[i]).toBe(0);
+  });
+});
+
+describe('選卡池裡的法具對這隻妖怪的武器都有效果（D65：新角色最容易漏的是「通用卡放到新武器上沒用」）', () => {
+  it('全掃：每隻妖怪、每種出手方式——池裡的法具都不在「沒效果」名單上；河童沒有穿透卡（水盤本來就來回穿透）', () => {
+    for (const y of Object.values(YOKAI)) {
+      const kind = y.weapon.kind ?? 'projectile';
+      for (const id of itemPoolFor(y.weapon.id)) expect((ITEM_WEAPON_KINDS[id] ?? [kind]).includes(kind), `${y.id} 的選卡池有對 ${kind} 沒效果的 ${id}`).toBe(true);
+    }
+    expect(itemPoolFor('waterdisc')).not.toContain('pierce');
+    expect(itemPoolFor('waterdisc')).toContain('volley');
+    expect(itemPoolFor('ghostfire')).toContain('pierce');
+  });
+});
+
+describe('主武器自己「適合」的法具也只列有效果的（D65：暫停頁看到水盤適合穿透會怪）', () => {
+  it('提燈小僧列穿透；河童不列；揮擊也不列發射數、碎裂、穿透', async () => {
+    const { baseLikesOf } = await import('../../src/data/links');
+    expect(baseLikesOf('chochin-kozo')).toContain('pierce');
+    expect(baseLikesOf('kappa')).not.toContain('pierce');
+    expect(baseLikesOf('kappa')).toContain('volley');
+    const l = baseLikesOf('test-sweep');
+    for (const id of ['volley', 'splash', 'pierce']) expect(l).not.toContain(id);
+    expect(l).toContain('power');
   });
 });

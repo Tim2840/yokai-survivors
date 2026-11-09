@@ -4,7 +4,7 @@
  * 所以只剩技法（主武器鬼火也算一個技法）。選卡畫面與能力面板都用這一份，所以新增技法或法具時不用另外維護文字。
  * 取捨道具（妖刀、狂熱、金剛身）算成它們加強的那個屬性道具（力量、迅捷、堅甲）。
  */
-import { ITEMS, type ItemDef } from './items';
+import { ITEMS, ITEM_WEAPON_KINDS, type ItemDef } from './items';
 import { BASE_TECH_LIKES, TECHS } from './techniques';
 import { YOKAI } from './yokai';
 
@@ -21,6 +21,12 @@ function baseItemId(d: ItemDef): string {
   return d.id;
 }
 
+/** 主武器自己「適合」的法具：只留對它的出手方式有效果的（D65；水盤本來就來回穿透，不列穿透） */
+export function baseLikesOf(yokai: string): string[] {
+  const kind = YOKAI[yokai]?.weapon.kind ?? 'projectile';
+  return BASE_TECH_LIKES.filter((id) => (ITEM_WEAPON_KINDS[id] ?? [kind]).includes(kind));
+}
+
 export function cardLinks(cardId: string, yokai: string): CardLinks {
   const weaponId = YOKAI[yokai]?.weapon.id ?? '';
   const d = ITEMS.find((x) => x.id === cardId);
@@ -28,7 +34,7 @@ export function cardLinks(cardId: string, yokai: string): CardLinks {
   const base = baseItemId(d);
   return {
     // 主武器（鬼火）也是一個技法（D53）：排在最前面
-    techs: [...(BASE_TECH_LIKES.includes(base) && weaponId ? [weaponId] : []), ...TECHS.filter((x) => x.weapon === weaponId && x.likes.includes(base)).map((x) => x.id)],
+    techs: [...(baseLikesOf(yokai).includes(base) && weaponId ? [weaponId] : []), ...TECHS.filter((x) => x.weapon === weaponId && x.likes.includes(base)).map((x) => x.id)],
     weapon: d.kind === 'weapon',
   };
 }
