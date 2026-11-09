@@ -26,6 +26,8 @@ export interface GameEvents {
   bossDown: { stage: number };
   /** 召喚祭壇顯現／被開啟、小頭目被召喚出來（D34；mult = 召喚當下的生命倍率） */
   summonAltar: { stage: number };
+  /** 這一局第一次有某種人類出場（E-1；字幕與圖鑑用） */
+  enemySeen: { id: string };
   /** 合魂祠出現（大招材料湊齊） */
   /** 道祖神出現了（D47） */
   dosojin: { stage: number };

@@ -157,7 +157,8 @@ export function buildHud(parent: HTMLElement): Hud {
       // 道祖神（D47）：只在出現後 hintSeconds 秒內提示、指路（不想換的人不會一直被叫過去）
       const dslot = run.elements.dosojinSlot;
       const dosojin = dslot && dslot.announce <= 0 && dslot.age < DOSOJIN.hintSeconds ? dslot : null;
-      const noteText = run.director.swarm ? t('hud.swarm') : run.portal.active ? t('hud.bossDown') : altar ? t('hud.summonNote') : shrine ? t('hud.fuseNote') : dosojin ? t('hud.dosojinNote') : summit && run.time < 15 ? t('hud.summitNote') : '';
+      const intro = run.enemyIntro && run.clock < run.enemyIntro.until ? run.enemyIntro.key : '';
+      const noteText = run.director.swarm ? t('hud.swarm') : intro ? t(intro as I18nKey) : run.portal.active ? t('hud.bossDown') : altar ? t('hud.summonNote') : shrine ? t('hud.fuseNote') : dosojin ? t('hud.dosojinNote') : summit && run.time < 15 ? t('hud.summitNote') : '';
       if (noteText !== lastNote) {
         lastNote = noteText;
         note.textContent = noteText;

@@ -8,7 +8,7 @@ import { ball, lathe } from '../art/shapes';
  * 差異靠顏色與頭飾：土褐的衣服、頭巾、手持火把（火焰用大於 1 的頂點色，Bloom 會讓它發光）。
  * 約定：腳底 y = 0、臉朝 +z、高約 1.3 公尺。
  */
-function paint(g: THREE.BufferGeometry, color: THREE.ColorRepresentation, boost = 1): THREE.BufferGeometry {
+export function paint(g: THREE.BufferGeometry, color: THREE.ColorRepresentation, boost = 1): THREE.BufferGeometry {
   const c = new THREE.Color(color);
   const n = g.attributes.position.count;
   const arr = new Float32Array(n * 3);

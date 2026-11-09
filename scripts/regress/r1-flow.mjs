@@ -56,6 +56,12 @@ export async function run(browser) {
         expect(await page.locator('#portal-box').isVisible(), `召喚祭壇的箭頭沒顯示（${vp.name}）`);
         const txt = await page.locator('#portal-text').innerText();
         expect(/召喚祭壇 \d+ 公尺/.test(txt), `箭頭文字不對：${txt}`);
+        // 第 30% 剛好也是足輕第一次出場：新人類的提示會先佔 7 秒的提示欄，之後才輪到祭壇的提示（箭頭一直都在）
+        for (let i = 0; i < 40 && (await page.locator('#wave-note').innerText()) !== '召喚祭壇出現了'; i++) {
+          await page.evaluate(() => window.__game.advance(0.5));
+          if ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await dismissLevelUps();
+          await page.evaluate(() => window.__game.render());
+        }
         const note = await page.locator('#wave-note').innerText();
         expect(note === '召喚祭壇出現了', `提示文字不對：${note}`);
         await hudTopOk(ctx, '・召喚祭壇提示');

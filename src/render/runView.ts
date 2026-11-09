@@ -6,7 +6,9 @@ import type { Run } from '../game/run';
 import { COMBAT } from '../data/combat';
 import { buildLanternMonk, type Character } from '../units/lanternMonk';
 import { buildKappa } from '../units/kappa';
-import { buildVillagerGeometry } from '../units/villager';
+import { ENEMY_MODELS } from '../units/enemyModels';
+import { ENEMY_IDS } from '../data/enemies';
+import { EnemyShotsView } from './enemyShotsView';
 import { buildWorldView, type WorldView } from '../world/worldView';
 import { writeMatrix, setHugeBounds } from './instancedLayer';
 import { DamageNumbers } from './damageNumbers';
@@ -38,7 +40,9 @@ export class RunView {
   private readonly player: Character;
   /** 投射物畫成扁盤（河童）還是圓球（鬼火） */
   private diskShot = false;
-  private readonly enemyMesh: THREE.InstancedMesh;
+  private readonly enemyMeshes: THREE.InstancedMesh[];
+  readonly shotsView: EnemyShotsView;
+  private readonly enemyCounts = new Int32Array(ENEMY_IDS.length);
   private readonly enemyShadow: THREE.InstancedMesh;
   private readonly bulletMesh: THREE.InstancedMesh;
   private readonly orbMesh: THREE.InstancedMesh;
@@ -71,32 +75,38 @@ export class RunView {
     renderer.playerLight.color.set(fxOf(run.yokai.id).light);
     this.group.add(this.player.root);
 
-    // 敵人：單一幾何＋頂點色，頂點著色器做彈跳與傾斜（T2：頂點著色器動畫）
-    const eg = buildVillagerGeometry();
-    const phase = new THREE.InstancedBufferAttribute(new Float32Array(run.enemies.capacity), 1);
-    phase.setUsage(THREE.DynamicDrawUsage);
-    eg.setAttribute('aPhase', phase);
-    const em = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0 });
-    em.onBeforeCompile = (shader) => {
-      shader.uniforms.uTime = this.timeUniform;
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute float aPhase;\nuniform float uTime;')
-        .replace(
-          '#include <begin_vertex>',
-          `#include <begin_vertex>
+    // 敵人：每種人類一個實例化圖層（各自的幾何＋頂點色），頂點著色器做彈跳與傾斜（T2：頂點著色器動畫）
+    // 材質的 onBeforeCompile 在每個材質上是同一份程式碼 → 著色器程式共用（p1 程式數不變）
+    this.enemyMeshes = ENEMY_IDS.map((id) => {
+      const eg = ENEMY_MODELS[id]();
+      const phase = new THREE.InstancedBufferAttribute(new Float32Array(run.enemies.capacity), 1);
+      phase.setUsage(THREE.DynamicDrawUsage);
+      eg.setAttribute('aPhase', phase);
+      const em = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0 });
+      em.onBeforeCompile = (shader) => {
+        shader.uniforms.uTime = this.timeUniform;
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', '#include <common>\nattribute float aPhase;\nuniform float uTime;')
+          .replace(
+            '#include <begin_vertex>',
+            `#include <begin_vertex>
           float bounce = sin(uTime * ${BOUNCE_FREQ.toFixed(1)} + aPhase);
           transformed.y += abs(bounce) * 0.1;
           transformed.x += bounce * transformed.y * 0.07;`,
-        );
-    };
-    this.enemyMesh = new THREE.InstancedMesh(eg, em, run.enemies.capacity);
-    this.enemyMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.enemyMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(run.enemies.capacity * 3).fill(1), 3);
-    this.enemyMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
-    this.enemyMesh.count = 0;
-    setHugeBounds(this.enemyMesh, 200);
-    this.group.add(this.enemyMesh);
-    this.disposables.push(eg, em);
+          );
+      };
+      const mesh = new THREE.InstancedMesh(eg, em, run.enemies.capacity);
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(run.enemies.capacity * 3).fill(1), 3);
+      mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+      mesh.count = 0;
+      setHugeBounds(mesh, 200);
+      this.group.add(mesh);
+      this.disposables.push(eg, em);
+      return mesh;
+    });
+    this.shotsView = new EnemyShotsView(run);
+    this.group.add(this.shotsView.group);
 
     // 腳下陰影（沒有開陰影貼圖，用扁圓片代替；也讓敵人貼地看得清楚）
     const sg = new THREE.CircleGeometry(0.42, 14).rotateX(-Math.PI / 2);
@@ -230,36 +240,45 @@ export class RunView {
     this.feelFx.update(dt);
     this.timeUniform.value = t % TWO_PI;
 
-    // 敵人
+    // 敵人：依種類分到各自的圖層
     const e = run.enemies;
-    const em = this.enemyMesh.instanceMatrix.array as Float32Array;
     const sm = this.enemyShadow.instanceMatrix.array as Float32Array;
-    const ph = (this.enemyMesh.geometry.getAttribute('aPhase') as THREE.InstancedBufferAttribute).array as Float32Array;
-    const col = (this.enemyMesh.instanceColor as THREE.InstancedBufferAttribute).array as Float32Array;
-    let n = 0;
+    const counts = this.enemyCounts;
+    counts.fill(0);
+    let total = 0;
     for (let i = 0; i < e.high; i++) {
       if (!e.alive[i]) continue;
+      const k = e.kind[i];
+      const mesh = this.enemyMeshes[k];
+      const n = counts[k]++;
+      const em = mesh.instanceMatrix.array as Float32Array;
+      const ph = (mesh.geometry.getAttribute('aPhase') as THREE.InstancedBufferAttribute).array as Float32Array;
+      const col = (mesh.instanceColor as THREE.InstancedBufferAttribute).array as Float32Array;
       const x = e.x[i];
       const z = e.z[i];
       const y = map.heightAt(x, z);
       const sc = e.scale[i];
       writeMatrix(em, n, x, y, z, e.yaw[i], sc, sc, sc);
-      writeMatrix(sm, n, x, y + DECAL_LIFT, z, 0, sc, 1, sc);
+      writeMatrix(sm, total++, x, y + DECAL_LIFT, z, 0, sc, 1, sc);
       ph[n] = e.phase[i];
       const f = e.flash[i] > 0 ? 1 + (e.flash[i] / COMBAT.hitFlash) * 2.2 : 1;
-      // 精英偏紅、頭目更紅（一般人類的顏色不變）
+      // 精英偏紅、頭目更紅（一般人類的顏色不變）；弓手瞄準時偏紅閃爍（預告）
       const v = e.variant[i];
-      col[n * 3] = f * (v === 0 ? 1 : 1.5);
-      col[n * 3 + 1] = f * (v === 0 ? 1 : v === 1 ? 0.7 : 0.5);
-      col[n * 3 + 2] = f * (v === 0 ? 1 : v === 1 ? 0.7 : 0.5);
-      n++;
+      const aim = e.wind[i] > 0 ? 0.6 + 0.4 * Math.sin(t * 28) : 0;
+      col[n * 3] = f * (v === 0 ? 1 : 1.5) * (1 + aim * 0.8);
+      col[n * 3 + 1] = f * (v === 0 ? 1 : v === 1 ? 0.7 : 0.5) * (1 - aim * 0.45);
+      col[n * 3 + 2] = f * (v === 0 ? 1 : v === 1 ? 0.7 : 0.5) * (1 - aim * 0.45);
     }
-    this.enemyMesh.count = n;
-    this.enemyShadow.count = n;
-    this.enemyMesh.instanceMatrix.needsUpdate = true;
+    for (let k = 0; k < this.enemyMeshes.length; k++) {
+      const mesh = this.enemyMeshes[k];
+      mesh.count = counts[k];
+      mesh.instanceMatrix.needsUpdate = true;
+      (mesh.instanceColor as THREE.InstancedBufferAttribute).needsUpdate = true;
+      (mesh.geometry.getAttribute('aPhase') as THREE.InstancedBufferAttribute).needsUpdate = true;
+    }
+    this.enemyShadow.count = total;
     this.enemyShadow.instanceMatrix.needsUpdate = true;
-    (this.enemyMesh.instanceColor as THREE.InstancedBufferAttribute).needsUpdate = true;
-    (this.enemyMesh.geometry.getAttribute('aPhase') as THREE.InstancedBufferAttribute).needsUpdate = true;
+    this.shotsView.update();
 
     // 鬼火
     const pr = run.projectiles;
@@ -305,7 +324,8 @@ export class RunView {
     this.player.dispose();
     this.world.dispose();
     for (const d of this.disposables) d.dispose();
-    this.enemyMesh.dispose();
+    for (const m of this.enemyMeshes) m.dispose();
+    this.shotsView.dispose();
     this.enemyShadow.dispose();
     this.bulletMesh.dispose();
     this.orbMesh.dispose();

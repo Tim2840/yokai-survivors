@@ -24,6 +24,8 @@ import { Pickups } from '../systems/pickups';
 import { PICKUPS, PICKUP_KINDS, PICKUP_RULES, type PickupKind } from '../data/pickups';
 import { FlowField } from '../systems/flowField';
 import { Enemies, kindIndex } from '../systems/enemies';
+import { EnemyShots } from '../systems/enemyShots';
+import { ENEMY_IDS } from '../data/enemies';
 import { Projectiles } from '../systems/projectiles';
 import { Orbs } from '../systems/orbs';
 import { HitFeed } from '../systems/hitFeed';
@@ -86,6 +88,8 @@ export class Run {
   readonly curse: Record<CurseId, number> = { enemyHp: 0, enemySpeed: 0, enemyDamage: 0, spawnRate: 0 };
   private readonly elementCarry: ElementCarry = { serial: 0, downKeys: [] };
   readonly projectiles: Projectiles;
+  /** 敵方投射物（弓手的箭，E-1） */
+  readonly shots = new EnemyShots();
   readonly orbs: Orbs;
   readonly feed = new HitFeed();
   readonly stats: Stats;
@@ -368,6 +372,7 @@ export class Run {
       emitUsed: (kind, rarity) => this.bus.emit('elementUsed', { kind, rarity }),
     }, this.elementCarry);
     this.projectiles.reset();
+    this.shots.reset();
     this.orbs.reset();
     this.pickups?.reset();
     this.freezeUntil = 0;
@@ -457,6 +462,19 @@ export class Run {
     if (this.phase === 'combat') this.clearStage();
   }
 
+  /** 開發與測試：清場（敵人、敵方的箭）、解除受傷後的無敵時間、並停止這一關的湧出（只剩測試自己放的敵人） */
+  devClearEnemies(): void {
+    this.director.active = false;
+    this.enemies.reset();
+    this.shots.reset();
+    this.invul = 0;
+  }
+
+  /** 開發與測試：場上所有敵人的生命設成極大（行為測試不要被玩家的武器先打死） */
+  devTankEnemies(): void {
+    for (let i = 0; i < this.enemies.high; i++) if (this.enemies.alive[i]) this.enemies.hp[i] = this.enemies.maxHp[i] = 1e9;
+  }
+
   devSpawn(kindId: string, n: number): number {
     const kind = kindIndex(kindId);
     let made = 0;
@@ -509,8 +527,9 @@ export class Run {
 
     this.flow.update(this.px, this.pz);
     const aura = this.yokai.aura;
-    this.enemies.update(dt, this.px, this.pz, this.flow, aura.radius * s.area, aura.slow);
+    this.enemies.update(dt, this.px, this.pz, this.flow, aura.radius * s.area, aura.slow, this.shots);
     this.contactDamage();
+    this.arrowDamage(dt);
     this.weapon(dt);
     this.tech.update(dt);
     this.projectiles.homeX = this.px;
@@ -541,6 +560,7 @@ export class Run {
     this.director.hpCurse = 1 + this.curse.enemyHp;
     this.enemies.speedMult = this.frozenEnemies ? 0 : 1 + this.curse.enemySpeed;
     this.director.update(dt, this.px, this.pz, this.night, this.bossDefeated);
+    this.checkEnemySeen();
 
     if (this.hp <= 0 && !this.god) {
       this.dead = true;
@@ -549,6 +569,19 @@ export class Run {
     }
     if (this.portal.active && this.portalReached()) this.clearStage();
   }
+
+  /** 這一局第一次看到某種人類（頭目以外）→ 發事件（字幕與圖鑑）；每種只發一次 */
+  private checkEnemySeen(): void {
+    const c = this.enemies.kindCount;
+    for (let k = 0; k < c.length; k++) {
+      if (c[k] <= 0 || this.seenKinds[k]) continue;
+      this.seenKinds[k] = 1;
+      this.bus.emit('enemySeen', { id: ENEMY_IDS[k] });
+    }
+  }
+  private readonly seenKinds = new Uint8Array(ENEMY_IDS.length);
+  /** 新人類第一次出場的簡短提示（i18n 鍵與結束時間；由 Game 在存檔裡沒有紀錄時設定，HUD 顯示在波數旁） */
+  enemyIntro: { key: string; until: number } | null = null;
 
   private portalReached(): boolean {
     const p = this.portal;
@@ -663,17 +696,33 @@ export class Run {
       if (this.invul > 0 || this.god || this.frozenEnemies) continue;
       e.contactCd[i] = COMBAT.contactCooldown;
       if (this.rngCombat.next() < this.stats.value.dodge) continue;
-      // 護身火（技法）：充好了就擋下這一次並炸開
-      if (this.tech.tryWard()) {
-        this.invul = COMBAT.invulnerable;
-        break;
-      }
-      const dmg = e.damage[i] * (1 + this.curse.enemyDamage) * (1 + this.difficulty * DIFFICULTY.damage) * armorMult(this.stats.value.armor);
-      this.hp -= dmg;
-      this.invul = COMBAT.invulnerable;
-      this.bus.emit('playerHurt', { damage: dmg, hp: this.hp });
-      break;
+      if (this.hurtPlayer(e.damage[i])) break;
     }
+  }
+
+  /** 敵方的箭：前進一步；打中就走和接觸傷害同一條受傷流程。跳起來（腳離地超過 arrowClear）箭從腳下飛過 */
+  private arrowDamage(dt: number): void {
+    if (this.shots.aliveCount === 0) return;
+    const airborne = this.py - this.map.heightAt(this.px, this.pz) > COMBAT.arrowClear;
+    const canHit = this.invul <= 0 && !this.god && !this.frozenEnemies && !airborne;
+    const dmg = this.shots.update(dt, this.px, this.pz, COMBAT.playerRadius, canHit);
+    if (dmg > 0 && this.rngCombat.next() >= this.stats.value.dodge) this.hurtPlayer(dmg);
+  }
+
+  /**
+   * 玩家受到一次傷害（已排除無敵與閃避）：護身火擋下就回傳 true 且不扣血；否則依難度、詛咒、護甲換算後扣血。
+   * rawDamage 是敵人身上的原始傷害（接觸傷害或箭的傷害）。
+   */
+  private hurtPlayer(rawDamage: number): boolean {
+    if (this.tech.tryWard()) {
+      this.invul = COMBAT.invulnerable;
+      return true;
+    }
+    const dmg = rawDamage * (1 + this.curse.enemyDamage) * (1 + this.difficulty * DIFFICULTY.damage) * armorMult(this.stats.value.armor);
+    this.hp -= dmg;
+    this.invul = COMBAT.invulnerable;
+    this.bus.emit('playerHurt', { damage: dmg, hp: this.hp });
+    return true;
   }
 
   private weapon(dt: number): void {
@@ -820,6 +869,7 @@ export class Run {
     const en = this.enemies;
     const x = en.x[e];
     const z = en.z[e];
+    dmg = en.guard(e, dmg); // 盾面正面減傷（E-1）：傷害數字也顯示減傷後的
     if (!quiet) this.feed.push(x, z, dmg, crit);
     const l = Math.hypot(dx, dz);
     if (en.hurt(e, dmg, l > 1e-6 ? dx / l : 0, l > 1e-6 ? dz / l : 0, en.variant[e] === 2 ? 0 : knock)) {
@@ -1415,6 +1465,7 @@ export class Run {
     // 沒打完的人類撤退（不給魂火）、投射物消失；場上的魂火全部收進來
     this.enemies.reset();
     this.projectiles.reset();
+    this.shots.reset();
     let rest = 0;
     for (let i = 0; i < this.orbs.high; i++) if (this.orbs.alive[i]) rest += this.orbs.value[i];
     this.orbs.reset();

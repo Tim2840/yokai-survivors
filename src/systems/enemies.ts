@@ -6,6 +6,7 @@ import { enemyHpMult, enemyDamageMult, enemySpeedMult } from '../data/waves';
 import { SpatialHash } from '../lib/spatialHash';
 import type { TerrainMap } from '../world/terrainMap';
 import type { FlowField } from './flowField';
+import type { EnemyShots } from './enemyShots';
 
 const KIND_HP = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].hp));
 /** 每種敵人的每波 HP 成長（NaN = 用 WAVES.hpPerWave，讓 sim 的 --tune w.hpPerWave 還能用） */
@@ -13,6 +14,13 @@ const KIND_GROWTH = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].hpPerWave
 const KIND_SPEED = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].speed));
 const KIND_CONTACT = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].contact));
 const KIND_RADIUS = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].radius));
+const KIND_BEHAVIOR = new Uint8Array(ENEMY_IDS.map((id) => (ENEMIES[id].behavior === 'shield' ? 1 : ENEMIES[id].behavior === 'ranged' ? 2 : 0)));
+const BEH_SHIELD = 1;
+const KIND_SHIELD_REDUCTION = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].shield?.reduction ?? 0));
+const KIND_SHIELD_COS = new Float32Array(ENEMY_IDS.map((id) => Math.cos(ENEMIES[id].shield?.halfArc ?? 0)));
+const KIND_SHIELD_TURN = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].shield?.turn ?? 0));
+const FACE_UNSET = 99;
+const BEH_RANGED = 2;
 const KIND_POINTS = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].points));
 export const kindIndex = (id: string): number => {
   const i = ENEMY_IDS.indexOf(id);
@@ -39,6 +47,15 @@ export class Enemies {
   readonly contactCd: Float32Array;
   readonly yaw: Float32Array;
   readonly phase: Float32Array;
+  /** 盾面朝向（弧度；只有盾兵用，會慢慢轉向玩家） */
+  readonly face: Float32Array;
+  /** 遠程：預告剩餘秒數（> 0 = 正在瞄準，不動）、下一發的冷卻、預告開始時鎖定的方向 */
+  readonly wind: Float32Array;
+  readonly shootCd: Float32Array;
+  readonly aimX: Float32Array;
+  readonly aimZ: Float32Array;
+  /** 每種敵人現在活著幾隻（出場配方的同時上限用） */
+  readonly kindCount = new Int32Array(ENEMY_IDS.length);
   readonly kind: Uint8Array;
   /** 0 一般、1 精英、2 頭目 */
   readonly variant: Uint8Array;
@@ -74,6 +91,11 @@ export class Enemies {
     this.contactCd = f();
     this.yaw = f();
     this.phase = f();
+    this.face = f();
+    this.wind = f();
+    this.shootCd = f();
+    this.aimX = f();
+    this.aimZ = f();
     this.kind = new Uint8Array(capacity);
     this.variant = new Uint8Array(capacity);
     this.scale = new Float32Array(capacity).fill(1);
@@ -88,6 +110,7 @@ export class Enemies {
     this.high = 0;
     this.aliveCount = 0;
     this.freeTop = 0;
+    this.kindCount.fill(0);
   }
 
   radius(i: number): number {
@@ -127,6 +150,13 @@ export class Enemies {
     this.contactCd[i] = 0;
     this.yaw[i] = 0;
     this.phase[i] = phase;
+    this.face[i] = FACE_UNSET;
+    this.wind[i] = 0;
+    // 遠程：每隻的第一發錯開（用 phase 當種子，別一整群同時開火）
+    this.shootCd[i] = KIND_BEHAVIOR[kind] === BEH_RANGED ? (ENEMIES[ENEMY_IDS[kind]].ranged?.cooldown ?? 1) * (0.4 + 0.6 * ((phase * 7.13) % 1)) : 0;
+    this.aimX[i] = 0;
+    this.aimZ[i] = 1;
+    this.kindCount[kind]++;
     this.aliveCount++;
     return i;
   }
@@ -153,6 +183,27 @@ export class Enemies {
     this.alive[i] = 0;
     this.free[this.freeTop++] = i;
     this.aliveCount--;
+    this.kindCount[this.kind[i]]--;
+  }
+
+  /** 最近一次 update 時的玩家位置（盾面判斷用：攻擊視為從玩家那邊來） */
+  private playerX = 0;
+  private playerZ = 0;
+
+  /** 這一隻現在是不是「盾面對著玩家」（沒有盾的敵人回傳 false） */
+  shielded(i: number): boolean {
+    const k = this.kind[i];
+    if (KIND_BEHAVIOR[k] !== BEH_SHIELD || this.face[i] === FACE_UNSET) return false;
+    const dx = this.playerX - this.x[i];
+    const dz = this.playerZ - this.z[i];
+    const l = Math.hypot(dx, dz);
+    if (l < 1e-6) return true;
+    return (dx * Math.sin(this.face[i]) + dz * Math.cos(this.face[i])) / l >= KIND_SHIELD_COS[k];
+  }
+
+  /** 盾擋掉一部分之後的傷害（沒有盾、或玩家在盾面之外就原樣回傳）。武器傷害都要先過這裡再 hurt */
+  guard(i: number, dmg: number): number {
+    return this.shielded(i) ? dmg * (1 - KIND_SHIELD_REDUCTION[this.kind[i]]) : dmg;
   }
 
   /** 對一隻造成傷害並擊退；回傳是否死亡 */
@@ -171,8 +222,10 @@ export class Enemies {
   /** 敵人移動速度倍率（詛咒；每步由 Run 設） */
   speedMult = 1;
 
-  update(dt: number, px: number, pz: number, flow: FlowField, auraRadius: number, auraSlow: number): void {
+  update(dt: number, px: number, pz: number, flow: FlowField, auraRadius: number, auraSlow: number, shots?: EnemyShots): void {
     const map = this.map;
+    this.playerX = px;
+    this.playerZ = pz;
     const decay = Math.pow(COMBAT.knockbackDecay, dt);
     const soft = this.aliveCount >= COMBAT.softPushMin;
     const dir = this.dir;
@@ -198,6 +251,51 @@ export class Enemies {
       }
       let spd = this.speed[i] * this.speedMult * map.speedAt(ex, ez);
       if (d2 < auraR2) spd *= 1 - auraSlow;
+      const beh = KIND_BEHAVIOR[this.kind[i]];
+      let faceYaw = NaN;
+      if (beh === BEH_SHIELD) {
+        // 盾面慢慢轉向玩家：繞得比它轉得快，就能繞到側面、背後
+        const want = Math.atan2(dx, dz);
+        if (this.face[i] === FACE_UNSET) this.face[i] = want;
+        else {
+          let diff = want - this.face[i];
+          diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+          const maxTurn = KIND_SHIELD_TURN[this.kind[i]] * dt;
+          this.face[i] += Math.max(-maxTurn, Math.min(maxTurn, diff));
+        }
+        faceYaw = this.face[i];
+      } else if (beh === BEH_RANGED) {
+        const rg = ENEMIES[ENEMY_IDS[this.kind[i]]].ranged!;
+        const d = Math.sqrt(d2);
+        faceYaw = Math.atan2(dx, dz);
+        if (this.speedMult <= 0) {
+          // 被凍住：不動、不瞄準
+          spd = 0;
+        } else if (this.wind[i] > 0) {
+          // 瞄準中：站定、臉朝鎖定的方向；預告結束就射
+          spd = 0;
+          faceYaw = Math.atan2(this.aimX[i], this.aimZ[i]);
+          this.wind[i] -= dt;
+          if (this.wind[i] <= 0) {
+            this.wind[i] = 0;
+            this.shootCd[i] = rg.cooldown;
+            shots?.spawn(ex + this.aimX[i] * 0.5, ez + this.aimZ[i] * 0.5, this.aimX[i], this.aimZ[i], rg.shotSpeed, rg.shotLife, this.damage[i] * rg.damageMult, rg.shotRadius);
+          }
+        } else {
+          this.shootCd[i] -= dt;
+          if (this.shootCd[i] <= 0 && d <= rg.range && d > 1e-3) {
+            this.wind[i] = rg.windup;
+            this.aimX[i] = dx / d;
+            this.aimZ[i] = dz / d;
+            spd = 0;
+          } else if (d < rg.keep * 0.75) {
+            // 太近：邊退邊保持距離
+            mx = -mx;
+            mz = -mz;
+            spd *= 0.7;
+          } else if (d <= rg.keep) spd = 0;
+        }
+      }
       let vx = mx * spd + this.kx[i];
       let vz = mz * spd + this.kz[i];
       this.kx[i] *= decay;
@@ -230,7 +328,8 @@ export class Enemies {
       }
       this.x[i] = nx;
       this.z[i] = nz;
-      if (mx !== 0 || mz !== 0) this.yaw[i] = Math.atan2(mx, mz);
+      if (!Number.isNaN(faceYaw)) this.yaw[i] = faceYaw;
+      else if (mx !== 0 || mz !== 0) this.yaw[i] = Math.atan2(mx, mz);
       if (this.flash[i] > 0) this.flash[i] -= dt;
       if (this.contactCd[i] > 0) this.contactCd[i] -= dt;
     }

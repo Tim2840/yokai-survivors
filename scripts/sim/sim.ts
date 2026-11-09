@@ -39,6 +39,7 @@ const SUMMON_AT = Number(arg('summonAt', '0.5'));
 const ELEMENTS = arg('elements', 'both'); // on | off | both
 const JSON_OUT = arg('json', '');
 /** --cast on|off：機器人要不要發動大招（比較大招的影響） */
+const DODGE = process.argv.includes('--nododge') ? false : true;
 const CAST = arg('cast', 'on') === 'on';
 /** --techs a,b,c：技法面板優先選這幾個（沒給 = 依策略的偏好；random 亂選） */
 const TECH_PREF = arg('techs', '');
@@ -60,13 +61,20 @@ const TECH_BY_STRATEGY: Record<string, string[]> = {
   survive: ['ring', 'ward', 'lamp', 'hellfire', 'pillar', 'seed', 'kitsunebi', 'bounce', 'homing'],
 };
 /** --tune countScale=3,hpScale=1.2,xp.needPerLevel=4,w.hpPerWave=0.2,tech.levelGap=2：臨時改旋鈕比較（不改檔案）；xp. 開頭是 PROGRESSION、w. 開頭是 WAVES、tech. 開頭是 TECH_OFFER、chapter. 開頭是 STAGE.chapter（例：chapter.normalStages=3） */
+import { SPAWN_RECIPES } from '../../src/data/spawnRecipes';
 const TUNE = arg('tune', '');
 function applyTune(): void {
   // --noTrade：不出狐面商（取捨道具只在狐面商拿得到，D38；對照組）
   if (process.argv.includes('--noTrade')) (ELEMENT_WEIGHTS as Record<string, number>).fox = 0;
   for (const kv of TUNE.split(',').filter(Boolean)) {
     const [k, v] = kv.split('=');
-    if (k.startsWith('chapter.')) (STAGE.chapter as unknown as Record<string, number>)[k.slice(8)] = Number(v);
+    if (k === 'recipes' && v === 'off') {
+      // 對照組：只出村人（E-1 之前的敵人）
+      for (let i = 0; i < SPAWN_RECIPES.length; i++) (SPAWN_RECIPES as unknown as unknown[])[i] = [{ id: 'villager', from: 0, weight: 1 }];
+    } else if (k.startsWith('recipes.')) {
+      // recipes.yumi=0 把某種敵人的權重設成 0（全部關卡）
+      for (const r of SPAWN_RECIPES) for (const e of r) if (e.id === k.slice(8)) (e as { weight: number }).weight = Number(v);
+    } else if (k.startsWith('chapter.')) (STAGE.chapter as unknown as Record<string, number>)[k.slice(8)] = Number(v);
     else if (k.startsWith('summon.')) (STAGE.summon as unknown as Record<string, number>)[k.slice(7)] = Number(v);
     else if (k.startsWith('drops.')) (STAGE.drops as unknown as Record<string, number>)[k.slice(6)] = Number(v);
     else if (k.startsWith('w.')) (WAVES as unknown as Record<string, number>)[k.slice(2)] = Number(v);
@@ -245,6 +253,33 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
       } else {
         mx = Math.cos(t * 0.5);
         mz = Math.sin(t * 0.5);
+      }
+    }
+    // 躲箭（E-1）：預測這支箭 1.2 秒內會不會從身邊 1.1 公尺內飛過；會就往垂直於箭的方向閃（機器人不會跳，這是保守的）
+    if (DODGE && run.shots.aliveCount > 0) {
+      const sh = run.shots;
+      for (let i = 0; i < sh.high; i++) {
+        if (!sh.alive[i]) continue;
+        const rx = sh.x[i] - run.px;
+        const rz = sh.z[i] - run.pz;
+        const sp2 = sh.vx[i] * sh.vx[i] + sh.vz[i] * sh.vz[i];
+        if (sp2 < 1e-6) continue;
+        const tc = -(rx * sh.vx[i] + rz * sh.vz[i]) / sp2;
+        if (tc < 0 || tc > 1.2) continue;
+        const cx = rx + sh.vx[i] * tc;
+        const cz = rz + sh.vz[i] * tc;
+        if (Math.hypot(cx, cz) > 1.1) continue;
+        const sp = Math.sqrt(sp2);
+        // 垂直方向，朝「箭的路線離我比較遠的那一側」
+        let px2 = -sh.vz[i] / sp;
+        let pz2 = sh.vx[i] / sp;
+        if (px2 * -cx + pz2 * -cz < 0) {
+          px2 = -px2;
+          pz2 = -pz2;
+        }
+        mx = mx * 0.25 + px2 * 1.6;
+        mz = mz * 0.25 + pz2 * 1.6;
+        break;
       }
     }
     run.setMove(mx, mz);

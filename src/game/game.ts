@@ -4,6 +4,7 @@ import type { FixedLoop } from '../core/loop';
 import type { Input } from '../core/input';
 import type { Renderer } from '../core/renderer';
 import { loadSave, writeSave, type SaveData } from '../core/save';
+import { ENEMIES, ENEMY_INTRO_SECONDS } from '../data/enemies';
 import { Run, subSeed } from './run';
 import type { GameStateMachine } from './stateMachine';
 import { RunView } from '../render/runView';
@@ -70,6 +71,8 @@ export class Game {
   private lastKills = 0;
   /** 頓幀（D69）：事件發生時模擬凝結一下，畫面照畫 */
   private readonly hitStop = new HitStop();
+  /** 開發用：不是 null 時，戰鬥的移動方向用這個世界座標向量（不看輸入） */
+  devMove: [number, number] | null = null;
   private lastElite = 0;
   private lastXp = 0;
   private lastHead = 0;
@@ -250,7 +253,9 @@ export class Game {
         if (!run) return;
         this.input.poll();
         worldMove(this.input.moveX, this.input.moveZ, this.renderer.rig.yaw, this.moveOut);
-        run.setMove(this.moveOut[0], this.moveOut[1]);
+        // 開發用：測試要精準的世界方向（閃箭）時蓋過輸入；平常是 null
+        if (this.devMove) run.setMove(this.devMove[0], this.devMove[1]);
+        else run.setMove(this.moveOut[0], this.moveOut[1]);
         if (this.input.consumeJump()) run.requestJump();
         if (this.input.consumeCommand()) run.castUltimate();
         // 頓幀：這一步不前進（輸入照收，畫面照畫）
@@ -375,6 +380,14 @@ export class Game {
       this.hitStop.add(FEEL.hitStop.evolve);
     });
     b.on('elementResult', () => this.renderer.rig.shake.add(FEEL.shake.element));
+    // 新人類第一次出場：存檔記下來（圖鑑），沒看過才給一句提示（字幕，不是彈窗）
+    b.on('enemySeen', ({ id }) => {
+      if (this.save.codex.humans[id]) return;
+      this.save.codex.humans[id] = 1;
+      writeSave(this.save);
+      const def = ENEMIES[id];
+      if (def?.intro && this.run) this.run.enemyIntro = { key: def.intro, until: this.run.clock + ENEMY_INTRO_SECONDS };
+    });
     b.on('runEnd', (e) => {
       this.lastEnd = { result: e.result, stage: e.stage, kills: e.kills, level: e.level, merit: e.merit };
       this.save.merit += e.merit;
@@ -492,6 +505,10 @@ export class Game {
   /** 開發介面：手感現在的狀態（震動強度、頓幀剩餘、暈邊、畫面上的爆圈數） */
   get feelState() {
     return { shake: this.renderer.rig.shake.trauma, hitStop: this.hitStop.left, pops: this.view?.feelFx.active ?? 0, vignette: Number(this.d.ui.querySelector<HTMLElement>('#hurt-vignette')?.style.opacity ?? 0) };
+  }
+  /** 開發用：畫面上有幾支箭、幾條預告線 */
+  get humansView() {
+    return this.view ? { ...this.view.shotsView.active } : { arrows: 0, lines: 0 };
   }
   get tuningInfo() {
     return { ...tuning };

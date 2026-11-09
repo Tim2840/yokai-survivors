@@ -1,3 +1,4 @@
+import { ENEMY_IDS } from '../data/enemies';
 import { collectMarkers, markers } from '../game/minimapMarkers';
 import type { ElementKind } from '../data/elements';
 import { PICKUP_KINDS, type PickupKind } from '../data/pickups';
@@ -135,6 +136,25 @@ export function installDevApi(ctx: DevContext): void {
         focus: r.elements.focus ? r.elements.focus.kind : null,
         tuning: ctx.game.tuningInfo,
         feel: ctx.game.feelState,
+        humans: {
+          kinds: Object.fromEntries(ENEMY_IDS.map((id, k) => [id, r.enemies.kindCount[k]])),
+          shots: {
+            alive: r.shots.aliveCount,
+            fired: r.shots.fired,
+            list: (() => {
+              const out: { x: number; z: number; vx: number; vz: number }[] = [];
+              for (let i = 0; i < r.shots.high && out.length < 8; i++) if (r.shots.alive[i]) out.push({ x: r.shots.x[i], z: r.shots.z[i], vx: r.shots.vx[i], vz: r.shots.vz[i] });
+              return out;
+            })(),
+          },
+          winding: (() => {
+            let n = 0;
+            for (let i = 0; i < r.enemies.high; i++) if (r.enemies.alive[i] && r.enemies.wind[i] > 0) n++;
+            return n;
+          })(),
+          view: ctx.game.humansView,
+          intro: r.enemyIntro ? { key: r.enemyIntro.key, left: r.enemyIntro.until - r.clock } : null,
+        },
       };
     },
     /** 這一關的地圖摘要（台地、丘、尺寸）：傳送到特定地形、截圖與測試用 */
@@ -164,6 +184,14 @@ export function installDevApi(ctx: DevContext): void {
     render: () => {
       ctx.game.frame(1);
       ctx.loop.render();
+    },
+    /** 清場：敵人、敵方的箭都清掉，並解除無敵時間（測試人類行為用） */
+    clearEnemies: () => run()?.devClearEnemies(),
+    /** 場上敵人的生命設成極大（行為測試用） */
+    tankEnemies: () => run()?.devTankEnemies(),
+    /** 用世界座標的方向走（不看輸入；null = 還給輸入）；閃箭測試要精準方向 */
+    driveWorld: (x: number | null, z = 0) => {
+      ctx.game.devMove = x === null ? null : [x, z];
     },
     spawn: (id: string, n: number) => run()?.devSpawn(id, n) ?? 0,
     /** 把這一關的時間直接跳到 t 秒（跳到頭目前後用） */

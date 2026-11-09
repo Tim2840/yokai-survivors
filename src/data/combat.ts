@@ -2,6 +2,8 @@
 export const COMBAT = {
   /** 同一隻對玩家的接觸傷害冷卻（秒）、玩家受傷後無敵（秒） */
   contactCooldown: 0.8,
+  /** 敵方的箭飛行高度：玩家腳離地超過這個高度（跳起來）就從腳下飛過 */
+  arrowClear: 0.8,
   invulnerable: 0.3,
   /** 擊退速度衰減（每秒保留比例的指數底，越小停得越快） */
   knockbackDecay: 0.0005,

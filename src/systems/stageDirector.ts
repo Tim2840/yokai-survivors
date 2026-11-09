@@ -6,6 +6,7 @@ import type { TerrainMap } from '../world/terrainMap';
 import type { Enemies } from './enemies';
 import { kindIndex } from './enemies';
 import type { FlowField } from './flowField';
+import { recipeFor, type RecipeEntry } from '../data/spawnRecipes';
 
 /**
  * 連續計時關卡的導演（D22，docs/02 第 8.1 節）：
@@ -36,6 +37,8 @@ export class StageDirector {
   private nextSwarmElite = 0;
   private stageMult = 1;
   private kindVillager = kindIndex('villager');
+  /** 這一關的出場配方（已換成種類索引）；每步依經過的時間挑一種 */
+  private recipe: { kind: number; from: number; weight: number; cap: number }[] = [];
   private kindBoss = kindIndex('taimasou');
   /** 待生成的精英數（因同畫面上限或找不到位置而延後） */
   private pendingElites = 0;
@@ -59,7 +62,7 @@ export class StageDirector {
 
   /** stage = 第幾關（0 起）；hpMult = 難度帶來的敵人生命倍率（含關卡）；bossMult = 大頭目倍率 */
   start(stage: number, bossMult = 1, opts: { autoBoss?: boolean; hpMult?: number } = {}): void {
-    void stage;
+    this.recipe = recipeFor(stage).map((r: RecipeEntry) => ({ kind: kindIndex(r.id), from: r.from, weight: r.weight, cap: r.cap ?? Infinity }));
     this.stageMult = opts.hpMult ?? 1;
     this.bossMult = bossMult;
     this.autoBoss = opts.autoBoss ?? true;
@@ -125,6 +128,21 @@ export class StageDirector {
     return false;
   }
 
+  /** 依配方挑這一次要生哪一種：已開始出現、還沒到同時上限的，按權重抽；都不行就是村人 */
+  private pickKind(): number {
+    const u = this.time / this.duration;
+    let total = 0;
+    for (const r of this.recipe) if (u >= r.from && this.enemies.kindCount[r.kind] < r.cap) total += r.weight;
+    if (total <= 0) return this.kindVillager;
+    let roll = this.rng.next() * total;
+    for (const r of this.recipe) {
+      if (u < r.from || this.enemies.kindCount[r.kind] >= r.cap) continue;
+      roll -= r.weight;
+      if (roll <= 0) return r.kind;
+    }
+    return this.kindVillager;
+  }
+
   private spawnOne(kind: number, variant: number, px: number, pz: number, night: number): number {
     if (!this.findSpot(px, pz)) return -1;
     return this.enemies.spawn(kind, this.spot[0], this.spot[1], this.virtualWave(), night, this.rng.range(0, Math.PI * 2), variant, (variant === 2 ? this.stageMult * this.bossMult * this.summonMult * this.summitMult : this.stageMult) * this.hpCurse);
@@ -173,7 +191,7 @@ export class StageDirector {
       n++;
     }
     while (this.pending >= 1 && n < WAVES.spawnPerStepMax && this.enemies.aliveCount < this.maxEnemies) {
-      const i = this.spawnOne(this.kindVillager, 0, px, pz, night);
+      const i = this.spawnOne(this.pickKind(), 0, px, pz, night);
       if (i < 0) break;
       this.pending -= this.enemies.points(i);
       n++;
