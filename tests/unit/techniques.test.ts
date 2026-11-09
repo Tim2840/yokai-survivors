@@ -133,7 +133,7 @@ describe('技法怎麼拿（D49：機率出現在升級卡裡、8 級、分稀�
     const rng = new Rng(3);
     for (let k = 0; k < 300; k++) expect(a.tech.pickCard(rng)).not.toBe(id);
   });
-  it('D60 集中：已有的技法，等級越高越常出現在技法卡裡；沒拿過的比已有的少見（舊版平均分配會紅）', () => {
+  it('D60 集中：已有的技法，等級越高越常出現在技法卡裡；（舊版平均分配會紅）', () => {
     const run = make(12);
     run.level = 40;
     run.devAddTech('ring', 'ward');
@@ -145,9 +145,21 @@ describe('技法怎麼拿（D49：機率出現在升級卡裡、8 級、分稀�
       n[id] = (n[id] ?? 0) + 1;
     }
     expect(n.ring, '練到 4 級的環').toBeGreaterThan(n.ward * 1.5);
-    const fresh = Object.entries(n).filter(([id]) => id !== 'ring' && id !== 'ward').reduce((a, [, v]) => a + v, 0);
-    expect(n.ward, '1 級的護身火仍比所有沒拿過的加起來多一點').toBeGreaterThan(fresh * 0.5);
+    expect(n.ward, '1 級的護身火也還會出現').toBeGreaterThan(0);
     expect(TECH_OFFER.levelBias).toBeGreaterThan(0);
+  });
+  it('D62 先填滿欄位：還有空位時，沒拿過的技法佔多數（變化）；欄位滿了就只剩已有的', () => {
+    const run = make(13);
+    run.level = 40;
+    run.devAddTech('ring');
+    const rng = new Rng(6);
+    let fresh = 0;
+    const N = 800;
+    for (let k = 0; k < N; k++) if (run.tech.pickCard(rng) !== 'ring') fresh++;
+    expect(fresh / N, '有空位時新技法的比例').toBeGreaterThan(0.5);
+    run.devAddTech('ward', 'hellfire');
+    const rng2 = new Rng(7);
+    for (let k = 0; k < 200; k++) expect(['ring', 'ward', 'hellfire']).toContain(run.tech.pickCard(rng2));
   });
   it('拿滿 TECH_MAX 個之後只會出現已有的下一級；互斥照舊（燈籠環在身上不出彈跳／歸巢）', () => {
     const rng = new Rng(9);

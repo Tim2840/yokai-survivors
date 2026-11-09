@@ -128,6 +128,7 @@ interface Result {
   curseTotal: number;
   casts: number;
   evolved: number;
+  evolvedIds: string[];
   variant: string;
   summonedAt: number;
   /** 撿到幾個補給品 */
@@ -280,6 +281,7 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     variant: run.tech.owned.join('+') || '-',
     casts,
     evolved: run.tech.evolved.length,
+    evolvedIds: [...run.tech.evolved],
     summonedAt,
     pickups,
     weaponMaxAt,
@@ -441,7 +443,7 @@ function summarize(rs: Result[]): string {
     `等級 ${avg(rs.map((r) => r.level)).toFixed(1)}`,
     `用掉要素 ${avg(rs.map((r) => r.elementsUsed)).toFixed(1)}`,
     `大招 ${ULT_ID || '預設'} Lv${ULT_LV}、發動 ${avg(rs.map((r) => r.casts)).toFixed(1)} 次、技法進化 ${avg(rs.map((r) => r.evolved)).toFixed(2)} 次`,
-    `技法平均 ${avg(rs.map((r) => (r.variant === '-' ? 0 : r.variant.split('+').length))).toFixed(1)} 個（${[...new Set(rs.map((r) => r.variant))].slice(0, 4).join('/')}…）`,
+    `技法平均 ${avg(rs.map((r) => (r.variant === '-' ? 0 : r.variant.split('+').length))).toFixed(1)} 個（${[...new Set(rs.map((r) => r.variant))].slice(0, 4).join('/')}…）；變化度：${new Set(rs.map((r) => r.variant.split('+').sort().join('+'))).size}／${rs.length} 種不同組合、${new Set(rs.flatMap((r) => (r.variant === '-' ? [] : r.variant.split('+')))).size} 種技法出現過、進化出現過 ${new Set(rs.flatMap((r) => r.evolvedIds)).size} 種`,
     `補給品 ${avg(rs.map((r) => r.pickups)).toFixed(1)} 個`,
     `主武器 4 級中位第 ${pct(rs.filter((r) => r.weapon4At >= 0).map((r) => r.weapon4At), 50)?.toFixed(0) ?? '-'} 秒、滿級 ${((rs.filter((r) => r.weaponMaxAt >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.weaponMaxAt >= 0).map((r) => r.weaponMaxAt), 50)?.toFixed(0) ?? '-'} 秒）、結束時平均 ${avg(rs.map((r) => r.weaponLv)).toFixed(1)} 級`,
     `技法等級合計 ${avg(rs.map((r) => r.techLvSum)).toFixed(1)}、最高技法 Lv${avg(rs.map((r) => r.techMaxLv)).toFixed(1)}（≥5 級 ${share(rs, (r) => r.techMaxLv >= 5)}、≥6 級 ${share(rs, (r) => r.techMaxLv >= 6)}、8 級 ${share(rs, (r) => r.techMaxLv >= 8)}；進化≥1 次 ${share(rs, (r) => r.evolved >= 1)}）`,
