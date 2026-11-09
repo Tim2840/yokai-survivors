@@ -384,13 +384,15 @@ describe('一局的模擬（無頭）', () => {
     expect(n).toBe(1);
     // 主武器到 4 級會插一次招式變化三選一（不算升級的次數）
     let picks = 0;
+    let techCards = 0; // 技法卡不進 picked（走 applyTechCard），機率改動時張數會變
     for (let g = 0; g < total + 5 && run.awaitingPick; g++) {
       if (run.offerKind !== 'tech') picks++;
+      if (run.offer![0].cardId.startsWith('tech:')) techCards++;
       run.chooseCard(0);
     }
     expect(run.awaitingPick).toBe(false);
     expect(picks).toBe(total);
-    expect(run.picked).toHaveLength(total);
+    expect(run.picked).toHaveLength(total - techCards);
   });
 
   it('選到生命卡：最大生命與現有生命一起增加', () => {

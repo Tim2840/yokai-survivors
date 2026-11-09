@@ -21,7 +21,7 @@ export const TECH_CHOICES = 3;
  * 起始提案，sim 校準（docs/02 變更紀錄）。
  */
 /** D50（使用者：「技法的養成速度太快」）：chance 0.15 → 0.12；已有的技法下一級要玩家等級 ≥ minLevel + levelGap × 目前技法等級 */
-export const TECH_OFFER = { chance: 0.12, minLevel: 4, fresh: 1, owned: 1.3, levelGap: 3 } as const;
+export const TECH_OFFER = { chance: 0.2, minLevel: 4, fresh: 1, owned: 1.3, levelGap: 3 } as const;
 
 export const TECH_FAMILIES = ['split', 'orbit', 'burn'] as const;
 export type TechFamily = (typeof TECH_FAMILIES)[number];
@@ -239,7 +239,7 @@ export const BASE_TECH_LIKES: readonly string[] = ['power', 'atkSpeed', 'volley'
 
 /**
  * 技法進化（D53，使用者 2026-11-06：「技法進化要做，一開始的鬼火也要是一個技法，納入招式進化的名單，融合時兩招都要等級 8」）：
- * 配方 = 兩個技法（其中一個可以是主武器鬼火 `ghostfire`）都練到 EVO.minLevel（5）級。湊齊後到**合魂祠**（地圖上出現）或**開寶箱**選進化卡。
+ * 配方（D56，使用者 2026-11-09：「先照你建議吧」，docs/18）= **主武器鬼火 + 一個技法**，兩個都練到 EVO.minLevel（5）級；每個技法各有一個進化（12 個）。湊齊後到**合魂祠**（地圖上出現）或**開寶箱**選進化卡。
  * 進化後兩個技法併成一個（技法欄位少佔一格；有鬼火的不省格）、效果倍率 × EVO.power，並套用 `set`（把兩個技法的參數換成更強的值，
  * 只寫要換的欄位）；有鬼火的另外給主武器 `weapon` 加成。一個技法一局只能進化一次。
  * 名稱先用暫名（使用者要保留「九尾」給之後的角色）。
@@ -273,28 +273,63 @@ export const EVOS: readonly EvoDef[] = [
   },
   {
     id: 'evoBounce',
-    from: ['bounce', 'homing'],
-    set: { bounce: { bounce: { range: 8, jumps: 5, atMaxJumps: 6, damage: 0.85 } }, homing: { homing: { returnPierce: 4, speedMult: 1.3, atMaxPierce: 2 } } },
+    from: ['ghostfire', 'bounce'],
+    set: { bounce: { bounce: { range: 8, jumps: 5, atMaxJumps: 6, damage: 0.85 } } },
+    weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
-    id: 'evoSky',
-    from: ['rain', 'pillar'],
-    set: { rain: { rain: { count: 5, atMaxCount: 6, range: 4, radius: 1.5, damage: 0.7, life: 0.3 } }, pillar: { pillar: { interval: 2.5, range: 12, radius: 2.2, damage: 3.5, atMaxCount: 3, life: 0.5, max: 6 } } },
+    id: 'evoHoming',
+    from: ['ghostfire', 'homing'],
+    set: { homing: { homing: { returnPierce: 4, speedMult: 1.3, atMaxPierce: 2 } } },
+    weapon: { damage: 0.1, pierce: 1, volley: 0 },
   },
   {
-    id: 'evoArray',
-    from: ['ring', 'satellite'],
-    set: { ring: { orbit: { baseOrbs: 3, atMaxOrbs: 2, radius: 3.6, damage: 1.7, innerDamage: 0.8 } }, satellite: { satellite: { count: 3, atMaxCount: 4, radius: 6.5, damage: 2.0 } } },
+    id: 'evoRain',
+    from: ['ghostfire', 'rain'],
+    set: { rain: { rain: { count: 5, atMaxCount: 6, range: 4, radius: 1.5, damage: 0.7, life: 0.3 } } },
+    weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
-    id: 'evoWatch',
-    from: ['ward', 'lamp'],
-    set: { ward: { ward: { chargeSeconds: 3, atMaxChargeSeconds: 2, burstRadius: 3.8, burstDamage: 3 } }, lamp: { lamp: { count: 2, atMaxCount: 3, damage: 1.7 } } },
+    id: 'evoPillar',
+    from: ['ghostfire', 'pillar'],
+    set: { pillar: { pillar: { interval: 2.5, range: 12, radius: 2.2, damage: 3.5, atMaxCount: 3, life: 0.5, max: 6 } } },
+    weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
-    id: 'evoInferno',
-    from: ['hellfire', 'oil'],
-    set: { hellfire: { burn: { radius: 2.2, seconds: 4, damage: 0.5, atMaxScale: 1.4 } }, oil: { oil: { seconds: 5, atMaxSeconds: 6, damage: 0.4, spread: 4, atMaxSpread: 5 } } },
+    id: 'evoRing',
+    from: ['ghostfire', 'ring'],
+    set: { ring: { orbit: { baseOrbs: 3, atMaxOrbs: 2, radius: 3.6, damage: 1.7, innerDamage: 0.8 } } },
+    weapon: { damage: 0.1, pierce: 0, volley: 0 },
+  },
+  {
+    id: 'evoSatellite',
+    from: ['ghostfire', 'satellite'],
+    set: { satellite: { satellite: { count: 3, atMaxCount: 4, radius: 6.5, damage: 2.0 } } },
+    weapon: { damage: 0.1, pierce: 0, volley: 0 },
+  },
+  {
+    id: 'evoWard',
+    from: ['ghostfire', 'ward'],
+    set: { ward: { ward: { chargeSeconds: 3, atMaxChargeSeconds: 2, burstRadius: 3.8, burstDamage: 3 } } },
+    weapon: { damage: 0.1, pierce: 0, volley: 0 },
+  },
+  {
+    id: 'evoLamp',
+    from: ['ghostfire', 'lamp'],
+    set: { lamp: { lamp: { count: 2, atMaxCount: 3, damage: 1.7 } } },
+    weapon: { damage: 0.1, pierce: 0, volley: 0 },
+  },
+  {
+    id: 'evoHellfire',
+    from: ['ghostfire', 'hellfire'],
+    set: { hellfire: { burn: { radius: 2.2, seconds: 4, damage: 0.5, atMaxScale: 1.4 } } },
+    weapon: { damage: 0.1, pierce: 0, volley: 0 },
+  },
+  {
+    id: 'evoOil',
+    from: ['ghostfire', 'oil'],
+    set: { oil: { oil: { seconds: 5, atMaxSeconds: 6, damage: 0.4, spread: 4, atMaxSpread: 5 } } },
+    weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
 ];
 

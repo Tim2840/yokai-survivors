@@ -138,6 +138,8 @@ D14（11/3）寫的是「一顆號令鈕，各妖怪不同（集火、潮湧、�
 - **效能預算**：全部小妖合計 ≤ 6 隻、用 `InstancedMesh`、AI 不做路徑搜尋（直接朝目標走、撞到地形就停）、攻擊用現有的投射物池。
 - 之後（M4）才加小狸、烏鴉等局外解鎖的種類與種族加成。
 
+> **D56 備註（2026-11-09）**：進化規則已改成「主武器＋一個技法，每個技法各一個進化」。河童、赤鬼的 6 種技法因此各有 6 個進化（不是上面寫的 2 個）；每個進化只是參數覆寫＋主武器加成，資料量小。上面「進化 2 個」的字樣以這則備註為準。
+
 ## 7. 會改到的系統與檔案
 
 `src/data/yokai.ts`（`WeaponDef.kind`、`growth`、`forms`、每隻的基礎值）、`src/data/techniques.ts`（`weapon` → 每隻一池、`EVOS` 依妖怪）、`src/data/ultimates.ts`（河童、赤鬼各 2 招＋新效果類型）、`src/game/run.ts`（武器發射分三種、怒氣、成長、化身）、`src/game/techniques.ts`（掛勾接到揮擊與回力）、`src/systems/projectiles.ts`（回力升格）、`src/render/`（金棒揮擊、水痕、新模型 `src/units/`）、`src/ui/overlays.ts`（選角雷達圖、圖示）、`src/ui/icons.ts`（新）、`src/i18n`、sim（三隻妖怪維度）、回歸（三隻各走一局、選角畫面）、單元測試（資料全掃）。

@@ -54,6 +54,11 @@ describe('技法進化資料（D53）', () => {
     }
     for (const x of TECHS) expect(inEvo.has(x.id), `${x.id} 不在任何進化裡`).toBe(true);
   });
+  it('D56：每個進化的材料都是「鬼火 + 一個技法」，每個技法剛好一個進化（舊版兩個技法配對會紅）', () => {
+    for (const e of EVOS) expect(e.from[0], e.id).toBe(BASE_TECH_ID);
+    expect(EVOS).toHaveLength(TECHS.length);
+    expect(new Set(EVOS.map((e) => e.from[1]))).toEqual(new Set(TECHS.map((x) => x.id)));
+  });
 });
 
 describe('適合沒有加成（使用者 2026-11-06：「不要再有適合加成」）', () => {
@@ -111,59 +116,47 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
     expect(run.tech.evolvable.map((e) => e.id), '鬼火差一級').toEqual([]);
     run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
     expect(run.tech.evolvable.map((e) => e.id)).toEqual(['evoSplit']);
-    // 技法差一級也不行
+    // 技法差一級也不行（鬼火已經 5 級）
     const r2 = make(22);
-    r2.devAddTech('ring', 'satellite');
-    r2.devTechLevel('ring', EVO.minLevel);
-    r2.devTechLevel('satellite', EVO.minLevel - 1);
+    r2.devAddTech('ring');
+    r2.devTechLevel(BASE_TECH_ID, EVO.minLevel);
+    r2.devTechLevel('ring', EVO.minLevel - 1);
     expect(r2.tech.evolvable).toHaveLength(0);
-    r2.devTechLevel('satellite', EVO.minLevel);
-    expect(r2.tech.evolvable.map((e) => e.id)).toEqual(['evoArray']);
+    r2.devTechLevel('ring', EVO.minLevel);
+    expect(r2.tech.evolvable.map((e) => e.id)).toEqual(['evoRing']);
   });
 
-  it('進化：兩個技法併成一格、效果 × EVO.power、參數換成進化後的值；只能進化一次', () => {
+  it('進化：技法效果 × EVO.power、參數換成進化後的值、鬼火加成；有鬼火不省格；只能進化一次', () => {
     const run = make(22);
     run.devAddTech('ring', 'satellite');
     const used0 = run.tech.slotsUsed;
     run.devTechLevel('ring', TECH_LEVELS.max);
-    run.devTechLevel('satellite', TECH_LEVELS.max);
+    run.devTechLevel(BASE_TECH_ID, TECH_LEVELS.max);
     const pr0 = run.tech.powerOf('ring');
-    const cnt0 = run.tech.satCount;
-    expect(run.tech.evolve('evoArray')).toBe(true);
-    expect(run.tech.evolve('evoArray'), '不能再進化一次').toBe(false);
-    expect(run.tech.slotsUsed).toBe(used0 - 1);
+    const ps0 = run.tech.powerOf('satellite');
+    expect(run.tech.evolve('evoRing')).toBe(true);
+    expect(run.tech.evolve('evoRing'), '不能再進化一次').toBe(false);
+    expect(run.tech.slotsUsed, '有鬼火的進化不省格').toBe(used0);
     expect(run.tech.powerOf('ring')).toBeCloseTo(pr0 * EVO.power);
-    expect(run.tech.satCount).toBeGreaterThan(cnt0);
-    expect(run.tech.act.ring!.orbit!.baseOrbs).toBe(evoById('evoArray').set.ring.orbit.baseOrbs);
-    expect(run.tech.isEvolved('ring') && run.tech.isEvolved('satellite')).toBe(true);
+    expect(run.tech.powerOf('satellite'), '另一個技法不受影響').toBeCloseTo(ps0);
+    expect(run.tech.act.ring!.orbit!.baseOrbs).toBe(evoById('evoRing').set.ring.orbit.baseOrbs);
+    expect(run.tech.isEvolved('ring')).toBe(true);
+    expect(run.tech.isEvolved('satellite')).toBe(false);
   });
 
-  it('不限次數：進化省下的欄位可以再拿新技法、再進化；鬼火可以和不同技法各進化一次；用過的技法不能再當材料', () => {
+  it('不限次數：鬼火可以和不同技法各進化一次（最多跟著手上的技法數）；進化過的技法不能再進化；鬼火不會被用掉', () => {
     const run = make(23);
     expect(TECH_MAX).toBe(3);
     run.devAddTech('ring', 'satellite', 'ward');
-    run.devTechLevel('ring', EVO.minLevel);
-    run.devTechLevel('satellite', EVO.minLevel);
-    run.tech.evolve('evoArray');
-    expect(run.tech.slotsUsed).toBe(2);
-    run.devAddTech('lamp');
-    expect(run.tech.owned).toContain('lamp');
-    expect(run.tech.slotsUsed).toBe(3);
-    run.devTechLevel('ward', EVO.minLevel);
-    run.devTechLevel('lamp', EVO.minLevel);
+    for (const id of ['ring', 'satellite', 'ward']) run.devTechLevel(id, EVO.minLevel);
     run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
-    expect(run.tech.evolvable.map((e) => e.id)).toContain('evoWatch');
-    run.tech.evolve('evoWatch');
-    expect(run.tech.slotsUsed).toBe(2);
-    expect(run.tech.evolved).toEqual(['evoArray', 'evoWatch']);
-    // 鬼火＋狐火分裂、鬼火＋火種：鬼火不會被用掉，兩個都能進化（不省格）
-    run.devAddTech('kitsunebi');
-    run.devTechLevel('kitsunebi', EVO.minLevel);
-    expect(run.tech.evolve('evoSplit')).toBe(true);
+    expect(run.tech.evolvable.map((e) => e.id)).toEqual(['evoRing', 'evoSatellite', 'evoWard']);
+    for (const id of ['evoRing', 'evoSatellite', 'evoWard']) expect(run.tech.evolve(id), id).toBe(true);
+    expect(run.tech.evolved).toEqual(['evoRing', 'evoSatellite', 'evoWard']);
     expect(run.tech.isEvolved(BASE_TECH_ID)).toBe(false);
-    expect(run.tech.evolve('evoSoul'), '火種沒拿到').toBe(false);
-    // 用過的技法不能再當別的進化的材料
-    expect(run.tech.evolvable.every((e) => e.from.every((m) => !run.tech.isEvolved(m)))).toBe(true);
+    expect(run.tech.evolvable, '都進化完了').toEqual([]);
+    expect(run.tech.evolve('evoRing')).toBe(false);
+    expect(run.tech.evolve('evoSplit'), '狐火分裂沒拿到').toBe(false);
   });
 
   it('進化給主武器加成（鬼火＋狐火分裂：傷害 +15%、穿透 +1）', () => {
@@ -184,19 +177,19 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
     const run = make(25);
     run.devAddTech('ring', 'satellite');
     run.devTechLevel('ring', EVO.minLevel);
-    run.devTechLevel('satellite', EVO.minLevel);
-    run.tech.evolve('evoArray');
+    run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
+    run.tech.evolve('evoRing');
     run.tech.replace('ring', 'ward');
     expect(run.tech.evolved).toEqual([]);
-    expect(run.tech.isEvolved('satellite')).toBe(false);
+    expect(run.tech.isEvolved('ring')).toBe(false);
   });
 
   it('寶箱：可以進化的排在最前面，選了真的進化；合魂祠：可以進化後 appearDelay 秒出現、站上去按住 → 面板只列進化 → 進化後收掉', () => {
     const run = make(26);
     run.director.active = false;
-    run.devAddTech('ring', 'satellite');
+    run.devAddTech('ring');
     run.devTechLevel('ring', EVO.minLevel);
-    run.devTechLevel('satellite', EVO.minLevel);
+    run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
     expect(run.tech.evolvable).toHaveLength(1);
     // 合魂祠
     for (let i = 0; i < 60 * (FUSE.appearDelay + 2) && !run.elements.fuseSlot; i++) {
@@ -212,16 +205,15 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
       run.step(DT);
     }
     expect(run.offerKind).toBe('fusion');
-    expect(run.offer!.map((c) => c.cardId)).toEqual(['evo:evoArray']);
+    expect(run.offer!.map((c) => c.cardId)).toEqual(['evo:evoRing']);
     run.chooseCard(0);
-    expect(run.tech.evolved).toEqual(['evoArray']);
+    expect(run.tech.evolved).toEqual(['evoRing']);
     run.step(DT);
     expect(run.elements.fuseSlot, '進化後合魂祠要收掉').toBeNull();
 
     // 寶箱：再湊一組（燃燒系），寶箱第一張是進化卡
-    run.devAddTech('hellfire', 'oil');
+    run.devAddTech('hellfire');
     run.devTechLevel('hellfire', EVO.minLevel);
-    run.devTechLevel('oil', EVO.minLevel);
     const s = run.elements.devForce('chest', 'common', run.px, run.pz)!;
     run.devTeleport(s.x, s.z);
     for (let i = 0; i < 60 * (CHEST_HOLD_SECONDS + 1) && !(run.awaitingPick && run.offerKind === 'chest'); i++) {
@@ -229,7 +221,7 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
       run.step(DT);
     }
     expect(run.offerKind).toBe('chest');
-    expect(run.offer![0].cardId).toBe('evo:evoInferno');
+    expect(run.offer![0].cardId).toBe('evo:evoHellfire');
   });
 
   it('可以進化時提示一次（evolveReady）', () => {
@@ -237,10 +229,9 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
     const bus = (run as unknown as { bus: EventBus }).bus;
     const events: string[] = [];
     bus.on('evolveReady', (e) => events.push(e.id));
-    run.devAddTech('ring', 'satellite');
+    run.devAddTech('ring');
+    run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
     run.devTechLevel('ring', EVO.minLevel);
-    run.devTechLevel('satellite', EVO.minLevel);
-    run.devTechLevel('ring', EVO.minLevel);
-    expect(events).toEqual(['evoArray']);
+    expect(events).toEqual(['evoRing']);
   });
 });
