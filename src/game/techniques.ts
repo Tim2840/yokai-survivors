@@ -334,7 +334,7 @@ export class Techniques {
       // 養成門檻（D50）：下一級要玩家等級 ≥ minLevel + levelGap × 目前技法等級
       if (this.run.level < TECH_OFFER.minLevel + TECH_OFFER.levelGap * this.levels[i]) return;
       ids.push(id);
-      w.push(TECH_OFFER.owned);
+      w.push(TECH_OFFER.owned + TECH_OFFER.levelBias * (this.levels[i] - 1));
     });
     if (ids.length === 0) return null;
     let t = rng.next() * w.reduce((a, b) => a + b, 0);

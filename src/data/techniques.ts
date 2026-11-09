@@ -20,8 +20,13 @@ export const TECH_CHOICES = 3;
  * 玩家 minLevel 級以前不會出現；沒拿過的技法權重 fresh、已有的（下一級）權重 owned。
  * 起始提案，sim 校準（docs/02 變更紀錄）。
  */
+/**
+ * D60（使用者 2026-11-09：「拜託你試到可行的方法再報告」；docs/02 變更紀錄）：一局只抽得到約 5 張技法卡、而且分散在 3 個技法上，6～8 級碰不到。
+ * 改成：chance 0.2 → 0.3（技法卡更常出現）；**集中**：已有技法的權重 owned 1.3 → 2.5，再加 levelBias × (目前等級 − 1)（練得越高越常出現），沒拿過的 fresh 1 → 0.25。
+ * 目標（sim 20 分鐘、貪輸出）：進化 ≥ 1 次的局 > 50%、技法 ≥ 6 級的局 30～40%、8 級 10～20%，過關率與主武器 4 級時間不變壞。
+ */
 /** D50（使用者：「技法的養成速度太快」）：chance 0.15 → 0.12；已有的技法下一級要玩家等級 ≥ minLevel + levelGap × 目前技法等級。D59（使用者 2026-11-09：「放寬技法升級的玩家等級門檻，讓技法 6～8 級不用等到那麼晚」）：levelGap 3 → 2（6 級要玩家 16 級、7 級 18、8 級 20；原本 19／22／25） */
-export const TECH_OFFER = { chance: 0.2, minLevel: 4, fresh: 1, owned: 1.3, levelGap: 2 } as const;
+export const TECH_OFFER = { chance: 0.3, minLevel: 4, fresh: 0.25, owned: 2.5, levelGap: 2, levelBias: 3 } as const;
 
 export const TECH_FAMILIES = ['split', 'orbit', 'burn'] as const;
 export type TechFamily = (typeof TECH_FAMILIES)[number];

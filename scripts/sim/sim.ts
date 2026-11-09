@@ -137,6 +137,7 @@ interface Result {
   weaponLv: number;
   weapon4At: number;
   techLvSum: number;
+  techMaxLv: number;
   aliveAvg: number;
   alivePeak: number;
   /** 死在召喚之後幾秒（沒死或沒召喚 = -1） */
@@ -285,6 +286,7 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     weapon4At,
     weaponLv: run.weaponLevel,
     techLvSum: run.tech.levels.reduce((a, b) => a + b, 0),
+    techMaxLv: run.tech.levels.reduce((a, b) => Math.max(a, b), 0),
     aliveAvg: aliveN ? aliveSum / aliveN : 0,
     alivePeak,
     diedAfterSummon: run.phase === 'ended' && run.result === 'death' && summonedAt >= 0 && run.director.bossSpawned ? run.time - summonedAt : -1,
@@ -442,11 +444,16 @@ function summarize(rs: Result[]): string {
     `技法平均 ${avg(rs.map((r) => (r.variant === '-' ? 0 : r.variant.split('+').length))).toFixed(1)} 個（${[...new Set(rs.map((r) => r.variant))].slice(0, 4).join('/')}…）`,
     `補給品 ${avg(rs.map((r) => r.pickups)).toFixed(1)} 個`,
     `主武器 4 級中位第 ${pct(rs.filter((r) => r.weapon4At >= 0).map((r) => r.weapon4At), 50)?.toFixed(0) ?? '-'} 秒、滿級 ${((rs.filter((r) => r.weaponMaxAt >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.weaponMaxAt >= 0).map((r) => r.weaponMaxAt), 50)?.toFixed(0) ?? '-'} 秒）、結束時平均 ${avg(rs.map((r) => r.weaponLv)).toFixed(1)} 級`,
-    `技法等級合計 ${avg(rs.map((r) => r.techLvSum)).toFixed(1)}`,
+    `技法等級合計 ${avg(rs.map((r) => r.techLvSum)).toFixed(1)}、最高技法 Lv${avg(rs.map((r) => r.techMaxLv)).toFixed(1)}（≥5 級 ${share(rs, (r) => r.techMaxLv >= 5)}、≥6 級 ${share(rs, (r) => r.techMaxLv >= 6)}、8 級 ${share(rs, (r) => r.techMaxLv >= 8)}；進化≥1 次 ${share(rs, (r) => r.evolved >= 1)}）`,
     `場上敵人 平均 ${avg(rs.map((r) => r.aliveAvg)).toFixed(0)}、最多 ${avg(rs.map((r) => r.alivePeak)).toFixed(0)}`,
     `死在召喚後 ${rs.filter((r) => r.diedAfterSummon >= 0).length} 局（中位 ${pct(rs.filter((r) => r.diedAfterSummon >= 0).map((r) => r.diedAfterSummon), 50)?.toFixed(0) ?? '-'} 秒）`,
     `召喚頭目 ${((rs.filter((r) => r.summonedAt >= 0).length / rs.length) * 100).toFixed(0)}%（平均第 ${avg(rs.filter((r) => r.summonedAt >= 0).map((r) => r.summonedAt)).toFixed(0)} 秒）`,
   ].join('；');
+}
+
+/** 符合條件的局佔幾 % */
+function share(rs: Result[], f: (r: Result) => boolean): string {
+  return `${((rs.filter(f).length / rs.length) * 100).toFixed(0)}%`;
 }
 
 // ── 主程式 ──
