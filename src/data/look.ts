@@ -6,9 +6,11 @@
  */
 export interface LookDef {
   id: string;
-  /** 像素化：每個畫面像素放大幾倍（0 = 不像素化）；手機另外一個值 */
-  pixel: number;
-  pixelTouch: number;
+  /** 像素化：低解析度畫面的「短邊」有幾個像素（0 = 不像素化）。依畫面大小換算放大倍率，桌面與手機的像素粗細感一致 */
+  pixelShort: number;
+  /** 調色盤量化：每個色頻分幾階（0 = 不量化）、抖動強度（0～1；用 4×4 Bayer 矩陣，在低解析度像素上抖） */
+  levels: number;
+  dither: number;
   /** 描線：深色線的強度（0～1）、相對深度差從多少開始到多少算滿（越小越容易描到） */
   edge: number;
   edgeFrom: number;
@@ -28,8 +30,8 @@ export interface LookDef {
 export const DEFAULT_LOOK = 'jrpg';
 
 export const LOOKS: Record<string, LookDef> = {
-  classic: { id: 'classic', pixel: 0, pixelTouch: 0, edge: 0, edgeFrom: 0.05, edgeTo: 0.1, tiltShift: 0, tiltFocus: 0.5, timeOfDay: false, contrast: 1.06, saturation: 1.1, vignette: 0.28 },
-  jrpg: { id: 'jrpg', pixel: 3, pixelTouch: 2, edge: 0.55, edgeFrom: 0.05, edgeTo: 0.12, tiltShift: 2.2, tiltFocus: 0.5, timeOfDay: true, contrast: 1.08, saturation: 1.18, vignette: 0.32 },
+  classic: { id: 'classic', pixelShort: 0, levels: 0, dither: 0, edge: 0, edgeFrom: 0.05, edgeTo: 0.1, tiltShift: 0, tiltFocus: 0.5, timeOfDay: false, contrast: 1.06, saturation: 1.1, vignette: 0.28 },
+  jrpg: { id: 'jrpg', pixelShort: 360, levels: 11, dither: 0.55, edge: 0.55, edgeFrom: 0.05, edgeTo: 0.12, tiltShift: 0, tiltFocus: 0.5, timeOfDay: true, contrast: 1.08, saturation: 1.18, vignette: 0.32 },
 };
 
 /** 目前的畫面風格：網址 ?look= 優先（開發），其次打包時的 VITE_LOOK，都沒有就用 DEFAULT_LOOK */

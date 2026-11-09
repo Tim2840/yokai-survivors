@@ -67,13 +67,14 @@ AMBIENCE['highlands@day'] = {
   },
   fog: { color: '#cfe6f2', near: 55, far: 170 },
   hemi: { sky: '#d6ecff', ground: '#6c8a4a', intensity: 1.1 },
-  groundDetail: { tile: 5, strength: 0.42 },
-  tufts: { count: 4800, height: [0.28, 0.5], colors: ['#7cc85a', '#9fd668', '#62b35a', '#c3dc72'] },
-  flowers: { clusters: 40, perCluster: 14, colors: ['#ffffff', '#ff9cc0', '#ffe066', '#b9a4ff'] },
+  groundDetail: { tile: 5, strength: 0.3 },
+  tufts: { count: 1700, height: [0.32, 0.55], colors: ['#5fae54', '#74be5c', '#4c9a54', '#86c264'] },
+  flowers: { clusters: 22, perCluster: 12, colors: ['#ffffff', '#ff9cc0', '#ffe066', '#b9a4ff'] },
   bushes: { count: 90, colors: ['#5fb55a', '#78c562', '#4aa36a', '#e09a4a'] },
   trees: { count: 90, canopy: ['#4f9a4e', '#63ad55', '#3f8a5a'], autumn: 0.2, autumnColors: ['#e0663a', '#f0943a', '#e8c14a'], trunk: '#7a5a3e' },
-  motes: { count: 50, color: '#fff6c0', size: 0.25, height: [0.8, 3.0], range: 24 },
-  terrainTint: '#cfeab0',
+  // 白天沒有螢火（以前這裡的亮點在白天看起來像灰塵）
+  motes: { count: 0, color: '#fff6c0', size: 0.25, height: [0.8, 3.0], range: 24 },
+  terrainTint: '#dcf8bc',
   playerLight: 0.35,
 };
 
@@ -91,7 +92,8 @@ AMBIENCE['highlands@dusk'] = {
   fog: { color: '#f2b483', near: 50, far: 160 },
   hemi: { sky: '#ffd8b0', ground: '#7a7090', intensity: 1.4 },
   terrainTint: '#f2e0b4',
-  motes: { count: 80, color: '#ffe08a', size: 0.3, height: [0.8, 3.0], range: 24 },
+  motes: { count: 60, color: '#ffe08a', size: 0.3, height: [0.8, 3.0], range: 24 },
+  tufts: { count: 1700, height: [0.32, 0.55], colors: ['#8aa850', '#a0b45a', '#7a9a50', '#b8b866'] },
   playerLight: 0.6,
 };
 

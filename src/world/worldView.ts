@@ -64,7 +64,7 @@ export function buildWorldView(map: TerrainMap, seed: number, amb: AmbienceDef =
         n++;
       }
       c.setRGB(r / n, g / n, b / n);
-      const patch = (fbm(x * 0.35, z * 0.35, seed, 2) - 0.5) * 0.22;
+      const patch = (fbm(x * 0.2, z * 0.2, seed, 2) - 0.5) * 0.18;
       const lift = Math.max(0, h) * 0.035;
       // 陡處（懸崖、陡坡）露出岩石色，高處略亮
       const hl = map.heightAt(x - map.cell, z);

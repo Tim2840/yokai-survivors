@@ -9,15 +9,16 @@ import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 export class PixelPass extends Pass {
   scene: THREE.Scene;
   camera: THREE.Camera;
-  private pixelSize: number;
+  /** 低解析度畫面的短邊像素數（放大倍率 = 畫面短邊 ÷ 這個，取整數、至少 2） */
+  private readonly shortSide: number;
   private readonly target: THREE.WebGLRenderTarget;
   private readonly quad: FullScreenQuad;
   private readonly mat: THREE.ShaderMaterial;
   private readonly res = new THREE.Vector2();
 
-  constructor(pixelSize: number, scene: THREE.Scene, camera: THREE.Camera, edge: { strength: number; from: number; to: number }) {
+  constructor(shortSide: number, scene: THREE.Scene, camera: THREE.Camera, edge: { strength: number; from: number; to: number; levels: number; dither: number }) {
     super();
-    this.pixelSize = pixelSize;
+    this.shortSide = shortSide;
     this.scene = scene;
     this.camera = camera;
     this.target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
@@ -32,6 +33,9 @@ export class PixelPass extends Pass {
         strength: { value: edge.strength },
         edgeFrom: { value: edge.from },
         edgeTo: { value: edge.to },
+        levels: { value: edge.levels },
+        dither: { value: edge.dither },
+        lowRes: { value: new THREE.Vector2(1, 1) },
       },
       vertexShader: /* glsl */ `
         varying vec2 vUv;
@@ -47,6 +51,9 @@ export class PixelPass extends Pass {
         uniform float strength;
         uniform float edgeFrom;
         uniform float edgeTo;
+        uniform float levels;
+        uniform float dither;
+        uniform vec2 lowRes;
         varying vec2 vUv;
         float viewDepth(vec2 uv) { return -perspectiveDepthToViewZ(texture2D(tDepth, uv).x, near, far); }
         // neighbour closer than this pixel -> this pixel is background just outside an edge (relative difference)
@@ -59,6 +66,24 @@ export class PixelPass extends Pass {
           float d = viewDepth(vUv);
           float e = edgeAt(d, vUv + vec2(texel.x, 0.0)) + edgeAt(d, vUv - vec2(texel.x, 0.0)) + edgeAt(d, vUv + vec2(0.0, texel.y)) + edgeAt(d, vUv - vec2(0.0, texel.y));
           c.rgb *= 1.0 - strength * clamp(e, 0.0, 1.0);
+          if (levels > 0.5) {
+            // palette quantization in gamma space with a 4x4 Bayer dither on the low-res pixel grid; HDR part (> 1, glow) is kept
+            vec3 hdr = max(c.rgb - 1.0, 0.0);
+            vec3 g = pow(clamp(c.rgb, 0.0, 1.0), vec3(1.0 / 2.2));
+            vec2 q = floor(vUv * lowRes);
+            int ix = int(mod(q.x, 4.0));
+            int iy = int(mod(q.y, 4.0));
+            int idx = ix + iy * 4;
+            // 4x4 Bayer thresholds 0..15 (indexed without arrays for GLSL ES 1.0 safety)
+            float b = 0.0;
+            if (idx == 0) b = 0.0; else if (idx == 1) b = 8.0; else if (idx == 2) b = 2.0; else if (idx == 3) b = 10.0;
+            else if (idx == 4) b = 12.0; else if (idx == 5) b = 4.0; else if (idx == 6) b = 14.0; else if (idx == 7) b = 6.0;
+            else if (idx == 8) b = 3.0; else if (idx == 9) b = 11.0; else if (idx == 10) b = 1.0; else if (idx == 11) b = 9.0;
+            else if (idx == 12) b = 15.0; else if (idx == 13) b = 7.0; else if (idx == 14) b = 13.0; else b = 5.0;
+            float t = (b + 0.5) / 16.0 - 0.5;
+            g = floor(g * (levels - 1.0) + 0.5 + t * dither) / (levels - 1.0);
+            c.rgb = pow(clamp(g, 0.0, 1.0), vec3(2.2)) + hdr;
+          }
           gl_FragColor = c;
         }
       `,
@@ -67,9 +92,11 @@ export class PixelPass extends Pass {
   }
 
   setSize(width: number, height: number): void {
-    const w = Math.max(1, Math.floor(width / this.pixelSize));
-    const h = Math.max(1, Math.floor(height / this.pixelSize));
+    const scale = Math.max(2, Math.round(Math.min(width, height) / this.shortSide));
+    const w = Math.max(1, Math.floor(width / scale));
+    const h = Math.max(1, Math.floor(height / scale));
     this.res.set(w, h);
+    this.mat.uniforms.lowRes.value.set(w, h);
     this.target.setSize(w, h);
     this.mat.uniforms.texel.value.set(1 / w, 1 / h);
   }

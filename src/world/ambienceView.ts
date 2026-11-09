@@ -38,14 +38,14 @@ function tuftGeometry(): THREE.BufferGeometry {
     const ca = Math.cos(a);
     const sa = Math.sin(a);
     const baseR = 0.07;
-    const w = 0.14;
+    const w = 0.18;
     const h = 0.7 + (i % 3) * 0.15;
     const lean = 0.2 + (i % 2) * 0.1;
     // 根部兩點（垂直於朝外方向）＋尖端（朝外彎）
     const bx = ca * baseR;
     const bz = sa * baseR;
     pos.push(bx - sa * w, 0, bz + ca * w, bx + sa * w, 0, bz - ca * w, bx + ca * lean, h, bz + sa * lean);
-    col.push(1.1, 1.15, 0.95, 1.1, 1.15, 0.95, 1.9, 2.0, 1.5);
+    col.push(0.9, 0.95, 0.8, 0.9, 0.95, 0.8, 1.35, 1.4, 1.1);
     nor.push(0, 1, 0, 0, 1, 0, 0, 1, 0);
   }
   const g = new THREE.BufferGeometry();

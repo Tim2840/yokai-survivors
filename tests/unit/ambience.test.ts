@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { AMBIENCE, ambienceFor, type AmbienceDef } from '../../src/data/ambience';
-import { groundDetailGain } from '../../src/art/groundTexture';
+import * as THREE from 'three';
+import { groundDetailGain, groundDetailTexture } from '../../src/art/groundTexture';
 import { makeHighlands } from '../../src/data/maps/highlands';
 import { PROTOTYPE_MAP } from '../../src/data/maps/prototype';
 
@@ -39,7 +40,24 @@ describe('場景氣氛資料全掃', () => {
     expect(ambienceFor(PROTOTYPE_MAP.id)).toBe(AMBIENCE.highlands);
     expect(ambienceFor('不存在的地圖')).toBe(AMBIENCE.highlands);
   });
-  it('地表細節貼圖的亮度補償：貼圖平均亮度 × 補償 = 1', () => {
-    for (const s of [0, 0.3, 0.55]) expect((1 - s / 2) * groundDetailGain(s)).toBeCloseTo(1, 6);
+  it('地表細節貼圖：真的算出來的平均亮度 × 補償 ≈ 1（誤差 5% 內）、最近點取樣不做 mipmap（像素畫風）、亮度在 (1 - 強度)～1', () => {
+    for (const s of [0.2, 0.3, 0.4]) {
+      const tex = groundDetailTexture(93, s);
+      const d = tex.image.data as Uint8Array;
+      let sum = 0;
+      let min = 255;
+      for (let i = 0; i < d.length; i += 4) {
+        sum += d[i];
+        min = Math.min(min, d[i]);
+      }
+      const mean = sum / (d.length / 4) / 255;
+      expect(mean * groundDetailGain(s), `強度 ${s}：平均 ${mean}`).toBeGreaterThan(0.95);
+      expect(mean * groundDetailGain(s)).toBeLessThan(1.05);
+      expect(min / 255).toBeGreaterThanOrEqual(1 - s - 0.01);
+      expect(tex.magFilter).toBe(THREE.NearestFilter);
+      expect(tex.minFilter).toBe(THREE.NearestFilter);
+      expect(tex.generateMipmaps).toBe(false);
+    }
   });
+
 });
