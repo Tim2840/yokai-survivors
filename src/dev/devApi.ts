@@ -122,6 +122,8 @@ export function installDevApi(ctx: DevContext): void {
         ward: r.tech.wardProgress,
         wardReady: r.tech.wardReady,
         seeds: r.tech.seedCount,
+        yokai: r.yokai.id,
+        weaponId: r.weaponItemId,
         weaponLevel: r.weaponLevel,
         zones: r.zoneCount,
         orbit: r.orbitCount,

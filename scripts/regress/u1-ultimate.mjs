@@ -126,7 +126,7 @@ export async function run(browser) {
       const shrineInfo = () =>
         p2.evaluate(() => ({
           merit: document.querySelector('#shrine-merit').innerText,
-          rows: [...document.querySelectorAll('.shrine-ult')].map((r) => ({ id: r.dataset.ult, equipped: r.classList.contains('equipped'), t: r.innerText.replace(/\s+/g, ' ') })),
+          rows: [...document.querySelectorAll('.shrine-ult[data-yokai="chochin-kozo"]')].map((r) => ({ id: r.dataset.ult, equipped: r.classList.contains('equipped'), t: r.innerText.replace(/\s+/g, ' ') })),
         }));
       await step(`${vp.name} 神社：列出 2 招、預設裝配炎獄燈；領測試功德、裝配鬼火亂舞、升一級`, async () => {
         await press(ctx2, '#btn-shrine');

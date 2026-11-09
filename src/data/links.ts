@@ -5,7 +5,7 @@
  * 取捨道具（妖刀、狂燈、金剛身）算成它們加強的那個屬性道具（力量、迅捷、堅甲）。
  */
 import { ITEMS, type ItemDef } from './items';
-import { BASE_TECH_ID, BASE_TECH_LIKES, TECHS } from './techniques';
+import { BASE_TECH_LIKES, TECHS } from './techniques';
 import { YOKAI } from './yokai';
 
 export interface CardLinks {
@@ -28,7 +28,7 @@ export function cardLinks(cardId: string, yokai: string): CardLinks {
   const base = baseItemId(d);
   return {
     // 主武器（鬼火）也是一個技法（D53）：排在最前面
-    techs: [...(BASE_TECH_LIKES.includes(base) ? [BASE_TECH_ID] : []), ...TECHS.filter((x) => x.weapon === weaponId && x.likes.includes(base)).map((x) => x.id)],
+    techs: [...(BASE_TECH_LIKES.includes(base) && weaponId ? [weaponId] : []), ...TECHS.filter((x) => x.weapon === weaponId && x.likes.includes(base)).map((x) => x.id)],
     weapon: d.kind === 'weapon',
   };
 }

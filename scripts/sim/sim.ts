@@ -42,6 +42,8 @@ const JSON_OUT = arg('json', '');
 const CAST = arg('cast', 'on') === 'on';
 /** --techs a,b,c：技法面板優先選這幾個（沒給 = 依策略的偏好；random 亂選） */
 const TECH_PREF = arg('techs', '');
+/** --yokai kappa：換妖怪（D63；沒給 = 提燈小僧）；主武器卡的分數用 ghostfire 那一格，技法偏好用對應的清單 */
+const YOKAI_ID = arg('yokai', 'chochin-kozo');
 /** --give a,b：開局直接給這幾個技法；--techMax N：一局最多 N 個（給 2 個再 --techMax 2 = 只測這一對，不會再抽到別的） */
 const GIVE = arg('give', '');
 const TECH_MAX_ARG = arg('techMax', '');
@@ -49,6 +51,10 @@ const TECH_MAX_ARG = arg('techMax', '');
 const GIVE_SETS = Number(arg('giveSets', '0'));
 /** --mobile：用手機的敵人上限（WAVES.maxEnemiesMobile） */
 const MOBILE = process.argv.includes('--mobile');
+const KAPPA_TECHS: Record<string, string[]> = {
+  dps: ['splash', 'torrent', 'geyser', 'pond', 'whirl', 'veil'],
+  survive: ['whirl', 'veil', 'pond', 'geyser', 'splash', 'torrent'],
+};
 const TECH_BY_STRATEGY: Record<string, string[]> = {
   dps: ['kitsunebi', 'bounce', 'pillar', 'seed', 'hellfire', 'lamp', 'homing', 'ring', 'ward'],
   survive: ['ring', 'ward', 'lamp', 'hellfire', 'pillar', 'seed', 'kitsunebi', 'bounce', 'homing'],
@@ -89,9 +95,9 @@ function choose(run: Run, strategy: string, rnd: () => number): number {
   const sc = SCORES[strategy];
   let best = 0;
   let bestV = -1;
-  const pref = TECH_PREF ? TECH_PREF.split(',') : TECH_BY_STRATEGY[strategy] ?? [];
+  const pref = TECH_PREF ? TECH_PREF.split(',') : (YOKAI_ID === 'kappa' ? KAPPA_TECHS : TECH_BY_STRATEGY)[strategy] ?? [];
   offer.forEach((o, i) => {
-    let v = (sc[o.cardId] ?? 1) * RARITY_SCORE[o.rarity];
+    let v = (sc[o.cardId === run.weaponItemId ? 'ghostfire' : o.cardId] ?? 1) * RARITY_SCORE[o.rarity];
     // 技法卡（D49：機率混在升級卡裡）：會玩的人看到想要的技法幾乎都會拿；已有的下一級也很有價值
     if (o.cardId.startsWith('tech:')) {
       const id = o.cardId.slice(5);
@@ -150,7 +156,7 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   applyTune();
   const rnd = lcg(seed * 7919);
   tuning.stageSeconds = SECONDS;
-  const run = new Run({ seed, bus: new EventBus(), mapNumber: 1, mobile: MOBILE, ults: ULT_ID ? [ULT_ID] : undefined, ultLevels: ULT_ID ? { [ULT_ID]: ULT_LV } : undefined });
+  const run = new Run({ seed, bus: new EventBus(), yokaiId: YOKAI_ID, mapNumber: 1, mobile: MOBILE, ults: ULT_ID ? [ULT_ID] : undefined, ultLevels: ULT_ID ? { [ULT_ID]: ULT_LV } : undefined });
   if (TECH_MAX_ARG) run.tech.max = Number(TECH_MAX_ARG);
   if (GIVE) run.devAddTech(...GIVE.split(','));
   if (GIVE_SETS > 0) {

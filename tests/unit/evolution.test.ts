@@ -2,7 +2,8 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { tuning, resetTuning } from '../../src/data/tuning';
-import { BASE_TECH_ID, EVO, EVOS, TECHS, TECH_LEVELS, TECH_MAX, evoById, techById } from '../../src/data/techniques';
+import { YOKAI } from '../../src/data/yokai';
+import { BASE_TECH_ID, EVO, EVOS, mechOf, TECHS, TECH_LEVELS, TECH_MAX, evoById, techById } from '../../src/data/techniques';
 import { ITEMS } from '../../src/data/items';
 import { FUSE } from '../../src/data/elements';
 import { CHEST_HOLD_SECONDS } from '../../src/data/elements';
@@ -15,9 +16,12 @@ import { ITEM_POOL } from '../../src/data/items';
 
 const DT = 1 / 60;
 afterEach(() => resetTuning());
-function make(seed = 3) {
+/** 所有妖怪的主武器 id（進化的第一個材料） */
+const BASES = new Set(Object.values(YOKAI).map((y) => y.weapon.id));
+const YOKAI_OF: Record<string, string> = Object.fromEntries(Object.values(YOKAI).map((y) => [y.weapon.id, y.id]));
+function make(seed = 3, yokaiId?: string) {
   tuning.stageSeconds = 600;
-  const run = new Run({ seed, bus: new EventBus() });
+  const run = new Run({ seed, bus: new EventBus(), yokaiId });
   run.god = true;
   return run;
 }
@@ -32,7 +36,7 @@ describe('技法進化資料（D53）', () => {
     for (const e of EVOS) {
       expect(e.from[0]).not.toBe(e.from[1]);
       for (const m of e.from) {
-        if (m !== BASE_TECH_ID) expect(() => techById(m), `${e.id} 的材料 ${m}`).not.toThrow();
+        if (!BASES.has(m)) expect(() => techById(m), `${e.id} 的材料 ${m}`).not.toThrow();
         inEvo.add(m);
       }
       for (const [tid, blocks] of Object.entries(e.set)) {
@@ -43,11 +47,11 @@ describe('技法進化資料（D53）', () => {
           for (const k of Object.keys(vals)) expect(k in d[block], `${tid}.${block} 沒有欄位 ${k}`).toBe(true);
         }
       }
-      if (e.from.includes(BASE_TECH_ID)) expect(e.weapon, `${e.id} 有鬼火但沒有主武器加成`).toBeTruthy();
+      if (BASES.has(e.from[0])) expect(e.weapon, `${e.id} 有鬼火但沒有主武器加成`).toBeTruthy();
       for (const key of [`evo.${e.id}`, `evo.${e.id}.desc`] as const) expect(t(key as I18nKey), key).not.toBe(key);
       // 兩個材料不能互斥（不然一局拿不到）
       const [a, b] = e.from;
-      if (a !== BASE_TECH_ID && b !== BASE_TECH_ID) {
+      if (!BASES.has(a) && !BASES.has(b)) {
         expect(techById(a).excludes).not.toContain(b);
         expect(techById(b).excludes).not.toContain(a);
       }
@@ -55,7 +59,7 @@ describe('技法進化資料（D53）', () => {
     for (const x of TECHS) expect(inEvo.has(x.id), `${x.id} 不在任何進化裡`).toBe(true);
   });
   it('D56：每個進化的材料都是「鬼火 + 一個技法」，每個技法剛好一個進化（舊版兩個技法配對會紅）', () => {
-    for (const e of EVOS) expect(e.from[0], e.id).toBe(BASE_TECH_ID);
+    for (const e of EVOS) expect(BASES.has(e.from[0]), e.id).toBe(true);
     expect(EVOS).toHaveLength(TECHS.length);
     expect(new Set(EVOS.map((e) => e.from[1]))).toEqual(new Set(TECHS.map((x) => x.id)));
   });
@@ -119,14 +123,14 @@ describe('進化形態的升級（D57）：5 級封頂、進化後才能升到 8
   });
   it('全掃：每個進化都能練到 8 級、每一級的資料不產生 NaN／負數的關鍵欄位', () => {
     for (const e of EVOS) {
-      const run = make(33);
+      const run = make(33, YOKAI_OF[e.from[0]]);
       run.devAddTech(e.from[1]);
-      run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
+      run.devTechLevel(e.from[0], EVO.minLevel);
       run.devTechLevel(e.from[1], EVO.minLevel);
       expect(run.tech.evolve(e.id), e.id).toBe(true);
       for (let lv = EVO.minLevel + 1; lv <= TECH_LEVELS.max; lv++) {
         run.devTechLevel(e.from[1], lv);
-        const d = run.tech.act[e.from[1] as keyof typeof run.tech.act] as unknown as Record<string, Record<string, number>>;
+        const d = run.tech.act[mechOf(techById(e.from[1]))] as unknown as Record<string, Record<string, number>>;
         for (const [b, vals] of Object.entries(d)) {
           if (typeof vals !== 'object' || vals === null) continue;
           for (const [f, v] of Object.entries(vals)) if (typeof v === 'number') expect(Number.isFinite(v) && v >= 0 || f === 'delay', `${e.id} Lv${lv} ${b}.${f}=${v}`).toBe(true);

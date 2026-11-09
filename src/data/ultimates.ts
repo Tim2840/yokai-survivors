@@ -44,6 +44,9 @@ export interface UltDef {
 export const ULTS: readonly UltDef[] = [
   { id: 'infernoLantern', yokai: 'chochin-kozo', price: 0, effect: { type: 'nova', radius: 9, damageMult: 12, knockback: 8 } },
   { id: 'ghostfireDance', yokai: 'chochin-kozo', price: 300, effect: { type: 'frenzy', seconds: 6, power: 0.3, atkSpeed: 0.8, volley: 3 } },
+  // 河童（D63，草案）：防守／治療的雨乞（護罩類）、範圍攻擊的大波（沿用範圍爆發；docs/17 的「大渦潮把敵人拉進中心」之後再做）
+  { id: 'rainPrayer', yokai: 'kappa', price: 0, effect: { type: 'bulwark', seconds: 4, healFrac: 0.5, radius: 7, damageMult: 3, knockback: 10 } },
+  { id: 'tidalWave', yokai: 'kappa', price: 300, effect: { type: 'nova', radius: 11, damageMult: 10, knockback: 12 } },
   // 還沒有人用的效果類型：先留著資料與測試，河童（防守／治療）、赤鬼（單體）做的時候直接用
   { id: 'bulwarkLantern', yokai: '-', price: 0, effect: { type: 'bulwark', seconds: 4, healFrac: 0.4, radius: 7, damageMult: 3, knockback: 10 } },
   { id: 'thunderSpear', yokai: '-', price: 0, effect: { type: 'beam', length: 22, width: 2.4, damageMult: 25 } },

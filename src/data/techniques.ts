@@ -38,6 +38,8 @@ export type TechMechanic = 'kitsunebi' | 'bounce' | 'homing' | 'rain' | 'ring' |
 
 export interface TechDef {
   id: string;
+  /** 用哪一套機制（D63）：沒寫 = id 本身。河童的技法沿用鬼火那邊做好的機制，換名字與數值 */
+  mech?: TechMechanic;
   /** 屬於哪把主武器（目前只有鬼火） */
   weapon: string;
   family: TechFamily;
@@ -166,9 +168,74 @@ export const TECHS: readonly TechDef[] = [
     excludes: [],
     pillar: { interval: 4, range: 10, radius: 1.8, damage: 2.5, atMaxCount: 2, life: 0.5, max: 4 },
   },
+  // ── 河童（D63，草案）：機制沿用鬼火那邊做好的，名字與數值換成河童的 ──
+  {
+    id: 'torrent',
+    mech: 'bounce',
+    weapon: 'waterdisc',
+    family: 'split',
+    kind: 'onHit',
+    likes: ['volley', 'power', 'atkSpeed'],
+    excludes: ['whirl'],
+    bounce: { range: 6, jumps: 2, damage: 0.7, atMaxJumps: 3 },
+  },
+  {
+    id: 'splash',
+    mech: 'kitsunebi',
+    weapon: 'waterdisc',
+    family: 'split',
+    kind: 'onHit',
+    likes: ['volley', 'splash', 'atkSpeed', 'power'],
+    excludes: [],
+    split: { children: 2, damage: 0.55, range: 7, atMaxChildren: 3, shardBonus: 1, reSplit: 1 },
+  },
+  {
+    id: 'whirl',
+    mech: 'ring',
+    weapon: 'waterdisc',
+    family: 'orbit',
+    kind: 'delivery',
+    likes: ['area', 'hp', 'armor', 'atkSpeed'],
+    excludes: ['torrent'],
+    orbit: { radius: 3.0, spin: 2.6, hitRadius: 1.0, tick: 0.25, damage: 1.3, knockback: 3, baseOrbs: 1, atMaxOrbs: 1, atMaxRadius: 1.25, innerDamage: 0.5, innerKnockback: 6 },
+  },
+  {
+    id: 'veil',
+    mech: 'ward',
+    weapon: 'waterdisc',
+    family: 'orbit',
+    kind: 'passive',
+    likes: ['armor', 'hp', 'regen', 'area'],
+    excludes: [],
+    ward: { chargeSeconds: 6, atMaxChargeSeconds: 4, burstRadius: 2.5, burstDamage: 2 },
+  },
+  {
+    id: 'pond',
+    mech: 'hellfire',
+    weapon: 'waterdisc',
+    family: 'burn',
+    kind: 'onHit',
+    likes: ['area', 'power', 'atkSpeed'],
+    excludes: [],
+    burn: { radius: 1.6, seconds: 2.5, tick: 0.5, damage: 0.35, shotDamage: 1.2, interval: 1.25, atMaxScale: 1.3, maxZones: 24 },
+  },
+  {
+    id: 'geyser',
+    mech: 'pillar',
+    weapon: 'waterdisc',
+    family: 'burn',
+    kind: 'extra',
+    likes: ['power', 'area', 'atkSpeed'],
+    excludes: [],
+    pillar: { interval: 4, range: 10, radius: 1.8, damage: 2.5, atMaxCount: 2, life: 0.5, max: 4 },
+  },
 ];
 
 export const techsFor = (weapon: string): TechDef[] => TECHS.filter((t) => t.weapon === weapon);
+/** 這隻妖怪的進化（材料的第一個是它的主武器） */
+export const evosFor = (weapon: string): EvoDef[] => EVOS.filter((e) => e.from[0] === weapon);
+/** 這個技法用哪一套機制 */
+export const mechOf = (d: TechDef): TechMechanic => d.mech ?? (d.id as TechMechanic);
 export const techById = (id: string): TechDef => {
   const t = TECHS.find((x) => x.id === id);
   if (!t) throw new Error(`沒有這個技法：${id}`);
@@ -322,6 +389,49 @@ export const EVOS: readonly EvoDef[] = [
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
     unlock: { mech: 'oil', level: 6 },
     up: [{}, { hellfire: { burn: { radius: 0.4 } } }, { hellfire: { burn: { seconds: 1, damage: 0.15 }, oil: { spread: 1, atMaxSpread: 1 } } }],
+  },
+  // ── 河童（D63，草案；和鬼火那邊的進化同格式）──
+  {
+    id: 'evoTorrent',
+    from: ['waterdisc', 'torrent'],
+    set: { torrent: { bounce: { range: 8, jumps: 5, atMaxJumps: 6, damage: 0.85 } } },
+    weapon: { damage: 0.1, pierce: 0, volley: 0 },
+    up: [{ torrent: { bounce: { jumps: 1, atMaxJumps: 1 } } }, { torrent: { bounce: { range: 1.5 } } }, { torrent: { bounce: { jumps: 1, atMaxJumps: 1, damage: 0.1 } } }],
+  },
+  {
+    id: 'evoSplash',
+    from: ['waterdisc', 'splash'],
+    set: { splash: { split: { children: 4, atMaxChildren: 5, damage: 0.75, range: 9, reSplit: 2 } } },
+    weapon: { damage: 0.15, pierce: 0, volley: 0 },
+    up: [{ splash: { split: { children: 1, atMaxChildren: 1 } } }, { splash: { split: { damage: 0.1, range: 1 } } }, { splash: { split: { reSplit: 1 } } }],
+  },
+  {
+    id: 'evoWhirl',
+    from: ['waterdisc', 'whirl'],
+    set: { whirl: { orbit: { baseOrbs: 3, atMaxOrbs: 2, radius: 3.6, damage: 1.7, innerDamage: 0.8 } } },
+    weapon: { damage: 0.1, pierce: 0, volley: 0 },
+    up: [{ whirl: { orbit: { radius: 0.3 } } }, { whirl: { orbit: { baseOrbs: 1 } } }, { whirl: { orbit: { damage: 0.3, innerDamage: 0.2 } } }],
+  },
+  {
+    id: 'evoVeil',
+    from: ['waterdisc', 'veil'],
+    set: { veil: { ward: { chargeSeconds: 3, atMaxChargeSeconds: 2, burstRadius: 3.8, burstDamage: 3 } } },
+    weapon: { damage: 0.1, pierce: 0, volley: 0 },
+    up: [{ veil: { ward: { burstRadius: 0.6 } } }, { veil: { ward: { chargeSeconds: -0.5, atMaxChargeSeconds: -0.3 } } }, { veil: { ward: { burstDamage: 1, burstRadius: 0.6 } } }],
+  },
+  {
+    id: 'evoPond',
+    from: ['waterdisc', 'pond'],
+    set: { pond: { burn: { radius: 2.2, seconds: 4, damage: 0.5, atMaxScale: 1.4 } } },
+    weapon: { damage: 0.1, pierce: 0, volley: 0 },
+    up: [{ pond: { burn: { radius: 0.3 } } }, { pond: { burn: { radius: 0.4 } } }, { pond: { burn: { seconds: 1, damage: 0.15 } } }],
+  },
+  {
+    id: 'evoGeyser',
+    from: ['waterdisc', 'geyser'],
+    set: { geyser: { pillar: { interval: 2.5, range: 12, radius: 2.2, damage: 3.5, atMaxCount: 3, life: 0.5, max: 6 } } },
+    weapon: { damage: 0.1, pierce: 0, volley: 0 },
+    up: [{ geyser: { pillar: { radius: 0.4 } } }, { geyser: { pillar: { interval: -0.4 } } }, { geyser: { pillar: { damage: 1.0, radius: 0.4 } } }],
   },
 ];
 

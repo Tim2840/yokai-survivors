@@ -5,6 +5,7 @@ import { ball } from '../art/shapes';
 import type { Run } from '../game/run';
 import { COMBAT } from '../data/combat';
 import { buildLanternMonk, type Character } from '../units/lanternMonk';
+import { buildKappa } from '../units/kappa';
 import { buildVillagerGeometry } from '../units/villager';
 import { buildWorldView, type WorldView } from '../world/worldView';
 import { writeMatrix, setHugeBounds } from './instancedLayer';
@@ -34,6 +35,8 @@ const SHARD_VIEW_SCALE = 0.55;
 export class RunView {
   private readonly world: WorldView;
   private readonly player: Character;
+  /** 投射物畫成扁盤（河童）還是圓球（鬼火） */
+  private diskShot = false;
   private readonly enemyMesh: THREE.InstancedMesh;
   private readonly enemyShadow: THREE.InstancedMesh;
   private readonly bulletMesh: THREE.InstancedMesh;
@@ -61,7 +64,7 @@ export class RunView {
     this.world = buildWorldView(map, run.seed);
     this.group.add(this.world.group);
 
-    this.player = buildLanternMonk();
+    this.player = run.yokai.id === 'kappa' ? buildKappa() : buildLanternMonk();
     this.group.add(this.player.root);
 
     // 敵人：單一幾何＋頂點色，頂點著色器做彈跳與傾斜（T2：頂點著色器動畫）
@@ -108,7 +111,8 @@ export class RunView {
 
     // 鬼火：發光小球
     const bg = ball(0.2, 12, 8);
-    const bm = glow(palette.fire.ghost, 3.2);
+    const bm = glow(run.yokai.id === 'kappa' ? palette.fire.soul : palette.fire.ghost, 3.2);
+    this.diskShot = run.yokai.id === 'kappa';
     this.bulletMesh = new THREE.InstancedMesh(bg, bm, run.projectiles.capacity);
     this.bulletMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.bulletMesh.count = 0;
@@ -258,7 +262,8 @@ export class RunView {
       if (!pr.alive[i]) continue;
       // 碎火、分裂出來的小火畫小一點（看得出是碎片）
       const sc = pr.gen[i] === 0 ? 1 : SHARD_VIEW_SCALE;
-      writeMatrix(bm, b++, pr.x[i], map.heightAt(pr.x[i], pr.z[i]) + 0.8, pr.z[i], 0, sc, sc, sc);
+      // 河童的水盤：扁扁的圓盤；鬼火：圓球
+      writeMatrix(bm, b++, pr.x[i], map.heightAt(pr.x[i], pr.z[i]) + 0.8, pr.z[i], 0, this.diskShot ? sc * 1.3 : sc, this.diskShot ? sc * 0.35 : sc, this.diskShot ? sc * 1.3 : sc);
     }
     this.bulletMesh.count = b;
     this.bulletMesh.instanceMatrix.needsUpdate = true;

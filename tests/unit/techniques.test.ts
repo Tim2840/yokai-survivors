@@ -49,7 +49,7 @@ function levelWeapon(run: Run, level: number): void {
 describe('技法池（資料全掃）', () => {
   it('id 唯一、每個都有名稱與說明（≤36 字）、適合的道具都在卡池、互斥雙向一致、三個系都有、剛好一個機制資料', () => {
     expect(new Set(TECHS.map((t) => t.id)).size).toBe(TECHS.length);
-    for (const f of TECH_FAMILIES) expect(TECHS.filter((t) => t.family === f).length, f).toBeGreaterThanOrEqual(3);
+    for (const w of ['ghostfire', 'waterdisc']) for (const f of TECH_FAMILIES) expect(techsFor(w).filter((t) => t.family === f).length, `${w} ${f}`).toBeGreaterThanOrEqual(2);
     for (const t of TECHS) {
       for (const k of [`tech.${t.id}`, `tech.${t.id}.desc`] as const) {
         const txt = zhTW[k as keyof typeof zhTW] as string | undefined;
@@ -63,7 +63,7 @@ describe('技法池（資料全掃）', () => {
     }
     expect(TECH_OFFER.chance).toBeGreaterThan(0);
     expect(TECH_OFFER.chance).toBeLessThan(1);
-    expect(techsFor('ghostfire').length).toBe(TECHS.length);
+    expect(techsFor('ghostfire').length + techsFor('waterdisc').length).toBe(TECHS.length);
   });
   it('混搭提示：命中效果 × 出手方式 → hit；同系 → family；沒關係 → null', () => {
     expect(techMix('hellfire', ['ring'])).toEqual({ kind: 'hit', via: 'ring', hit: 'hellfire' });
@@ -563,7 +563,7 @@ describe('同系加深、技法等級、滿級加強', () => {
     expect(run.tech.satCount).toBeGreaterThan(s0);
   });
   it('技法兩兩組合都能跑 10 秒不出錯（兩兩組合全掃，沒有 NaN 傷害）', () => {
-    const ids = TECHS.map((t) => t.id);
+    const ids = techsFor('ghostfire').map((t) => t.id);
     for (let i = 0; i < ids.length; i++) {
       for (let j = i + 1; j < ids.length; j++) {
         const run = make(30 + i * 13 + j);

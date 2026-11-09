@@ -3,7 +3,6 @@ import type { I18nKey } from '../i18n/zh-TW';
 import { CARD_FORMAT, type StatId } from '../data/stats';
 import { setWeaponTextFormatter, type BuildSummary } from '../game/buildSummary';
 import { cardLinks } from '../data/links';
-import { BASE_TECH_ID } from '../data/techniques';
 import { DIFFICULTY } from '../data/difficulty';
 import { EVO, EVOS, FORM_LEVEL0, TECH_CARD_PREFIX, TECH_KEEP, TECH_LEVELS, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard, techById, techMix } from '../data/techniques';
 import { ITEM_RARITY_MULT } from '../data/items';
@@ -11,7 +10,7 @@ import type { Rarity } from '../data/rarity';
 import { cardById, type CardOffer } from '../systems/cards';
 import type { Affix } from '../data/affixes';
 import { WEAPON_LEVELS, itemDown, itemValue, scaleWeaponStep, type WeaponLevel } from '../data/items';
-import { PLAYABLE_YOKAI, STARTER_YOKAI } from '../data/yokai';
+import { PLAYABLE_YOKAI, STARTER_YOKAI, YOKAI } from '../data/yokai';
 import { CARD_EFFECT } from '../data/stats';
 import { lineIsGood, type ElementResult, type ResultLine } from '../systems/elementResult';
 
@@ -271,7 +270,7 @@ export function cardLinkLines(cardId: string, yokai: string, owned?: readonly st
   const l = cardLinks(cardId, yokai);
   if (cardById(cardId).kind === 'fallback') return [];
   if (owned) {
-    const mine = l.techs.filter((x) => x === BASE_TECH_ID || owned.includes(x));
+    const mine = l.techs.filter((x) => x === YOKAI[yokai]?.weapon.id || owned.includes(x));
     return mine.length ? [t('card.link.owned', { list: mine.map((x) => techName(x)).join('、') })] : [];
   }
   if (l.weapon) return [t('card.link.weapon')];
@@ -504,7 +503,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
         const li = document.createElement('li');
         li.dataset.card = c.id;
         const chips = (['common', 'rare', 'epic', 'legend'] as const).map((r) => `<i class="chip r-${r}"></i>`.repeat(c.byRarity[r])).join('');
-        li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), lv: c.level, max: c.maxLevel })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}${cardLinkLines(c.id, sum.yokai).map((x) => `<br><span class="clink">${x}</span>`).join('')}${c.kind === 'weapon' ? `<br>${t('pause.techRow', { name: techName(BASE_TECH_ID), lv: c.level, items: sum.baseLikes.map((x) => t(`card.${x}` as I18nKey)).join('、') })}` : ''}${c.kind === 'weapon' ? sum.techs.map((x) => `<br>${t('pause.techRow', { name: techName(x.id), lv: x.level, items: x.likes.map((l) => t(`card.${l}` as I18nKey)).join('、') })}`).join('') : ''}</em>`;
+        li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), lv: c.level, max: c.maxLevel })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}${cardLinkLines(c.id, sum.yokai).map((x) => `<br><span class="clink">${x}</span>`).join('')}${c.kind === 'weapon' ? `<br>${t('pause.techRow', { name: techName(c.id), lv: c.level, items: sum.baseLikes.map((x) => t(`card.${x}` as I18nKey)).join('、') })}` : ''}${c.kind === 'weapon' ? sum.techs.map((x) => `<br>${t('pause.techRow', { name: techName(x.id), lv: x.level, items: x.likes.map((l) => t(`card.${l}` as I18nKey)).join('、') })}`).join('') : ''}</em>`;
         cards.appendChild(li);
       }
       const evo = q('sum-evo');

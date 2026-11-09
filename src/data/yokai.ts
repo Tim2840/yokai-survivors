@@ -79,6 +79,31 @@ export const YOKAI: Record<string, YokaiDef> = {
   },
 };
 
+YOKAI.kappa = {
+  id: 'kappa',
+  // 機動型（docs/17 第 6.2、6.4 節，草案）：血少、跑得快、回血快、會閃
+  base: { maxHp: 85, speed: 4.6, regen: 0.8, dodge: 0.05 },
+  weapon: {
+    id: 'waterdisc',
+    kind: 'boomerang',
+    damage: 10,
+    interval: 1.1,
+    range: 9,
+    volley: 1,
+    projectileSpeed: 11,
+    turnRate: 2,
+    lifetime: 0.65,
+    hitRadius: 0.6,
+    pierce: 30,
+    splashRadius: 0,
+    splashRatio: 0,
+    knockback: 4,
+  },
+  // 被動「水氣」（草案）：身邊的人類減速。docs/17 的「水痕」（身後留水痕、水中加速）之後再做
+  aura: { radius: 3.5, slow: 0.12 },
+  radius: 0.5,
+};
+
 export const STARTER_YOKAI = ['chochin-kozo', 'kappa', 'aka-oni'] as const;
 /** M1 已可玩的領頭妖怪（其餘在選單顯示「製作中」） */
-export const PLAYABLE_YOKAI: readonly string[] = ['chochin-kozo'];
+export const PLAYABLE_YOKAI: readonly string[] = ['chochin-kozo', 'kappa'];

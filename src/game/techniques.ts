@@ -1,5 +1,5 @@
 import { COMBAT } from '../data/combat';
-import { BASE_TECH_ID, EVO, EVOS, FORM_LEVEL0, TECHS, TECH_CHOICES, TECH_DEEPEN, TECH_FAMILIES, TECH_LEVELS, TECH_MAX, TECH_OFFER, TECH_RULES, evoById, techById, techsFor, type EvoDef, type TechDef, type TechFamily, type TechMechanic } from '../data/techniques';
+import { EVO, FORM_LEVEL0, evosFor, mechOf, TECHS, TECH_CHOICES, TECH_DEEPEN, TECH_FAMILIES, TECH_LEVELS, TECH_MAX, TECH_OFFER, TECH_RULES, evoById, techById, techsFor, type EvoDef, type TechDef, type TechFamily, type TechMechanic } from '../data/techniques';
 import type { WeaponDef } from '../data/yokai';
 import type { Rng } from '../lib/random';
 import type { Run } from './run';
@@ -143,17 +143,21 @@ export class Techniques {
   // ── 進化（D53）──
   /** 這個技法已經併進某個進化了（鬼火不會被用掉：它可以和不同的技法各進化一次） */
   isEvolved(id: string): boolean {
-    if (id === BASE_TECH_ID) return false;
+    if (this.isBase(id)) return false;
     for (const e of this.evolved) if (evoById(e).from.includes(id)) return true;
     return false;
   }
+  /** 是不是這隻妖怪的主武器（鬼火、水盤…；D63 起不再寫死鬼火） */
+  isBase(id: string): boolean {
+    return id === this.run.weaponItemId;
+  }
   /** 這個技法（或鬼火）現在幾級（鬼火 = 主武器等級；沒有 = 0） */
   techLevel(id: string): number {
-    return id === BASE_TECH_ID ? this.run.weaponLevel : this.levelOf(id);
+    return this.isBase(id) ? this.run.weaponLevel : this.levelOf(id);
   }
   /** 材料都到 EVO.minLevel 級、還沒進化、而且沒有被別的進化用掉的進化 */
   get evolvable(): EvoDef[] {
-    return EVOS.filter((e) => !this.evolved.includes(e.id) && e.from.every((m) => !this.isEvolved(m) && this.techLevel(m) >= EVO.minLevel));
+    return evosFor(this.run.weaponItemId).filter((e) => !this.evolved.includes(e.id) && e.from.every((m) => !this.isEvolved(m) && this.techLevel(m) >= EVO.minLevel));
   }
   /** 進化：兩個技法併成一個 */
   evolve(id: string): boolean {
@@ -167,7 +171,7 @@ export class Techniques {
     let n = this.owned.length;
     for (const id of this.evolved) {
       const e = evoById(id);
-      if (!e.from.includes(BASE_TECH_ID) && e.from.every((m) => this.has(m))) n--;
+      if (!e.from.includes(this.run.weaponItemId) && e.from.every((m) => this.has(m))) n--;
     }
     return n;
   }
@@ -211,8 +215,8 @@ export class Techniques {
   }
   /** 開發與測試：直接把技法（或鬼火）練到指定等級 */
   devSetLevel(id: string, level: number): void {
-    if (id === BASE_TECH_ID) {
-      while (this.run.weaponLevel < level) this.run.give(BASE_TECH_ID, 'common');
+    if (this.isBase(id)) {
+      while (this.run.weaponLevel < level) this.run.give(this.run.weaponItemId, 'common');
       return;
     }
     const i = this.owned.indexOf(id);
@@ -237,7 +241,7 @@ export class Techniques {
     this.owned.forEach((id, i) => {
       const d = techById(id);
       const ed = this.withEvo(d, this.levels[i]);
-      this.act[id as TechMechanic] = ed;
+      this.act[mechOf(d)] = ed;
       fam[d.family]++;
       // 進化形態到指定等級：併進來的舊招式（鬼火雨／衛星燈／燈油）開始作用（D57）
       const u = this.evoOf(id)?.unlock;

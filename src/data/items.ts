@@ -57,11 +57,23 @@ export const GHOSTFIRE_LEVELS: readonly WeaponLevel[] = [
   { damage: 5, volley: 1 },
 ];
 
+/** 水盤（河童）8 級表（D63，草案）：回力投射物本來就會穿透，所以沒有「穿透」，改加傷害；Lv1 起始 */
+export const WATERDISC_LEVELS: readonly WeaponLevel[] = [
+  { damage: 3 },
+  { volley: 1 },
+  { cooldownPct: 10 },
+  { damage: 4 },
+  { damage: 3 },
+  { cooldownPct: 10, splash: 0.5 },
+  { damage: 5, volley: 1 },
+];
+
 /** 每隻妖怪的主武器升級表（id = 道具 id） */
-export const WEAPON_LEVELS: Record<string, readonly WeaponLevel[]> = { ghostfire: GHOSTFIRE_LEVELS };
+export const WEAPON_LEVELS: Record<string, readonly WeaponLevel[]> = { ghostfire: GHOSTFIRE_LEVELS, waterdisc: WATERDISC_LEVELS };
 
 export const ITEMS: readonly ItemDef[] = [
   { id: 'ghostfire', kind: 'weapon', maxLevel: GHOSTFIRE_LEVELS.length + 1, rarityScales: true, levelGate: 4 },
+  { id: 'waterdisc', kind: 'weapon', maxLevel: WATERDISC_LEVELS.length + 1, rarityScales: true, levelGate: 4 },
   // 屬性道具（5 級）
   { id: 'power', kind: 'stat', stat: 'power', perLevel: 10, maxLevel: 5, rarityScales: true },
   { id: 'atkSpeed', kind: 'stat', stat: 'atkSpeed', perLevel: 8, maxLevel: 5, rarityScales: true },

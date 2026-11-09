@@ -8,7 +8,7 @@ import { STAT_IDS } from '../data/stats';
 import { ALTAR_CURSE_IDS, type CurseId } from '../data/altar';
 import { tuning } from '../data/tuning';
 import { ULT, ULT_UPGRADE } from '../data/ultimates';
-import { BASE_TECH_ID, BASE_TECH_LIKES, EVOS, techById } from '../data/techniques';
+import { BASE_TECH_LIKES, evosFor, techById } from '../data/techniques';
 
 /** 暫停畫面「能力」面板的資料（純資料，不含文字；文字由介面層用 i18n 組） */
 export interface BuildSummary {
@@ -100,7 +100,7 @@ export function summarizeBuild(run: Run): BuildSummary {
     yokai: run.yokai.id,
     techs: run.tech.owned.map((id, i) => ({ id, level: run.tech.levels[i], evolved: run.tech.isEvolved(id), likes: [...techById(id).likes] })),
     baseLikes: [...BASE_TECH_LIKES],
-    evolutions: EVOS.filter((e) => e.from.every((m) => m === BASE_TECH_ID || run.tech.has(m))).map((e) => ({
+    evolutions: evosFor(run.weaponItemId).filter((e) => e.from.every((m) => run.tech.isBase(m) || run.tech.has(m))).map((e) => ({
       id: e.id,
       from: e.from.map((m) => ({ id: m, level: run.tech.techLevel(m) })),
       done: run.tech.evolved.includes(e.id),
