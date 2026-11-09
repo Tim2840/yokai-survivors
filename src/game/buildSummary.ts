@@ -24,7 +24,7 @@ export interface BuildSummary {
   /** 鬼火（主武器）適合的法具（能力面板詳細列出） */
   baseLikes: string[];
   /** 技法進化（D53）：兩個材料都拿到的配方、各自的技法等級（鬼火 = 主武器等級）、是否已進化 */
-  evolutions: { id: string; from: { id: string; level: number }[]; done: boolean; ready: boolean }[];
+  evolutions: { id: string; from: { id: string; level: number }[]; done: boolean; ready: boolean; formLevel: number }[];
   /** 屬性：id、目前值（內部單位）、基礎值 */
   stats: { id: StatId; value: number; base: number }[];
   /** 武器：鬼火數量、濺射半徑（公尺）、穿透 */
@@ -105,6 +105,7 @@ export function summarizeBuild(run: Run): BuildSummary {
       from: e.from.map((m) => ({ id: m, level: run.tech.techLevel(m) })),
       done: run.tech.evolved.includes(e.id),
       ready: run.tech.evolvable.some((x) => x.id === e.id),
+      formLevel: run.tech.levelOf(e.from[1]),
     })),
     slots: ITEM_SLOTS,
     stats: STAT_IDS.filter((id) => id !== 'merit').map((id) => ({ id, value: s[id], base: run.stats.baseOf(id) })),

@@ -10,9 +10,10 @@ export interface ChangelogEntry {
   text: I18nKey;
 }
 
-export const CONTENT_VERSION = 35;
+export const CONTENT_VERSION = 36;
 
 export const CHANGELOG: readonly ChangelogEntry[] = [
+  { version: 36, date: '2026-11-09', text: 'changelog.v36' },
   { version: 35, date: '2026-11-09', text: 'changelog.v35' },
   { version: 34, date: '2026-11-08', text: 'changelog.v34' },
   { version: 33, date: '2026-11-08', text: 'changelog.v33' },

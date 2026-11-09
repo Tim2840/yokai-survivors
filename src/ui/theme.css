@@ -197,6 +197,7 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 .sum-ult em { font-style: normal; font-size: 12px; color: var(--text-dim); }
 .sum-ult span { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; }
 .sum-ult i { font-style: normal; color: var(--text-dim); } .sum-ult i.ok { color: #9fe8a0; }
+.sum-ult .evo-form { flex-direction: column; gap: 1px; font-size: 12px; }
 #sum-ult { margin-top: 10px; }
 
 /* ── 法具（D30）── */

@@ -61,6 +61,81 @@ describe('技法進化資料（D53）', () => {
   });
 });
 
+describe('進化形態的升級（D57）：5 級封頂、進化後才能升到 8 級、每級有專屬強化', () => {
+  it('資料全掃：每個進化有 6、7、8 級各一組強化（加上去的數值欄位真的存在）、有說明文字；併進來的招式有資料也有解鎖等級', () => {
+    for (const e of EVOS) {
+      expect(e.up, e.id).toHaveLength(3);
+      e.up.forEach((patch, k) => {
+        expect(t(`evoUp.${e.id}.${6 + k}` as I18nKey), `${e.id} 的 ${6 + k} 級說明`).not.toBe(`evoUp.${e.id}.${6 + k}`);
+        for (const [tid, blocks] of Object.entries(patch)) {
+          expect(tid, `${e.id} 的強化只能改自己的技法`).toBe(e.from[1]);
+          const d = techById(tid) as unknown as Record<string, Record<string, number>>;
+          for (const [b, vals] of Object.entries(blocks)) {
+            expect(d[b], `${tid} 沒有區塊 ${b}`).toBeTruthy();
+            for (const f of Object.keys(vals)) expect(f in d[b], `${tid}.${b} 沒有欄位 ${f}`).toBe(true);
+          }
+        }
+      });
+      // 每個進化的 6～8 級加起來至少要有一項（不是空的）
+      expect(e.up.some((p) => Object.keys(p).length > 0) || !!e.unlock, `${e.id} 的升級是空的`).toBe(true);
+      if (e.unlock) {
+        const d = techById(e.from[1]) as unknown as Record<string, unknown>;
+        expect(d[e.unlock.mech], `${e.id} 解鎖的 ${e.unlock.mech} 沒有資料`).toBeTruthy();
+        expect(e.unlock.level).toBeGreaterThanOrEqual(6);
+      }
+    }
+    // 三個併進來的招式各自剛好被一個進化解鎖
+    expect(EVOS.filter((e) => e.unlock).map((e) => e.unlock!.mech).sort()).toEqual(['oil', 'rain', 'satellite']);
+  });
+  it('進化前最多 5 級、進化後才能繼續升到 8 級；進化前升不上去', () => {
+    const run = make(31);
+    run.devAddTech('ring');
+    for (let k = 0; k < 10; k++) run.tech.levelUp('ring');
+    expect(run.tech.levelOf('ring')).toBe(EVO.minLevel);
+    expect(run.tech.capOf('ring')).toBe(EVO.minLevel);
+    run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
+    run.tech.evolve('evoRing');
+    expect(run.tech.capOf('ring')).toBe(TECH_LEVELS.max);
+    for (let k = 0; k < 10; k++) run.tech.levelUp('ring');
+    expect(run.tech.levelOf('ring')).toBe(TECH_LEVELS.max);
+    expect(run.tech.levelUp('ring')).toBe(false);
+  });
+  it('進化形態每升一級就多一組強化（累積）：燈籠環 7 級多 1 顆；進化前（5 級）沒有', () => {
+    const a = make(32);
+    a.devAddTech('ring');
+    a.devTechLevel(BASE_TECH_ID, EVO.minLevel);
+    a.devTechLevel('ring', EVO.minLevel);
+    a.tech.evolve('evoRing');
+    const base = a.tech.act.ring!.orbit!.baseOrbs;
+    a.devTechLevel('ring', 6);
+    expect(a.tech.act.ring!.orbit!.baseOrbs, '6 級是解鎖衛星燈，沒有加顆數').toBe(base);
+    a.devTechLevel('ring', 7);
+    expect(a.tech.act.ring!.orbit!.baseOrbs).toBe(base + 1);
+    a.devTechLevel('ring', 8);
+    expect(a.tech.act.ring!.orbit!.damage).toBeCloseTo(evoById('evoRing').set.ring.orbit.damage + 0.3);
+    expect(a.tech.act.ring!.orbit!.baseOrbs, '7 級的強化要留著').toBe(base + 1);
+    expect(a.tech.act.satellite, '8 級衛星燈再多一盞').toBeTruthy();
+    expect(a.tech.satCount).toBeGreaterThanOrEqual(2);
+  });
+  it('全掃：每個進化都能練到 8 級、每一級的資料不產生 NaN／負數的關鍵欄位', () => {
+    for (const e of EVOS) {
+      const run = make(33);
+      run.devAddTech(e.from[1]);
+      run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
+      run.devTechLevel(e.from[1], EVO.minLevel);
+      expect(run.tech.evolve(e.id), e.id).toBe(true);
+      for (let lv = EVO.minLevel + 1; lv <= TECH_LEVELS.max; lv++) {
+        run.devTechLevel(e.from[1], lv);
+        const d = run.tech.act[e.from[1] as keyof typeof run.tech.act] as unknown as Record<string, Record<string, number>>;
+        for (const [b, vals] of Object.entries(d)) {
+          if (typeof vals !== 'object' || vals === null) continue;
+          for (const [f, v] of Object.entries(vals)) if (typeof v === 'number') expect(Number.isFinite(v) && v >= 0 || f === 'delay', `${e.id} Lv${lv} ${b}.${f}=${v}`).toBe(true);
+        }
+      }
+    }
+  });
+});
+
 describe('適合沒有加成（使用者 2026-11-06：「不要再有適合加成」）', () => {
   it('法具練到高等級也不會讓技法或主鬼火變強（舊版有適合加成會紅）', () => {
     const a = make(11);
@@ -128,31 +203,31 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
 
   it('進化：技法效果 × EVO.power、參數換成進化後的值、鬼火加成；有鬼火不省格；只能進化一次', () => {
     const run = make(22);
-    run.devAddTech('ring', 'satellite');
+    run.devAddTech('ring', 'ward');
     const used0 = run.tech.slotsUsed;
-    run.devTechLevel('ring', TECH_LEVELS.max);
-    run.devTechLevel(BASE_TECH_ID, TECH_LEVELS.max);
+    run.devTechLevel('ring', EVO.minLevel);
+    run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
     const pr0 = run.tech.powerOf('ring');
-    const ps0 = run.tech.powerOf('satellite');
+    const ps0 = run.tech.powerOf('ward');
     expect(run.tech.evolve('evoRing')).toBe(true);
     expect(run.tech.evolve('evoRing'), '不能再進化一次').toBe(false);
     expect(run.tech.slotsUsed, '有鬼火的進化不省格').toBe(used0);
     expect(run.tech.powerOf('ring')).toBeCloseTo(pr0 * EVO.power);
-    expect(run.tech.powerOf('satellite'), '另一個技法不受影響').toBeCloseTo(ps0);
+    expect(run.tech.powerOf('ward'), '另一個技法不受影響').toBeCloseTo(ps0);
     expect(run.tech.act.ring!.orbit!.baseOrbs).toBe(evoById('evoRing').set.ring.orbit.baseOrbs);
     expect(run.tech.isEvolved('ring')).toBe(true);
-    expect(run.tech.isEvolved('satellite')).toBe(false);
+    expect(run.tech.isEvolved('ward')).toBe(false);
   });
 
   it('不限次數：鬼火可以和不同技法各進化一次（最多跟著手上的技法數）；進化過的技法不能再進化；鬼火不會被用掉', () => {
     const run = make(23);
     expect(TECH_MAX).toBe(3);
-    run.devAddTech('ring', 'satellite', 'ward');
-    for (const id of ['ring', 'satellite', 'ward']) run.devTechLevel(id, EVO.minLevel);
+    run.devAddTech('ring', 'ward', 'lamp');
+    for (const id of ['ring', 'ward', 'lamp']) run.devTechLevel(id, EVO.minLevel);
     run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
-    expect(run.tech.evolvable.map((e) => e.id)).toEqual(['evoRing', 'evoSatellite', 'evoWard']);
-    for (const id of ['evoRing', 'evoSatellite', 'evoWard']) expect(run.tech.evolve(id), id).toBe(true);
-    expect(run.tech.evolved).toEqual(['evoRing', 'evoSatellite', 'evoWard']);
+    expect(run.tech.evolvable.map((e) => e.id)).toEqual(['evoRing', 'evoWard', 'evoLamp']);
+    for (const id of ['evoRing', 'evoWard', 'evoLamp']) expect(run.tech.evolve(id), id).toBe(true);
+    expect(run.tech.evolved).toEqual(['evoRing', 'evoWard', 'evoLamp']);
     expect(run.tech.isEvolved(BASE_TECH_ID)).toBe(false);
     expect(run.tech.evolvable, '都進化完了').toEqual([]);
     expect(run.tech.evolve('evoRing')).toBe(false);
@@ -175,7 +250,7 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
 
   it('道祖神換掉進化過的技法：進化跟著拆掉', () => {
     const run = make(25);
-    run.devAddTech('ring', 'satellite');
+    run.devAddTech('ring', 'lamp');
     run.devTechLevel('ring', EVO.minLevel);
     run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
     run.tech.evolve('evoRing');

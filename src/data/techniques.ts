@@ -79,6 +79,8 @@ export const TECHS: readonly TechDef[] = [
     likes: ['volley', 'splash', 'atkSpeed', 'power'],
     excludes: [],
     split: { children: 2, damage: 0.55, range: 7, atMaxChildren: 3, shardBonus: 1, reSplit: 1 },
+    // 併進來的「鬼火雨」（D57）：進化形態 Lv6 解鎖，命中處再落下幾顆小火
+    rain: { count: 2, atMaxCount: 3, range: 3, radius: 1.2, damage: 0.5, life: 0.3 },
   },
   {
     id: 'bounce',
@@ -98,15 +100,6 @@ export const TECHS: readonly TechDef[] = [
     excludes: ['ring'],
     homing: { returnPierce: 2, speedMult: 1.15, atMaxPierce: 1 },
   },
-  {
-    id: 'rain',
-    weapon: 'ghostfire',
-    family: 'split',
-    kind: 'onHit',
-    likes: ['volley', 'atkSpeed', 'power'],
-    excludes: [],
-    rain: { count: 2, atMaxCount: 3, range: 3, radius: 1.2, damage: 0.5, life: 0.3 },
-  },
   // ── 環繞系 ──
   {
     id: 'ring',
@@ -116,6 +109,8 @@ export const TECHS: readonly TechDef[] = [
     likes: ['area', 'hp', 'armor', 'atkSpeed'],
     excludes: ['bounce', 'homing'],
     orbit: { radius: 3.0, spin: 2.6, hitRadius: 1.0, tick: 0.25, damage: 1.3, knockback: 3, baseOrbs: 1, atMaxOrbs: 1, atMaxRadius: 1.25, innerDamage: 0.5, innerKnockback: 6 },
+    // 併進來的「衛星燈」（D57）：進化形態 Lv6 解鎖，外圈多一盞大燈籠慢慢繞
+    satellite: { count: 1, atMaxCount: 2, radius: 5.5, spin: 1.2, hitRadius: 1.3, tick: 0.4, damage: 1.5, knockback: 3 },
   },
   {
     id: 'ward',
@@ -125,15 +120,6 @@ export const TECHS: readonly TechDef[] = [
     likes: ['armor', 'hp', 'regen', 'area'],
     excludes: [],
     ward: { chargeSeconds: 6, atMaxChargeSeconds: 4, burstRadius: 2.5, burstDamage: 2 },
-  },
-  {
-    id: 'satellite',
-    weapon: 'ghostfire',
-    family: 'orbit',
-    kind: 'extra',
-    likes: ['area', 'power', 'atkSpeed'],
-    excludes: [],
-    satellite: { count: 1, atMaxCount: 2, radius: 5.5, spin: 1.2, hitRadius: 1.3, tick: 0.4, damage: 1.5, knockback: 3 },
   },
   {
     id: 'lamp',
@@ -153,6 +139,8 @@ export const TECHS: readonly TechDef[] = [
     likes: ['area', 'power', 'atkSpeed'],
     excludes: [],
     burn: { radius: 1.6, seconds: 2.5, tick: 0.5, damage: 0.35, shotDamage: 1.2, interval: 1.25, atMaxScale: 1.3, maxZones: 24 },
+    // 併進來的「燈油」（D57）：進化形態 Lv6 解鎖，被打中的人身上沾火，燒死時火傳給附近的人
+    oil: { seconds: 3, atMaxSeconds: 4, tick: 0.5, damage: 0.25, spreadRange: 3, spread: 2, atMaxSpread: 3, max: 24 },
   },
   {
     id: 'seed',
@@ -171,15 +159,6 @@ export const TECHS: readonly TechDef[] = [
     likes: ['power', 'area', 'atkSpeed'],
     excludes: [],
     pillar: { interval: 4, range: 10, radius: 1.8, damage: 2.5, atMaxCount: 2, life: 0.5, max: 4 },
-  },
-  {
-    id: 'oil',
-    weapon: 'ghostfire',
-    family: 'burn',
-    kind: 'onHit',
-    likes: ['power', 'atkSpeed', 'volley'],
-    excludes: [],
-    oil: { seconds: 3, atMaxSeconds: 4, tick: 0.5, damage: 0.25, spreadRange: 3, spread: 2, atMaxSpread: 3, max: 24 },
   },
 ];
 
@@ -248,15 +227,28 @@ export const BASE_TECH_LIKES: readonly string[] = ['power', 'atkSpeed', 'volley'
 export const EVO = { power: 1.25, minLevel: 5 } as const;
 
 type Block = Record<string, number>;
+/** 技法 id → 區塊名 → 欄位 → 數值（換成新值，或加上去，看用在哪） */
+export type EvoPatch = Readonly<Record<string, Readonly<Record<string, Block>>>>;
 export interface EvoDef {
   id: string;
-  /** 兩個材料（技法 id 或 BASE_TECH_ID） */
+  /** 兩個材料：鬼火 + 一個技法（D56） */
   from: readonly [string, string];
-  /** 把這幾個技法的參數換掉：技法 id → 區塊名 → 欄位 → 新值（直接取代） */
-  set: Readonly<Record<string, Readonly<Record<string, Block>>>>;
+  /** 進化的那一刻：把這幾個技法的參數換掉（直接取代） */
+  set: EvoPatch;
   /** 有鬼火的進化：主武器傷害倍率、穿透、發射數（加在主武器上） */
   weapon?: { damage: number; pierce: number; volley: number };
+  /**
+   * 進化形態的升級（D57，使用者 2026-11-09：「升級後的融合招式我也想要有可以升級的設計」「技法 5 級就能合併，剩下 3 級是做甚麼的？」）：
+   * 技法在進化前最多 5 級（EVO.minLevel）；進化後才能繼續升到 6、7、8 級，每一級各有一組強化（**加上去**，累積）。
+   * up[0] = 6 級、up[1] = 7 級、up[2] = 8 級。
+   */
+  up: readonly [EvoPatch, EvoPatch, EvoPatch];
+  /** 進化形態到這個等級，併進來的舊招式（鬼火雨／衛星燈／燈油）開始作用 */
+  unlock?: { mech: TechMechanic; level: number };
 }
+
+/** 進化形態的等級：進化前最多 EVO.minLevel 級，進化後最多 TECH_LEVELS.max 級；up 的第 k 組在 FORM_LEVEL0 + k 級生效 */
+export const FORM_LEVEL0 = EVO.minLevel + 1;
 
 export const EVOS: readonly EvoDef[] = [
   {
@@ -264,72 +256,66 @@ export const EVOS: readonly EvoDef[] = [
     from: ['ghostfire', 'kitsunebi'],
     set: { kitsunebi: { split: { children: 4, atMaxChildren: 5, damage: 0.75, range: 9, reSplit: 2 } } },
     weapon: { damage: 0.15, pierce: 1, volley: 0 },
+    unlock: { mech: 'rain', level: 6 },
+    up: [{}, { kitsunebi: { split: { children: 1, atMaxChildren: 1 } } }, { kitsunebi: { split: { reSplit: 1 }, rain: { count: 1, atMaxCount: 1 } } }],
   },
   {
     id: 'evoSoul',
     from: ['ghostfire', 'seed'],
     set: { seed: { seed: { delay: 0.6, radius: 2.8, atMaxRadius: 3.4, damage: 1.0, max: 20 } } },
     weapon: { damage: 0.15, pierce: 0, volley: 0.5 },
+    up: [{ seed: { seed: { radius: 0.4, atMaxRadius: 0.4, damage: 0.2 } } }, { seed: { seed: { delay: -0.15 } } }, { seed: { seed: { radius: 0.5, atMaxRadius: 0.5, damage: 0.3 } } }],
   },
   {
     id: 'evoBounce',
     from: ['ghostfire', 'bounce'],
     set: { bounce: { bounce: { range: 8, jumps: 5, atMaxJumps: 6, damage: 0.85 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
+    up: [{ bounce: { bounce: { jumps: 1, atMaxJumps: 1 } } }, { bounce: { bounce: { range: 1.5 } } }, { bounce: { bounce: { jumps: 1, atMaxJumps: 1, damage: 0.1 } } }],
   },
   {
     id: 'evoHoming',
     from: ['ghostfire', 'homing'],
     set: { homing: { homing: { returnPierce: 4, speedMult: 1.3, atMaxPierce: 2 } } },
     weapon: { damage: 0.1, pierce: 1, volley: 0 },
-  },
-  {
-    id: 'evoRain',
-    from: ['ghostfire', 'rain'],
-    set: { rain: { rain: { count: 5, atMaxCount: 6, range: 4, radius: 1.5, damage: 0.7, life: 0.3 } } },
-    weapon: { damage: 0.1, pierce: 0, volley: 0 },
+    up: [{ homing: { homing: { returnPierce: 1 } } }, { homing: { homing: { speedMult: 0.15 } } }, { homing: { homing: { returnPierce: 2 } } }],
   },
   {
     id: 'evoPillar',
     from: ['ghostfire', 'pillar'],
     set: { pillar: { pillar: { interval: 2.5, range: 12, radius: 2.2, damage: 3.5, atMaxCount: 3, life: 0.5, max: 6 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
+    up: [{ pillar: { pillar: { radius: 0.4 } } }, { pillar: { pillar: { interval: -0.4 } } }, { pillar: { pillar: { damage: 1.0, radius: 0.4 } } }],
   },
   {
     id: 'evoRing',
     from: ['ghostfire', 'ring'],
     set: { ring: { orbit: { baseOrbs: 3, atMaxOrbs: 2, radius: 3.6, damage: 1.7, innerDamage: 0.8 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
-  },
-  {
-    id: 'evoSatellite',
-    from: ['ghostfire', 'satellite'],
-    set: { satellite: { satellite: { count: 3, atMaxCount: 4, radius: 6.5, damage: 2.0 } } },
-    weapon: { damage: 0.1, pierce: 0, volley: 0 },
+    unlock: { mech: 'satellite', level: 6 },
+    up: [{}, { ring: { orbit: { baseOrbs: 1 } } }, { ring: { satellite: { count: 1, atMaxCount: 1 }, orbit: { damage: 0.3 } } }],
   },
   {
     id: 'evoWard',
     from: ['ghostfire', 'ward'],
     set: { ward: { ward: { chargeSeconds: 3, atMaxChargeSeconds: 2, burstRadius: 3.8, burstDamage: 3 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
+    up: [{ ward: { ward: { burstRadius: 0.6 } } }, { ward: { ward: { chargeSeconds: -0.5, atMaxChargeSeconds: -0.3 } } }, { ward: { ward: { burstDamage: 1, burstRadius: 0.6 } } }],
   },
   {
     id: 'evoLamp',
     from: ['ghostfire', 'lamp'],
     set: { lamp: { lamp: { count: 2, atMaxCount: 3, damage: 1.7 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
+    up: [{ lamp: { lamp: { hitRadius: 0.3, damage: 0.4 } } }, { lamp: { lamp: { ahead: 1 } } }, { lamp: { lamp: { damage: 0.6, hitRadius: 0.3 } } }],
   },
   {
     id: 'evoHellfire',
     from: ['ghostfire', 'hellfire'],
     set: { hellfire: { burn: { radius: 2.2, seconds: 4, damage: 0.5, atMaxScale: 1.4 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
-  },
-  {
-    id: 'evoOil',
-    from: ['ghostfire', 'oil'],
-    set: { oil: { oil: { seconds: 5, atMaxSeconds: 6, damage: 0.4, spread: 4, atMaxSpread: 5 } } },
-    weapon: { damage: 0.1, pierce: 0, volley: 0 },
+    unlock: { mech: 'oil', level: 6 },
+    up: [{}, { hellfire: { burn: { radius: 0.4 } } }, { hellfire: { burn: { seconds: 1, damage: 0.15 }, oil: { spread: 1, atMaxSpread: 1 } } }],
   },
 ];
 

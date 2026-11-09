@@ -104,7 +104,7 @@ describe('道祖神（D47；D48 起換的是技法）', () => {
     const { run, bus } = make(63);
     let n = 0;
     bus.on('techChanged', () => n++);
-    run.devAddTech('kitsunebi', 'satellite');
+    run.devAddTech('kitsunebi', 'lamp');
     const before = [...run.tech.owned];
     waitDosojin(run);
     holdOn(run);

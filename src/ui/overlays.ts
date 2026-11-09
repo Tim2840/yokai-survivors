@@ -5,7 +5,7 @@ import { setWeaponTextFormatter, type BuildSummary } from '../game/buildSummary'
 import { cardLinks } from '../data/links';
 import { BASE_TECH_ID } from '../data/techniques';
 import { DIFFICULTY } from '../data/difficulty';
-import { EVO, TECH_CARD_PREFIX, TECH_KEEP, TECH_LEVELS, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard, techById, techMix } from '../data/techniques';
+import { EVO, EVOS, FORM_LEVEL0, TECH_CARD_PREFIX, TECH_KEEP, TECH_LEVELS, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard, techById, techMix } from '../data/techniques';
 import { ITEM_RARITY_MULT } from '../data/items';
 import type { Rarity } from '../data/rarity';
 import { cardById, type CardOffer } from '../systems/cards';
@@ -225,13 +225,20 @@ export function affixHtml(affixes: readonly Affix[] | undefined): string {
   return `<span class="ctech caffix" data-affixes="${affixes.length}">${t('card.affix', { list })}</span>`;
 }
 
+/** 進化形態升到 level 級時多得到的東西（D57）；進化前（< 6 級）沒有 */
+function formUpHtml(id: string, level: number): string {
+  if (level < FORM_LEVEL0) return '';
+  const e = EVOS.find((x) => x.from[1] === id);
+  return e ? `<span class="ctech form" data-form="${level}">${t('tech.up.form', { lv: level, text: t(`evoUp.${e.id}.${level}` as I18nKey) })}</span>` : '';
+}
+
 function techCardHtml(cardId: string, rarity: Rarity, owned: readonly string[], levels: readonly number[], affixes?: readonly Affix[]): string {
   if (cardId === TECH_KEEP) return `<span class="rname">${t('card.techTag')}</span><b>${t('tech.keep')}</b><span class="cdesc">${t('tech.keep.desc')}</span>`;
   // 已有的技法：升一級（D49：最高 TECH_LEVELS.max 級，效果吃這張卡的稀有度）
   if (cardId.startsWith(TECH_CARD_PREFIX) && owned.includes(cardId.slice(TECH_CARD_PREFIX.length))) {
     const id = cardId.slice(TECH_CARD_PREFIX.length);
     const lv = levels[owned.indexOf(id)] ?? 1;
-    return `<span class="rname">${t(`rarity.${rarity}` as I18nKey)}・${t('tech.up.tag', { a: lv, b: lv + 1, max: TECH_LEVELS.max })}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="ctech">${t('tech.up.fx', { v: Math.round(TECH_LEVELS.perLevel * ITEM_RARITY_MULT[rarity] * 100) })}</span>${affixHtml(affixes)}`;
+    return `<span class="rname">${t(`rarity.${rarity}` as I18nKey)}・${t('tech.up.tag', { a: lv, b: lv + 1, max: TECH_LEVELS.max })}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="ctech">${t('tech.up.fx', { v: Math.round(TECH_LEVELS.perLevel * ITEM_RARITY_MULT[rarity] * 100) })}</span>${formUpHtml(id, lv + 1)}${affixHtml(affixes)}`;
   }
   let id: string;
   let tag: string;
@@ -507,7 +514,13 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
               (e) =>
                 `<li data-evo="${e.id}" class="${e.done ? 'fused' : ''}"><b>${t(`evo.${e.id}` as I18nKey)}${e.done ? ' ✓' : ''}</b><em>${t(`evo.${e.id}.desc` as I18nKey)}</em><span>${e.from
                   .map((m) => `<i class="${m.level >= EVO.minLevel ? 'ok' : ''}">${t('pause.evoPart', { name: techName(m.id), lv: Math.min(m.level, EVO.minLevel), max: EVO.minLevel })}</i>`)
-                  .join('')}${e.ready ? `<i class="ok">${t('pause.evoReady')}</i>` : ''}</span></li>`,
+                  .join('')}${e.ready ? `<i class="ok">${t('pause.evoReady')}</i>` : ''}${e.done ? '' : `<i>${t('pause.evoCap', { max: TECH_LEVELS.max })}</i>`}</span>${
+                  e.done
+                    ? `<span class="evo-form" data-form-level="${e.formLevel}"><i class="ok">${t('pause.evoForm', { lv: e.formLevel, max: TECH_LEVELS.max })}</i>${[6, 7, 8]
+                        .map((lv) => `<i class="${e.formLevel >= lv ? 'ok' : ''}">${t('pause.evoUpRow', { lv, text: t(`evoUp.${e.id}.${lv}` as I18nKey) })}</i>`)
+                        .join('')}</span>`
+                    : ''
+                }</li>`,
             )
             .join('')}</ul>`
         : '';

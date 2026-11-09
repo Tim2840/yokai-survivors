@@ -1,5 +1,5 @@
 import { COMBAT } from '../data/combat';
-import { BASE_TECH_ID, EVO, EVOS, TECHS, TECH_CHOICES, TECH_DEEPEN, TECH_FAMILIES, TECH_LEVELS, TECH_MAX, TECH_OFFER, TECH_RULES, evoById, techById, techsFor, type EvoDef, type TechDef, type TechFamily, type TechMechanic } from '../data/techniques';
+import { BASE_TECH_ID, EVO, EVOS, FORM_LEVEL0, TECHS, TECH_CHOICES, TECH_DEEPEN, TECH_FAMILIES, TECH_LEVELS, TECH_MAX, TECH_OFFER, TECH_RULES, evoById, techById, techsFor, type EvoDef, type TechDef, type TechFamily, type TechMechanic } from '../data/techniques';
 import type { WeaponDef } from '../data/yokai';
 import type { Rng } from '../lib/random';
 import type { Run } from './run';
@@ -223,7 +223,7 @@ export class Techniques {
   }
   levelUp(id: string, rarityMult = 1): boolean {
     const i = this.owned.indexOf(id);
-    if (i < 0 || this.levels[i] >= TECH_LEVELS.max) return false;
+    if (i < 0 || this.levels[i] >= this.capOf(id)) return false;
     this.levels[i]++;
     this.points[i] += rarityMult;
     this.recompute();
@@ -234,10 +234,17 @@ export class Techniques {
   recompute(): void {
     for (const k of Object.keys(this.act) as TechMechanic[]) this.act[k] = null;
     const fam: Record<TechFamily, number> = { split: 0, orbit: 0, burn: 0 };
-    this.owned.forEach((id) => {
+    this.owned.forEach((id, i) => {
       const d = techById(id);
-      this.act[id as TechMechanic] = this.withEvo(d);
+      const ed = this.withEvo(d, this.levels[i]);
+      this.act[id as TechMechanic] = ed;
       fam[d.family]++;
+      // 進化形態到指定等級：併進來的舊招式（鬼火雨／衛星燈／燈油）開始作用（D57）
+      const u = this.evoOf(id)?.unlock;
+      if (u && this.levels[i] >= u.level) {
+        const blk = (ed as unknown as Record<string, unknown>)[u.mech];
+        this.act[u.mech] = { id: d.id, weapon: d.weapon, family: d.family, kind: u.mech === 'satellite' ? 'extra' : 'onHit', likes: d.likes, excludes: d.excludes, [u.mech]: blk } as TechDef;
+      }
     });
     for (const f of TECH_FAMILIES) this.deep[f] = Math.max(0, fam[f] - 1);
     // 拿掉的技法留下的東西清掉
@@ -257,18 +264,37 @@ export class Techniques {
   }
 
   /** 套用進化：把進化指定的區塊欄位換成新值（回傳新的定義；沒有進化就回原本的） */
-  private withEvo(d: TechDef): TechDef {
+  private withEvo(d: TechDef, level: number): TechDef {
     let out: TechDef | null = null;
-    for (const e of this.evolved) {
-      const blocks = evoById(e).set[d.id];
+    for (const eid of this.evolved) {
+      const e = evoById(eid);
+      const blocks = e.set[d.id];
       if (!blocks) continue;
-      out ??= { ...d };
-      for (const [name, vals] of Object.entries(blocks)) {
-        const cur = (out as unknown as Record<string, Record<string, number>>)[name];
-        (out as unknown as Record<string, Record<string, number>>)[name] = { ...cur, ...vals };
-      }
+      const o = (out ??= { ...d }) as unknown as Record<string, Record<string, number>>;
+      for (const [name, vals] of Object.entries(blocks)) o[name] = { ...o[name], ...vals };
+      // 進化形態的升級（D57）：6、7、8 級各加一組（累積，數值加上去）
+      e.up.forEach((patch, k) => {
+        if (level < FORM_LEVEL0 + k) return;
+        for (const [name, vals] of Object.entries(patch[d.id] ?? {})) {
+          const cur = { ...o[name] };
+          for (const [f, v] of Object.entries(vals)) cur[f] = (cur[f] ?? 0) + v;
+          o[name] = cur;
+        }
+      });
     }
     return out ?? d;
+  }
+  /** 這個技法已經進化成哪一個（沒有 = undefined；鬼火不算） */
+  evoOf(id: string): EvoDef | undefined {
+    for (const e of this.evolved) {
+      const ev = evoById(e);
+      if (ev.from[1] === id) return ev;
+    }
+    return undefined;
+  }
+  /** 這個技法現在最高幾級：進化前 EVO.minLevel（5）級，進化後 TECH_LEVELS.max（8）級（D57） */
+  capOf(id: string): number {
+    return this.isEvolved(id) ? TECH_LEVELS.max : EVO.minLevel;
   }
 
   /** 這個技法現在能不能被抽到（沒拿過、沒和已有的互斥、拿掉 skip 之後） */
@@ -304,7 +330,7 @@ export class Techniques {
       }
     }
     this.owned.forEach((id, i) => {
-      if (this.levels[i] >= TECH_LEVELS.max) return;
+      if (this.levels[i] >= this.capOf(id)) return;
       // 養成門檻（D50）：下一級要玩家等級 ≥ minLevel + levelGap × 目前技法等級
       if (this.run.level < TECH_OFFER.minLevel + TECH_OFFER.levelGap * this.levels[i]) return;
       ids.push(id);
@@ -321,7 +347,7 @@ export class Techniques {
 
   /** 加深的候選（還沒到技法等級上限的，最多 n 個） */
   offerUp(rng: Rng, n: number = TECH_CHOICES): string[] {
-    const pool = this.owned.filter((_, i) => this.levels[i] < TECH_LEVELS.max);
+    const pool = this.owned.filter((id, i) => this.levels[i] < this.capOf(id));
     const out: string[] = [];
     while (out.length < n && pool.length > 0) out.push(pool.splice(Math.floor(rng.next() * pool.length), 1)[0]);
     return out;

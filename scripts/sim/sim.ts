@@ -50,8 +50,8 @@ const GIVE_SETS = Number(arg('giveSets', '0'));
 /** --mobile：用手機的敵人上限（WAVES.maxEnemiesMobile） */
 const MOBILE = process.argv.includes('--mobile');
 const TECH_BY_STRATEGY: Record<string, string[]> = {
-  dps: ['kitsunebi', 'bounce', 'rain', 'pillar', 'oil', 'seed', 'satellite', 'hellfire', 'lamp', 'homing', 'ring', 'ward'],
-  survive: ['ring', 'ward', 'lamp', 'satellite', 'hellfire', 'pillar', 'oil', 'seed', 'kitsunebi', 'rain', 'bounce', 'homing'],
+  dps: ['kitsunebi', 'bounce', 'pillar', 'seed', 'hellfire', 'lamp', 'homing', 'ring', 'ward'],
+  survive: ['ring', 'ward', 'lamp', 'hellfire', 'pillar', 'seed', 'kitsunebi', 'bounce', 'homing'],
 };
 /** --tune countScale=3,hpScale=1.2,xp.needPerLevel=4,w.hpPerWave=0.2,tech.levelGap=2：臨時改旋鈕比較（不改檔案）；xp. 開頭是 PROGRESSION、w. 開頭是 WAVES、tech. 開頭是 TECH_OFFER */
 const TUNE = arg('tune', '');
