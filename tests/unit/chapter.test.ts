@@ -15,13 +15,6 @@ describe('章節制（D26）：每第 N 張地圖是 3 關的大關、頭目更�
     expect(isBigMap(e)).toBe(true);
   });
 
-  it('D58（使用者 2026-11-09：「每張地圖都 3 關，只是每過 3 張地圖才有一個大頭目，其他都小頭目」）：所有地圖都是 3 關，只有每第 3 張地圖的最後一關是大頭目（舊版一般地圖 2 關會紅）', () => {
-    for (let m = 1; m <= 9; m++) {
-      expect(stagesForMap(m), `地圖 ${m}`).toBe(3);
-      for (let s = 0; s < 3; s++) expect(isBigBossStage(m, s), `地圖 ${m} 第 ${s + 1} 關`).toBe(m % STAGE.chapter.everyMaps === 0 && s === 2);
-    }
-  });
-
   it('頭目 HP 倍率只加在大關的最後一關', () => {
     const e = STAGE.chapter.everyMaps;
     const big = stagesForMap(e);

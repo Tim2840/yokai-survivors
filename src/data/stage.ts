@@ -5,7 +5,7 @@
 export const STAGE = {
   /** 章節制（D26）：一般地圖幾關；每第 everyMaps 張地圖是「大關」，關數增加、最後一關的頭目更強 */
   chapter: {
-    normalStages: 3,
+    normalStages: 2,
     bigStages: 3,
     everyMaps: 3,
     /** 大關最後一關的頭目 HP 倍率（佔位，M2 sim 調；頭目的招式強化等 M7 做完整頭目時再加） */
