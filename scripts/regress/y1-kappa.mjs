@@ -4,6 +4,14 @@ import { openPage, waitState, press, step, expect, shot, reportErrors, VIEWPORTS
 
 export const meta = { id: 'y1', desc: '河童：選角點河童→開局是河童（水盤）→打到人→雨乞回血→選卡是水盤與河童的技法→進化→神社列出兩招大招（三種畫面）', max: 200, stall: 60 };
 
+/** 河童的畫面不准出現提燈小僧的專屬字（D64 之後的自我審查：新角色最容易漏的是共用畫面裡殘留的別人的字） */
+const FOREIGN = ['鬼火', '狐火', '燈籠', '提燈', '燃燒', '燈油', '衛星燈', '業火', '火種', '燈火'];
+async function leaks(page, where) {
+  const text = await page.evaluate(() => document.body.innerText.replace(/魂火/g, ''));
+  const hit = FOREIGN.filter((w) => text.includes(w));
+  expect(hit.length === 0, `河童的「${where}」畫面出現別的角色的字：${hit.join('、')}`);
+}
+
 export async function run(browser) {
   const files = [];
   for (const vp of VIEWPORTS) {
@@ -38,6 +46,7 @@ export async function run(browser) {
         const k2 = await page.evaluate(() => window.__game.run.kills);
         expect(k2 > k, `水盤沒有打倒任何人（${k} → ${k2}）`);
         await page.evaluate(() => window.__game.render());
+        await leaks(page, '戰鬥');
         files.push(await shot(ctx, 'y1-combat'));
       }, 60);
 
@@ -58,6 +67,7 @@ export async function run(browser) {
         const tech = cs.find((c) => c.id.startsWith('tech:'));
         expect(tech && ['torrent', 'splash', 'whirl', 'veil', 'pond', 'geyser'].includes(tech.id.slice(5)), `技法卡不是河童的：${JSON.stringify(cs)}`);
         expect(!cs.some((c) => /鬼火/.test(c.t) && c.id === 'ghostfire'), '河童的選卡出現了鬼火');
+        await leaks(page, '升級選卡');
         files.push(await shot(ctx, 'y1-pick'));
         await page.locator(`.overlay[data-screen="levelup"] .card[data-card="${tech.id}"]`).click();
         while ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await page.locator('.overlay[data-screen="levelup"] .card').first().click();
@@ -76,7 +86,20 @@ export async function run(browser) {
         expect(ev.includes('evoWhirl'), `沒有可以進化的：${JSON.stringify(ev)}`);
         const box = await page.locator('#synergy-box').innerText();
         expect(/材料齊了/.test(box) && /渦潮陣/.test(box), `HUD 沒有「材料齊了」：${box}`);
+        await leaks(page, '可以進化');
         files.push(await shot(ctx, 'y1-evolve'));
+      });
+
+      await step(`${vp.name} 「能力」面板：河童的主武器、技法、進化、大招都是河童的字`, async () => {
+        while ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await page.locator('.overlay[data-screen="levelup"] .card').first().click();
+        await press(ctx, '#btn-abilities');
+        await page.waitForFunction(() => window.__game.screens.includes('pause'));
+        await leaks(page, '能力');
+        const head = await page.locator('.weapon-head').innerText();
+        expect(/水盤/.test(head), `能力面板的主武器標題不是水盤：${head}`);
+        files.push(await shot(ctx, 'y1-pause'));
+        await press(ctx, '#btn-pause-resume');
+        await page.waitForFunction(() => !window.__game.screens.includes('pause'));
       });
       reportErrors(ctx);
     } finally {
@@ -91,6 +114,7 @@ export async function run(browser) {
       await c2.page.waitForFunction(() => window.__game.screens.includes('shrine'), null, { timeout: 10000 });
       const rows = await c2.page.evaluate(() => [...document.querySelectorAll('.shrine-ult')].map((r) => ({ id: r.dataset.ult, y: r.dataset.yokai })));
       expect(['rainPrayer', 'tidalWave'].every((id) => rows.some((r) => r.id === id && r.y === 'kappa')), `神社沒有列出河童的兩招：${JSON.stringify(rows)}`);
+      // 神社列出所有妖怪的大招，本來就會看到別人的字，不掃
       files.push(await shot(c2, 'y1-shrine'));
       reportErrors(c2);
     } finally {
