@@ -185,6 +185,15 @@ export function installDevApi(ctx: DevContext): void {
       ctx.game.frame(1);
       ctx.loop.render();
     },
+    /** 鏡頭的朝向與俯仰（度；測試與截圖用，鏡頭會被夾在上下限內）；回傳實際值 */
+    setCamera: (yawDeg?: number, pitchDeg?: number) => {
+      const rig = ctx.renderer.rig;
+      const D = Math.PI / 180;
+      if (yawDeg !== undefined) rig.yaw = yawDeg * D;
+      if (pitchDeg !== undefined) rig.rotate(0, pitchDeg * D - rig.pitch);
+      ctx.game.frame(1);
+      return { yaw: rig.yaw / D, pitch: rig.pitch / D };
+    },
     /** 清場：敵人、敵方的箭都清掉，並解除無敵時間（測試人類行為用） */
     clearEnemies: () => run()?.devClearEnemies(),
     /** 場上敵人的生命設成極大（行為測試用） */

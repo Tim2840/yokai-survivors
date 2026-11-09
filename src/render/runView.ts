@@ -10,6 +10,8 @@ import { ENEMY_MODELS } from '../units/enemyModels';
 import { ENEMY_IDS } from '../data/enemies';
 import { EnemyShotsView } from './enemyShotsView';
 import { buildWorldView, type WorldView } from '../world/worldView';
+import { buildAmbienceView, type AmbienceView } from '../world/ambienceView';
+import { ambienceFor } from '../data/ambience';
 import { writeMatrix, setHugeBounds } from './instancedLayer';
 import { DamageNumbers } from './damageNumbers';
 import { ElementsView } from './elementsView';
@@ -42,6 +44,7 @@ export class RunView {
   private diskShot = false;
   private readonly enemyMeshes: THREE.InstancedMesh[];
   readonly shotsView: EnemyShotsView;
+  readonly ambience: AmbienceView;
   private readonly enemyCounts = new Int32Array(ENEMY_IDS.length);
   private readonly enemyShadow: THREE.InstancedMesh;
   private readonly bulletMesh: THREE.InstancedMesh;
@@ -69,6 +72,11 @@ export class RunView {
     const { map } = run;
     this.world = buildWorldView(map, run.seed);
     this.group.add(this.world.group);
+    // 場景氣氛（美術第一輪 A）：天空、月、星、草叢、花、遠景樹、光點；顏色與霧跟著地圖主題
+    const amb = ambienceFor(map.def.id);
+    renderer.applyAmbience(amb);
+    this.ambience = buildAmbienceView(map, run.seed, amb, matchMedia('(hover: none) and (pointer: coarse)').matches);
+    this.group.add(this.ambience.group);
 
     this.player = run.yokai.id === 'kappa' ? buildKappa() : buildLanternMonk();
     // 玩家身上的光：跟著妖怪的色組（顏色是 uniform，換色不會重編著色器；光源數量不變）
@@ -279,6 +287,7 @@ export class RunView {
     this.enemyShadow.count = total;
     this.enemyShadow.instanceMatrix.needsUpdate = true;
     this.shotsView.update();
+    this.ambience.update(t, this.renderer.camera.position, run.px, run.pz);
 
     // 鬼火
     const pr = run.projectiles;
@@ -326,6 +335,7 @@ export class RunView {
     for (const d of this.disposables) d.dispose();
     for (const m of this.enemyMeshes) m.dispose();
     this.shotsView.dispose();
+    this.ambience.dispose();
     this.enemyShadow.dispose();
     this.bulletMesh.dispose();
     this.orbMesh.dispose();

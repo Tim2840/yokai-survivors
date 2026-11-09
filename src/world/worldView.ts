@@ -6,6 +6,8 @@ import { fbm } from '../lib/noise';
 import { Rng } from '../lib/random';
 import { TERRAIN_IDS } from '../data/terrain';
 import type { TerrainMap } from './terrainMap';
+import { ambienceFor } from '../data/ambience';
+import { groundDetailTexture, groundDetailGain } from '../art/groundTexture';
 
 /**
  * 地形與場景物件的 3D 外觀（高度圖網格、水面、石頭與石燈籠）。一局建一次、結束時 dispose。
@@ -20,6 +22,7 @@ export function buildWorldView(map: TerrainMap, seed: number): WorldView {
   const group = new THREE.Group();
   const geos: THREE.BufferGeometry[] = [];
   const mats: THREE.Material[] = [];
+  const texs: THREE.Texture[] = [];
   const track = <T extends THREE.BufferGeometry>(g: T) => (geos.push(g), g);
   const trackM = <T extends THREE.Material>(m: T) => (mats.push(m), m);
 
@@ -31,6 +34,11 @@ export function buildWorldView(map: TerrainMap, seed: number): WorldView {
   const c = new THREE.Color();
   const tmp = new THREE.Color();
   const rockColor = new THREE.Color(palette.terrain.rock);
+  const amb = ambienceFor(map.def.id);
+  const detail = amb.groundDetail.strength > 0;
+  // 貼了細節貼圖（平均亮度 < 1）之後，頂點色要乘回來，整體亮度才不變
+  const detailGain = detail ? groundDetailGain(amb.groundDetail.strength) : 1;
+  const uv = new Float32Array(vc * vr * 2);
   for (let j = 0; j < vr; j++) {
     for (let i = 0; i < vc; i++) {
       const k = j * vc + i;
@@ -56,7 +64,7 @@ export function buildWorldView(map: TerrainMap, seed: number): WorldView {
         n++;
       }
       c.setRGB(r / n, g / n, b / n);
-      const patch = (fbm(x * 0.35, z * 0.35, seed, 2) - 0.5) * 0.14;
+      const patch = (fbm(x * 0.35, z * 0.35, seed, 2) - 0.5) * 0.22;
       const lift = Math.max(0, h) * 0.035;
       // 陡處（懸崖、陡坡）露出岩石色，高處略亮
       const hl = map.heightAt(x - map.cell, z);
@@ -67,9 +75,11 @@ export function buildWorldView(map: TerrainMap, seed: number): WorldView {
       tmp.setRGB(1 + patch + lift, 1 + patch + lift, 1 + patch * 0.6 + lift);
       c.multiply(tmp);
       if (steep > 0) c.lerp(rockColor, steep * 0.85);
-      col[k * 3] = c.r;
-      col[k * 3 + 1] = c.g;
-      col[k * 3 + 2] = c.b;
+      col[k * 3] = c.r * detailGain;
+      col[k * 3 + 1] = c.g * detailGain;
+      col[k * 3 + 2] = c.b * detailGain;
+      uv[k * 2] = x / amb.groundDetail.tile;
+      uv[k * 2 + 1] = z / amb.groundDetail.tile;
     }
   }
   const idx = new Uint32Array(map.cols * map.rows * 6);
@@ -84,9 +94,13 @@ export function buildWorldView(map: TerrainMap, seed: number): WorldView {
   const tg = track(new THREE.BufferGeometry());
   tg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   tg.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  tg.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   tg.setIndex(new THREE.BufferAttribute(idx, 1));
   tg.computeVertexNormals();
-  const terrain = new THREE.Mesh(tg, trackM(softVertexColors()));
+  const detailTex = detail ? groundDetailTexture(seed, amb.groundDetail.strength) : null;
+  const terrainMat = trackM(softVertexColors(detailTex ? { map: detailTex } : {}));
+  if (detailTex) texs.push(detailTex);
+  const terrain = new THREE.Mesh(tg, terrainMat);
   terrain.receiveShadow = true;
   group.add(terrain);
 
@@ -159,6 +173,7 @@ export function buildWorldView(map: TerrainMap, seed: number): WorldView {
     dispose() {
       for (const g of geos) g.dispose();
       for (const m of mats) m.dispose();
+      for (const t of texs) t.dispose();
       group.removeFromParent();
     },
   };
