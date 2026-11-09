@@ -87,6 +87,8 @@ export const ITEMS: readonly ItemDef[] = [
 ];
 
 /** 提燈小僧能拿到的道具（之後依局外解鎖與妖怪分開） */
+/** 這隻妖怪的選卡池：把池裡的主武器 'ghostfire' 換成它自己的主武器（D61） */
+export const itemPoolFor = (weaponId: string): readonly string[] => ITEM_POOL.map((id) => (id === 'ghostfire' ? weaponId : id));
 export const ITEM_POOL: readonly string[] = ['ghostfire', 'power', 'atkSpeed', 'area', 'hp', 'speed', 'armor', 'regen', 'dodge', 'volley', 'splash', 'pierce'];
 /** 取捨道具（D38）：只有狐面商會給，已經拿到的下一級也只在狐面商 */
 export const TRADE_ITEMS: readonly string[] = ['cursedBlade', 'wildLantern', 'diamondBody'];
@@ -105,6 +107,11 @@ export function milestoneRarity(level: number): Rarity | null {
 }
 
 const BY_ID = new Map(ITEMS.map((i) => [i.id, i]));
+/** 加入一個道具（測試用的假主武器；正式的主武器直接寫進 ITEMS） */
+export function registerItem(def: ItemDef): void {
+  (ITEMS as ItemDef[]).push(def);
+  BY_ID.set(def.id, def);
+}
 export const itemById = (id: string): ItemDef => {
   const d = BY_ID.get(id);
   if (!d) throw new Error(`沒有這個道具：${id}`);

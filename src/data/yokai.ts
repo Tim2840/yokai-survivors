@@ -1,8 +1,24 @@
 import type { StatId } from './stats';
 
 /** 領頭妖怪（docs/04 第 1 節、docs/02 第 2 節）。M1 只有提燈小僧；河童、赤鬼 M2 加。 */
+/**
+ * 主武器的出手方式（D61，docs/17 第 6.1 節）：
+ * - projectile：自動發射追蹤投射物（鬼火）；預設
+ * - boomerang：投射物飛到盡頭折返飛回玩家，來回都打（河童的水盤；用歸巢的飛行機制，`pierce` 要夠大才會來回都穿透）
+ * - sweep：以玩家為中心朝最近的敵人揮出扇形（赤鬼的金棒）；`arc`、`reach` 有效，每 `shockEvery` 下變成震波（範圍 × `shockRadius`、傷害 × `shockDamage`）
+ */
+export type WeaponKind = 'projectile' | 'boomerang' | 'sweep';
+
 export interface WeaponDef {
   id: string;
+  /** 出手方式；沒寫 = projectile */
+  kind?: WeaponKind;
+  /** sweep：扇形角度（弧度，整個扇形的張角）、半徑（公尺，× 範圍）；每 shockEvery 下變震波（0 = 沒有） */
+  arc?: number;
+  reach?: number;
+  shockEvery?: number;
+  shockRadius?: number;
+  shockDamage?: number;
   /** 基礎傷害 */
   damage: number;
   /** 攻擊間隔（秒） */

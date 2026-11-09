@@ -5,7 +5,7 @@ import { PLAYABLE_YOKAI, YOKAI, type YokaiDef } from '../data/yokai';
 import { rollAffixes } from '../data/affixes';
 import { CARD_CHOICES, PROGRESSION, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
 import { DOSOJIN, FUSE, SUMMIT } from '../data/elements';
-import { ITEM_POOL, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById, scaleWeaponStep } from '../data/items';
+import { itemPoolFor, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById, scaleWeaponStep } from '../data/items';
 import { EVO_CARD_PREFIX, TECH_CARD_PREFIX, TECH_KEEP, TECH_OFFER, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard } from '../data/techniques';
 import { Techniques } from './techniques';
 import { RARITY_MULT } from '../data/rarity';
@@ -248,7 +248,7 @@ export class Run {
     this.rngElements = new Rng(subSeed(this.seed, 4));
     this.rngPickups = new Rng(subSeed(this.seed, 5));
     this.pickups = new Pickups(this.rngPickups);
-    this.dealer = new CardDealer(this.rngCards, ITEM_POOL, RARITIES_UNLOCKED_M1);
+    this.dealer = new CardDealer(this.rngCards, itemPoolFor(this.weaponItemId), RARITIES_UNLOCKED_M1);
     // 主武器從 1 級開始（佔的不是道具欄位）
     this.cardCounts.set(this.weaponItemId, 1);
     this.ownedCards.add(this.weaponItemId);
@@ -679,6 +679,10 @@ export class Run {
     const w = this.tech.weapon;
     const s = this.stats.value;
     if (this.tech.replacesFire) return; // 燈籠環：不發射，改由技法系統繞身攻擊
+    if (w.kind === 'sweep') {
+      this.sweepWeapon(dt);
+      return;
+    }
     this.fireCd -= dt;
     if (this.fireCd > 0) return;
     const volleyExact = this.volleyExact;
@@ -706,7 +710,57 @@ export class Run {
       const ux = dx / d;
       const uz = dz / d;
       const pi = this.projectiles.spawn(this.px, this.pz, ux * c - uz * sn, ux * sn + uz * c, w, dmg, crit, target, this.rollPierce());
-      if (pi >= 0) this.projectiles.homing[pi] = this.tech.homingFlag;
+      if (pi >= 0) this.projectiles.homing[pi] = w.kind === 'boomerang' ? 1 : this.tech.homingFlag;
+    }
+  }
+
+  /** 揮擊次數（sweep 武器：每 shockEvery 下一次震波） */
+  private swings = 0;
+  /** 最近一次揮擊（畫面與測試用）：時間（clock）、朝向、是不是震波 */
+  lastSwing: { at: number; dx: number; dz: number; shock: boolean } | null = null;
+  /** 測試用：到目前揮了幾下 */
+  get swingCountForTest(): number {
+    return this.swings;
+  }
+  /**
+   * 近戰扇形揮擊（D61，赤鬼的金棒）：冷卻到了、半徑內有敵人才揮；朝最近的敵人揮，扇形內的每一隻都吃傷害與擊退；
+   * 每 shockEvery 下變成震波（半徑、傷害加大，擊退也用震波的範圍）。命中也會觸發技法的命中效果。
+   */
+  private sweepWeapon(dt: number): void {
+    const w = this.tech.weapon;
+    const s = this.stats.value;
+    this.fireCd -= dt;
+    if (this.fireCd > 0) return;
+    const reach = (w.reach ?? 3) * s.area;
+    if (this.enemies.nearestK(this.px, this.pz, reach, 1, this.aim) <= 0) {
+      this.fireCd = 0;
+      return;
+    }
+    this.fireCd += (w.interval * this.cooldownMult * this.tech.intervalMult) / s.atkSpeed;
+    const t0 = this.aim[0];
+    const fx = this.enemies.x[t0] - this.px;
+    const fz = this.enemies.z[t0] - this.pz;
+    const fl = Math.hypot(fx, fz) || 1;
+    this.swings++;
+    const shock = (w.shockEvery ?? 0) > 0 && this.swings % (w.shockEvery ?? 1) === 0;
+    const R = reach * (shock ? (w.shockRadius ?? 1) : 1);
+    const half = (shock ? Math.PI : (w.arc ?? Math.PI / 2) / 2);
+    const cosHalf = Math.cos(half);
+    const crit = this.rngCombat.next() < s.crit;
+    const dmg = this.shotDamage(crit) * this.tech.shotMult * (shock ? (w.shockDamage ?? 1) : 1);
+    this.lastSwing = { at: this.clock, dx: fx / fl, dz: fz / fl, shock };
+    const n = this.enemies.within(this.px, this.pz, R, this.splashNear);
+    for (let k = 0; k < n; k++) {
+      const e = this.splashNear[k];
+      if (!this.enemies.alive[e]) continue;
+      const dx = this.enemies.x[e] - this.px;
+      const dz = this.enemies.z[e] - this.pz;
+      const d = Math.hypot(dx, dz) || 1;
+      if ((dx * fx + dz * fz) / (d * fl) < cosHalf) continue;
+      const hx = this.enemies.x[e];
+      const hz = this.enemies.z[e];
+      this.weaponHit(e, dmg, dx / d, dz / d, w.knockback * (shock ? 1.5 : 1), crit);
+      if (this.enemies.alive[e]) this.tech.hitFx(e, hx, hz, dmg, true);
     }
   }
 
