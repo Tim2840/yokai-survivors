@@ -6,6 +6,7 @@ import { createPipeline, type Pipeline } from './postfx';
 import type { Quality } from './save';
 import type { AmbienceDef } from '../data/ambience';
 import { OVERLAY_LAYER } from '../render/overlay';
+import { currentLook } from '../data/look';
 
 /**
  * 渲染器與鏡頭。後製與畫質分級在 postfx.ts（從燈落之境搬來）。
@@ -19,6 +20,10 @@ export class Renderer {
   readonly playerLight: THREE.PointLight;
   /** 半球光（補月光照不到的暗面；顏色與強度跟著地圖主題，數量不變） */
   readonly hemi: THREE.HemisphereLight;
+  private shadowSize = 0;
+  private shadowExtent = 0;
+  /** 主光的方向（從場景指向光源的單位向量；applyAmbience 設定） */
+  private readonly lightDir = new THREE.Vector3(-0.3, 0.9, 0.3).normalize();
   /** 自由視角鏡頭的數學（D23） */
   readonly rig = new CameraRig();
 
@@ -36,7 +41,26 @@ export class Renderer {
 
     this.moon = new THREE.DirectionalLight(palette.moon, 2.6);
     this.moon.position.set(-8, 20, 6);
-    this.scene.add(this.moon);
+    this.scene.add(this.moon, this.moon.target);
+    // 真陰影（日系像素風）：方向光從玩家身上跟著走，陰影範圍是以玩家為中心的一塊方形；只有玩家、地圖物件、樹會投影
+    const look = currentLook();
+    if (look.shadows) {
+      const sh = look.shadow;
+      const touch = matchMedia('(hover: none) and (pointer: coarse)').matches;
+      this.pipeline.renderer.shadowMap.enabled = true;
+      this.pipeline.renderer.shadowMap.type = THREE.PCFShadowMap;
+      this.moon.castShadow = true;
+      this.shadowSize = touch ? sh.sizeTouch : sh.size;
+      this.moon.shadow.mapSize.set(this.shadowSize, this.shadowSize);
+      const c = this.moon.shadow.camera;
+      c.left = c.bottom = -sh.extent;
+      c.right = c.top = sh.extent;
+      c.near = 1;
+      c.far = 90;
+      this.moon.shadow.bias = sh.bias;
+      this.moon.shadow.normalBias = sh.normalBias;
+      this.shadowExtent = sh.extent;
+    }
     this.hemi = new THREE.HemisphereLight(palette.night.sky, palette.night.groundDark, 0.5);
     this.scene.add(this.hemi);
     this.playerLight = new THREE.PointLight(palette.warm.orange, 30, 12, 1.6);
@@ -62,9 +86,24 @@ export class Renderer {
     const el = (a.sky.moon.elevation * Math.PI) / 180;
     // 主光的方位另外設（lightAzimuth：從預設鏡頭那一側照過來，角色的臉不背光）；仰角比月亮高一些，不然斜照太平、地面明暗太重
     const lightEl = Math.min(Math.PI / 2, el + 0.5);
-    this.moon.position.set(Math.sin(az) * Math.cos(lightEl), Math.sin(lightEl), Math.cos(az) * Math.cos(lightEl)).multiplyScalar(25);
+    this.lightDir.set(Math.sin(az) * Math.cos(lightEl), Math.sin(lightEl), Math.cos(az) * Math.cos(lightEl));
+    this.moon.position.copy(this.lightDir).multiplyScalar(25);
     this.moon.color.set(a.sky.moon.color);
     this.moon.intensity = a.sky.moon.light;
+  }
+
+  /** 主光（和它的影子）跟著玩家走；目標點對齊陰影圖的像素格，影子才不會隨著移動閃爍 */
+  followLight(px: number, py: number, pz: number): void {
+    let x = px;
+    let z = pz;
+    if (this.shadowSize > 0) {
+      const texel = (2 * this.shadowExtent) / this.shadowSize;
+      x = Math.round(x / texel) * texel;
+      z = Math.round(z / texel) * texel;
+    }
+    this.moon.target.position.set(x, py, z);
+    this.moon.position.set(x + this.lightDir.x * 45, py + this.lightDir.y * 45, z + this.lightDir.z * 45);
+    this.moon.target.updateMatrixWorld();
   }
 
   resize(): void {

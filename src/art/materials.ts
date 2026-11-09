@@ -1,23 +1,48 @@
 import * as THREE from 'three';
+import { currentLook } from '../data/look';
 
-/** 圓潤卡通材質：平滑著色、柔和的霧面質感，像上了一層消光漆的玩具 */
+/** 卡通著色的色階貼圖（steps 階，最近點取樣）：最暗不要全黑（0.38），最亮 1 */
+const rampCache = new Map<number, THREE.DataTexture>();
+export function toonRamp(steps: number): THREE.DataTexture {
+  let t = rampCache.get(steps);
+  if (t) return t;
+  const data = new Uint8Array(steps * 4);
+  for (let i = 0; i < steps; i++) {
+    const v = Math.round((0.38 + (0.62 * i) / Math.max(1, steps - 1)) * 255);
+    data.set([v, v, v, 255], i * 4);
+  }
+  t = new THREE.DataTexture(data, steps, 1, THREE.RGBAFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.generateMipmaps = false;
+  t.needsUpdate = true;
+  rampCache.set(steps, t);
+  return t;
+}
+
+/**
+ * 受光的材質（全專案共用的入口）：一般風格是平滑的標準材質；日系像素風（look.toonSteps > 0）是卡通著色——光影分成一塊一塊的色階。
+ * 參數只用兩種材質都有的（color、vertexColors、map、emissive、side、transparent…）；roughness／metalness 只給標準材質。
+ */
+export function lit(params: THREE.MeshStandardMaterialParameters & { roughness?: number }): THREE.Material {
+  const steps = currentLook().toonSteps;
+  if (steps > 0) {
+    const { roughness: _r, metalness: _m, envMap: _e, ...rest } = params as THREE.MeshStandardMaterialParameters & Record<string, unknown>;
+    void _r;
+    void _m;
+    void _e;
+    return new THREE.MeshToonMaterial({ ...(rest as THREE.MeshToonMaterialParameters), gradientMap: toonRamp(steps) });
+  }
+  return new THREE.MeshStandardMaterial({ metalness: 0, ...params });
+}
+
+/** 圓潤卡通材質：柔和的霧面質感，像上了一層消光漆的玩具（日系像素風時是卡通著色） */
 export function soft(color: THREE.ColorRepresentation, opts: THREE.MeshStandardMaterialParameters = {}) {
-  return new THREE.MeshStandardMaterial({
-    color,
-    roughness: 0.78,
-    metalness: 0,
-    ...opts,
-  });
+  return lit({ color, roughness: 0.78, ...opts }) as THREE.MeshStandardMaterial;
 }
 
 /** 使用頂點色的材質（地形用，顏色在頂點之間平滑漸層） */
 export function softVertexColors(opts: THREE.MeshStandardMaterialParameters = {}) {
-  return new THREE.MeshStandardMaterial({
-    vertexColors: true,
-    roughness: 0.9,
-    metalness: 0,
-    ...opts,
-  });
+  return lit({ vertexColors: true, roughness: 0.9, ...opts }) as THREE.MeshStandardMaterial;
 }
 
 /** 發光材質：亮度超過 Bloom 門檻，會產生光暈 */

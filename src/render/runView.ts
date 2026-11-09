@@ -1,3 +1,4 @@
+import { lit } from '../art/materials';
 import * as THREE from 'three';
 import { fxOf, palette } from '../art/palette';
 import { glow } from '../art/materials';
@@ -10,7 +11,7 @@ import { ENEMY_MODELS } from '../units/enemyModels';
 import { CHIBI } from '../units/humans';
 import { ENEMY_IDS } from '../data/enemies';
 import { EnemyShotsView } from './enemyShotsView';
-import { markOverlay } from './overlay';
+import { markOverlay, pruneShadowCasters } from './overlay';
 import { buildWorldView, type WorldView } from '../world/worldView';
 import { buildAmbienceView, type AmbienceView } from '../world/ambienceView';
 import { ambienceFor, timeOfDaySuffix, type AmbienceDef } from '../data/ambience';
@@ -43,6 +44,8 @@ const SHARD_VIEW_SCALE = 0.55;
 
 /** 玩家身上那盞光的基準強度（Renderer 建立時的值；白天主題會打折） */
 const PLAYER_LIGHT_BASE = 30;
+/** 投影的最小零件大小（包圍球半徑，公尺）：小於這個的零件不投影（玩家的零件小，門檻低一點才有影子） */
+const SHADOW_MIN_RADIUS = { world: 0.55, player: 0.25 } as const;
 
 export class RunView {
   private readonly world: WorldView;
@@ -102,7 +105,7 @@ export class RunView {
       const phase = new THREE.InstancedBufferAttribute(new Float32Array(run.enemies.capacity), 1);
       phase.setUsage(THREE.DynamicDrawUsage);
       eg.setAttribute('aPhase', phase);
-      const em = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0 });
+      const em = lit({ vertexColors: true, roughness: 0.85 });
       em.onBeforeCompile = (shader) => {
         shader.uniforms.uTime = this.timeUniform;
         shader.vertexShader = shader.vertexShader
@@ -212,6 +215,10 @@ export class RunView {
     this.disposables.push(pg, pm, bg2, bm2);
 
     scene.add(this.group);
+    // 陰影只讓夠大的零件投影（每個投影的零件都多一次繪製；手機 draw call 預算 80）
+    pruneShadowCasters(this.world.group, SHADOW_MIN_RADIUS.world);
+    pruneShadowCasters(this.elementsView.group, SHADOW_MIN_RADIUS.world);
+    pruneShadowCasters(this.player.root, SHADOW_MIN_RADIUS.player);
     renderer.snapCamera(run.px, run.py, run.pz, run.map);
   }
 
@@ -248,6 +255,7 @@ export class RunView {
     // 自由視角鏡頭與玩家身上的光
     this.renderer.updateCamera(dt, run.px, run.py, run.pz, map);
     this.renderer.playerLight.position.set(run.px, run.py + 1.6, run.pz);
+    this.renderer.followLight(run.px, run.py, run.pz);
     this.numbers.refreshOrientation(this.renderer.camera);
     // 傳送門
     this.portal.visible = run.portal.active;

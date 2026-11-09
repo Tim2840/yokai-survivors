@@ -58,3 +58,20 @@ export function markOverlay(o: THREE.Object3D): void {
     for (const m of Array.isArray(mat) ? mat : [mat]) patch(m);
   });
 }
+
+/**
+ * 陰影成本控制：只有「夠大」的網格才投影（小零件——眼睛、手、腳、燈籠的蓋子——投影沒有意義，卻每個都多一次繪製）。
+ * 半徑 = 幾何的包圍球半徑 × 它在世界裡的縮放（用 matrixWorld 之前的本地縮放近似：沿父層累乘）。
+ */
+export function pruneShadowCasters(root: THREE.Object3D, minRadius: number): void {
+  root.updateWorldMatrix(true, true);
+  const sc = new THREE.Vector3();
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || !m.castShadow || (m as THREE.InstancedMesh).isInstancedMesh) return;
+    if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+    m.matrixWorld.decompose(new THREE.Vector3(), new THREE.Quaternion(), sc);
+    const r = (m.geometry.boundingSphere?.radius ?? 0) * Math.max(sc.x, sc.y, sc.z);
+    if (r < minRadius) m.castShadow = false;
+  });
+}

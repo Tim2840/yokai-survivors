@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { haloTexture } from '../art/materials';
+import { haloTexture, lit } from '../art/materials';
 import { fbm } from '../lib/noise';
 import { Rng } from '../lib/random';
 import type { AmbienceDef } from '../data/ambience';
@@ -155,7 +155,7 @@ export function buildAmbienceView(map: TerrainMap, seed: number, a: AmbienceDef,
   // ── 草叢（一個實例化圖層）：密度跟著低頻雜訊，成片的草地與空地 ──
   const tuftN = Math.round(a.tufts.count * scale);
   const tuftGeo = track(tuftGeometry());
-  const tuftMat = trackM(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, side: THREE.DoubleSide, emissive: '#16301c' }));
+  const tuftMat = trackM(lit({ vertexColors: true, roughness: 1, side: THREE.DoubleSide, emissive: '#16301c' }));
   // 草葉兩面都看得到，但背面不要被「翻轉法線」打黑（法線全朝上、兩面一樣受光）
   tuftMat.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader.replace('float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;', 'float faceDirection = 1.0;');
@@ -227,7 +227,7 @@ export function buildAmbienceView(map: TerrainMap, seed: number, a: AmbienceDef,
   // ── 灌木：草地上的圓球（純裝飾，走得過去），讓地面不只有草叢 ──
   const bushN = Math.round(a.bushes.count * scale);
   const bushGeo = track(new THREE.IcosahedronGeometry(0.5, 1).scale(1.1, 0.95, 1.1).translate(0, 0.32, 0));
-  const bushMat = trackM(new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 }));
+  const bushMat = trackM(lit({ roughness: 1 }));
   const bushes = new THREE.InstancedMesh(bushGeo, bushMat, bushN);
   const bushColors = a.bushes.colors.map(colorOf);
   let bmade = 0;
@@ -253,8 +253,8 @@ export function buildAmbienceView(map: TerrainMap, seed: number, a: AmbienceDef,
   const treeN = Math.round(a.trees.count * scale);
   const trunkGeo = track(new THREE.CylinderGeometry(0.2, 0.32, 2.6, 6, 1).translate(0, 1.3, 0));
   const canopyGeo = track(new THREE.IcosahedronGeometry(1.5, 1).scale(1.15, 0.95, 1.15).translate(0, 3.3, 0));
-  const trunkMat = trackM(new THREE.MeshStandardMaterial({ color: a.trees.trunk, roughness: 0.95, metalness: 0 }));
-  const canopyMat = trackM(new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0 }));
+  const trunkMat = trackM(lit({ color: a.trees.trunk, roughness: 0.95 }));
+  const canopyMat = trackM(lit({ roughness: 0.9 }));
   const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, treeN);
   const canopies = new THREE.InstancedMesh(canopyGeo, canopyMat, treeN);
   const green = a.trees.canopy.map(colorOf);

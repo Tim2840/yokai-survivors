@@ -196,6 +196,20 @@ export function installDevApi(ctx: DevContext): void {
       ctx.game.frame(1);
       return { yaw: rig.yaw / D, pitch: rig.pitch / D };
     },
+    /** 會投影、看得到的網格有幾個（陰影成本分析用）；依父層名稱分組太麻煩，直接回傳數量與前幾個的三角形數 */
+    shadowCasters: () => {
+      let n = 0;
+      let tris = 0;
+      ctx.renderer.scene.traverseVisible((o) => {
+        const m = o as import('three').Mesh;
+        if (m.isMesh && m.castShadow) {
+          n++;
+          const g = m.geometry;
+          tris += ((g.index ? g.index.count : g.attributes.position.count) / 3) * ((m as import('three').InstancedMesh).count ?? 1);
+        }
+      });
+      return { n, tris };
+    },
     /** 清場：敵人、敵方的箭都清掉，並解除無敵時間（測試人類行為用） */
     clearEnemies: () => run()?.devClearEnemies(),
     /** 在玩家相對位置 (dx, dz) 放一隻指定的人類（截圖用；不動、打不死）；回傳索引 */

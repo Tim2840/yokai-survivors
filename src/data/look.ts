@@ -18,6 +18,12 @@ export interface LookDef {
   /** 移軸景深：模糊強度（0 = 不用）、清楚帶的位置（畫面高度比例，0 = 下緣） */
   tiltShift: number;
   tiltFocus: number;
+  /** 卡通著色：光影分成幾階（0 = 平滑的一般著色）。像素畫的光影是一塊一塊的色階，不是平滑漸層 */
+  toonSteps: number;
+  /** 真陰影（太陽／月光投出來的影子，只有玩家、地圖上的物件、樹會投；敵人用腳下的圓影） */
+  shadows: boolean;
+  /** 真陰影的設定：覆蓋範圍（公尺，以玩家為中心的方形邊長的一半）、陰影圖邊長（像素；手機用 mobile）、偏移（避免自己的影子畫在自己身上） */
+  shadow: { extent: number; size: number; sizeTouch: number; bias: number; normalBias: number };
   /** 依關卡換時段（白天→黃昏→夜晚，D72）；false = 永遠是基本主題（夜晚） */
   timeOfDay: boolean;
   /** 調色 */
@@ -30,8 +36,8 @@ export interface LookDef {
 export const DEFAULT_LOOK = 'jrpg';
 
 export const LOOKS: Record<string, LookDef> = {
-  classic: { id: 'classic', pixelShort: 0, levels: 0, dither: 0, edge: 0, edgeFrom: 0.05, edgeTo: 0.1, tiltShift: 0, tiltFocus: 0.5, timeOfDay: false, contrast: 1.06, saturation: 1.1, vignette: 0.28 },
-  jrpg: { id: 'jrpg', pixelShort: 360, levels: 11, dither: 0.55, edge: 0.55, edgeFrom: 0.05, edgeTo: 0.12, tiltShift: 0, tiltFocus: 0.5, timeOfDay: true, contrast: 1.08, saturation: 1.18, vignette: 0.32 },
+  classic: { id: 'classic', toonSteps: 0, shadows: false, shadow: { extent: 24, size: 1024, sizeTouch: 1024, bias: -0.0005, normalBias: 0.05 }, pixelShort: 0, levels: 0, dither: 0, edge: 0, edgeFrom: 0.05, edgeTo: 0.1, tiltShift: 0, tiltFocus: 0.5, timeOfDay: false, contrast: 1.06, saturation: 1.1, vignette: 0.28 },
+  jrpg: { id: 'jrpg', toonSteps: 4, shadows: true, shadow: { extent: 24, size: 2048, sizeTouch: 1024, bias: -0.0005, normalBias: 0.06 }, pixelShort: 360, levels: 11, dither: 0.55, edge: 0.55, edgeFrom: 0.05, edgeTo: 0.12, tiltShift: 0, tiltFocus: 0.5, timeOfDay: true, contrast: 1.08, saturation: 1.18, vignette: 0.32 },
 };
 
 /** 目前的畫面風格：網址 ?look= 優先（開發），其次打包時的 VITE_LOOK，都沒有就用 DEFAULT_LOOK */
