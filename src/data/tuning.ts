@@ -18,7 +18,7 @@ import { TECH_OFFER } from './techniques';
  * 起步 1 顆、無濺射太弱（×1.5 平均 201 秒、×2.5 平均 49 秒，機器人撐不過前幾分鐘）。
  */
 /** D50（使用者：「敵人同時出現數量過少」）：數量 ×3 → ×6（使用者「或許過多了點」→ ×4.5）、單隻 HP 1.5 → 0.75（更多、更脆；魂火每點也減半，見 PROGRESSION.orbPerPoint） */
-export const M1_PLAYTEST = { countScale: 4.5, hpScale: WAVES.hpScale as number, damageScale: 1, volley: 2, splash: 0.8, stageSeconds: STAGE.duration as number, techChance: TECH_OFFER.chance as number };
+export const M1_PLAYTEST = { countScale: 4.5, hpScale: WAVES.hpScale as number, damageScale: 1, volley: 0 /* 0 = 用各妖怪自己的 volley（都是 1；D67 拿掉全域「起步 2 顆」） */, splash: 0.8, stageSeconds: STAGE.duration as number, techChance: TECH_OFFER.chance as number };
 
 export const tuning = {
   /** 敵人數量倍率（見 WAVES.countScale） */

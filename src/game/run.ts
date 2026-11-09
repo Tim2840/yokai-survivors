@@ -685,6 +685,11 @@ export class Run {
     }
     this.fireCd -= dt;
     if (this.fireCd > 0) return;
+    // 回力武器（河童的水盤）：上一批還沒回到身邊就不丟下一批（一次一批，D67）
+    if (w.kind === 'boomerang' && this.projectiles.hasHoming()) {
+      this.fireCd = 0;
+      return;
+    }
     const volleyExact = this.volleyExact;
     // 小數的部分 = 機率多一顆（卡片的數值是小數，這樣每張卡的價值才能細調）
     const volley = Math.min(this.aim.length, Math.floor(volleyExact) + (this.rngCombat.next() < volleyExact - Math.floor(volleyExact) ? 1 : 0));

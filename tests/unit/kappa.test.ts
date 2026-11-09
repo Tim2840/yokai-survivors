@@ -68,6 +68,40 @@ describe('河童', () => {
     stepN(r2, 120);
     expect(r2.enemies.hp[near] < 1e6 || r2.enemies.hp[far] < 1e6).toBe(true);
   });
+  it('D67 一次一批：開局一次丟 1 個；上一個沒回到身邊之前不丟下一個；飛回來之後才丟下一個（舊版開局一次 2 發、不等回來會紅）', () => {
+    const run = make(21);
+    expect(run.volleyExact, '河童開局一次 1 個').toBe(1);
+    for (let i = 0; i < 5; i++) place(run, 4 + i * 0.5, i - 2);
+    let maxAlive = 0;
+    let throws = 0;
+    let lastAlive = 0;
+    let wentOut = 0;
+    let returned = false;
+    for (let f = 0; f < 60 * 8; f++) {
+      run.step(DT);
+      const a = run.projectiles.aliveCount;
+      maxAlive = Math.max(maxAlive, a);
+      if (a > lastAlive) throws++;
+      lastAlive = a;
+      for (let i = 0; i < run.projectiles.capacity; i++) {
+        if (!run.projectiles.alive[i] || run.projectiles.gen[i] !== 0) continue;
+        const d = Math.hypot(run.projectiles.x[i] - run.px, run.projectiles.z[i] - run.pz);
+        wentOut = Math.max(wentOut, d);
+        if (run.projectiles.homing[i] === 2 && d < 3) returned = true;
+      }
+    }
+    expect(maxAlive, '同時只有 1 個水盤（碎片不算）').toBeLessThanOrEqual(1 + 3);
+    expect(throws, '8 秒內至少丟了 2 次').toBeGreaterThanOrEqual(2);
+    expect(wentOut, '飛出去了').toBeGreaterThan(3);
+    expect(wentOut, '折返要急轉彎，不能繞出很遠的大圈（舊版繞到 12.8 公尺）').toBeLessThan(9.5);
+    expect(returned, '折返後回到身邊').toBe(true);
+  });
+  it('D67 全角色開局都是 1 發（以前試玩用的全域「起步 2 顆」蓋掉每隻妖怪自己的設定）', () => {
+    for (const id of ['chochin-kozo', 'kappa']) {
+      const run = new Run({ seed: 4, bus: new EventBus(), yokaiId: id });
+      expect(run.volleyExact, id).toBe(1);
+    }
+  });
   it('進化：水盤＋渦盤各 5 級 → 渦潮陣；之後可以升到 8 級', () => {
     const run = make(9);
     run.devAddTech('whirl');

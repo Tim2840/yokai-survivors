@@ -27,6 +27,11 @@ export class Projectiles {
   homeReturnPierce = 0;
   high = 0;
   aliveCount = 0;
+  /** 場上有沒有還沒回到玩家手上的回力投射物（飛出去或折返中；回力武器要等它回來才丟下一個） */
+  hasHoming(): boolean {
+    for (let i = 0; i < this.high; i++) if (this.alive[i] && this.homing[i] > 0) return true;
+    return false;
+  }
   private readonly near = new Int32Array(COMBAT.queryMax);
 
   constructor(readonly capacity: number) {
@@ -142,7 +147,7 @@ export class Projectiles {
         let diff = want - cur;
         while (diff > Math.PI) diff -= 2 * Math.PI;
         while (diff < -Math.PI) diff += 2 * Math.PI;
-        const maxTurn = w.turnRate * dt;
+        const maxTurn = (this.homing[i] === 2 ? Math.max(w.turnRate, COMBAT.homingReturnTurn) : w.turnRate) * dt;
         const a = cur + Math.max(-maxTurn, Math.min(maxTurn, diff));
         this.vx[i] = Math.cos(a) * speed2;
         this.vz[i] = Math.sin(a) * speed2;

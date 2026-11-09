@@ -61,8 +61,8 @@ export const YOKAI: Record<string, YokaiDef> = {
     base: { maxHp: 100, speed: 4.0 },
     weapon: {
       id: 'ghostfire',
-      damage: 8,
-      interval: 0.8,
+      damage: 12,
+      interval: 0.7,
       range: 9,
       volley: 1,
       projectileSpeed: 12,
@@ -82,11 +82,11 @@ export const YOKAI: Record<string, YokaiDef> = {
 YOKAI.kappa = {
   id: 'kappa',
   // 機動型（docs/17 第 6.2、6.4 節，草案）：血少、跑得快、回血快、會閃
-  base: { maxHp: 85, speed: 4.6, regen: 0.8, dodge: 0.05 },
+  base: { maxHp: 85, speed: 4.2, regen: 0.5, dodge: 0 },
   weapon: {
     id: 'waterdisc',
     kind: 'boomerang',
-    damage: 10,
+    damage: 8,
     interval: 1.1,
     range: 9,
     volley: 1,
@@ -100,7 +100,7 @@ YOKAI.kappa = {
     knockback: 4,
   },
   // 被動「水氣」（草案）：身邊的人類減速。docs/17 的「水痕」（身後留水痕、水中加速）之後再做
-  aura: { radius: 3.5, slow: 0.12 },
+  aura: { radius: 3.5, slow: 0.08 },
   radius: 0.5,
 };
 
