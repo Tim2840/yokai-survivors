@@ -24,6 +24,10 @@ export interface AmbienceDef {
   motes: { count: number; color: string; size: number; height: [number, number]; range: number };
   /** 手機（觸控裝置）的數量倍率 */
   mobileScale: number;
+  /** 地形顏色的倍率（白天要更亮、更飽和；沒寫 = 不變） */
+  terrainTint?: string;
+  /** 玩家身上那盞光的強度倍率（白天不需要那麼亮；沒寫 = 1） */
+  playerLight?: number;
 }
 
 export const AMBIENCE: Record<string, AmbienceDef> = {
@@ -47,6 +51,29 @@ export const AMBIENCE: Record<string, AmbienceDef> = {
   },
 };
 
-export function ambienceFor(mapId: string): AmbienceDef {
-  return AMBIENCE[mapId] ?? AMBIENCE.highlands;
+/** 白天版（日系 RPG 樣張用，docs/23 第 8 節）：亮藍天空、暖白日光、明亮飽和的草地 */
+AMBIENCE['highlands@day'] = {
+  ...AMBIENCE.highlands,
+  sky: {
+    horizon: '#cfe6f2',
+    mid: '#8cc4ec',
+    top: '#4f93d8',
+    stars: { count: 0, size: 2, color: '#ffffff' },
+    moon: { azimuth: 140, elevation: 22, size: 9, halo: 60, color: '#fff6dc', light: 3.4 },
+  },
+  fog: { color: '#cfe6f2', near: 55, far: 170 },
+  hemi: { sky: '#d6ecff', ground: '#6c8a4a', intensity: 1.1 },
+  groundDetail: { tile: 5, strength: 0.42 },
+  tufts: { count: 4800, height: [0.28, 0.5], colors: ['#7cc85a', '#9fd668', '#62b35a', '#c3dc72'] },
+  flowers: { clusters: 40, perCluster: 14, colors: ['#ffffff', '#ff9cc0', '#ffe066', '#b9a4ff'] },
+  bushes: { count: 90, colors: ['#5fb55a', '#78c562', '#4aa36a', '#e09a4a'] },
+  trees: { count: 90, canopy: ['#4f9a4e', '#63ad55', '#3f8a5a'], autumn: 0.2, autumnColors: ['#e0663a', '#f0943a', '#e8c14a'], trunk: '#7a5a3e' },
+  motes: { count: 50, color: '#fff6c0', size: 0.25, height: [0.8, 3.0], range: 24 },
+  terrainTint: '#cfeab0',
+  playerLight: 0.35,
+};
+
+/** mapId 的主題；suffix（例 '@day'）有對應的就用，沒有就退回 mapId、再退回 highlands */
+export function ambienceFor(mapId: string, suffix = ''): AmbienceDef {
+  return AMBIENCE[mapId + suffix] ?? (suffix ? AMBIENCE['highlands' + suffix] : undefined) ?? AMBIENCE[mapId] ?? AMBIENCE.highlands;
 }

@@ -12,6 +12,7 @@ import { EnemyShotsView } from './enemyShotsView';
 import { buildWorldView, type WorldView } from '../world/worldView';
 import { buildAmbienceView, type AmbienceView } from '../world/ambienceView';
 import { ambienceFor } from '../data/ambience';
+import { currentLook } from '../data/look';
 import { writeMatrix, setHugeBounds } from './instancedLayer';
 import { DamageNumbers } from './damageNumbers';
 import { ElementsView } from './elementsView';
@@ -36,6 +37,9 @@ const AURA_WIDTH = 0.1;
  */
 /** 碎片（gen > 0 的投射物）的外觀縮放 */
 const SHARD_VIEW_SCALE = 0.55;
+
+/** 玩家身上那盞光的基準強度（Renderer 建立時的值；白天主題會打折） */
+const PLAYER_LIGHT_BASE = 30;
 
 export class RunView {
   private readonly world: WorldView;
@@ -73,7 +77,7 @@ export class RunView {
     this.world = buildWorldView(map, run.seed);
     this.group.add(this.world.group);
     // 場景氣氛（美術第一輪 A）：天空、月、星、草叢、花、遠景樹、光點；顏色與霧跟著地圖主題
-    const amb = ambienceFor(map.def.id);
+    const amb = ambienceFor(map.def.id, currentLook().ambienceSuffix);
     renderer.applyAmbience(amb);
     this.ambience = buildAmbienceView(map, run.seed, amb, matchMedia('(hover: none) and (pointer: coarse)').matches);
     this.group.add(this.ambience.group);
@@ -81,6 +85,7 @@ export class RunView {
     this.player = run.yokai.id === 'kappa' ? buildKappa() : buildLanternMonk();
     // 玩家身上的光：跟著妖怪的色組（顏色是 uniform，換色不會重編著色器；光源數量不變）
     renderer.playerLight.color.set(fxOf(run.yokai.id).light);
+    renderer.playerLight.intensity = PLAYER_LIGHT_BASE * (ambienceFor(map.def.id, currentLook().ambienceSuffix).playerLight ?? 1);
     this.group.add(this.player.root);
 
     // 敵人：每種人類一個實例化圖層（各自的幾何＋頂點色），頂點著色器做彈跳與傾斜（T2：頂點著色器動畫）

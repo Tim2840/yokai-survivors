@@ -7,6 +7,7 @@ import { Rng } from '../lib/random';
 import { TERRAIN_IDS } from '../data/terrain';
 import type { TerrainMap } from './terrainMap';
 import { ambienceFor } from '../data/ambience';
+import { currentLook } from '../data/look';
 import { groundDetailTexture, groundDetailGain } from '../art/groundTexture';
 
 /**
@@ -34,7 +35,8 @@ export function buildWorldView(map: TerrainMap, seed: number): WorldView {
   const c = new THREE.Color();
   const tmp = new THREE.Color();
   const rockColor = new THREE.Color(palette.terrain.rock);
-  const amb = ambienceFor(map.def.id);
+  const amb = ambienceFor(map.def.id, currentLook().ambienceSuffix);
+  const tint = new THREE.Color(amb.terrainTint ?? '#ffffff');
   const detail = amb.groundDetail.strength > 0;
   // 貼了細節貼圖（平均亮度 < 1）之後，頂點色要乘回來，整體亮度才不變
   const detailGain = detail ? groundDetailGain(amb.groundDetail.strength) : 1;
@@ -75,9 +77,9 @@ export function buildWorldView(map: TerrainMap, seed: number): WorldView {
       tmp.setRGB(1 + patch + lift, 1 + patch + lift, 1 + patch * 0.6 + lift);
       c.multiply(tmp);
       if (steep > 0) c.lerp(rockColor, steep * 0.85);
-      col[k * 3] = c.r * detailGain;
-      col[k * 3 + 1] = c.g * detailGain;
-      col[k * 3 + 2] = c.b * detailGain;
+      col[k * 3] = c.r * detailGain * tint.r;
+      col[k * 3 + 1] = c.g * detailGain * tint.g;
+      col[k * 3 + 2] = c.b * detailGain * tint.b;
       uv[k * 2] = x / amb.groundDetail.tile;
       uv[k * 2 + 1] = z / amb.groundDetail.tile;
     }

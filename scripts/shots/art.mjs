@@ -3,6 +3,7 @@
 import { launch, openPage, startRun, VIEWPORTS } from '../regress/lib.mjs';
 
 const tag = process.argv[2] || 'now';
+const look = process.argv[3] ? `&look=${process.argv[3]}` : '';
 const VIEWS = [
   { name: 'high', yaw: 0, pitch: 55 },
   { name: 'mid', yaw: 0, pitch: 38 },
@@ -10,7 +11,7 @@ const VIEWS = [
 ];
 const browser = await launch();
 for (const vp of VIEWPORTS.filter((v) => v.name !== 'phone-landscape')) {
-  const ctx = await openPage(browser, vp, '?q=4&seed=93');
+  const ctx = await openPage(browser, vp, '?q=4&seed=93' + look);
   const { page } = ctx;
   await startRun(ctx);
   await page.evaluate(() => { window.__game.god = true; window.__game.clearEnemies(); });

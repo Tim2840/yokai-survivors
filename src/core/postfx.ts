@@ -6,6 +6,10 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { MAX_QUALITY_LEVEL, QUALITY } from '../data/quality';
 import type { Quality } from './save';
+import { RenderPixelatedPass } from 'three/addons/postprocessing/RenderPixelatedPass.js';
+import { HorizontalTiltShiftShader } from 'three/addons/shaders/HorizontalTiltShiftShader.js';
+import { VerticalTiltShiftShader } from 'three/addons/shaders/VerticalTiltShiftShader.js';
+import { currentLook } from '../data/look';
 
 /**
  * 後製管線與畫質分級（從燈落之境的 renderer.ts 搬來，docs/10 第 2 節）：
@@ -65,15 +69,28 @@ export function createPipeline(container: HTMLElement, opts: { mode: Quality; on
 
   const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
   const composer = new EffectComposer(renderer, target);
+  const look = currentLook();
+  const pixelSize = touch ? look.pixelTouch : look.pixel;
+  // 日系 RPG 樣張（docs/23 第 8 節）：低解析度畫面＋描線；一般是普通的 RenderPass
+  const pixelPass = pixelSize > 0 ? new RenderPixelatedPass(pixelSize, new THREE.Scene(), new THREE.PerspectiveCamera(), { normalEdgeStrength: look.normalEdge, depthEdgeStrength: look.depthEdge }) : null;
   const renderPass = new RenderPass(new THREE.Scene(), new THREE.PerspectiveCamera());
   const b = QUALITY.bloom;
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), b.strength, b.radius, b.threshold);
   const grade = new ShaderPass(GradeShader);
-  grade.uniforms.uContrast.value = QUALITY.grade.contrast;
-  grade.uniforms.uSat.value = QUALITY.grade.saturation;
-  grade.uniforms.uVig.value = QUALITY.grade.vignette;
-  composer.addPass(renderPass);
+  grade.uniforms.uContrast.value = look.contrast;
+  grade.uniforms.uSat.value = look.saturation;
+  grade.uniforms.uVig.value = look.vignette;
+  composer.addPass(pixelPass ?? renderPass);
   composer.addPass(bloom);
+  // 移軸景深：上下兩條模糊、中間清楚（模型屋感）
+  const tiltH = look.tiltShift > 0 ? new ShaderPass(HorizontalTiltShiftShader) : null;
+  const tiltV = look.tiltShift > 0 ? new ShaderPass(VerticalTiltShiftShader) : null;
+  if (tiltH && tiltV) {
+    tiltH.uniforms.r.value = look.tiltFocus;
+    tiltV.uniforms.r.value = look.tiltFocus;
+    composer.addPass(tiltH);
+    composer.addPass(tiltV);
+  }
   composer.addPass(new OutputPass());
   composer.addPass(grade);
 
@@ -92,6 +109,10 @@ export function createPipeline(container: HTMLElement, opts: { mode: Quality; on
     renderer.setSize(w, h, false);
     composer.setPixelRatio(ratio());
     composer.setSize(w, h);
+    if (tiltH && tiltV) {
+      tiltH.uniforms.h.value = look.tiltShift / (w * ratio());
+      tiltV.uniforms.v.value = look.tiltShift / (h * ratio());
+    }
     return { w, h };
   };
 
@@ -161,6 +182,10 @@ export function createPipeline(container: HTMLElement, opts: { mode: Quality; on
       renderer.setRenderTarget(prev);
       renderPass.scene = scene;
       renderPass.camera = camera;
+      if (pixelPass) {
+        pixelPass.scene = scene;
+        pixelPass.camera = camera;
+      }
       const was = bloom.strength;
       bloom.strength = 0;
       composer.render();
@@ -171,6 +196,10 @@ export function createPipeline(container: HTMLElement, opts: { mode: Quality; on
       renderer.info.reset();
       renderPass.scene = scene;
       renderPass.camera = camera;
+      if (pixelPass) {
+        pixelPass.scene = scene;
+        pixelPass.camera = camera;
+      }
       grade.uniforms.uSeed.value = (grade.uniforms.uSeed.value + 1.7) % 100;
       composer.render();
     },
