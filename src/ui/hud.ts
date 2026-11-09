@@ -143,6 +143,8 @@ export function buildHud(parent: HTMLElement): Hud {
         // 難度另起一行（中間欄要窄，不把血條與右上的鈕擠壞）
         waveDiff.textContent = diff > 0 ? t('hud.diff', { d: diff }) : '';
         waveDiff.classList.toggle('hidden', diff <= 0);
+        // 第 2 關起多一行「難度 +n%」：下面的提示框（頭目血條、要素說明、箭頭）跟著往下讓一行，不蓋到波數旁的提示字
+        root.style.setProperty('--diff-shift', diff > 0 ? '16px' : '0px');
       }
       const left = Math.ceil(run.timeLeft);
       if (left !== lastTimer) {

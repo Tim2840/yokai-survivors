@@ -11,6 +11,8 @@ export interface AmbienceDef {
     stars: { count: number; size: number; color: string };
     /** 月亮：方位角與仰角（度）、圓盤與光暈大小（天空球上的公尺） */
     moon: { azimuth: number; elevation: number; size: number; halo: number; color: string; light: number };
+    /** 主光（月光／日光）真正照過來的方位角（度）。和月亮圓盤分開：預設鏡頭從 +z 看，光從鏡頭這一側來，角色的臉才不會背光（D72） */
+    lightAzimuth: number;
   };
   fog: { color: string; near: number; far: number };
   /** 半球光（天空色／地面色）：補月光照不到的暗面，不增減光源數量 */
@@ -38,6 +40,7 @@ export const AMBIENCE: Record<string, AmbienceDef> = {
       top: '#0f1531',
       stars: { count: 260, size: 2.2, color: '#dfe6ff' },
       moon: { azimuth: 140, elevation: 14, size: 14, halo: 70, color: '#f2f4ff', light: 2.6 },
+      lightAzimuth: 25,
     },
     fog: { color: '#2d4d5e', near: 45, far: 140 },
     hemi: { sky: '#6a86c8', ground: '#33523f', intensity: 0.55 },
@@ -60,6 +63,7 @@ AMBIENCE['highlands@day'] = {
     top: '#4f93d8',
     stars: { count: 0, size: 2, color: '#ffffff' },
     moon: { azimuth: 140, elevation: 22, size: 9, halo: 60, color: '#fff6dc', light: 3.4 },
+    lightAzimuth: 25,
   },
   fog: { color: '#cfe6f2', near: 55, far: 170 },
   hemi: { sky: '#d6ecff', ground: '#6c8a4a', intensity: 1.1 },
@@ -72,6 +76,34 @@ AMBIENCE['highlands@day'] = {
   terrainTint: '#cfeab0',
   playerLight: 0.35,
 };
+
+/** 黃昏版：橘紅的天、低斜的暖光、偏紫的影子 */
+AMBIENCE['highlands@dusk'] = {
+  ...AMBIENCE['highlands@day'],
+  sky: {
+    horizon: '#f2b483',
+    mid: '#c9789a',
+    top: '#4a4f8f',
+    stars: { count: 60, size: 2, color: '#ffe9d6' },
+    moon: { azimuth: 140, elevation: 9, size: 16, halo: 90, color: '#ffd09a', light: 3.6 },
+    lightAzimuth: 40,
+  },
+  fog: { color: '#f2b483', near: 50, far: 160 },
+  hemi: { sky: '#ffd8b0', ground: '#7a7090', intensity: 1.4 },
+  terrainTint: '#f2e0b4',
+  motes: { count: 80, color: '#ffe08a', size: 0.3, height: [0.8, 3.0], range: 24 },
+  playerLight: 0.6,
+};
+
+/**
+ * 依關卡換時段（D72，使用者照預設）：每張地圖的第 1 關白天、第 2 關黃昏、大頭目那一關夜晚（妖怪感最強）。
+ * 回傳 ambienceFor 用的後綴；夜晚就是沒有後綴的基本主題。
+ */
+export const TIME_OF_DAY = ['@day', '@dusk'] as const;
+export function timeOfDaySuffix(stageIndex: number, bossStage: boolean): string {
+  if (bossStage) return '';
+  return TIME_OF_DAY[Math.min(stageIndex, TIME_OF_DAY.length - 1)];
+}
 
 /** mapId 的主題；suffix（例 '@day'）有對應的就用，沒有就退回 mapId、再退回 highlands */
 export function ambienceFor(mapId: string, suffix = ''): AmbienceDef {

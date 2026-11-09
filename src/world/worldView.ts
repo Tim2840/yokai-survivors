@@ -6,8 +6,7 @@ import { fbm } from '../lib/noise';
 import { Rng } from '../lib/random';
 import { TERRAIN_IDS } from '../data/terrain';
 import type { TerrainMap } from './terrainMap';
-import { ambienceFor } from '../data/ambience';
-import { currentLook } from '../data/look';
+import { ambienceFor, type AmbienceDef } from '../data/ambience';
 import { groundDetailTexture, groundDetailGain } from '../art/groundTexture';
 
 /**
@@ -19,7 +18,7 @@ export interface WorldView {
   dispose(): void;
 }
 
-export function buildWorldView(map: TerrainMap, seed: number): WorldView {
+export function buildWorldView(map: TerrainMap, seed: number, amb: AmbienceDef = ambienceFor(map.def.id)): WorldView {
   const group = new THREE.Group();
   const geos: THREE.BufferGeometry[] = [];
   const mats: THREE.Material[] = [];
@@ -35,7 +34,6 @@ export function buildWorldView(map: TerrainMap, seed: number): WorldView {
   const c = new THREE.Color();
   const tmp = new THREE.Color();
   const rockColor = new THREE.Color(palette.terrain.rock);
-  const amb = ambienceFor(map.def.id, currentLook().ambienceSuffix);
   const tint = new THREE.Color(amb.terrainTint ?? '#ffffff');
   const detail = amb.groundDetail.strength > 0;
   // 貼了細節貼圖（平均亮度 < 1）之後，頂點色要乘回來，整體亮度才不變

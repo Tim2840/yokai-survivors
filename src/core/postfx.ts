@@ -6,7 +6,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { MAX_QUALITY_LEVEL, QUALITY } from '../data/quality';
 import type { Quality } from './save';
-import { RenderPixelatedPass } from 'three/addons/postprocessing/RenderPixelatedPass.js';
+import { PixelPass } from './pixelPass';
 import { HorizontalTiltShiftShader } from 'three/addons/shaders/HorizontalTiltShiftShader.js';
 import { VerticalTiltShiftShader } from 'three/addons/shaders/VerticalTiltShiftShader.js';
 import { currentLook } from '../data/look';
@@ -72,7 +72,7 @@ export function createPipeline(container: HTMLElement, opts: { mode: Quality; on
   const look = currentLook();
   const pixelSize = touch ? look.pixelTouch : look.pixel;
   // 日系 RPG 樣張（docs/23 第 8 節）：低解析度畫面＋描線；一般是普通的 RenderPass
-  const pixelPass = pixelSize > 0 ? new RenderPixelatedPass(pixelSize, new THREE.Scene(), new THREE.PerspectiveCamera(), { normalEdgeStrength: look.normalEdge, depthEdgeStrength: look.depthEdge }) : null;
+  const pixelPass = pixelSize > 0 ? new PixelPass(pixelSize, new THREE.Scene(), new THREE.PerspectiveCamera(), { strength: look.edge, from: look.edgeFrom, to: look.edgeTo }) : null;
   const renderPass = new RenderPass(new THREE.Scene(), new THREE.PerspectiveCamera());
   const b = QUALITY.bloom;
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), b.strength, b.radius, b.threshold);
@@ -125,6 +125,8 @@ export function createPipeline(container: HTMLElement, opts: { mode: Quality; on
       }
     }
     bloom.enabled = level < MAX_QUALITY_LEVEL;
+    // 移軸景深是兩道全解析度的後製：畫質自動降到 2 級以下（手機掉幀）就先關掉它
+    if (tiltH && tiltV) tiltH.enabled = tiltV.enabled = level < 2;
     maxRatio = RATIO_CAP[level];
     resize();
   };

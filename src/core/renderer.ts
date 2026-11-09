@@ -56,9 +56,9 @@ export class Renderer {
     this.hemi.color.set(a.hemi.sky);
     this.hemi.groundColor.set(a.hemi.ground);
     this.hemi.intensity = a.hemi.intensity;
-    const az = (a.sky.moon.azimuth * Math.PI) / 180;
+    const az = (a.sky.lightAzimuth * Math.PI) / 180;
     const el = (a.sky.moon.elevation * Math.PI) / 180;
-    // 月光從月亮的方向來；仰角比月亮高一些，不然斜照太平、地面明暗太重
+    // 主光的方位另外設（lightAzimuth：從預設鏡頭那一側照過來，角色的臉不背光）；仰角比月亮高一些，不然斜照太平、地面明暗太重
     const lightEl = Math.min(Math.PI / 2, el + 0.5);
     this.moon.position.set(Math.sin(az) * Math.cos(lightEl), Math.sin(lightEl), Math.cos(az) * Math.cos(lightEl)).multiplyScalar(25);
     this.moon.color.set(a.sky.moon.color);

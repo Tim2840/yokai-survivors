@@ -1,3 +1,4 @@
+import { kindIndex } from '../systems/enemies';
 import { ENEMY_IDS } from '../data/enemies';
 import { collectMarkers, markers } from '../game/minimapMarkers';
 import type { ElementKind } from '../data/elements';
@@ -186,9 +187,10 @@ export function installDevApi(ctx: DevContext): void {
       ctx.loop.render();
     },
     /** 鏡頭的朝向與俯仰（度；測試與截圖用，鏡頭會被夾在上下限內）；回傳實際值 */
-    setCamera: (yawDeg?: number, pitchDeg?: number) => {
+    setCamera: (yawDeg?: number, pitchDeg?: number, dist?: number) => {
       const rig = ctx.renderer.rig;
       const D = Math.PI / 180;
+      if (dist !== undefined) (rig as unknown as { desiredDist: number }).desiredDist = dist;
       if (yawDeg !== undefined) rig.yaw = yawDeg * D;
       if (pitchDeg !== undefined) rig.rotate(0, pitchDeg * D - rig.pitch);
       ctx.game.frame(1);
@@ -196,6 +198,18 @@ export function installDevApi(ctx: DevContext): void {
     },
     /** 清場：敵人、敵方的箭都清掉，並解除無敵時間（測試人類行為用） */
     clearEnemies: () => run()?.devClearEnemies(),
+    /** 在玩家相對位置 (dx, dz) 放一隻指定的人類（截圖用；不動、打不死）；回傳索引 */
+    spawnAt: (id: string, dx: number, dz: number, variant = 0) => {
+      const r = run();
+      if (!r) return -1;
+      const i = r.enemies.spawn(kindIndex(id), r.px + dx, r.pz + dz, 1, 0, dx * 0.7 + dz, variant);
+      if (i >= 0) {
+        r.enemies.hp[i] = r.enemies.maxHp[i] = 1e9;
+        r.enemies.speed[i] = 0;
+        r.enemies.yaw[i] = Math.atan2(-dx, -dz);
+      }
+      return i;
+    },
     /** 場上敵人的生命設成極大（行為測試用） */
     tankEnemies: () => run()?.devTankEnemies(),
     /** 用世界座標的方向走（不看輸入；null = 還給輸入）；閃箭測試要精準方向 */

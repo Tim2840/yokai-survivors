@@ -8,7 +8,9 @@ export const palette = {
     kappa: { body: '#5fae8e', accent: '#f1e2a8' },
     akaOni: { body: '#d9503f', accent: '#f2c14e' },
   },
-  human: { earth: '#a58563', slate: '#6b7a8f', robe: '#2b2b30', robeAccent: '#d88a3a' },
+  /** 日系 Q 版角色共用（D72）：膚色、髮色、眼睛（深色＋高光）、腮紅、白衣領、深色腳 */
+  chibi: { skin: '#f8dcbc', hair: '#6b4532', eye: '#1e1a24', eyeHi: '#ffffff', blush: '#f49a8a', collar: '#f4efe4', foot: '#3a3029', gold: '#e8c25a' },
+  human: { earth: '#a58563', slate: '#6b7a8f', robe: '#2b2b30', robeAccent: '#d88a3a', archer: '#5f8a74', straw: '#c9a86a', wood: '#6a4b2e', monk: '#6a4a9a', kesa: '#e8c25a' },
   rarity: { common: '#e8e6e0', rare: '#5ec4e8', epic: '#a678e0', legend: '#ffb347' },
   /** 補給品（D39）：糰子三色、飯糰、海苔、御神酒瓶與紅紋、金（鈴、小判、鼓框）、鼓身朱紅、雪女的吐息、地上光圈（回復綠、法器金、冰藍） */
   pickup: { dangoPink: '#f6a6bf', dangoWhite: '#f6f1e6', dangoGreen: '#a6d58a', stick: '#c99a64', rice: '#fbf8f0', nori: '#25382c', bottle: '#f3efe4', red: '#d8453a', gold: '#ffcf5a', drum: '#c8402f', yuki: '#bfe8ff', glowHeal: '#8ff0a0', glowTool: '#ffd27a', glowIce: '#9fdcff' },

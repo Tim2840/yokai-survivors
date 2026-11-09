@@ -33,6 +33,20 @@ for (const vp of VIEWPORTS.filter((v) => v.name !== 'phone-landscape')) {
     g.render();
   });
   await page.screenshot({ path: `screenshots/art-${tag}-busy-${vp.name}.png` });
+  // 第 2 關（日系風格是黃昏）：走正常的過關流程
+  const levelups = async () => { while ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await page.locator('.overlay[data-screen="levelup"] .card').first().click(); };
+  await page.evaluate(() => { window.__game.clearEnemies(); window.__game.clearStage(); });
+  await page.waitForFunction(() => window.__game.state === 'INTERMISSION' || window.__game.screens.includes('levelup'), null, { timeout: 20000 });
+  await levelups();
+  await page.waitForFunction(() => window.__game.state === 'INTERMISSION', null, { timeout: 20000 });
+  await levelups();
+  await page.locator('#btn-inter-next').click();
+  await page.waitForFunction(() => window.__game.state === 'COMBAT' && window.__game.run.stage === 2, null, { timeout: 20000 });
+  await page.waitForTimeout(1500); // 換關的淡入（畫面上的遮罩）跑完再拍
+  for (const v of [VIEWS[1], VIEWS[2]]) {
+    await page.evaluate(({ yaw, pitch }) => { window.__game.god = true; window.__game.setCamera(yaw, pitch); window.__game.render(); window.__game.render(); }, v);
+    await page.screenshot({ path: `screenshots/art-${tag}-stage2-${v.name}-${vp.name}.png` });
+  }
   await ctx.close();
 }
 await browser.close();

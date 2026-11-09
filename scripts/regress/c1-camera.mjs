@@ -2,7 +2,7 @@
 // 被暫停面板擋住時不轉；觸控只有螢幕右側（搖桿以外）才轉；鏡頭在地圖上各種位置與角度都不穿進地形（全掃，用 __game.settle() 不畫圖，快）。
 import { openPage, startRun, press, step, expect, shot, reportErrors, mouseDrag, touchDrag, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'c1', desc: '自由視角：拖曳／觸控／Q E 轉視角、俯仰夾住、暫停時不轉、鏡頭不穿地（三種畫面）', max: 420, stall: 120 };
+export const meta = { id: 'c1', desc: '自由視角：拖曳／觸控／Q E 轉視角、俯仰夾住、暫停時不轉、鏡頭不穿地（三種畫面）', max: 600, stall: 120 };
 
 export async function run(browser) {
   const files = [];
@@ -76,15 +76,25 @@ export async function run(browser) {
         // 觸控起點避開右下的跳躍鈕（手指按在按鈕上是跳躍，不是轉視角）
         const down = vp.hasTouch ? () => touchDrag(page, { x: vp.width * 0.55, y: vp.height * 0.2 }, { x: vp.width * 0.55, y: vp.height * 0.9 }, 8) : () => mouseDrag(page, { x: cx, y: cy * 0.4 }, { x: cx, y: vp.height - 5 }, 8);
         const up = vp.hasTouch ? () => touchDrag(page, { x: vp.width * 0.55, y: vp.height * 0.9 }, { x: vp.width * 0.55, y: vp.height * 0.1 }, 8) : () => mouseDrag(page, { x: cx, y: vp.height - 5 }, { x: cx, y: 3 }, 8);
-        for (let i = 0; i < 6; i++) await down();
+        // 拖曳很慢（無頭瀏覽器），途中可能升級（選卡面板開著時拖曳不算，這是對的）：像玩家一樣先選完卡再拖
+        const clearPick = async () => {
+          while ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await page.locator('.overlay[data-screen="levelup"] .card').first().click();
+        };
+        for (let i = 0; i < 6; i++) {
+          await clearPick();
+          await down();
+        }
         await page.evaluate(() => window.__game.settle());
         const hi = (await cam()).pitch;
         expect(Math.abs(hi - (75 * Math.PI) / 180) < 1e-6, `向下拖到底，俯角應該是 75°：${(hi * 180) / Math.PI}`);
-        for (let i = 0; i < 12; i++) await up();
+        for (let i = 0; i < 12; i++) {
+          await clearPick();
+          await up();
+        }
         await page.evaluate(() => window.__game.settle());
         const lo = (await cam()).pitch;
         expect(Math.abs(lo - (8 * Math.PI) / 180) < 1e-6, `向上拖到底，俯角應該是 8°：${(lo * 180) / Math.PI}`);
-      });
+      }, 75); // 18 次拖曳、每次 8 步：無頭瀏覽器在日系風格（多一道後製）下要 30～45 秒
 
       await step(`${vp.name} 暫停面板開著時，拖曳不轉視角`, async () => {
         // 這一路上可能剛好升級（模擬暫停、選卡面板蓋住 HUD）：像玩家一樣先選完卡
