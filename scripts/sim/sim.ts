@@ -53,14 +53,15 @@ const TECH_BY_STRATEGY: Record<string, string[]> = {
   dps: ['kitsunebi', 'bounce', 'pillar', 'seed', 'hellfire', 'lamp', 'homing', 'ring', 'ward'],
   survive: ['ring', 'ward', 'lamp', 'hellfire', 'pillar', 'seed', 'kitsunebi', 'bounce', 'homing'],
 };
-/** --tune countScale=3,hpScale=1.2,xp.needPerLevel=4,w.hpPerWave=0.2,tech.levelGap=2：臨時改旋鈕比較（不改檔案）；xp. 開頭是 PROGRESSION、w. 開頭是 WAVES、tech. 開頭是 TECH_OFFER */
+/** --tune countScale=3,hpScale=1.2,xp.needPerLevel=4,w.hpPerWave=0.2,tech.levelGap=2：臨時改旋鈕比較（不改檔案）；xp. 開頭是 PROGRESSION、w. 開頭是 WAVES、tech. 開頭是 TECH_OFFER、chapter. 開頭是 STAGE.chapter（例：chapter.normalStages=3） */
 const TUNE = arg('tune', '');
 function applyTune(): void {
   // --noTrade：不出狐面商（取捨道具只在狐面商拿得到，D38；對照組）
   if (process.argv.includes('--noTrade')) (ELEMENT_WEIGHTS as Record<string, number>).fox = 0;
   for (const kv of TUNE.split(',').filter(Boolean)) {
     const [k, v] = kv.split('=');
-    if (k.startsWith('summon.')) (STAGE.summon as unknown as Record<string, number>)[k.slice(7)] = Number(v);
+    if (k.startsWith('chapter.')) (STAGE.chapter as unknown as Record<string, number>)[k.slice(8)] = Number(v);
+    else if (k.startsWith('summon.')) (STAGE.summon as unknown as Record<string, number>)[k.slice(7)] = Number(v);
     else if (k.startsWith('drops.')) (STAGE.drops as unknown as Record<string, number>)[k.slice(6)] = Number(v);
     else if (k.startsWith('w.')) (WAVES as unknown as Record<string, number>)[k.slice(2)] = Number(v);
     else if (k.startsWith('tech.')) (TECH_OFFER as unknown as Record<string, number>)[k.slice(5)] = Number(v);
