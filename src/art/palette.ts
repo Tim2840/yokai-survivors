@@ -19,6 +19,8 @@ export const palette = {
   /** 地形頂點色（docs/03 第 2 節各地形的外觀） */
   terrain: { grass: '#4f7a55', shallow: '#4c7f8f', deep: '#25506b', mud: '#5b4a3a', rock: '#7b7d82', bamboo: '#5d8a58', stone: '#9a9488', spring: '#7fb6b0' },
   water: { shallow: '#7cc4d8', deep: '#1c4e78' },
+  /** 小地圖（D66）：符號顏色依「功能」分組，不依屬性；每個符號再配不同的形狀（色盲也分得出來） */
+  minimap: { boon: '#7ddc8a', risk: '#ff6b6b', trade: '#ffd24d', reward: '#ffb347', luck: '#c79bff', boss: '#ff4d4d', upgrade: '#6fe3ff', swap: '#9fe8ff', challenge: '#ff9a3c', player: '#ffffff', portal: '#b88cff', elite: '#ff5a5a', water: '#2f6f9c', shallow: '#5aa2c4', land: '#4f7a55', rock: '#7b7d82', mud: '#6b5646', blocked: '#2e3a34' },
   /** 技法與大招特效的色組（每隻妖怪一組：main = 主色、mid = 亮色、accent = 點綴）；通用特效不寫死火的顏色（D65） */
   fx: {
     'chochin-kozo': { main: '#ff9a3c', mid: '#ffc46b', accent: '#9fe8ff', aura: '#ffd27a', light: '#ffb35c' },

@@ -1,4 +1,5 @@
 import { t } from '../i18n';
+import { buildMinimap } from './minimap';
 import { describeCard } from './overlays';
 import type { I18nKey } from '../i18n/zh-TW';
 import type { Run } from '../game/run';
@@ -54,6 +55,8 @@ export function buildHud(parent: HTMLElement): Hud {
     <button class="ult hidden" id="btn-ult" type="button"><span class="ult-fill" id="ult-fill"></span><b>${t('hud.ult')}</b><em id="ult-key">F</em></button>
     <button class="jump" id="btn-jump" type="button" aria-label="${t('hud.jump')}">${t('hud.jump')}</button>`;
   parent.appendChild(root);
+  const minimap = buildMinimap(root);
+  let lastMapTime = performance.now();
   const q = <T extends HTMLElement>(id: string) => root.querySelector<T>('#' + id)!;
   const hpFill = q('hp-fill');
   const hpText = q('hp-text');
@@ -100,8 +103,12 @@ export function buildHud(parent: HTMLElement): Hud {
     ultButton: q<HTMLButtonElement>('btn-ult'),
     show(v) {
       root.classList.toggle('hidden', !v);
+      minimap.setVisible(v);
     },
     update(run, yaw) {
+      const nowT = performance.now();
+      minimap.update(run, yaw, Math.min(0.25, (nowT - lastMapTime) / 1000));
+      lastMapTime = nowT;
       const hp = Math.max(0, Math.ceil(run.hp));
       const key = `${hp}/${Math.round(run.maxHp)}`;
       if (key !== lastHp) {

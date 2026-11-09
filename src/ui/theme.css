@@ -200,6 +200,18 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 .sum-ult .evo-form { flex-direction: column; gap: 1px; font-size: 12px; }
 #sum-ult { margin-top: 10px; }
 
+/* ── 小地圖（D66，docs/21）：右上角、按鈕列下方；點一下放大，不擋搖桿與跳躍 ── */
+.minimap { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 54px); right: max(12px, env(safe-area-inset-right)); padding: 0; border: 2px solid rgba(255,255,255,0.35); border-radius: 10px; background: rgba(0,0,0,0.35); overflow: hidden; pointer-events: auto !important; cursor: pointer; line-height: 0; z-index: 3; }
+.minimap.hidden { display: none; }
+.minimap canvas { display: block; }
+.minimap.big { border-color: rgba(255,255,255,0.6); }
+.minimap.shift { right: calc(max(12px, env(safe-area-inset-right)) + 92px); }
+/* 窄螢幕（手機直式）：中間的提示、頭目血條、傳送門箭頭往左讓出小地圖那一欄，不被蓋住 */
+@media (max-width: 640px) {
+  .hud-boss, .hud-element, .hud-portal { left: calc(12px + (100vw - 24px - var(--mm-reserve, 0px)) / 2); max-width: min(calc(100vw - 24px - var(--mm-reserve, 0px)), 360px); }
+  .hud-wave em { transform: translateX(calc(-50% - var(--mm-reserve, 0px) / 2)); max-width: calc(100vw - 24px - var(--mm-reserve, 0px)); }
+}
+
 /* ── 法具（D30）── */
 .card.r-weapon { --rc: #ffd27a; background: rgba(255,210,122,0.1); }
 .card .clv { font-size: 12px; color: var(--text-dim, #b9b2a4); }

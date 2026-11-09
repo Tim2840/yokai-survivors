@@ -1,3 +1,4 @@
+import { collectMarkers, markers } from '../game/minimapMarkers';
 import type { ElementKind } from '../data/elements';
 import { PICKUP_KINDS, type PickupKind } from '../data/pickups';
 import type { AudioEngine } from '../core/audio';
@@ -122,6 +123,10 @@ export function installDevApi(ctx: DevContext): void {
         ward: r.tech.wardProgress,
         wardReady: r.tech.wardReady,
         seeds: r.tech.seedCount,
+        markers: (() => {
+          const n = collectMarkers(r);
+          return markers.slice(0, n).map((m) => ({ shape: m.shape, group: m.group, x: m.x, z: m.z, high: m.high }));
+        })(),
         yokai: r.yokai.id,
         weaponId: r.weaponItemId,
         weaponLevel: r.weaponLevel,
