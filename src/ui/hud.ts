@@ -1,5 +1,7 @@
 import { t } from '../i18n';
 import { buildMinimap } from './minimap';
+import { FEEL } from '../data/feel';
+import { feel } from '../core/feel';
 import { describeCard } from './overlays';
 import type { I18nKey } from '../i18n/zh-TW';
 import type { Run } from '../game/run';
@@ -27,6 +29,8 @@ export interface Hud {
   /** yaw = 鏡頭的 yaw（傳送門箭頭要相對鏡頭轉） */
   update(run: Run, yaw: number): void;
   show(visible: boolean): void;
+  /** 受傷暈邊（D69）：strength 0～1，之後每秒淡出 */
+  flashHurt(strength: number): void;
 }
 
 export function buildHud(parent: HTMLElement): Hud {
@@ -34,6 +38,7 @@ export function buildHud(parent: HTMLElement): Hud {
   root.className = 'hud hidden';
   root.dataset.screen = 'hud';
   root.innerHTML = `
+    <div class="hurt-vignette" id="hurt-vignette" aria-hidden="true"></div>
     <div class="hud-top">
       <div class="hud-hp" aria-label="${t('hud.hp')}">
         <div class="bar"><i id="hp-fill"></i></div>
@@ -57,6 +62,9 @@ export function buildHud(parent: HTMLElement): Hud {
   parent.appendChild(root);
   const minimap = buildMinimap(root);
   let lastMapTime = performance.now();
+  let vig = 0;
+  let vigShown = -1;
+  const vigEl = root.querySelector<HTMLElement>('#hurt-vignette')!;
   const q = <T extends HTMLElement>(id: string) => root.querySelector<T>('#' + id)!;
   const hpFill = q('hp-fill');
   const hpText = q('hp-text');
@@ -105,10 +113,21 @@ export function buildHud(parent: HTMLElement): Hud {
       root.classList.toggle('hidden', !v);
       minimap.setVisible(v);
     },
+    flashHurt(strength) {
+      vig = Math.max(vig, Math.min(FEEL.vignette.max, strength * feel.vignette));
+    },
     update(run, yaw) {
       const nowT = performance.now();
-      minimap.update(run, yaw, Math.min(0.25, (nowT - lastMapTime) / 1000));
+      const realDt = Math.min(0.25, (nowT - lastMapTime) / 1000);
+      minimap.update(run, yaw, realDt);
       lastMapTime = nowT;
+      // 淡出每幀最多用 0.05 秒（低幀率或被切到背景回來時不會一幀就消失）
+      if (vig > 0) vig = Math.max(0, vig - FEEL.vignette.fade * Math.min(0.05, realDt));
+      const vs = Math.round(vig * 100) / 100;
+      if (vs !== vigShown) {
+        vigShown = vs;
+        vigEl.style.opacity = String(vs);
+      }
       const hp = Math.max(0, Math.ceil(run.hp));
       const key = `${hp}/${Math.round(run.maxHp)}`;
       if (key !== lastHp) {

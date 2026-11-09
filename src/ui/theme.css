@@ -200,6 +200,10 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 .sum-ult .evo-form { flex-direction: column; gap: 1px; font-size: 12px; }
 #sum-ult { margin-top: 10px; }
 
+/* ── 手感（D69）：受傷暈邊，從畫面四周往內泛紅，不擋操作 ── */
+.hurt-vignette { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, rgba(180,20,20,0) 45%, rgba(190,20,20,0.55) 80%, rgba(150,0,0,0.9) 100%); z-index: 1; }
+@media (prefers-reduced-motion: reduce) { .hurt-vignette { transition: none; } }
+
 /* ── 小地圖（D66，docs/21）：右上角、按鈕列下方；點一下放大，不擋搖桿與跳躍 ── */
 .minimap { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 54px); right: max(12px, env(safe-area-inset-right)); padding: 0; border: 2px solid rgba(255,255,255,0.35); border-radius: 10px; background: rgba(0,0,0,0.35); overflow: hidden; pointer-events: auto !important; cursor: pointer; line-height: 0; z-index: 3; }
 .minimap.hidden { display: none; }

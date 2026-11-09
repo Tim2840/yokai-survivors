@@ -10,6 +10,7 @@ import { EVO_CARD_PREFIX, TECH_CARD_PREFIX, TECH_KEEP, TECH_OFFER, TECH_SWAP_PRE
 import { Techniques } from './techniques';
 import { RARITY_MULT } from '../data/rarity';
 import { STAGE, stagesForMap, bossHpMult, isBigBossStage } from '../data/stage';
+import { FEEL } from '../data/feel';
 import { DIFFICULTY } from '../data/difficulty';
 import { WAVES } from '../data/waves';
 import { tuning } from '../data/tuning';
@@ -837,8 +838,19 @@ export class Run {
     return this.rngCombat.next() < rate;
   }
 
+  /** 擊殺紀錄（環形緩衝，給畫面做爆圈）：x、z、種類（0 一般／1 精英／2 頭目）、體型；deathHead = 總共寫了幾筆 */
+  readonly deathLog = new Float32Array(FEEL.deathLog * 4);
+  deathHead = 0;
+  /** 精英、頭目擊殺數（頓幀與震動用） */
+  eliteKills = 0;
   private onKill(e: number): void {
     this.kills++;
+    const di = (this.deathHead++ % FEEL.deathLog) * 4;
+    this.deathLog[di] = this.enemies.x[e];
+    this.deathLog[di + 1] = this.enemies.z[e];
+    this.deathLog[di + 2] = this.enemies.variant[e];
+    this.deathLog[di + 3] = this.enemies.scale[e];
+    if (this.enemies.variant[e] === 1) this.eliteKills++;
     if (!this.ultCooling) this.ultCharge = Math.min(ULT.max, this.ultCharge + (this.enemies.variant[e] === 2 ? ULT.perBoss : this.enemies.variant[e] === 1 ? ULT.perElite : ULT.perKill) * this.ultModsNow.charge);
     const value = this.enemies.points(e) * PROGRESSION.orbPerPoint;
     const x = this.enemies.x[e];

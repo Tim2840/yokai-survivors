@@ -20,6 +20,8 @@ import { tuning } from '../data/tuning';
 import { CAMERA } from '../data/camera';
 import type { buildTuningPanel } from '../ui/tuningPanel';
 import { worldMove } from '../core/cameraRig';
+import { HitStop, initFeel } from '../core/feel';
+import { FEEL, hurtStrength } from '../data/feel';
 
 export interface GameDeps {
   fsm: GameStateMachine;
@@ -66,6 +68,9 @@ export class Game {
   private lastEnd: { result: 'death' | 'victory' | 'abandon'; stage: number; kills: number; level: number; merit: number } | null = null;
   // 每幀音效用的上一次數值
   private lastKills = 0;
+  /** 頓幀（D69）：事件發生時模擬凝結一下，畫面照畫 */
+  private readonly hitStop = new HitStop();
+  private lastElite = 0;
   private lastXp = 0;
   private lastHead = 0;
   private time = 0;
@@ -81,6 +86,7 @@ export class Game {
     this.audio = d.audio;
     this.input = d.input;
     this.save = d.save;
+    initFeel(typeof location !== 'undefined' ? location.search : '', typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches);
     const ui = d.ui;
 
     const tune = d.tuneUi ? d.tuneUi(ui) : null;
@@ -247,6 +253,8 @@ export class Game {
         run.setMove(this.moveOut[0], this.moveOut[1]);
         if (this.input.consumeJump()) run.requestJump();
         if (this.input.consumeCommand()) run.castUltimate();
+        // 頓幀：這一步不前進（輸入照收，畫面照畫）
+        if (this.hitStop.consume(dt)) return;
         run.step(dt);
       },
       exit: () => {
@@ -294,6 +302,9 @@ export class Game {
     this.run = new Run({ seed, yokaiId: this.selectedYokai, mobile: this.d.mobile, bus: this.b, meritStat: 0, ...loadoutFor(this.save, this.selectedYokai, this.unlockAll) });
     this.view = new RunView(this.run, this.renderer);
     this.lastKills = 0;
+    this.lastElite = 0;
+    this.hitStop.reset();
+    this.renderer.rig.shake.reset();
     this.lastXp = 0;
     this.lastHead = this.run.feed.head;
     this.renderer.precompile();
@@ -328,6 +339,8 @@ export class Game {
       this.picker.render(run.offer, run.picksLeft, run.offerKind, this.pickerCtx(run));
       this.picker.show();
       this.audio.sfx('levelUp');
+      this.view?.feelFx.levelBurst();
+      this.renderer.rig.shake.add(FEEL.shake.levelUp);
     });
     b.on('stageStart', () => {
       this.audio.sfx('waveStart');
@@ -343,8 +356,25 @@ export class Game {
       this.audio.sfx('waveEnd');
       if (!last) this.go('INTERMISSION');
     });
-    b.on('bossDown', () => this.audio.sfx('levelUp'));
-    b.on('playerHurt', () => this.audio.sfx('hurt'));
+    b.on('bossDown', () => {
+      this.audio.sfx('levelUp');
+      this.renderer.rig.shake.add(FEEL.shake.boss);
+      this.hitStop.add(FEEL.hitStop.boss);
+    });
+    b.on('playerHurt', ({ damage }) => {
+      this.audio.sfx('hurt');
+      this.renderer.rig.shake.add(FEEL.shake.hurt);
+      this.hud.flashHurt(hurtStrength(damage, this.run?.maxHp ?? 100));
+    });
+    b.on('ultimate', () => {
+      this.renderer.rig.shake.add(FEEL.shake.ult);
+      this.hitStop.add(FEEL.hitStop.ult);
+    });
+    b.on('evolve', () => {
+      this.renderer.rig.shake.add(FEEL.shake.evolve);
+      this.hitStop.add(FEEL.hitStop.evolve);
+    });
+    b.on('elementResult', () => this.renderer.rig.shake.add(FEEL.shake.element));
     b.on('runEnd', (e) => {
       this.lastEnd = { result: e.result, stage: e.stage, kills: e.kills, level: e.level, merit: e.merit };
       this.save.merit += e.merit;
@@ -438,6 +468,13 @@ export class Game {
         this.audio.sfx('enemyDown');
         this.lastKills = run.kills;
       }
+      if (run.eliteKills !== this.lastElite) {
+        if (run.eliteKills > this.lastElite) {
+          this.renderer.rig.shake.add(FEEL.shake.elite);
+          this.hitStop.add(FEEL.hitStop.elite);
+        }
+        this.lastElite = run.eliteKills;
+      }
       if (run.xp !== this.lastXp) {
         this.audio.sfx('pickup');
         this.lastXp = run.xp;
@@ -452,6 +489,10 @@ export class Game {
       .map((el) => el.dataset.screen!);
   }
 
+  /** 開發介面：手感現在的狀態（震動強度、頓幀剩餘、暈邊、畫面上的爆圈數） */
+  get feelState() {
+    return { shake: this.renderer.rig.shake.trauma, hitStop: this.hitStop.left, pops: this.view?.feelFx.active ?? 0, vignette: Number(this.d.ui.querySelector<HTMLElement>('#hurt-vignette')?.style.opacity ?? 0) };
+  }
   get tuningInfo() {
     return { ...tuning };
   }

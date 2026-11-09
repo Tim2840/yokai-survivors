@@ -1,4 +1,5 @@
 import { CAMERA } from '../data/camera';
+import { Shake } from './feel';
 
 /** 只要會回答「某個水平位置的地面高度」就行（TerrainMap 符合） */
 export interface HeightSource {
@@ -23,6 +24,8 @@ export function worldMove(ix: number, iz: number, yaw: number, out: Float32Array
  * 注視點平滑跟隨玩家的 3D 位置；彈簧臂沿線取樣地形，碰到就拉近（最短 minDistance），放開時慢慢回復。
  */
 export class CameraRig {
+  /** 螢幕震動（D69）：位移疊在鏡頭位置上，不影響瞄準與移動方向 */
+  readonly shake = new Shake();
   yaw = 0;
   pitch = CAMERA.pitchDeg * DEG;
   /** 平滑後的注視點與鏡頭位置（唯讀使用） */
@@ -70,6 +73,13 @@ export class CameraRig {
     this.tz += (pz - this.tz) * k;
     this.ty += (py + CAMERA.lookHeight - this.ty) * ky;
     this.solve(map, dt, false);
+    this.shake.update(dt);
+    if (this.shake.trauma > 0) {
+      // 位移在鏡頭的左右與上下方向（不改注視點）
+      this.x += Math.cos(this.yaw) * this.shake.ox;
+      this.z -= Math.sin(this.yaw) * this.shake.ox;
+      this.y += this.shake.oy;
+    }
   }
 
   private solve(map: HeightSource, dt: number, snap: boolean): void {

@@ -134,6 +134,7 @@ export function installDevApi(ctx: DevContext): void {
         orbit: r.orbitCount,
         focus: r.elements.focus ? r.elements.focus.kind : null,
         tuning: ctx.game.tuningInfo,
+        feel: ctx.game.feelState,
       };
     },
     /** 這一關的地圖摘要（台地、丘、尺寸）：傳送到特定地形、截圖與測試用 */
