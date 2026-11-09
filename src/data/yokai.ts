@@ -58,7 +58,7 @@ export interface YokaiDef {
 export const YOKAI: Record<string, YokaiDef> = {
   'chochin-kozo': {
     id: 'chochin-kozo',
-    base: { maxHp: 100, speed: 4.0 },
+    base: { maxHp: 110, speed: 4.0, regen: 0.8 },
     weapon: {
       id: 'ghostfire',
       damage: 12,
@@ -74,7 +74,7 @@ export const YOKAI: Record<string, YokaiDef> = {
       splashRatio: 0,
       knockback: 5,
     },
-    aura: { radius: 5, slow: 0.1 },
+    aura: { radius: 6, slow: 0.15 },
     radius: 0.45,
   },
 };
