@@ -66,7 +66,7 @@ export const ULT_UPGRADE = {
   ] as readonly UltStep[],
 } as const;
 
-/** 升級一級多給的：power = 威力（傷害、強化幅度）、radius = 範圍（半徑、長寬、持續秒數）、cooldown = 冷卻秒數（負的 = 縮短）、charge = 量表充能 */
+/** 升級一級多給的：power = 攻擊力（傷害、強化幅度）、radius = 範圍（半徑、長寬、持續秒數）、cooldown = 冷卻秒數（負的 = 縮短）、charge = 量表充能 */
 export interface UltStep {
   power?: number;
   radius?: number;

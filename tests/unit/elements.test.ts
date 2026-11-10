@@ -6,7 +6,7 @@ import { itemById, TRADE_ITEMS } from '../../src/data/items';
 import { tuning } from '../../src/data/tuning';
 import { RARITIES, type Rarity } from '../../src/data/rarity';
 import { ALTAR_BOON_PCT, ALTAR_CURSE, ALTAR_EFFECT_COUNT, ALTAR_BOONS, ALTAR_CURSE_IDS } from '../../src/data/altar';
-import { FOX, ELEMENT_KINDS, ELEMENT_PER_KIND, OFFERING, OFFERING_HOLD_SECONDS, OMIKUJI_EFFECT, OMIKUJI_RESULTS, OMIKUJI_WEIGHTS, CHEST_HOLD_SECONDS, OMIKUJI_HOLD_SECONDS, ELEMENT_RULES, JIZO, JIZO_ARMOR_SECONDS, JIZO_HOLD_SECONDS, ALTAR_HOLD_SECONDS, BARRIER, BARRIER_SPAWN_MULT, BARRIER_RADIUS } from '../../src/data/elements';
+import { FOX, ELEMENT_KINDS, ELEMENT_PER_KIND, OFFERING, OFFERING_HOLD_SECONDS, OMIKUJI_EFFECT, OMIKUJI_RESULTS, OMIKUJI_WEIGHTS, CHEST_HOLD_SECONDS, OMIKUJI_HOLD_SECONDS, ELEMENT_RULES, JIZO, JIZO_HOLD_SECONDS, ALTAR_HOLD_SECONDS, BARRIER, BARRIER_SPAWN_MULT, BARRIER_RADIUS } from '../../src/data/elements';
 import { STAT_LIMITS, STAT_IDS } from '../../src/data/stats';
 import { Elements, elementRarityWeights } from '../../src/systems/elements';
 import { TerrainMap } from '../../src/world/terrainMap';
@@ -127,7 +127,7 @@ describe('地圖要素：落下規則（種子全掃）', () => {
 });
 
 describe('石地藏', () => {
-  it('按住 1 秒 → 回復最大生命的 frac 並加護甲，護甲 60 秒後消失', () => {
+  it('按住 1 秒 → 回復最大生命的 frac 並加護甲；D78：護甲是整場的（120 秒後還在，舊版 60 秒消失會紅）', () => {
     for (const r of RARITIES) {
       const { run } = make(4);
       const slot = run.elements.devForce('jizo', r, run.px, run.pz)!;
@@ -138,8 +138,8 @@ describe('石地藏', () => {
       const j = JIZO[r];
       expect(run.hp, r).toBeGreaterThanOrEqual(Math.min(run.maxHp, 10 + run.maxHp * j.healFrac) - 1);
       expect(run.stats.value.armor, r).toBeCloseTo(armor0 + j.armor);
-      stand(run, slot.x + 6, slot.z, JIZO_ARMOR_SECONDS + 1);
-      expect(run.stats.value.armor, r).toBeCloseTo(armor0);
+      stand(run, slot.x + 6, slot.z, 120);
+      expect(run.stats.value.armor, r).toBeCloseTo(armor0 + j.armor);
     }
   });
 
@@ -353,7 +353,7 @@ describe('賽錢箱、神籤、寶箱（M2-2）', () => {
     }
   });
 
-  it('神籤：每種結果的效果與持續時間；到期恢復；凶類是讓敵人變強', () => {
+  it('神籤：每種結果的效果與持續時間；D78：好結果是整場的（過很久還在），壞結果（凶類）限時、到期恢復', () => {
     for (const res of OMIKUJI_RESULTS) {
       const { run } = make(24);
       const f = OMIKUJI_EFFECT[res];
@@ -365,11 +365,41 @@ describe('賽錢箱、神籤、寶箱（M2-2）', () => {
       if (f.flat) expect(run.stats.value.regen).toBeCloseTo(before.regen + f.flat.regen);
       if (f.curse) for (const [k, v] of Object.entries(f.curse)) expect(run.curse[k as 'enemySpeed']).toBeCloseTo(v);
       if (f.merit) expect(run.bonusMerit).toBe(merit0 + f.merit);
-      advance(run, f.seconds + 1);
-      expect(run.stats.value.power).toBeCloseTo(before.power);
-      expect(run.stats.value.regen).toBeCloseTo(before.regen);
-      expect(run.curse.enemySpeed + run.curse.enemyDamage).toBeCloseTo(0);
+      if (f.curse) {
+        expect(f.seconds, '壞結果要限時').toBeGreaterThan(0);
+        advance(run, f.seconds + 1);
+        expect(run.curse.enemySpeed + run.curse.enemyDamage).toBeCloseTo(0);
+      } else {
+        expect(f.seconds, '好結果是整場（seconds 0）').toBe(0);
+        advance(run, 120);
+        for (const [k, v] of Object.entries(f.pct ?? {})) expect(run.stats.value[k as 'power'], `${res}／${k} 整場`).toBeCloseTo(before[k as 'power'] * (1 + v));
+        if (f.flat) expect(run.stats.value.regen, `${res} 整場`).toBeCloseTo(before.regen + f.flat.regen);
+      }
     }
+  });
+
+  it('D78 倒數標籤：限時效果（凶類、大招、雪女的吐息、站在結界裡）都列進 collectBuffs、剩餘秒數會變少；整場效果（好籤、石地藏）不列', () => {
+    const { run } = make(26);
+    expect(run.collectBuffs()).toBe(0);
+    run.elements.applyOmikuji('daikichi');
+    run.elements.applyOmikuji('shokichi');
+    expect(run.collectBuffs(), '好籤是整場的，不倒數').toBe(0);
+    run.elements.applyOmikuji('kyo');
+    expect(run.collectBuffs()).toBe(1);
+    expect(run.buffs[0]).toMatchObject({ label: 'omikuji.kyo', bad: true });
+    const left0 = run.buffs[0].left;
+    advance(run, 5);
+    run.collectBuffs();
+    expect(run.buffs[0].left).toBeLessThan(left0 - 4);
+    const j = run.elements.devForce('jizo', 'epic', run.px, run.pz)!;
+    stand(run, j.x, j.z, JIZO_HOLD_SECONDS + 0.2);
+    const labels = () => (run.collectBuffs(), run.buffs.slice(0, run.buffCount).map((b) => b.label));
+    expect(labels().some((l) => l.startsWith('jizo') || l === 'element.jizo'), '石地藏是整場的').toBe(false);
+    const b = run.elements.devForce('barrier', 'rare', run.px + 2, run.pz)!;
+    stand(run, b.x, b.z, 1);
+    expect(labels()).toContain('element.barrier');
+    advance(run, 60);
+    expect(labels(), '凶到期就消失').not.toContain('omikuji.kyo');
   });
 
   it('神籤：按住 1 秒抽一次、只能用一次；權重每階加總 100；凶類隨稀有度變少、幸運再壓低', () => {

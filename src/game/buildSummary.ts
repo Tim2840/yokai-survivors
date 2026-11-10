@@ -36,7 +36,7 @@ export interface BuildSummary {
   difficulty: number;
   /** 護甲換算的承受傷害倍率 */
   damageTaken: number;
-  /** 這一局裝配的大招（D52）與它的局外升級等級、累計的威力／範圍／冷卻／充能 */
+  /** 這一局裝配的大招（D52）與它的局外升級等級、累計的攻擊力／範圍／冷卻／充能 */
   ultimates: { id: string; level: number; maxLevel: number; mods: { power: number; radius: number; cooldown: number; charge: number } }[];
   /** 大招量表 0～1 */
   ultCharge: number;

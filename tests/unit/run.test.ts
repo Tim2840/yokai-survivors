@@ -474,10 +474,15 @@ describe('一局的模擬（無頭）', () => {
     let stuck = 0;
     let compared = 0;
     const nbBuf = new Int32Array(512);
+    // 雪女的吐息（補給品）會把人類全部定住幾秒：那 5 秒的窗口不算（設計，不是尋路卡住）
+    let frozenInWindow = false;
     for (let k = 0; k < 60 * 70; k++) {
       if (run.awaitingPick) run.chooseCard(0);
       else run.step(DT);
+      if (run.frozenEnemies) frozenInWindow = true;
       if (k % 300 === 299) {
+        const skip = frozenInWindow;
+        frozenInWindow = false;
         const e = run.enemies;
         const next = new Map<number, [number, number, number]>();
         for (let i = 0; i < e.high; i++) {
@@ -485,7 +490,7 @@ describe('一局的模擬（無頭）', () => {
           const id = e.phase[i];
           next.set(id, [e.x[i], e.z[i], e.hp[i]]);
           const prev = snap.get(id);
-          if (prev) {
+          if (prev && !skip) {
             compared++;
             const moved = Math.hypot(e.x[i] - prev[0], e.z[i] - prev[1]);
             const far = Math.hypot(e.x[i] - run.px, e.z[i] - run.pz) > 3;

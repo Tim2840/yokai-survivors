@@ -199,7 +199,7 @@ export class Run {
   /** 法具等級（id → 等級）、這一局裝配的大招（D52，最多 ULT_SLOTS 招）、大招量表（0～ULT.max）、最近一次發動（給外觀用） */
   readonly cardCounts = new Map<string, number>();
   readonly ults: string[] = [];
-  /** 裝配的大招各自的局外升級等級 → 累計的威力、範圍、冷卻、充能（開局算好，每步不重算） */
+  /** 裝配的大招各自的局外升級等級 → 累計的攻擊力、範圍、冷卻、充能（開局算好，每步不重算） */
   readonly ultLevels = new Map<string, number>();
   private ultModsNow: UltMods = ultMods(0);
   ultCharge = 0;
@@ -219,6 +219,33 @@ export class Run {
   private frenzyUntil = 0;
   private frenzyVolley = 0;
   shieldUntil = 0;
+  private frenzyTotal = 1;
+  private frenzyLabel = '';
+  private shieldTotal = 1;
+  private shieldLabel = '';
+  private freezeTotal = 1;
+  /**
+   * 現在作用中的限時效果（D78：HUD 的倒數標籤）：collectBuffs() 重填同一個陣列（不配置），回傳個數。
+   * label = i18n key；left／total 秒；bad = 對玩家不利（紅色）。
+   */
+  readonly buffs: { label: string; left: number; total: number; bad: boolean }[] = Array.from({ length: 8 }, () => ({ label: '', left: 0, total: 1, bad: false }));
+  buffCount = 0;
+  private readonly pushBuff = (label: string, left: number, total: number, bad: boolean): void => {
+    if (this.buffCount >= this.buffs.length || left <= 0) return;
+    const b = this.buffs[this.buffCount++];
+    b.label = label;
+    b.left = left;
+    b.total = Math.max(total, 0.001);
+    b.bad = bad;
+  };
+  collectBuffs(): number {
+    this.buffCount = 0;
+    if (this.frenzyUntil > this.clock) this.pushBuff(this.frenzyLabel, this.frenzyUntil - this.clock, this.frenzyTotal, false);
+    if (this.shieldUntil > this.clock) this.pushBuff(this.shieldLabel, this.shieldUntil - this.clock, this.shieldTotal, false);
+    if (this.freezeUntil > this.clock) this.pushBuff('pickup.yukiBreath', this.freezeUntil - this.clock, this.freezeTotal, false);
+    this.elements.visitTimed(this.pushBuff);
+    return this.buffCount;
+  }
   private ultNear = new Int32Array(0);
   /** 這一局累計的模擬秒數（跨關） */
   clock = 0;
@@ -816,7 +843,7 @@ export class Run {
       const hx = this.enemies.x[e];
       const hz = this.enemies.z[e];
       this.weaponHit(e, dmg, dx / d, dz / d, w.knockback * (shock ? 1.5 : 1), crit);
-      if (this.enemies.alive[e]) this.tech.hitFx(e, hx, hz, dmg, true);
+      if (this.enemies.alive[e]) this.tech.hitFx(e, hx, hz, dmg, true, crit);
     }
   }
 
@@ -838,7 +865,7 @@ export class Run {
     const gen = pr.gen[p];
     this.weaponHit(e, dmg, pr.vx[p] / vl, pr.vz[p] / vl, w.knockback, pr.crit[p] === 1);
     // 技法的命中效果（D48）：主鬼火直接命中每次都觸發；彈跳的小火打中後再跳
-    if (gen === 0) this.tech.hitFx(e, hx, hz, dmg, true);
+    if (gen === 0) this.tech.hitFx(e, hx, hz, dmg, true, pr.crit[p] === 1);
     else if (gen === 3) this.tech.onBounceHit(e, hx, hz, dmg, pr.chain[p]);
     // 碎火（D43）：主鬼火命中 → 飛出幾片；狐火分裂時碎片打中後再分裂一次
     if (gen === 0) {
@@ -979,6 +1006,7 @@ export class Run {
       this.lastThunder = { at: this.clock, x: this.px, z: this.pz, r: e.radius };
     } else if (e.type === 'freeze') {
       this.freezeUntil = this.clock + e.seconds;
+      this.freezeTotal = e.seconds;
       v = e.seconds;
     } else {
       this.bonusMerit += e.amount;
@@ -1294,7 +1322,7 @@ export class Run {
       dx = ex / d;
       dz = ez / d;
     }
-    for (const id of this.ults) this.applyUltEffect(ultById(id).effect, dx, dz);
+    for (const id of this.ults) this.applyUltEffect(ultById(id).effect, dx, dz, id);
     this.lastCast = { ids: [...this.ults], at: this.clock, x: this.px, z: this.pz, dx, dz };
     this.ultCoolUntil = this.clock + this.ultModsNow.cooldown;
     this.ultCharge = 0;
@@ -1306,17 +1334,21 @@ export class Run {
     return (this.yokai.weapon.damage + this.weaponDamageBonus) * this.stats.value.power * tuning.damageScale * e.damageMult * this.ultModsNow.power;
   }
 
-  private applyUltEffect(e: UltEffect, dx: number, dz: number): void {
+  private applyUltEffect(e: UltEffect, dx: number, dz: number, id = ''): void {
     const s = this.stats.value;
     if (e.type === 'frenzy') {
       this.stats.setMod('ult:frenzy', { pct: { power: e.power * this.ultModsNow.power, atkSpeed: e.atkSpeed * this.ultModsNow.power } });
       this.frenzyUntil = this.clock + e.seconds * this.ultModsNow.radius;
+      this.frenzyTotal = e.seconds * this.ultModsNow.radius;
+      this.frenzyLabel = `ult.${id}`;
       this.frenzyVolley = e.volley;
       return;
     }
     if (e.type === 'bulwark') {
       this.invul = Math.max(this.invul, e.seconds * this.ultModsNow.radius);
       this.shieldUntil = this.clock + e.seconds * this.ultModsNow.radius;
+      this.shieldTotal = e.seconds * this.ultModsNow.radius;
+      this.shieldLabel = `ult.${id}`;
       this.hp = Math.min(this.maxHp, this.hp + this.maxHp * e.healFrac);
     }
     const dmg = e.type === 'beam' || e.type === 'nova' || e.type === 'bulwark' ? this.ultDamage(e) : 0;

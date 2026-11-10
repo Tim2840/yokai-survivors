@@ -1,7 +1,7 @@
 import { kindIndex } from '../systems/enemies';
 import { ENEMY_IDS } from '../data/enemies';
 import { collectMarkers, markers } from '../game/minimapMarkers';
-import type { ElementKind } from '../data/elements';
+import { OMIKUJI_RESULTS, type ElementKind, type OmikujiResult } from '../data/elements';
 import { PICKUP_KINDS, type PickupKind } from '../data/pickups';
 import type { AudioEngine } from '../core/audio';
 import type { FixedLoop } from '../core/loop';
@@ -296,6 +296,20 @@ export function installDevApi(ctx: DevContext): void {
       if (!r || !(PICKUP_KINDS as readonly string[]).includes(kind)) return false;
       r.devPickup(kind as PickupKind, dist);
       return true;
+    },
+    /** 直接套用一個神籤結果（D78 倒數標籤的測試用） */
+    omikuji: (result: string) => {
+      const r = run();
+      if (!r || !(OMIKUJI_RESULTS as readonly string[]).includes(result)) return false;
+      r.elements.applyOmikuji(result as OmikujiResult);
+      return true;
+    },
+    /** 現在 HUD 要倒數的限時效果（label、剩幾秒、壞事） */
+    buffs: () => {
+      const r = run();
+      if (!r) return [];
+      const n = r.collectBuffs();
+      return r.buffs.slice(0, n).map((b) => ({ label: b.label, left: b.left, bad: b.bad }));
     },
     give: (cardId: string, rarity: RarityLike) => run()?.give(cardId, rarity),
     set god(v: boolean) {

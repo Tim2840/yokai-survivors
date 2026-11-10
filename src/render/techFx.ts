@@ -9,7 +9,7 @@ import { setHugeBounds } from './instancedLayer';
 const MAX_ORBS = 18;
 const MAX_OIL = 24;
 const MAX_SEEDS = 16;
-const MAX_PILLARS = 4;
+const MAX_PILLARS = 6; // = techniques.ts 的 PILLARS（數量詞條會一次噴更多根）
 const MAX_FLASHES = 24;
 const MAX_ZONES = 32;
 const DECAL_LIFT = 0.16;

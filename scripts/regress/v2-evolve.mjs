@@ -31,10 +31,12 @@ export async function run(browser) {
         const tech = cs.find((c) => c.id.startsWith('tech:'));
         expect(tech, `沒有技法卡：${JSON.stringify(cs.map((c) => c.t))}`);
         const want = { common: 2, rare: 2, epic: 3, legend: 3 }[tech.rarity];
-        expect(tech.aff === want && /詞條：/.test(tech.t), `技法卡的詞條條數不對（${tech.rarity} 應該 ${want} 條）：${JSON.stringify(tech)}`);
+        expect(tech.aff === want && /詞條（只對這個技法）：/.test(tech.t), `技法卡的詞條條數不對（${tech.rarity} 應該 ${want} 條）：${JSON.stringify(tech)}`);
         // 詞條只強化技法本身：不能出現最大生命、護甲這類全身的能力值（D74）
-        expect(!/最大生命|護甲|再生|迴避|移動速度|攻擊力|攻擊速度/.test(tech.t.split('詞條：')[1] ?? ''), `技法卡的詞條出現了全身的能力值：${tech.t}`);
-        expect(/(威力|範圍|頻率|連鎖) \+\d+%/.test(tech.t), `技法卡的詞條格式不對：${tech.t}`);
+        const afx = tech.t.split('詞條（只對這個技法）：')[1] ?? '';
+        expect(!/最大生命|護甲|再生|迴避|移動速度|拾取|幸運/.test(afx), `技法卡的詞條出現了全身的能力值：${tech.t}`);
+        // D77：統一名稱（和能力值同一組字）；舊的「威力／頻率」不能再出現
+        expect(/(攻擊力|範圍|攻擊速度|連鎖|暴擊率|暴擊傷害|持續時間) \+\d+%|數量 \+\d/.test(afx) && !/威力|頻率/.test(tech.t), `技法卡的詞條格式或名稱不對：${tech.t}`);
         expect(!/適合 \d\/\d|效果 \+\d+%/.test(tech.t), `技法卡還有適合加成：${tech.t}`);
         files.push(await shot(ctx, 'v2-fit'));
         await page.locator(`.overlay[data-screen="levelup"] .card[data-card="${tech.id}"]`).click();

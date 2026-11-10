@@ -100,7 +100,21 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 .hud { position: fixed; inset: 0; z-index: 10; padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; }
 .hud > * { pointer-events: none; }
 .hud-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: 8px; }
+.hud-left { display: flex; flex-direction: column; align-items: stretch; gap: 5px; min-width: 0; }
+.hud-left > .hud-hp { width: 100%; }
 .hud-hp { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* 限時效果的倒數標籤（D78）：好的暖色、壞的紅色；底下一條會縮短的線 */
+.hud-buffs { align-self: flex-start; display: flex; flex-wrap: wrap; gap: 4px; max-width: clamp(150px, 34vw, 340px); pointer-events: none; }
+.hud-buffs:empty { display: none; }
+.buff { position: relative; display: inline-flex; align-items: baseline; gap: 4px; padding: 2px 7px 4px; border-radius: 8px; background: rgba(40, 30, 10, 0.62); border: 1px solid rgba(255, 214, 120, 0.7); font-size: 12px; line-height: 1.2; color: #fff3d0; text-shadow: var(--hud-shadow); overflow: hidden; white-space: nowrap; }
+.buff b { font-weight: 700; }
+.buff em { font-style: normal; font-variant-numeric: tabular-nums; opacity: 0.9; }
+.buff i { position: absolute; left: 0; bottom: 0; height: 2px; background: #ffd27a; }
+.buff.bad { background: rgba(60, 10, 10, 0.66); border-color: rgba(255, 120, 110, 0.8); color: #ffe0dc; }
+.buff.bad i { background: #ff7b6b; }
+.buff.more { padding: 2px 6px; }
+/* 手機直式：排在小地圖下方（位置由 hud.ts 依小地圖算） */
+.hud-buffs.side { position: absolute; flex-direction: column; align-items: flex-end; max-width: 48vw; z-index: 2; }
 .hud-hp .bar { width: clamp(110px, 24vw, 220px); height: 14px; background: rgba(0,0,0,0.45); border-radius: 999px; overflow: hidden; border: 2px solid rgba(255,255,255,0.25); }
 .hud-hp .bar i { display: block; height: 100%; width: 100%; background: linear-gradient(#ff7b6b, #d9503f); border-radius: 999px; }
 .hud-hp span { font-size: 14px; font-variant-numeric: tabular-nums; text-shadow: var(--hud-shadow); }

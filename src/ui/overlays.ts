@@ -5,10 +5,9 @@ import { setWeaponTextFormatter, type BuildSummary } from '../game/buildSummary'
 import { cardLinks } from '../data/links';
 import { DIFFICULTY } from '../data/difficulty';
 import { EVO, EVOS, FORM_LEVEL0, TECH_CARD_PREFIX, TECH_KEEP, TECH_LEVELS, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard, techById, techMix } from '../data/techniques';
-import { ITEM_RARITY_MULT } from '../data/items';
 import type { Rarity } from '../data/rarity';
 import { cardById, type CardOffer } from '../systems/cards';
-import type { Affix } from '../data/affixes';
+import { AFFIX_LABEL, type Affix } from '../data/affixes';
 import { ITEM_WEAPON_KINDS, WEAPON_LEVELS, itemDown, itemValue, scaleWeaponStep, type WeaponLevel } from '../data/items';
 import { PLAYABLE_YOKAI, STARTER_YOKAI, YOKAI } from '../data/yokai';
 import { CARD_EFFECT } from '../data/stats';
@@ -220,8 +219,8 @@ function evoCardHtml(cardId: string): string {
 /** 詞條（D53）的文字：「力量 +10%、迅捷 +8%」；沒有詞條就空字串 */
 export function affixHtml(affixes: readonly Affix[] | undefined): string {
   if (!affixes || affixes.length === 0) return '';
-  // 詞條只強化這個技法：威力／範圍／頻率／連鎖，一律用百分比顯示
-  const list = affixes.map((a) => t('card.affixItem', { name: t(`affix.${a.stat}` as I18nKey), v: Math.round(a.value * 100) })).join('、');
+  // 詞條只強化這個技法（名稱借用能力值的字，D77）；數量是整數，其他用百分比
+  const list = affixes.map((a) => (a.stat === 'count' ? t('card.affixCount', { name: t(AFFIX_LABEL[a.stat] as I18nKey), v: a.value }) : t('card.affixItem', { name: t(AFFIX_LABEL[a.stat] as I18nKey), v: Math.round(a.value * 100) }))).join('、');
   return `<span class="ctech caffix" data-affixes="${affixes.length}">${t('card.affix', { list })}</span>`;
 }
 
@@ -238,7 +237,7 @@ function techCardHtml(cardId: string, rarity: Rarity, owned: readonly string[], 
   if (cardId.startsWith(TECH_CARD_PREFIX) && owned.includes(cardId.slice(TECH_CARD_PREFIX.length))) {
     const id = cardId.slice(TECH_CARD_PREFIX.length);
     const lv = levels[owned.indexOf(id)] ?? 1;
-    return `<span class="rname">${t(`rarity.${rarity}` as I18nKey)}・${t('tech.up.tag', { a: lv, b: lv + 1, max: TECH_LEVELS.max })}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span><span class="ctech">${t('tech.up.fx', { v: Math.round(TECH_LEVELS.perLevel * ITEM_RARITY_MULT[rarity] * 100) })}</span>${formUpHtml(id, lv + 1)}${affixHtml(affixes)}`;
+    return `<span class="rname">${t(`rarity.${rarity}` as I18nKey)}・${t('tech.up.tag', { a: lv, b: lv + 1, max: TECH_LEVELS.max })}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span>${formUpHtml(id, lv + 1)}${affixHtml(affixes)}`;
   }
   let id: string;
   let tag: string;
@@ -257,7 +256,7 @@ function techCardHtml(cardId: string, rarity: Rarity, owned: readonly string[], 
   return `<span class="rname">${tag}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span>${affixHtml(affixes)}${mixText ? `<span class="ctech mix">${mixText}</span>` : ''}`;
 }
 
-/** 大招的局外升級累計（能力面板用）：「威力 ×1.1、範圍 ×1.08、冷卻 23 秒、充能 ×1.1」 */
+/** 大招的局外升級累計（能力面板用）：「攻擊力 ×1.1、範圍 ×1.08、冷卻 23 秒、充能 ×1.1」 */
 export function ultModsText(m: { power: number; radius: number; cooldown: number; charge: number }): string {
   return `${t('ult.mods', { power: fix(m.power, 2), radius: fix(m.radius, 2) })}、${t('ult.mods2', { cooldown: fix(m.cooldown, 0), charge: fix(m.charge, 2) })}`;
 }
@@ -339,10 +338,12 @@ export const RESULT_GUARD_MS = 400;
 
 /** 一行結果的文字（數字全部來自結果資料） */
 export function resultLineText(l: ResultLine, levels: ReadonlyMap<string, number> = new Map()): string {
-  const sec = (s?: number) => (s ? t('result.seconds', { s }) : '');
+  // D78：限時的寫秒數，其他（石地藏、好籤、祭壇…）寫「整場」，玩家分得出來
+  const sec = (s?: number) => (s ? t('result.seconds', { s }) : t('result.wholeRun'));
   switch (l.t) {
     case 'heal':
-      return t('result.heal', { v: Math.round(l.v) });
+      // 生命本來就滿的時候不要寫「回復 0 生命」
+      return Math.round(l.v) <= 0 ? t('result.healFull') : t('result.heal', { v: Math.round(l.v) });
     case 'stat': {
       const name = t(`stat.${l.stat}` as I18nKey);
       if (l.pct !== undefined) return t('card.fmt.pct', { name, v: num(l.pct * 100, 0) }) + sec(l.seconds);

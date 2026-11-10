@@ -3,7 +3,7 @@ import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { tuning, resetTuning } from '../../src/data/tuning';
 import { RARITIES } from '../../src/data/rarity';
-import { JIZO, JIZO_ARMOR_SECONDS, OMIKUJI_RESULTS, OMIKUJI_EFFECT, ELEMENT_KINDS } from '../../src/data/elements';
+import { JIZO, OMIKUJI_RESULTS, OMIKUJI_EFFECT, ELEMENT_KINDS } from '../../src/data/elements';
 import { resultLineText } from '../../src/ui/overlays';
 import type { ResultLine } from '../../src/systems/elementResult';
 
@@ -46,7 +46,7 @@ describe('要素結果卡（D36）', () => {
       // 極階回滿：上限是「還缺多少」（站的時候自然回復了一點點）
       expect(heal.v).toBeGreaterThan(Math.min(run.maxHp * JIZO[r].healFrac, run.maxHp - 11) - 1e-6);
       expect(heal.v).toBeLessThanOrEqual(run.maxHp * JIZO[r].healFrac + 1e-6);
-      expect(res.lines).toContainEqual({ t: 'stat', stat: 'armor', flat: JIZO[r].armor, seconds: JIZO_ARMOR_SECONDS });
+      expect(res.lines).toContainEqual({ t: 'stat', stat: 'armor', flat: JIZO[r].armor });
       // 凍結：時間不走、結果卡還在
       const t0 = run.time;
       for (let i = 0; i < 60; i++) run.step(DT);
@@ -175,8 +175,9 @@ describe('要素結果卡（D36）', () => {
       expect(s, JSON.stringify(l)).not.toMatch(/[{}]/);
     }
     expect(resultLineText({ t: 'stat', stat: 'armor', flat: 3, seconds: 60 })).toBe('護甲 +3（60 秒）');
-    expect(resultLineText({ t: 'stat', stat: 'power', pct: 0.32 })).toBe('攻擊力 +32%');
+    expect(resultLineText({ t: 'stat', stat: 'power', pct: 0.32 })).toBe('攻擊力 +32%（整場）');
     expect(resultLineText({ t: 'heal', v: 25.4 })).toBe('回復 25 生命');
+    expect(resultLineText({ t: 'heal', v: 0 }), '生命滿的時候').toBe('生命已滿');
     void ELEMENT_KINDS;
   });
 });

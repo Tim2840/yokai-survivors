@@ -25,7 +25,7 @@ export class Projectiles {
   homeX = 0;
   homeZ = 0;
   homeReturnPierce = 0;
-  /** 歸巢：折返之後（回程）的傷害倍率（詞條「威力」；1 = 不變） */
+  /** 歸巢：折返之後（回程）的傷害倍率（詞條「攻擊力」；1 = 不變） */
   homeReturnDamage = 1;
   high = 0;
   aliveCount = 0;

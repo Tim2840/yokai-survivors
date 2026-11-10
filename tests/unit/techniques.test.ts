@@ -127,7 +127,7 @@ describe('技法怎麼拿（D49：機率出現在升級卡裡、8 級、分稀�
     expect(a.tech.powerOf(id)).toBeCloseTo(1, 5);
     a.tech.levelUp(id, 1.2);
     expect(a.tech.levelOf(id)).toBe(2);
-    expect(a.tech.powerOf(id)).toBeCloseTo(1 + TECH_LEVELS.perLevel * 1.2, 5);
+    expect(a.tech.powerOf(id), 'D77：升級本身不再加成（變強只靠詞條）').toBeCloseTo(1, 5);
     for (let k = 0; k < 20; k++) a.tech.levelUp(id, 1);
     expect(a.tech.levelOf(id), '進化前最多 EVO.minLevel 級（D57）').toBe(EVO.minLevel);
     // 到上限的那個不會再被抽到
@@ -528,7 +528,7 @@ describe('同系加深、技法等級、滿級加強', () => {
     expect(b.tech.deep.chain).toBe(0);
     expect(b.tech.deep.field).toBe(0);
   });
-  it('技法等級：升一級 → 效果乘 1 + perLevel × 稀有度；到上限（進化前 5 級）不再加', () => {
+  it('技法等級（D77）：升一級本身不加成（效果一樣）；到上限（進化前 5 級）不再加', () => {
     const run = make(23);
     run.devAddTech('hellfire');
     expect(run.tech.levelUp('hellfire')).toBe(true);
@@ -549,7 +549,7 @@ describe('同系加深、技法等級、滿級加強', () => {
       return z;
     };
     tuning.volley = 1;
-    expect(dmg(b)).toBeGreaterThan(dmg(a));
+    expect(dmg(b), '舊版每級 +12% 會紅').toBeCloseTo(dmg(a), 6);
   });
   it('主武器滿級時技法再加強（燈籠環 顆數與半徑、衛星燈 盞數）', () => {
     const run = make(10);

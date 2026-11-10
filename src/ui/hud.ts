@@ -1,6 +1,6 @@
 import { t } from '../i18n';
 import { buildMinimap } from './minimap';
-import { FEEL } from '../data/feel';
+import { FEEL, BUFF_HUD } from '../data/feel';
 import { feel } from '../core/feel';
 import { describeCard } from './overlays';
 import type { I18nKey } from '../i18n/zh-TW';
@@ -11,7 +11,7 @@ import type { ElementSlot } from '../systems/elements';
 import { ULT } from '../data/ultimates';
 import { STAGE } from '../data/stage';
 import { PICKUPS } from '../data/pickups';
-import { BARRIER, DOSOJIN, TRIAL, JIZO, JIZO_ARMOR_SECONDS, OFFERING, trialNeeds, SUMMIT } from '../data/elements';
+import { BARRIER, DOSOJIN, TRIAL, JIZO, OFFERING, trialNeeds, SUMMIT } from '../data/elements';
 
 
 /**
@@ -40,9 +40,12 @@ export function buildHud(parent: HTMLElement): Hud {
   root.innerHTML = `
     <div class="hurt-vignette" id="hurt-vignette" aria-hidden="true"></div>
     <div class="hud-top">
-      <div class="hud-hp" aria-label="${t('hud.hp')}">
-        <div class="bar"><i id="hp-fill"></i></div>
-        <span id="hp-text"></span>
+      <div class="hud-left">
+        <div class="hud-hp" aria-label="${t('hud.hp')}">
+          <div class="bar"><i id="hp-fill"></i></div>
+          <span id="hp-text"></span>
+        </div>
+        <div class="hud-buffs" id="buff-box" aria-label="${t('hud.buffs')}"></div>
       </div>
       <div class="hud-wave"><b id="wave-text"></b><span id="wave-timer"></span><i id="wave-diff" class="hidden"></i><em id="wave-note"></em></div>
       <div class="hud-btns"><button class="hud-abilities" id="btn-abilities" type="button">${t('hud.abilities')}</button><button class="hud-pause" id="btn-pause" type="button" aria-label="${t('pause.button')}">II</button></div>
@@ -66,6 +69,25 @@ export function buildHud(parent: HTMLElement): Hud {
   let vigShown = -1;
   const vigEl = root.querySelector<HTMLElement>('#hurt-vignette')!;
   const q = <T extends HTMLElement>(id: string) => root.querySelector<T>('#' + id)!;
+  const buffBox = q('buff-box');
+  let lastBuffs = '';
+  const compact = typeof matchMedia === 'function' ? matchMedia('(max-width: 640px), (max-height: 520px)') : null;
+  // 手機直式：血條下方是關卡提示與指路，標籤改排在小地圖下方（右側）
+  const portrait = typeof matchMedia === 'function' ? matchMedia('(max-width: 640px) and (orientation: portrait)') : null;
+  const placeBuffs = (): void => {
+    const side = !!portrait?.matches;
+    buffBox.classList.toggle('side', side);
+    if (!side) {
+      buffBox.style.top = '';
+      buffBox.style.right = '';
+      return;
+    }
+    const mm = minimap.root;
+    const visible = !mm.classList.contains('hidden');
+    const top = visible ? mm.offsetTop + mm.offsetHeight + 6 : mm.offsetTop;
+    buffBox.style.top = `${top}px`;
+    buffBox.style.right = `${Math.max(0, root.clientWidth - (mm.offsetLeft + mm.offsetWidth))}px`;
+  };
   const hpFill = q('hp-fill');
   const hpText = q('hp-text');
   const waveText = q('wave-text');
@@ -134,6 +156,23 @@ export function buildHud(parent: HTMLElement): Hud {
         lastHp = key;
         hpText.textContent = key;
         hpFill.style.width = `${Math.max(0, Math.min(1, run.hp / run.maxHp)) * 100}%`;
+      }
+      // 限時效果的倒數標籤（D78）：只有內容或秒數變了才重寫
+      const nb = run.collectBuffs();
+      const cap = compact?.matches ? BUFF_HUD.maxShownCompact : BUFF_HUD.maxShown;
+      let bk = '';
+      for (let i = 0; i < nb; i++) bk += `${run.buffs[i].label}:${Math.ceil(run.buffs[i].left)}|`;
+      if (bk !== lastBuffs) {
+        lastBuffs = bk;
+        let html = '';
+        for (let i = 0; i < Math.min(nb, cap); i++) {
+          const b = run.buffs[i];
+          const p = Math.max(0, Math.min(1, b.left / b.total));
+          html += `<span class="buff${b.bad ? ' bad' : ''}" data-buff="${b.label}"><b>${t(b.label as I18nKey)}</b><em>${t('hud.buffSec', { s: Math.ceil(b.left) })}</em><i style="width:${Math.round(p * 100)}%"></i></span>`;
+        }
+        if (nb > cap) html += `<span class="buff more">+${nb - cap}</span>`;
+        buffBox.innerHTML = html;
+        if (nb > 0) placeBuffs();
       }
       const diff = Math.round(run.difficulty * 100);
       const waveKey = run.stageNumber * 10000 + diff;
@@ -311,7 +350,7 @@ function trialHint(rarity: ElementSlot['rarity'], progress: number): string {
 function describeElement(f: ElementSlot): string {
   if (f.kind === 'jizo') {
     const j = JIZO[f.rarity];
-    return t(f.rarity === 'legend' ? 'element.jizo.descLegend' : 'element.jizo.desc', { heal: Math.round(j.healFrac * 100), armor: j.armor, sec: JIZO_ARMOR_SECONDS });
+    return t(f.rarity === 'legend' ? 'element.jizo.descLegend' : 'element.jizo.desc', { heal: Math.round(j.healFrac * 100), armor: j.armor });
   }
   if (f.kind === 'offering') {
     const o = OFFERING[f.rarity];

@@ -23,3 +23,6 @@ export function hurtStrength(damage: number, maxHp: number): number {
   const frac = maxHp > 0 ? damage / maxHp : 0;
   return Math.min(FEEL.vignette.max, FEEL.vignette.base + frac * FEEL.vignette.perFrac);
 }
+
+/** HUD 的限時效果標籤（D78）：最多顯示幾個（手機直式 compact 時少一點），其餘縮成「+n」 */
+export const BUFF_HUD = { maxShown: 5, maxShownCompact: 3 } as const;

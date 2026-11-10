@@ -6,10 +6,12 @@ import type { Rng } from '../lib/random';
 import type { Run } from './run';
 
 const ZONES = 32;
+/** 沒有這個技法時的詞條（全 0，共用、唯讀） */
+const NO_AFFIX: Readonly<Record<TechStat, number>> = Object.freeze(emptyAffixes());
 const SEEDS = 16;
 const FLASHES = 24;
-const PILLARS = 4;
-const LAMPS = 2;
+const PILLARS = 6;
+const LAMPS = 4;
 /** 同時畫出幾隻燒著的人類 */
 const OIL_SHOWN = 24;
 
@@ -27,9 +29,9 @@ export class Techniques {
   /** 擁有的技法（拿到的順序）與各自的技法等級（1～TECH_LEVELS.max） */
   readonly owned: string[] = [];
   readonly levels: number[] = [];
-  /** 各技法累積的稀有度倍率（每拿一次加上那張卡的倍率；效果倍率 = 1 + perLevel × (累積 − 1)） */
+  /** 各技法累積的稀有度倍率（每拿一次加上那張卡的倍率；D77 起不再影響效果，留著給畫面與測試） */
   readonly points: number[] = [];
-  /** 各技法累積的詞條（D53 改：只強化這個技法自己）：威力、範圍、頻率、連鎖（比例，加總）；跟 owned 同一個順序 */
+  /** 各技法累積的詞條（D53 改：只強化這個技法自己）：攻擊力、範圍、攻擊速度、連鎖、暴擊率、暴擊傷害、持續時間、數量（加總）；跟 owned 同一個順序 */
   readonly afx: Record<TechStat, number>[] = [];
   /** 已進化的配方 id（D53）：兩個材料技法併成一個，效果 × EVO.power、參數換成進化後的值 */
   readonly evolved: string[] = [];
@@ -135,7 +137,39 @@ export class Techniques {
     return this.powerAt(this.owned.indexOf(d.id));
   }
   private powerAt(i: number): number {
-    return (1 + TECH_LEVELS.perLevel * (this.points[i] - 1)) * (this.isEvolved(this.owned[i]) ? EVO.power : 1) * (1 + this.afx[i].power);
+    // D77（使用者 2026-11-10：拿掉每一級升級強化，留下隨機詞條）：等級本身不再加成，變強只靠詞條（與進化）
+    return (this.isEvolved(this.owned[i]) ? EVO.power : 1) * (1 + this.afx[i].power);
+  }
+  /** 作用中的某個機制的詞條（沒有 = 全 0 的共用物件，不要改它） */
+  private afxOf(m: TechMechanic): Record<TechStat, number> {
+    const d = this.act[m];
+    const i = d ? this.owned.indexOf(d.id) : -1;
+    return i < 0 ? NO_AFFIX : this.afx[i];
+  }
+  /** 數量詞條（整數） */
+  private countOf(m: TechMechanic): number {
+    return Math.floor(this.afxOf(m).count);
+  }
+  /**
+   * 技法自己擲暴擊（繞身、開路燈、火柱、火種、護身火）：機率 = 全身暴擊率 + 這個技法的暴擊率詞條，倍率 = 全身暴擊傷害 + 暴擊傷害詞條。
+   * 回傳傷害倍率（沒暴擊 = 1），lastCrit 記下有沒有暴擊（顯示用）。
+   */
+  private ownCrit(m: TechMechanic): number {
+    const s = this.run.stats.value;
+    const a = this.afxOf(m);
+    this.lastCrit = this.run.rollCrit(s.crit + a.crit);
+    return this.lastCrit ? s.critDmg + a.critDmg : 1;
+  }
+  lastCrit = false;
+  /**
+   * 命中效果（分裂、彈跳、落火、燃燒地、燈油）的暴擊：傷害沿用命中的那一下。
+   * 那一下暴擊了 → 換成這個技法的暴擊倍率（全身 + 暴擊傷害詞條）；沒暴擊 → 用這個技法的暴擊率詞條再擲一次。
+   */
+  private fxCrit(m: TechMechanic, srcCrit: boolean): number {
+    const s = this.run.stats.value;
+    const a = this.afxOf(m);
+    if (srcCrit) return (s.critDmg + a.critDmg) / s.critDmg;
+    return a.crit > 0 && this.run.rand() < a.crit ? s.critDmg + a.critDmg : 1;
   }
   /** 選了技法卡：卡上的詞條加在這個技法身上，並重算作用中的參數 */
   addAffixes(id: string, list: readonly Affix[]): void {
@@ -157,11 +191,12 @@ export class Techniques {
     const whole = Math.floor(c);
     return whole + (this.run.rand() < c - whole ? 1 : 0);
   }
-  /** 把詞條（範圍、頻率）乘進技法的參數，回傳新的定義（沒有詞條就原樣回傳）。威力與連鎖在用到的地方另外算 */
+  /** 把詞條（範圍、攻擊速度、持續時間）乘進技法的參數，回傳新的定義（沒有詞條就原樣回傳）。攻擊力、連鎖、暴擊、數量在用到的地方另外算 */
   private withAffix(d: TechDef, a: Record<TechStat, number>): TechDef {
-    if (a.area === 0 && a.rate === 0) return d;
+    if (a.area === 0 && a.rate === 0 && a.duration === 0) return d;
     const A = 1 + a.area;
     const R = 1 + a.rate;
+    const D = 1 + a.duration;
     const out: TechDef = { ...d };
     if (d.split) out.split = { ...d.split, range: d.split.range * A };
     if (d.bounce) out.bounce = { ...d.bounce, range: d.bounce.range * A };
@@ -171,8 +206,8 @@ export class Techniques {
     if (d.ward) out.ward = { ...d.ward, burstRadius: d.ward.burstRadius * A, chargeSeconds: d.ward.chargeSeconds / R, atMaxChargeSeconds: d.ward.atMaxChargeSeconds / R };
     if (d.satellite) out.satellite = { ...d.satellite, radius: d.satellite.radius * A, hitRadius: d.satellite.hitRadius * A, tick: d.satellite.tick / R };
     if (d.lamp) out.lamp = { ...d.lamp, hitRadius: d.lamp.hitRadius * A, tick: d.lamp.tick / R };
-    if (d.oil) out.oil = { ...d.oil, spreadRange: d.oil.spreadRange * A, tick: d.oil.tick / R };
-    if (d.burn) out.burn = { ...d.burn, radius: d.burn.radius * A, tick: d.burn.tick / R };
+    if (d.oil) out.oil = { ...d.oil, spreadRange: d.oil.spreadRange * A, tick: d.oil.tick / R, seconds: d.oil.seconds * D, atMaxSeconds: d.oil.atMaxSeconds * D };
+    if (d.burn) out.burn = { ...d.burn, radius: d.burn.radius * A, tick: d.burn.tick / R, seconds: d.burn.seconds * D };
     if (d.seed) out.seed = { ...d.seed, radius: d.seed.radius * A, atMaxRadius: d.seed.atMaxRadius * A, delay: d.seed.delay / R };
     if (d.pillar) out.pillar = { ...d.pillar, radius: d.pillar.radius * A, range: d.pillar.range * A, interval: d.pillar.interval / R };
     return out;
@@ -445,7 +480,7 @@ export class Techniques {
   get ringCount(): number {
     const o = this.act.ring?.orbit;
     if (!o) return 0;
-    return Math.max(1, Math.floor(this.run.volleyExact) + o.baseOrbs + (this.run.weaponMaxed ? o.atMaxOrbs : 0) + this.deep.near * TECH_DEEPEN.near.orbs);
+    return Math.max(1, Math.floor(this.run.volleyExact) + o.baseOrbs + (this.run.weaponMaxed ? o.atMaxOrbs : 0) + this.deep.near * TECH_DEEPEN.near.orbs + this.countOf('ring'));
   }
   get ringRadius(): number {
     const o = this.act.ring?.orbit;
@@ -455,7 +490,7 @@ export class Techniques {
   /** 衛星燈：幾盞、半徑（公尺） */
   get satCount(): number {
     const o = this.act.satellite?.satellite;
-    return o ? o.count + (this.run.weaponMaxed ? o.atMaxCount - o.count : 0) : 0;
+    return o ? o.count + (this.run.weaponMaxed ? o.atMaxCount - o.count : 0) + this.countOf('satellite') : 0;
   }
   get satRadius(): number {
     const o = this.act.satellite?.satellite;
@@ -518,7 +553,6 @@ export class Techniques {
   private sweepRing(o: NonNullable<TechDef['orbit']>, power: number): void {
     const run = this.run;
     const en = run.enemies;
-    const s = run.stats.value;
     const n = this.ringCount;
     const R = this.ringRadius;
     // 環內護身（D46）：鑽進環內的人類受傷並被推出去（以前貼身的打不到，被包圍就只能挨打）
@@ -532,15 +566,14 @@ export class Techniques {
         const ez = en.z[e] - run.pz;
         if (ex * ex + ez * ez > inner * inner) continue;
         const d = Math.hypot(ex, ez) || 1;
-        const crit = run.rollCrit();
-        const dmg = run.shotDamage(crit) * o.damage * o.innerDamage * power;
+        const dmg = run.shotDamage(false) * o.damage * o.innerDamage * power * this.ownCrit('ring');
         this.innerHits++;
-        run.weaponHit(e, dmg, ex / d, ez / d, o.innerKnockback, crit);
+        run.weaponHit(e, dmg, ex / d, ez / d, o.innerKnockback, this.lastCrit);
       }
     }
     for (let k = 0; k < n; k++) {
       const a = this.ringAngle + (k / n) * Math.PI * 2;
-      this.sweepAt(run.px + Math.cos(a) * R, run.pz + Math.sin(a) * R, o.hitRadius, o.damage * power, o.knockback, s.crit);
+      this.sweepAt(run.px + Math.cos(a) * R, run.pz + Math.sin(a) * R, o.hitRadius, o.damage * power, o.knockback, 'ring');
     }
   }
 
@@ -550,12 +583,12 @@ export class Techniques {
     const R = this.satRadius;
     for (let k = 0; k < n; k++) {
       const a = this.satAngle + (k / n) * Math.PI * 2;
-      this.sweepAt(run.px + Math.cos(a) * R, run.pz + Math.sin(a) * R, o.hitRadius, o.damage * power, o.knockback, run.stats.value.crit);
+      this.sweepAt(run.px + Math.cos(a) * R, run.pz + Math.sin(a) * R, o.hitRadius, o.damage * power, o.knockback, 'satellite');
     }
   }
 
   /** 在 (ox, oz) 半徑 hit 內的人類各受一次傷害（可暴擊），並觸發命中效果 */
-  private sweepAt(ox: number, oz: number, hit: number, dmgRatio: number, knock: number, critRate: number): void {
+  private sweepAt(ox: number, oz: number, hit: number, dmgRatio: number, knock: number, mech: TechMechanic): void {
     const run = this.run;
     const en = run.enemies;
     const m = en.within(ox, oz, hit + 0.5, this.near);
@@ -566,15 +599,15 @@ export class Techniques {
       const dz = en.z[e] - oz;
       const rr = hit + en.radius(e);
       if (dx * dx + dz * dz > rr * rr) continue;
-      const crit = run.rollCrit(critRate);
-      const dmg = run.shotDamage(crit) * dmgRatio;
+      const dmg = run.shotDamage(false) * dmgRatio * this.ownCrit(mech);
+      const crit = this.lastCrit;
       const ex = en.x[e] - run.px;
       const ez = en.z[e] - run.pz;
       const d = Math.hypot(ex, ez) || 1;
       const x = en.x[e];
       const z = en.z[e];
       run.weaponHit(e, dmg, ex / d, ez / d, knock, crit);
-      this.hitFx(e, x, z, dmg, false);
+      this.hitFx(e, x, z, dmg, false, crit);
     }
   }
 
@@ -583,7 +616,7 @@ export class Techniques {
    * 打中 e（在 x, z）造成 dmg：觸發全部「命中效果」。鬼火直接命中（direct）每次都觸發；
    * 繞身、火柱的命中每隻人類 TECH_RULES.hitFxCooldown 秒內只觸發一次（高頻判定不爆量）。
    */
-  hitFx(e: number, x: number, z: number, dmg: number, direct: boolean): void {
+  hitFx(e: number, x: number, z: number, dmg: number, direct: boolean, crit = false): void {
     const a = this.act;
     if (!a.kitsunebi && !a.bounce && !a.hellfire && !a.rain && !a.oil) return;
     if (!direct) {
@@ -591,15 +624,16 @@ export class Techniques {
       if (now < this.fxUntil[e]) return;
       this.fxUntil[e] = now + TECH_RULES.hitFxCooldown;
     }
-    if (a.kitsunebi?.split) this.splitFrom(a.kitsunebi.split, x, z, e, dmg * this.pw('kitsunebi'));
+    // 每個命中效果各自套上自己的暴擊詞條（fxCrit）
+    if (a.kitsunebi?.split) this.splitFrom(a.kitsunebi.split, x, z, e, dmg * this.pw('kitsunebi') * this.fxCrit('kitsunebi', crit));
     if (a.bounce?.bounce) {
       const b = a.bounce.bounce;
       const jumps = (this.run.weaponMaxed ? b.atMaxJumps : b.jumps) + this.deep.chain * TECH_DEEPEN.chain.targets + this.chainExtra('bounce');
-      this.bounceFrom(b, x, z, e, dmg * b.damage * this.pw('bounce'), jumps);
+      this.bounceFrom(b, x, z, e, dmg * b.damage * this.pw('bounce') * this.fxCrit('bounce', crit), jumps);
     }
-    if (a.hellfire?.burn) this.addZone(a.hellfire.burn, x, z, dmg * a.hellfire.burn.damage * this.pw('hellfire') * Math.pow(TECH_DEEPEN.field.damage, this.deep.field));
-    if (a.rain?.rain) this.rainFrom(a.rain.rain, x, z, dmg * this.pw('rain'));
-    if (a.oil?.oil) this.ignite(a.oil.oil, e, dmg * a.oil.oil.damage * this.pw('oil') * Math.pow(TECH_DEEPEN.field.damage, this.deep.field));
+    if (a.hellfire?.burn) this.addZone(a.hellfire.burn, x, z, dmg * a.hellfire.burn.damage * this.pw('hellfire') * this.fxCrit('hellfire', crit) * Math.pow(TECH_DEEPEN.field.damage, this.deep.field));
+    if (a.rain?.rain) this.rainFrom(a.rain.rain, x, z, dmg * this.pw('rain') * this.fxCrit('rain', crit));
+    if (a.oil?.oil) this.ignite(a.oil.oil, e, dmg * a.oil.oil.damage * this.pw('oil') * this.fxCrit('oil', crit) * Math.pow(TECH_DEEPEN.field.damage, this.deep.field));
   }
 
   /** 鬼火雨：在命中點 range 公尺內隨機落下幾顆小火，各自炸到半徑內的人（不追人，落點隨機） */
@@ -685,23 +719,34 @@ export class Techniques {
   }
 
   // ── 開路燈 ───────────────────────────────────────────────────
+  /** 開路燈幾盞（含數量詞條，上限 LAMPS） */
+  get lampCount(): number {
+    const o = this.act.lamp?.lamp;
+    return o ? Math.min(LAMPS, (this.run.weaponMaxed ? o.atMaxCount : o.count) + this.countOf('lamp')) : 0;
+  }
+  /** 鬼火柱一次噴幾根（含數量詞條） */
+  get pillarCount(): number {
+    const p = this.act.pillar?.pillar;
+    return p ? (this.run.weaponMaxed ? p.atMaxCount : 1) + this.countOf('pillar') : 0;
+  }
   private lampStep(dt: number, o: NonNullable<TechDef['lamp']>): void {
     const run = this.run;
     const s = run.stats.value;
-    const n = run.weaponMaxed ? o.atMaxCount : o.count;
-    this.lampN = Math.min(LAMPS, n);
+    this.lampN = this.lampCount;
     const dx = Math.sin(run.facing);
     const dz = Math.cos(run.facing);
     const A = o.ahead * s.area;
     for (let i = 0; i < this.lampN; i++) {
-      const off = this.lampN === 1 ? 0 : (i === 0 ? -1 : 1) * o.side;
-      this.lampX[i] = run.px + dx * A - dz * off;
-      this.lampZ[i] = run.pz + dz * A + dx * off;
+      // 1 盞在正前方；2 盞在兩側；更多盞時排成往兩側展開、越外側越靠後的弧
+      const off = this.lampN === 1 ? 0 : (i / (this.lampN - 1) - 0.5) * 2 * o.side * Math.max(1, (this.lampN - 1) / 1.5);
+      const back = this.lampN <= 2 ? 0 : Math.abs(off) * 0.35;
+      this.lampX[i] = run.px + dx * (A - back) - dz * off;
+      this.lampZ[i] = run.pz + dz * (A - back) + dx * off;
     }
     this.lampTimer -= dt;
     if (this.lampTimer > 0) return;
     this.lampTimer += (o.tick * run.cooldownMult) / s.atkSpeed;
-    for (let i = 0; i < this.lampN; i++) this.sweepAt(this.lampX[i], this.lampZ[i], o.hitRadius, o.damage * this.pw('lamp'), o.knockback, s.crit);
+    for (let i = 0; i < this.lampN; i++) this.sweepAt(this.lampX[i], this.lampZ[i], o.hitRadius, o.damage * this.pw('lamp'), o.knockback, 'lamp');
   }
 
   /** 狐火分裂：從命中處朝其他敵人分裂出小火（小火不會再分裂；有碎火時另見 Run.emitShards） */
@@ -838,7 +883,9 @@ export class Techniques {
       const m = en.within(x, z, R, this.near);
       for (let j = 0; j < m; j++) {
         const e = this.near[j];
-        if (en.alive[e]) run.weaponHit(e, dmg, en.x[e] - x, en.z[e] - z, 2, false);
+        if (!en.alive[e]) continue;
+        const k = this.ownCrit('seed');
+        run.weaponHit(e, dmg * k, en.x[e] - x, en.z[e] - z, 2, this.lastCrit);
       }
     }
   }
@@ -857,7 +904,7 @@ export class Techniques {
     }
     this.pillarTimer += (p.interval * run.cooldownMult) / run.stats.value.atkSpeed;
     this.pillarR = R;
-    const count = run.weaponMaxed ? p.atMaxCount : 1;
+    const count = this.pillarCount;
     let fx = NaN;
     let fz = NaN;
     for (let c = 0; c < count; c++) {
@@ -888,7 +935,7 @@ export class Techniques {
     const run = this.run;
     const en = run.enemies;
     let slot = 0;
-    for (let i = 0; i < Math.min(p.max, PILLARS); i++) if (this.pillarLife[i] <= this.pillarLife[slot]) slot = i;
+    for (let i = 0; i < Math.min(Math.max(p.max, this.pillarCount * 2), PILLARS); i++) if (this.pillarLife[i] <= this.pillarLife[slot]) slot = i;
     this.pillarX[slot] = x;
     this.pillarZ[slot] = z;
     this.pillarLife[slot] = p.life;
@@ -900,12 +947,12 @@ export class Techniques {
     for (let j = 0; j < m; j++) {
       const e = this.near[j];
       if (!en.alive[e]) continue;
-      const crit = run.rollCrit();
-      const dmg = run.shotDamage(crit) * base;
+      const dmg = run.shotDamage(false) * base * this.ownCrit('pillar');
+      const crit = this.lastCrit;
       const ex = en.x[e];
       const ez = en.z[e];
       run.weaponHit(e, dmg, ex - x, ez - z, 0, crit);
-      this.hitFx(e, ex, ez, dmg, false);
+      this.hitFx(e, ex, ez, dmg, false, crit);
     }
   }
 
@@ -924,7 +971,10 @@ export class Techniques {
     const dmg = run.shotDamage(false) * w.burstDamage * this.pw('ward');
     for (let j = 0; j < m; j++) {
       const e = this.near[j];
-      if (en.alive[e]) run.weaponHit(e, dmg, en.x[e] - run.px, en.z[e] - run.pz, 5, false);
+      if (en.alive[e]) {
+        const k = this.ownCrit('ward');
+        run.weaponHit(e, dmg * k, en.x[e] - run.px, en.z[e] - run.pz, 5, this.lastCrit);
+      }
     }
     return true;
   }

@@ -108,7 +108,7 @@ export async function run(browser) {
         await page.waitForFunction(() => window.__game.screens.includes('pause'));
         const info = await page.evaluate(() => [...document.querySelectorAll('#sum-ult li')].map((li) => ({ id: li.dataset.ult, t: li.innerText.replace(/\s+/g, ' ') })));
         expect(info.length === 1 && info[0].id === 'infernoLantern', `應只列出裝配的那一招：${JSON.stringify(info)}`);
-        expect(/炎獄燈/.test(info[0].t) && /Lv0\/5/.test(info[0].t) && /威力 ×1/.test(info[0].t) && /冷卻 25 秒/.test(info[0].t), `大招的等級或升級累計不對：${info[0].t}`);
+        expect(/炎獄燈/.test(info[0].t) && /Lv0\/5/.test(info[0].t) && /攻擊力 ×1/.test(info[0].t) && /冷卻 25 秒/.test(info[0].t), `大招的等級或升級累計不對：${info[0].t}`);
         files.push(await shot(ctx, 'u1-pause'));
         await press(ctx, '#btn-pause-resume');
         await page.waitForFunction(() => !window.__game.screens.includes('pause'));

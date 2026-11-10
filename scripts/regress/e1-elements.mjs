@@ -91,7 +91,7 @@ export async function run(browser) {
         await page.evaluate(() => window.__game.advance(0.3));
       };
 
-      await step(`${vp.name} 石地藏：走近出現提示、按住 1 秒 → 護甲 +3（良階）`, async () => {
+      await step(`${vp.name} 石地藏：走近出現提示、按住 1 秒 → 護甲 +1 整場（良階）`, async () => {
         const s0 = await stats();
         const spot = await approach('jizo', 'rare');
         await page.evaluate(() => { window.__game.advance(0.4); window.__game.render(); });
@@ -103,7 +103,7 @@ export async function run(browser) {
         files.push(await shot(ctx, 'e1-jizo'));
         const card = await waitResult('石地藏');
         expect(card.title === '良・石地藏', `結果卡標題不對：${card.title}`);
-        expect(card.lines.some((l) => /^回復 \d+ 生命$/.test(l.text)) && card.lines.some((l) => l.text === '護甲 +3（60 秒）'), `結果卡內容不對：${JSON.stringify(card.lines)}`);
+        expect(card.lines.some((l) => /^回復 \d+ 生命$|^生命已滿$/.test(l.text)) && card.lines.some((l) => l.text === '護甲 +1（整場）'), `結果卡內容不對：${JSON.stringify(card.lines)}`);
         files.push(await shot(ctx, 'e1-result'));
         // 同時升級：結果卡開著時加魂火 → 不能蓋上選卡面板；關掉結果卡後才出現選卡
         await page.evaluate(() => window.__game.addXp(20));
@@ -112,7 +112,7 @@ export async function run(browser) {
         expect((await screens()).includes('levelup'), `關掉結果卡後沒有接著選卡（${vp.name}）`);
         await dismiss();
         const s1 = await stats();
-        expect(Math.abs(s1.armor - s0.armor - 3) < 1e-6, `石地藏護甲沒加 3：${s0.armor} → ${s1.armor}`);
+        expect(Math.abs(s1.armor - s0.armor - 1) < 1e-6, `石地藏護甲沒加 1（良階，D78）：${s0.armor} → ${s1.armor}`);
         await leave(spot);
         expect(!(await page.locator('#element-box').isVisible()), `離開了提示還在（${vp.name}）`);
       });

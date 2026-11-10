@@ -2,7 +2,8 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { tuning, resetTuning } from '../../src/data/tuning';
-import { AFFIX_BASE, AFFIX_COUNT, AFFIX_STATS, TECH_STATS, rollAffixes, emptyAffixes } from '../../src/data/affixes';
+import { AFFIX_BASE, AFFIX_COUNT, AFFIX_LABEL, AFFIX_ROLL, AFFIX_STATS, COUNT_RARITIES, TECH_STATS, rollAffixes, emptyAffixes } from '../../src/data/affixes';
+import { readFileSync } from 'node:fs';
 import { ITEM_RARITY_MULT } from '../../src/data/items';
 import { RARITIES } from '../../src/data/rarity';
 import { TECHS, mechOf, techsFor, type TechMechanic } from '../../src/data/techniques';
@@ -14,34 +15,63 @@ afterEach(() => resetTuning());
 const MECHS = Object.keys(AFFIX_STATS) as TechMechanic[];
 
 describe('詞條（D53；2026-11-09 改：只強化技法本身，每張至少 2 條）', () => {
-  it('每種機制都有詞條候選，至少 2 種；候選只有 威力／範圍／頻率／連鎖（沒有最大生命、護甲這類全身能力值）；每種詞條都有名稱', () => {
+  it('每種機制都有詞條候選，至少 2 種；候選只有技法自己的 8 種（沒有最大生命、護甲這類全身能力值）；每種詞條都有名稱', () => {
     for (const t of TECHS) expect(MECHS, `技法 ${t.id} 的機制 ${mechOf(t)} 沒有詞條設定`).toContain(mechOf(t));
     for (const m of MECHS) {
       expect(AFFIX_STATS[m].length, m).toBeGreaterThanOrEqual(2);
       for (const s of AFFIX_STATS[m]) expect(TECH_STATS, `${m}/${s}`).toContain(s);
     }
-    expect([...TECH_STATS]).toEqual(['power', 'area', 'rate', 'chain']);
-    for (const s of TECH_STATS) expect(zhTW[`affix.${s}` as keyof typeof zhTW], s).toBeTruthy();
+    expect([...TECH_STATS]).toEqual(['power', 'area', 'rate', 'chain', 'crit', 'critDmg', 'duration', 'count']);
+    for (const s of TECH_STATS) expect(zhTW[AFFIX_LABEL[s] as keyof typeof zhTW], s).toBeTruthy();
     expect(RARITIES.map((r) => AFFIX_COUNT[r])).toEqual([2, 2, 3, 3]);
   });
 
-  it('全掃：每種機制、每個稀有度、很多種子——條數 = min(稀有度條數, 候選數)、不重複、都在候選裡、數值 = 基準 × 稀有度倍率', () => {
+  it('全掃：每種機制、每個稀有度、很多種子——條數 = min(稀有度條數, 候選數)、不重複、都在候選裡、數值在 基準 × 稀有度倍率 × [lo, hi] 之間；數量詞條只在珍／極、固定 +1', () => {
+    const values = new Map<string, Set<number>>();
     for (const m of MECHS) {
       for (const r of RARITIES) {
+        const pool = AFFIX_STATS[m].filter((x) => x !== 'count' || COUNT_RARITIES.includes(r));
         for (let seed = 1; seed <= 40; seed++) {
           const a = rollAffixes(new Rng(seed), r, m);
-          expect(a, `${m}／${r}／${seed} 條數`).toHaveLength(Math.min(AFFIX_COUNT[r], AFFIX_STATS[m].length));
+          expect(a, `${m}／${r}／${seed} 條數`).toHaveLength(Math.min(AFFIX_COUNT[r], pool.length));
           expect(new Set(a.map((x) => x.stat)).size).toBe(a.length);
           for (const x of a) {
-            expect(AFFIX_STATS[m]).toContain(x.stat);
-            expect(x.value).toBeCloseTo(AFFIX_BASE[x.stat] * ITEM_RARITY_MULT[r]);
+            expect(pool, `${m}／${r}`).toContain(x.stat);
+            if (x.stat === 'count') {
+              expect(x.value).toBe(1);
+              continue;
+            }
+            const b = AFFIX_BASE[x.stat] * ITEM_RARITY_MULT[r];
+            expect(x.value, `${m}／${r}／${x.stat}`).toBeGreaterThanOrEqual(b * AFFIX_ROLL.lo - 0.0051);
+            expect(x.value, `${m}／${r}／${x.stat}`).toBeLessThanOrEqual(b * AFFIX_ROLL.hi + 0.0051);
+            const k = `${r}/${x.stat}`;
+            if (!values.has(k)) values.set(k, new Set());
+            values.get(k)!.add(x.value);
           }
         }
       }
     }
-    // 越稀有越大
-    const v = (r: (typeof RARITIES)[number]) => rollAffixes(new Rng(1), r, 'ring').find((x) => x.stat === 'power')?.value ?? AFFIX_BASE.power * ITEM_RARITY_MULT[r];
-    expect(v('legend')).toBeGreaterThan(v('common'));
+    // 數值有變化（D77：同稀有度的卡也不一樣；舊版固定值會紅）
+    expect(values.get('common/power')!.size, '凡階攻擊力的數值種類').toBeGreaterThan(5);
+    // 越稀有越大（平均）
+    const avg = (k: string) => [...values.get(k)!].reduce((a, b) => a + b, 0) / values.get(k)!.size;
+    expect(avg('legend/power')).toBeGreaterThan(avg('common/power'));
+  });
+
+  it('統一名稱（D77）：詞條和全身能力值用同一組字；介面文字裡不再出現「威力」「頻率」「攻速」（舊版會紅）', () => {
+    for (const s of TECH_STATS) expect(AFFIX_LABEL[s].startsWith('stat.'), s).toBe(true);
+    const banned = ['威力', '頻率', '攻速'];
+    for (const [k, v] of Object.entries(zhTW)) for (const w of banned) expect(String(v).includes(w), `${k}：「${v}」用了「${w}」`).toBe(false);
+  });
+
+  it('暴擊詞條接在每個技法自己的傷害路徑上（全掃程式碼：自己擲暴擊的機制呼叫 ownCrit、命中效果的機制呼叫 fxCrit）', () => {
+    const src = readFileSync('src/game/techniques.ts', 'utf8');
+    for (const m of MECHS) {
+      if (!AFFIX_STATS[m].includes('crit')) continue;
+      const own = src.includes(`ownCrit('${m}')`) || (src.includes('ownCrit(mech)') && src.includes(`, '${m}')`));
+      const fx = src.includes(`fxCrit('${m}'`);
+      expect(own || fx, `${m} 有暴擊詞條，但傷害沒有接上暴擊`).toBe(true);
+    }
   });
 
   it('固定種子可以重現；不同種子不全一樣', () => {
@@ -108,7 +138,7 @@ describe('詞條（D53；2026-11-09 改：只強化技法本身，每張至少 2
     expect(run.tech.affixesOf('ward')).toEqual(emptyAffixes());
   });
 
-  it('每個技法的每種詞條都「真的有作用」：威力 → 效果倍率變大；範圍／頻率 → 作用中的參數變了；連鎖 → 連鎖數增加（全掃 15 個技法）', () => {
+  it('每個技法的每種詞條都「真的有作用」：攻擊力 → 效果倍率變大；範圍／攻擊速度／持續時間 → 作用中的參數變了；連鎖 → 連鎖數增加；暴擊 → 傷害倍率 > 1；數量 → 顆數增加（全掃 15 個技法）', () => {
     tuning.stageSeconds = 600;
     for (const t of TECHS) {
       const m = mechOf(t);
@@ -118,7 +148,7 @@ describe('詞條（D53；2026-11-09 改：只強化技法本身，每張至少 2
         const before = JSON.stringify(run.tech.act[m]);
         const pw0 = run.tech.powerOf(t.id);
         const hr0 = run.projectiles.homeReturnDamage;
-        run.tech.addAffixes(t.id, [{ stat, value: 0.5 }]);
+        run.tech.addAffixes(t.id, [{ stat, value: stat === 'count' ? 1 : 0.5 }]);
         if (stat === 'power') {
           const changed = run.tech.powerOf(t.id) > pw0 + 1e-9 || run.projectiles.homeReturnDamage > hr0 + 1e-9;
           expect(changed, `${t.id}／威力沒有作用`).toBe(true);
@@ -128,6 +158,17 @@ describe('詞條（D53；2026-11-09 改：只強化技法本身，每張至少 2
           let max = ex;
           for (let k = 0; k < 40; k++) max = Math.max(max, (run.tech as unknown as { chainExtra(x: TechMechanic): number }).chainExtra(m));
           expect(max, `${t.id}／連鎖沒有作用`).toBeGreaterThanOrEqual(1);
+        } else if (stat === 'crit' || stat === 'critDmg') {
+          const tc = run.tech as unknown as { ownCrit(x: TechMechanic): number; fxCrit(x: TechMechanic, c: boolean): number };
+          if (stat === 'crit') run.tech.addAffixes(t.id, [{ stat: 'crit', value: 1 }]); // 必定暴擊：看得到倍率
+          const own = tc.ownCrit(m);
+          const fx = stat === 'crit' ? tc.fxCrit(m, false) : tc.fxCrit(m, true);
+          expect(Math.max(own, fx), `${t.id}／${stat} 沒有作用`).toBeGreaterThan(1);
+        } else if (stat === 'count') {
+          const n = (r: Run) => ({ ring: r.tech.ringCount, lamp: r.tech.lampCount, pillar: r.tech.pillarCount, satellite: r.tech.satCount })[m as 'ring'];
+          const ref = new Run({ seed: 1, bus: new EventBus(), yokaiId: t.weapon === 'waterdisc' ? 'kappa' : 'chochin-kozo' });
+          ref.tech.add(t.id, 1);
+          expect(n(run), `${t.id}／數量沒有作用`).toBeGreaterThan(n(ref));
         } else {
           expect(JSON.stringify(run.tech.act[m]), `${t.id}／${stat} 沒有改變任何參數`).not.toBe(before);
         }

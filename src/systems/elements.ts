@@ -19,7 +19,6 @@ import {
   ELEMENT_RULES,
   ELEMENT_WEIGHTS,
   JIZO,
-  JIZO_ARMOR_SECONDS,
   JIZO_HOLD_SECONDS,
   CHEST_HOLD_SECONDS,
   ELEMENT_PER_KIND,
@@ -158,7 +157,7 @@ export class Elements {
   readonly trial = { active: false, slot: -1, x: 0, z: 0, left: 0, kills: 0, tier: -1, needs: [0, 0, 0] as number[], rewards: ['common', 'rare', 'epic'] as Rarity[] };
   private nextDrop = 0;
   private drops = 0;
-  private readonly timed: { key: string; until: number; curse?: boolean }[] = [];
+  private readonly timed: { key: string; until: number; total: number; label: string; curse?: boolean }[] = [];
   private luck = 0;
   private clock = 0;
   /** 關卡經過比例 0～1（試煉門檻用） */
@@ -205,6 +204,21 @@ export class Elements {
     }
     this.timed.length = 0;
     for (const s of this.slots) this.host.stats.clearMod(`barrier:${this.slots.indexOf(s)}`);
+  }
+
+  /**
+   * 畫面上要倒數的限時效果（D78：「如若有時間限制，加成要顯示給使用者看」）：神籤的限時結果、站在裡面的結界石。
+   * fn(說明的 i18n key, 剩幾秒, 總秒數, 是不是壞事)。同一個神籤的多條詛咒只報一次。
+   */
+  visitTimed(fn: (label: string, left: number, total: number, bad: boolean) => void): void {
+    let last = '';
+    for (const t of this.timed) {
+      const id = t.key.split(':').slice(0, 2).join(':');
+      if (id === last) continue;
+      last = id;
+      fn(t.label, Math.max(0, t.until - this.clock), t.total, !!t.curse);
+    }
+    for (const s of this.slots) if (s.active && s.kind === 'barrier' && s.inside && s.usedAge < 0) fn('element.barrier', Math.max(0, s.life), BARRIER_LIFETIME, false);
   }
 
   get activeCount(): number {
@@ -400,9 +414,9 @@ export class Elements {
       const j = JIZO[s.rarity];
       lines.push({ t: 'heal', v: this.host.healFrac(j.healFrac) });
       const key = `jizo:${this.carry.serial++}`;
+      // D78：護甲是整場的（不放進 timed，換關也不清）
       st.setMod(key, { flat: { armor: j.armor } });
-      this.timed.push({ key, until: this.clock + JIZO_ARMOR_SECONDS });
-      lines.push({ t: 'stat', stat: 'armor', flat: j.armor, seconds: JIZO_ARMOR_SECONDS });
+      lines.push({ t: 'stat', stat: 'armor', flat: j.armor });
       if (s.rarity === 'legend' && this.carry.downKeys.length > 0) {
         const k = this.carry.downKeys.shift()!;
         this.host.clearCurse(k);
@@ -521,20 +535,22 @@ export class Elements {
   applyOmikuji(result: OmikujiResult): ResultLine[] {
     const f = OMIKUJI_EFFECT[result];
     const lines: ResultLine[] = [{ t: 'omikuji', id: result }];
-    for (const [id, v] of Object.entries(f.pct ?? {})) lines.push({ t: 'stat', stat: id as StatId, pct: v, seconds: f.seconds });
-    for (const [id, v] of Object.entries(f.flat ?? {})) lines.push({ t: 'stat', stat: id as StatId, flat: v, seconds: f.seconds });
-    for (const [id, v] of Object.entries(f.curse ?? {})) lines.push({ t: 'curse', id: id as CurseId, v, seconds: f.seconds });
+    const sec = f.seconds > 0 ? f.seconds : undefined;
+    for (const [id, v] of Object.entries(f.pct ?? {})) lines.push({ t: 'stat', stat: id as StatId, pct: v, seconds: sec });
+    for (const [id, v] of Object.entries(f.flat ?? {})) lines.push({ t: 'stat', stat: id as StatId, flat: v, seconds: sec });
+    for (const [id, v] of Object.entries(f.curse ?? {})) lines.push({ t: 'curse', id: id as CurseId, v, seconds: sec });
     if (f.merit) lines.push({ t: 'merit', v: f.merit });
     const key = `omikuji:${this.carry.serial++}`;
     if (f.pct || f.flat) {
       this.host.stats.setMod(key, { pct: f.pct, flat: f.flat });
-      this.timed.push({ key, until: this.clock + f.seconds });
+      // D78：seconds 0 = 整場（不放進 timed）
+      if (f.seconds > 0) this.timed.push({ key, until: this.clock + f.seconds, total: f.seconds, label: `omikuji.${result}` });
     }
     if (f.curse) {
       for (const [id, v] of Object.entries(f.curse)) {
         const k = `${key}:${id}`;
         this.host.setCurse(k, id as CurseId, v);
-        this.timed.push({ key: k, until: this.clock + f.seconds, curse: true });
+        this.timed.push({ key: k, until: this.clock + f.seconds, total: f.seconds, label: `omikuji.${result}`, curse: true });
       }
     }
     if (f.merit) this.host.addMerit(f.merit);

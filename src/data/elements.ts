@@ -43,14 +43,16 @@ export const ELEMENT_RARITY_BY_WAVE: readonly { from: number; w: Record<Rarity, 
 ];
 
 /** 石地藏（docs/02 第 6.2 節⑦） */
+/**
+ * 石地藏：回血＋護甲。D78（使用者 2026-11-10：「太多有限時間的加成，請移除一些有時間限制改為整場加成」）：
+ * 護甲從「60 秒 +2～+8」改成**整場**、數值變小（+1～+3）。
+ */
 export const JIZO: Record<Rarity, { healFrac: number; armor: number }> = {
-  common: { healFrac: 0.2, armor: 2 },
-  rare: { healFrac: 0.35, armor: 3 },
-  epic: { healFrac: 0.5, armor: 5 },
-  legend: { healFrac: 1, armor: 8 },
+  common: { healFrac: 0.2, armor: 1 },
+  rare: { healFrac: 0.35, armor: 1 },
+  epic: { healFrac: 0.5, armor: 2 },
+  legend: { healFrac: 1, armor: 3 },
 };
-/** 石地藏的護甲持續秒數（2 個虛擬波） */
-export const JIZO_ARMOR_SECONDS = 60;
 export const JIZO_HOLD_SECONDS = 1.0;
 
 /** 結界石（⑥）：圈內的攻擊力與攻擊速度加成、半徑、存在秒數（3 個虛擬波）、圈內敵人湧出倍率 */
@@ -91,9 +93,10 @@ export const OMIKUJI_WEIGHTS: Record<Rarity, Record<OmikujiResult, number>> = {
 };
 /** 各結果的效果：pct／flat = 自己的屬性；curse = 讓敵人變強（凶類）；merit = 功德；seconds = 持續 */
 export const OMIKUJI_EFFECT: Record<OmikujiResult, { seconds: number; pct?: Partial<Record<'power' | 'atkSpeed' | 'area' | 'speed', number>>; flat?: { regen: number }; curse?: Partial<Record<'enemySpeed' | 'enemyDamage', number>>; merit?: number }> = {
-  daikichi: { seconds: 60, pct: { power: 0.25, atkSpeed: 0.25, area: 0.25, speed: 0.25 } },
-  chukichi: { seconds: 60, pct: { power: 0.25 } },
-  shokichi: { seconds: 60, flat: { regen: 2 } },
+  // D78：好結果改成**整場**（seconds 0 = 整場）、數值變小；壞結果（凶、大凶）維持限時，HUD 顯示倒數
+  daikichi: { seconds: 0, pct: { power: 0.06, atkSpeed: 0.06, area: 0.06, speed: 0.06 } },
+  chukichi: { seconds: 0, pct: { power: 0.08 } },
+  shokichi: { seconds: 0, flat: { regen: 0.5 } },
   suekichi: { seconds: 0, merit: 5 },
   kyo: { seconds: 45, curse: { enemySpeed: 0.15 } },
   daikyo: { seconds: 45, curse: { enemyDamage: 0.3 } },
