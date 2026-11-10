@@ -6,7 +6,7 @@
  */
 export interface LookDef {
   id: string;
-  /** 像素化：低解析度畫面的「短邊」有幾個像素（0 = 不像素化）。依畫面大小換算放大倍率，桌面與手機的像素粗細感一致 */
+  /** 像素化：低解析度畫面的「短邊」有幾個像素（0 = 不像素化）。依畫面大小換算放大倍率（可以不是整數），桌面與手機的像素粗細感一致 */
   pixelShort: number;
   /** 調色盤量化：每個色頻分幾階（0 = 不量化）、抖動強度（0～1；用 4×4 Bayer 矩陣，在低解析度像素上抖） */
   levels: number;
@@ -30,14 +30,18 @@ export interface LookDef {
   contrast: number;
   saturation: number;
   vignette: number;
+  /** 真陰影的濃度（0～1；1 = 全黑）：太濃會變成一塊塊黑影 */
+  shadowStrength: number;
+  /** 卡通著色最暗那一階的亮度（0～1）：太低背光面會變黑塊 */
+  rampMin: number;
 }
 
 /** 預設風格（D72：使用者「照你的，開始做」＝日系 RPG 像素風）。舊的樣子用 ?look=classic */
 export const DEFAULT_LOOK = 'jrpg';
 
 export const LOOKS: Record<string, LookDef> = {
-  classic: { id: 'classic', toonSteps: 0, shadows: false, shadow: { extent: 24, size: 1024, sizeTouch: 1024, bias: -0.0005, normalBias: 0.05 }, pixelShort: 0, levels: 0, dither: 0, edge: 0, edgeFrom: 0.05, edgeTo: 0.1, tiltShift: 0, tiltFocus: 0.5, timeOfDay: false, contrast: 1.06, saturation: 1.1, vignette: 0.28 },
-  jrpg: { id: 'jrpg', toonSteps: 4, shadows: true, shadow: { extent: 24, size: 2048, sizeTouch: 1024, bias: -0.0005, normalBias: 0.06 }, pixelShort: 360, levels: 11, dither: 0.55, edge: 0.55, edgeFrom: 0.05, edgeTo: 0.12, tiltShift: 0, tiltFocus: 0.5, timeOfDay: true, contrast: 1.08, saturation: 1.18, vignette: 0.32 },
+  classic: { id: 'classic', toonSteps: 0, shadows: false, shadow: { extent: 24, size: 1024, sizeTouch: 1024, bias: -0.0005, normalBias: 0.05 }, pixelShort: 0, levels: 0, dither: 0, edge: 0, edgeFrom: 0.05, edgeTo: 0.1, tiltShift: 0, tiltFocus: 0.5, timeOfDay: false, contrast: 1.06, saturation: 1.1, vignette: 0.28, shadowStrength: 1, rampMin: 0.38 },
+  jrpg: { id: 'jrpg', toonSteps: 4, shadows: true, shadow: { extent: 24, size: 2048, sizeTouch: 1024, bias: -0.0005, normalBias: 0.06 }, pixelShort: 520, levels: 20, dither: 0.25, edge: 0.3, edgeFrom: 0.08, edgeTo: 0.2, tiltShift: 0, tiltFocus: 0.5, timeOfDay: true, contrast: 1.08, saturation: 1.15, vignette: 0.16, shadowStrength: 0.55, rampMin: 0.6 },
 };
 
 /** 目前的畫面風格：網址 ?look= 優先（開發），其次打包時的 VITE_LOOK，都沒有就用 DEFAULT_LOOK */

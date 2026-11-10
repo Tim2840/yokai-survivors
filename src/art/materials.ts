@@ -1,14 +1,15 @@
 import * as THREE from 'three';
 import { currentLook } from '../data/look';
 
-/** 卡通著色的色階貼圖（steps 階，最近點取樣）：最暗不要全黑（0.38），最亮 1 */
+/** 卡通著色的色階貼圖（steps 階，最近點取樣）：最暗那一階 = look.rampMin（不要黑塊），最亮 1 */
 const rampCache = new Map<number, THREE.DataTexture>();
 export function toonRamp(steps: number): THREE.DataTexture {
   let t = rampCache.get(steps);
   if (t) return t;
   const data = new Uint8Array(steps * 4);
   for (let i = 0; i < steps; i++) {
-    const v = Math.round((0.38 + (0.62 * i) / Math.max(1, steps - 1)) * 255);
+    const lo = currentLook().rampMin;
+    const v = Math.round((lo + ((1 - lo) * i) / Math.max(1, steps - 1)) * 255);
     data.set([v, v, v, 255], i * 4);
   }
   t = new THREE.DataTexture(data, steps, 1, THREE.RGBAFormat);

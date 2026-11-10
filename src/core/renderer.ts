@@ -59,6 +59,7 @@ export class Renderer {
       c.far = 90;
       this.moon.shadow.bias = sh.bias;
       this.moon.shadow.normalBias = sh.normalBias;
+      this.moon.shadow.intensity = look.shadowStrength; // 影子不要全黑
       this.shadowExtent = sh.extent;
     }
     this.hemi = new THREE.HemisphereLight(palette.night.sky, palette.night.groundDark, 0.5);

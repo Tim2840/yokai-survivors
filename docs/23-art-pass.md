@@ -159,3 +159,25 @@
 3. **要不要放行素材網域？**預設：**不放行**（你要用 A 的話，你下載後放進 `assets/` 資料夾給我）。
 
 **來源**：[Kenney 支援頁（資產為 CC0、不需標註）](https://kenney.nl/support)、[Quaternius Medieval Village MegaKit（glTF、CC0、部分免費）](https://quaternius.com/packs/medievalvillagemegakit.html)、[Quaternius LowPoly Bundle（itch.io）](https://quaternius.itch.io/quaternius-lowpoly-bundle)、[日式建築像素包（Vectoraith，itch.io，授權自訂）](https://vectoraith.itch.io/traditional-japanese-buildings-tileset-pack)、[日式圖塊（Starbird Resources，付費、需標註）](https://starbirdresources.itch.io/rpg-classic-japan-tileset)、[Game Asset Licenses Explained](https://cinevva-site.pages.dev/guides/game-asset-licenses)。
+
+## 12. 像素感減輕、去黑塊（D75，2026-11-10）
+
+> 使用者：「角色、地圖整體像素感再輕一些，畫面有點太多黑塊。」
+
+**黑塊是從哪來的（我看截圖的判斷）**：①描線太重（0.55）而且連小的深度落差（草叢、樹叢）都描，變成一團團黑邊 ②地面的小草記號用最深的色 ③抖動強（0.55）在暗處變成黑點 ④暗角 0.32 讓四周發黑 ⑤卡通著色最暗那一階只有 0.38，背光面整塊變暗 ⑥真陰影是全黑的。
+
+**改了什麼**（全部在 `src/data/look.ts`，可再調）
+| 參數 | 改前 | 改後 |
+|---|---|---|
+| 低解析度短邊（`pixelShort`） | 360，放大倍率取整數且至少 2 | **520，倍率可以不是整數**（< 1.05 倍就不縮）——桌面約 1.4 倍、手機（2 倍螢幕）約 1.5 倍 |
+| 色階（`levels`） | 11 | **20** |
+| 抖動（`dither`） | 0.55 | **0.25** |
+| 描線（`edge`／深度差門檻） | 0.55／0.05～0.12 | **0.3／0.08～0.2**（只描明顯的輪廓） |
+| 地面小草記號 | 最深色 | **只深 35%** |
+| 暗角（`vignette`） | 0.32 | **0.16** |
+| 卡通著色最暗階（`rampMin`） | 0.38 | **0.6** |
+| 影子濃度（`shadowStrength`） | 1（全黑） | **0.55** |
+
+**驗證了什麼**：前後截圖（`scripts/shots/art.mjs b0`／`b2`、`scripts/shots/cast.mjs b2`）逐張看過；單元測試全過；回歸 b1、c1、e3、f1、m1、p1 通過（p1：手機直式 draw call 75、三角形約 18.8 萬，沒變）。
+
+**沒覆蓋的**：①無頭瀏覽器的「手機」是 1 倍螢幕，短邊 390 < 520，**測試裡手機完全沒有像素化**；真手機（2 倍以上）會是約 1.5 倍的像素——要你在手機上看 ②非整數倍放大在移動時，少數像素寬度會一格一格交替（細微的閃動），我在靜態截圖裡看不出來 ③像素感「多輕才剛好」只有你能判斷：要更輕把 `pixelShort` 調大（例如 640），要更重調小。

@@ -94,7 +94,9 @@ export class PixelPass extends Pass {
   }
 
   setSize(width: number, height: number): void {
-    const scale = Math.max(2, Math.round(Math.min(width, height) / this.shortSide));
+    // 放大倍率不一定是整數（2026-11-10 使用者：像素感再輕一些）：低解析度畫面的短邊固定約 shortSide，倍率 < 1.05 就乾脆不縮
+    const raw = Math.min(width, height) / this.shortSide;
+    const scale = raw < 1.05 ? 1 : raw;
     const w = Math.max(1, Math.floor(width / scale));
     const h = Math.max(1, Math.floor(height / scale));
     this.res.set(w, h);

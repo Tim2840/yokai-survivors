@@ -5,10 +5,10 @@ import { Rng } from '../lib/random';
  * 地表細節貼圖（像素畫風，D72）：一小張（64×64）可無縫重複的草地圖，**最近點取樣、不做 mipmap**，
  * 所以放大後是一格一格的方塊；內容是「平坦的底色＋少量刻意的小草符號（深色小 V）＋零星亮點」，
  * 而不是以前那種到處都有的細碎雜訊（雜訊在像素化後看起來像畫質差）。
- * 亮度範圍 (1 - strength)～1，平均約 1 - strength × 0.15：貼在地形上是「乘」，所以地形頂點色要先乘 groundDetailGain 補回來。
+ * 亮度範圍 (1 - strength)～1，平均約 1 - strength × 0.03（小草符號淡、只佔一小部分）：貼在地形上是「乘」，所以地形頂點色要先乘 groundDetailGain 補回來。
  */
 export function groundDetailGain(strength: number): number {
-  return 1 / (1 - strength * 0.15);
+  return 1 / (1 - strength * 0.03);
 }
 
 export function groundDetailTexture(seed: number, strength: number): THREE.DataTexture {
@@ -32,7 +32,7 @@ export function groundDetailTexture(seed: number, strength: number): THREE.DataT
       if (rng.next() > 0.55) continue;
       const x = cx * cell + rng.int(1, 3);
       const y = cy * cell + rng.int(1, 4);
-      const v = lo;
+      const v = lo + (1 - lo) * 0.35; // 小草符號不要太深（太深在像素畫面上像一塊塊黑點）
       put(x, y, v);
       put(x + 4, y, v);
       put(x + 1, y + 1, v);
