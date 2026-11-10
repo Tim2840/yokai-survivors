@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { tuning, resetTuning } from '../../src/data/tuning';
-import { BASE_TECH_ID, EVO, EVOS, TECHS, TECH_DEEPEN, TECH_FAMILIES, TECH_LEVELS, TECH_OFFER, techById, techMix, techsFor } from '../../src/data/techniques';
+import { BASE_TECH_ID, EVO, EVOS, TECHS, TECH_FAMILIES, TECH_LEVELS, TECH_OFFER, techById, techMix, techsFor } from '../../src/data/techniques';
 import { ITEM_POOL } from '../../src/data/items';
 import { kindIndex } from '../../src/systems/enemies';
 import { Rng } from '../../src/lib/random';
@@ -65,10 +65,10 @@ describe('技法池（資料全掃）', () => {
     expect(TECH_OFFER.chance).toBeLessThan(1);
     expect(techsFor('ghostfire').length + techsFor('waterdisc').length).toBe(TECHS.length);
   });
-  it('混搭提示：命中效果 × 出手方式 → hit；同系 → family；沒關係 → null', () => {
+  it('混搭提示：命中效果 × 出手方式 → hit；同系不再有提示（D81）；沒關係 → null', () => {
     expect(techMix('hellfire', ['ring'])).toEqual({ kind: 'hit', via: 'ring', hit: 'hellfire' });
     expect(techMix('pillar', ['kitsunebi'])).toEqual({ kind: 'hit', via: 'pillar', hit: 'kitsunebi' });
-    expect(techMix('seed', ['hellfire'])?.kind).toBe('family');
+    expect(techMix('seed', ['hellfire']), 'D81：同系加深拿掉了').toBeNull();
     expect(techMix('homing', ['ward'])).toBeNull();
     expect(techMix('ring', [])).toBeNull();
   });
@@ -469,7 +469,7 @@ describe('第二步的三種技法', () => {
     stepN(run, 5);
     expect(run.tech.oilShown, '火沒有傳給附近的人').toBeGreaterThan(0);
     // 時間到就停
-    stepN(run, Math.ceil((o.atMaxSeconds + 4) / DT));
+    stepN(run, Math.ceil((o.seconds + 4) / DT));
     expect(run.tech.oilShown).toBe(0);
     void near;
   });
@@ -516,20 +516,20 @@ describe('混搭（命中效果掛在出手方式上）', () => {
   });
 });
 
-describe('同系加深、技法等級、滿級加強', () => {
-  it('同系拿兩個：該系加深一次（分裂 +1 顆、環繞 半徑與顆數、燃燒 傷害）', () => {
+describe('技法變強只靠詞條（D77、D79、D81）', () => {
+  it('D81：同系拿兩個不再加強（舊版環多一顆、半徑變大會紅）', () => {
     const a = make(22);
     a.devAddTech('ring');
     const n0 = a.orbitCount;
     const r0 = a.orbitRadius;
     a.devAddTech('ward');
-    expect(a.tech.deep.near).toBe(1);
-    expect(a.orbitCount).toBe(n0 + TECH_DEEPEN.near.orbs);
-    expect(a.orbitRadius).toBeCloseTo(r0 * TECH_DEEPEN.near.radius, 5);
+    expect(a.orbitCount).toBe(n0);
+    expect(a.orbitRadius).toBeCloseTo(r0, 6);
     const b = make(22);
-    b.devAddTech('kitsunebi', 'hellfire');
-    expect(b.tech.deep.chain).toBe(0);
-    expect(b.tech.deep.field).toBe(0);
+    b.devAddTech('kitsunebi');
+    const act0 = JSON.stringify(b.tech.act.kitsunebi);
+    b.devAddTech('bounce');
+    expect(JSON.stringify(b.tech.act.kitsunebi), '同系的另一招不能改到參數').toBe(act0);
   });
   it('技法等級（D77）：升一級本身不加成（效果一樣）；到上限（進化前 5 級）不再加', () => {
     const run = make(23);
@@ -554,17 +554,16 @@ describe('同系加深、技法等級、滿級加強', () => {
     tuning.volley = 1;
     expect(dmg(b), '舊版每級 +12% 會紅').toBeCloseTo(dmg(a), 6);
   });
-  it('主武器滿級時技法再加強（燈籠環 顆數與半徑、衛星燈 盞數）', () => {
-    const run = make(10);
-    evolveTo(run, 'ring', 6);
-    const n0 = run.orbitCount;
-    const r0 = run.orbitRadius;
-    const s0 = run.tech.satCount;
-    levelWeapon(run, 8);
-    expect(run.weaponMaxed).toBe(true);
-    expect(run.orbitCount).toBeGreaterThan(n0);
-    expect(run.orbitRadius).toBeGreaterThan(r0);
-    expect(run.tech.satCount).toBeGreaterThan(s0);
+  it('D81：主武器滿級時技法不再加強（全掃 9 種技法：作用中的參數、衛星燈盞數、開路燈、火柱數都不變；舊版會紅）', () => {
+    for (const id of techsFor('ghostfire').map((t) => t.id)) {
+      const run = make(10);
+      evolveTo(run, id, EVO.minLevel);
+      const snap = () => JSON.stringify(run.tech.act) + run.tech.satCount + run.tech.lampCount + run.tech.pillarCount + run.orbitRadius;
+      const before = snap();
+      levelWeapon(run, 8);
+      expect(run.weaponMaxed).toBe(true);
+      expect(snap(), `${id}：主武器滿級後技法變了`).toBe(before);
+    }
   });
   it('技法兩兩組合都能跑 10 秒不出錯（兩兩組合全掃，沒有 NaN 傷害）', () => {
     const ids = techsFor('ghostfire').map((t) => t.id);

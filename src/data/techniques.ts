@@ -9,7 +9,7 @@
  * 混搭靠「掛勾」自動發生：
  *  - 出手方式（delivery：燈籠環，取代發射；extra：衛星燈、鬼火柱，額外的）；
  *  - 命中效果（onHit）：任何出手方式「打中人類」都會觸發全部命中效果（每隻人類有冷卻，避免繞身的高頻判定爆量）。
- * 同系拿兩個以上 → 該系加深（TECH_DEEPEN）。互斥（excludes）：燈籠環不再發射，所以不能和要靠飛出去的鬼火的技法一起拿。
+ * D81（使用者 2026-11-10：「所有升級加成就是詞條而已」）：拿掉「同系加深」與「主武器滿級時技法加強」，技法變強只靠詞條（與進化）。互斥（excludes）：燈籠環不再發射，所以不能和要靠飛出去的鬼火的技法一起拿。
  * 數字為起始提案，用 npm run sim -- --techs 全掃組合校準（docs/02 變更紀錄）。
  */
 export const TECH_MAX = 3;
@@ -48,33 +48,33 @@ export interface TechDef {
   likes: readonly string[];
   /** 不能同時拿的技法 */
   excludes: readonly string[];
-  /** 狐火分裂：命中時分裂出幾顆小火、小火傷害比例、找下一個目標的範圍（公尺）；atMax：滿級多分裂；
+  /** 狐火分裂：命中時分裂出幾顆小火、小火傷害比例、找下一個目標的範圍（公尺）
    *  shardBonus：有碎火時每次多 1 片；碎片打中後再分裂 reSplit 片（D43：狐火分裂放大碎火） */
-  split?: { children: number; damage: number; range: number; atMaxChildren: number; shardBonus: number; reSplit: number };
-  /** 彈跳：打中後跳到範圍內下一隻（不回頭），最多 jumps 次，每次傷害 × damage；atMax：多跳一次 */
-  bounce?: { range: number; jumps: number; damage: number; atMaxJumps: number };
-  /** 鬼火雨：命中時在命中點 range 公尺內隨機落下 count 顆小火（落點隨機、不追人；每顆在半徑 radius 內傷害 × damage，畫面停留 life 秒）；atMax：多一顆 */
-  rain?: { count: number; atMaxCount: number; range: number; radius: number; damage: number; life: number };
-  /** 歸巢：鬼火飛到盡頭還沒用完時折返，飛回你身邊（回程也會打人，多穿透 returnPierce 隻）；所有鬼火飛行速度 × speedMult；atMax：穿透 +1 */
-  homing?: { returnPierce: number; speedMult: number; atMaxPierce: number };
+  split?: { children: number; damage: number; range: number; shardBonus: number; reSplit: number };
+  /** 彈跳：打中後跳到範圍內下一隻（不回頭），最多 jumps 次，每次傷害 × damage */
+  bounce?: { range: number; jumps: number; damage: number };
+  /** 鬼火雨：命中時在命中點 range 公尺內隨機落下 count 顆小火（落點隨機、不追人；每顆在半徑 radius 內傷害 × damage，畫面停留 life 秒） */
+  rain?: { count: number; range: number; radius: number; damage: number; life: number };
+  /** 歸巢：鬼火飛到盡頭還沒用完時折返，飛回你身邊（回程也會打人，多穿透 returnPierce 隻）；所有鬼火飛行速度 × speedMult */
+  homing?: { returnPierce: number; speedMult: number };
   /** 燈籠環：不再發射，鬼火繞身（數量 = 鬼火數量 + baseOrbs）；半徑（× 範圍）、角速度（弧度/秒）、命中半徑、
-   *  每隔幾秒判定一次（÷ 攻速、× 冷卻）、傷害比例、擊退；atMax：多一顆、半徑倍率；
+   *  每隔幾秒判定一次（÷ 攻速、× 冷卻）、傷害比例、擊退
    *  innerDamage／innerKnockback：環內護身（D46）：鑽進環內（離身體 < 半徑 − 命中半徑）的人類每次判定受「傷害比例 × innerDamage」並被推出去 */
-  orbit?: { radius: number; spin: number; hitRadius: number; tick: number; damage: number; knockback: number; baseOrbs: number; atMaxOrbs: number; atMaxRadius: number; innerDamage: number; innerKnockback: number };
-  /** 護身火：每 chargeSeconds 秒充一層；被碰到時擋下這次傷害並炸開（半徑、傷害比例）；atMax：充能秒數改成 atMaxChargeSeconds */
-  ward?: { chargeSeconds: number; atMaxChargeSeconds: number; burstRadius: number; burstDamage: number };
-  /** 衛星燈：照常發射，另有 count 盞大燈籠在半徑 radius（× 範圍）慢慢繞；其餘同燈籠環；atMax：多一盞 */
-  satellite?: { count: number; atMaxCount: number; radius: number; spin: number; hitRadius: number; tick: number; damage: number; knockback: number };
-  /** 開路燈：count 盞燈籠跑在移動方向前方 ahead 公尺處（不動時留在身前；兩盞時在前方兩側 side 公尺），每 tick 秒判定、命中半徑、傷害比例、擊退；atMax：兩盞 */
-  lamp?: { count: number; atMaxCount: number; ahead: number; side: number; hitRadius: number; tick: number; damage: number; knockback: number };
-  /** 燈油：命中的人身上沾火，燒 seconds 秒（每 tick 秒燒一次，傷害 = 命中傷害 × damage）；燒死時火傳給 spreadRange 公尺內最多 spread 個人；atMax：燒 atMaxSeconds 秒、傳 atMaxSpread 個 */
-  oil?: { seconds: number; atMaxSeconds: number; tick: number; damage: number; spreadRange: number; spread: number; atMaxSpread: number; max: number };
-  /** 業火：命中處留下燃燒地（半徑 × 範圍、秒數、每隔幾秒燒一次、每次傷害比例），鬼火本身傷害與冷卻倍率；atMax：燃燒地大小倍率 */
-  burn?: { radius: number; seconds: number; tick: number; damage: number; shotDamage: number; interval: number; atMaxScale: number; maxZones: number };
-  /** 火種：被鬼火打倒的人留下火種，delay 秒後爆炸（半徑、傷害比例）；最多 max 個；atMax：半徑 atMaxRadius */
-  seed?: { delay: number; radius: number; damage: number; atMaxRadius: number; max: number };
-  /** 鬼火柱：每 interval 秒（÷ 攻速）在 range 公尺內人最多的地方噴火柱（半徑、傷害比例、畫面停留秒數）；atMax：一次 atMaxCount 根 */
-  pillar?: { interval: number; range: number; radius: number; damage: number; atMaxCount: number; life: number; max: number };
+  orbit?: { radius: number; spin: number; hitRadius: number; tick: number; damage: number; knockback: number; baseOrbs: number; innerDamage: number; innerKnockback: number };
+  /** 護身火：每 chargeSeconds 秒充一層；被碰到時擋下這次傷害並炸開（半徑、傷害比例） */
+  ward?: { chargeSeconds: number; burstRadius: number; burstDamage: number };
+  /** 衛星燈：照常發射，另有 count 盞大燈籠在半徑 radius（× 範圍）慢慢繞；其餘同燈籠環 */
+  satellite?: { count: number; radius: number; spin: number; hitRadius: number; tick: number; damage: number; knockback: number };
+  /** 開路燈：count 盞燈籠跑在移動方向前方 ahead 公尺處（不動時留在身前；兩盞時在前方兩側 side 公尺），每 tick 秒判定、命中半徑、傷害比例、擊退 */
+  lamp?: { count: number; ahead: number; side: number; hitRadius: number; tick: number; damage: number; knockback: number };
+  /** 燈油：命中的人身上沾火，燒 seconds 秒（每 tick 秒燒一次，傷害 = 命中傷害 × damage）；燒死時火傳給 spreadRange 公尺內最多 spread 個人 */
+  oil?: { seconds: number; tick: number; damage: number; spreadRange: number; spread: number; max: number };
+  /** 業火：命中處留下燃燒地（半徑 × 範圍、秒數、每隔幾秒燒一次、每次傷害比例），鬼火本身傷害與冷卻倍率 */
+  burn?: { radius: number; seconds: number; tick: number; damage: number; shotDamage: number; interval: number; maxZones: number };
+  /** 火種：被鬼火打倒的人留下火種，delay 秒後爆炸（半徑、傷害比例）；最多 max 個 */
+  seed?: { delay: number; radius: number; damage: number; max: number };
+  /** 鬼火柱：每 interval 秒（÷ 攻速）在 range 公尺內人最多的地方噴火柱（半徑、傷害比例、畫面停留秒數） */
+  pillar?: { interval: number; range: number; radius: number; damage: number; life: number; max: number };
 }
 
 export const TECHS: readonly TechDef[] = [
@@ -86,9 +86,9 @@ export const TECHS: readonly TechDef[] = [
     kind: 'onHit',
     likes: ['volley', 'splash', 'atkSpeed', 'power'],
     excludes: [],
-    split: { children: 2, damage: 0.55, range: 7, atMaxChildren: 3, shardBonus: 1, reSplit: 1 },
+    split: { children: 2, damage: 0.55, range: 7, shardBonus: 1, reSplit: 1 },
     // 併進來的「鬼火雨」（D57）：進化形態 Lv6 解鎖，命中處再落下幾顆小火
-    rain: { count: 2, atMaxCount: 3, range: 3, radius: 1.2, damage: 0.5, life: 0.3 },
+    rain: { count: 2, range: 3, radius: 1.2, damage: 0.5, life: 0.3 },
   },
   {
     id: 'bounce',
@@ -97,7 +97,7 @@ export const TECHS: readonly TechDef[] = [
     kind: 'onHit',
     likes: ['volley', 'power', 'atkSpeed'],
     excludes: ['ring'],
-    bounce: { range: 6, jumps: 2, damage: 0.7, atMaxJumps: 3 },
+    bounce: { range: 6, jumps: 2, damage: 0.7 },
   },
   {
     id: 'homing',
@@ -106,7 +106,7 @@ export const TECHS: readonly TechDef[] = [
     kind: 'passive',
     likes: ['pierce', 'volley', 'atkSpeed'],
     excludes: ['ring'],
-    homing: { returnPierce: 2, speedMult: 1.15, atMaxPierce: 1 },
+    homing: { returnPierce: 2, speedMult: 1.15 },
   },
   // ── 近身系（貼著身體運作：繞身、護身、前導…）──
   {
@@ -116,9 +116,9 @@ export const TECHS: readonly TechDef[] = [
     kind: 'delivery',
     likes: ['area', 'hp', 'armor', 'atkSpeed'],
     excludes: ['bounce', 'homing'],
-    orbit: { radius: 3.0, spin: 2.6, hitRadius: 1.0, tick: 0.25, damage: 1.3, knockback: 3, baseOrbs: 1, atMaxOrbs: 1, atMaxRadius: 1.25, innerDamage: 0.5, innerKnockback: 6 },
+    orbit: { radius: 3.0, spin: 2.6, hitRadius: 1.0, tick: 0.25, damage: 1.3, knockback: 3, baseOrbs: 1, innerDamage: 0.5, innerKnockback: 6 },
     // 併進來的「衛星燈」（D57）：進化形態 Lv6 解鎖，外圈多一盞大燈籠慢慢繞
-    satellite: { count: 1, atMaxCount: 2, radius: 5.5, spin: 1.2, hitRadius: 1.3, tick: 0.4, damage: 1.5, knockback: 3 },
+    satellite: { count: 1, radius: 5.5, spin: 1.2, hitRadius: 1.3, tick: 0.4, damage: 1.5, knockback: 3 },
   },
   {
     id: 'ward',
@@ -127,7 +127,7 @@ export const TECHS: readonly TechDef[] = [
     kind: 'passive',
     likes: ['armor', 'hp', 'regen', 'area'],
     excludes: [],
-    ward: { chargeSeconds: 6, atMaxChargeSeconds: 4, burstRadius: 2.5, burstDamage: 2 },
+    ward: { chargeSeconds: 6, burstRadius: 2.5, burstDamage: 2 },
   },
   {
     id: 'lamp',
@@ -136,7 +136,7 @@ export const TECHS: readonly TechDef[] = [
     kind: 'extra',
     likes: ['speed', 'area', 'atkSpeed'],
     excludes: [],
-    lamp: { count: 1, atMaxCount: 2, ahead: 4, side: 1.6, hitRadius: 1.3, tick: 0.3, damage: 1.2, knockback: 4 },
+    lamp: { count: 1, ahead: 4, side: 1.6, hitRadius: 1.3, tick: 0.3, damage: 1.2, knockback: 4 },
   },
   // ── 佈置系（把效果放在場上：地面、種子、柱子…）──
   {
@@ -146,9 +146,9 @@ export const TECHS: readonly TechDef[] = [
     kind: 'onHit',
     likes: ['area', 'power', 'atkSpeed'],
     excludes: [],
-    burn: { radius: 1.6, seconds: 2.5, tick: 0.5, damage: 0.35, shotDamage: 1.2, interval: 1.25, atMaxScale: 1.3, maxZones: 24 },
+    burn: { radius: 1.6, seconds: 2.5, tick: 0.5, damage: 0.35, shotDamage: 1.2, interval: 1.25, maxZones: 24 },
     // 併進來的「燈油」（D57）：進化形態 Lv6 解鎖，被打中的人身上沾火，燒死時火傳給附近的人
-    oil: { seconds: 3, atMaxSeconds: 4, tick: 0.5, damage: 0.25, spreadRange: 3, spread: 2, atMaxSpread: 3, max: 24 },
+    oil: { seconds: 3, tick: 0.5, damage: 0.25, spreadRange: 3, spread: 2, max: 24 },
   },
   {
     id: 'seed',
@@ -157,7 +157,7 @@ export const TECHS: readonly TechDef[] = [
     kind: 'onHit',
     likes: ['power', 'area', 'volley'],
     excludes: [],
-    seed: { delay: 1, radius: 2, damage: 0.6, atMaxRadius: 2.6, max: 12 },
+    seed: { delay: 1, radius: 2, damage: 0.6, max: 12 },
   },
   {
     id: 'pillar',
@@ -166,7 +166,7 @@ export const TECHS: readonly TechDef[] = [
     kind: 'extra',
     likes: ['power', 'area', 'atkSpeed'],
     excludes: [],
-    pillar: { interval: 4, range: 10, radius: 1.8, damage: 2.5, atMaxCount: 2, life: 0.5, max: 4 },
+    pillar: { interval: 4, range: 10, radius: 1.8, damage: 2.5, life: 0.5, max: 4 },
   },
   // ── 河童（D63，草案）：機制沿用鬼火那邊做好的，名字與數值換成河童的 ──
   {
@@ -177,7 +177,7 @@ export const TECHS: readonly TechDef[] = [
     kind: 'onHit',
     likes: ['volley', 'power', 'atkSpeed'],
     excludes: ['whirl'],
-    bounce: { range: 6, jumps: 2, damage: 0.7, atMaxJumps: 3 },
+    bounce: { range: 6, jumps: 2, damage: 0.7 },
   },
   {
     id: 'splash',
@@ -187,7 +187,7 @@ export const TECHS: readonly TechDef[] = [
     kind: 'onHit',
     likes: ['volley', 'splash', 'atkSpeed', 'power'],
     excludes: [],
-    split: { children: 2, damage: 0.55, range: 7, atMaxChildren: 3, shardBonus: 1, reSplit: 1 },
+    split: { children: 2, damage: 0.55, range: 7, shardBonus: 1, reSplit: 1 },
   },
   {
     id: 'whirl',
@@ -197,7 +197,7 @@ export const TECHS: readonly TechDef[] = [
     kind: 'delivery',
     likes: ['area', 'hp', 'armor', 'atkSpeed'],
     excludes: ['torrent'],
-    orbit: { radius: 3.0, spin: 2.6, hitRadius: 1.0, tick: 0.25, damage: 1.3, knockback: 3, baseOrbs: 1, atMaxOrbs: 1, atMaxRadius: 1.25, innerDamage: 0.5, innerKnockback: 6 },
+    orbit: { radius: 3.0, spin: 2.6, hitRadius: 1.0, tick: 0.25, damage: 1.3, knockback: 3, baseOrbs: 1, innerDamage: 0.5, innerKnockback: 6 },
   },
   {
     id: 'veil',
@@ -207,7 +207,7 @@ export const TECHS: readonly TechDef[] = [
     kind: 'passive',
     likes: ['armor', 'hp', 'regen', 'area'],
     excludes: [],
-    ward: { chargeSeconds: 6, atMaxChargeSeconds: 4, burstRadius: 2.5, burstDamage: 2 },
+    ward: { chargeSeconds: 6, burstRadius: 2.5, burstDamage: 2 },
   },
   {
     id: 'pond',
@@ -217,7 +217,7 @@ export const TECHS: readonly TechDef[] = [
     kind: 'onHit',
     likes: ['area', 'power', 'atkSpeed'],
     excludes: [],
-    burn: { radius: 1.6, seconds: 2.5, tick: 0.5, damage: 0.35, shotDamage: 1.2, interval: 1.25, atMaxScale: 1.3, maxZones: 24 },
+    burn: { radius: 1.6, seconds: 2.5, tick: 0.5, damage: 0.35, shotDamage: 1.2, interval: 1.25, maxZones: 24 },
   },
   {
     id: 'geyser',
@@ -227,7 +227,7 @@ export const TECHS: readonly TechDef[] = [
     kind: 'extra',
     likes: ['power', 'area', 'atkSpeed'],
     excludes: [],
-    pillar: { interval: 4, range: 10, radius: 1.8, damage: 2.5, atMaxCount: 2, life: 0.5, max: 4 },
+    pillar: { interval: 4, range: 10, radius: 1.8, damage: 2.5, life: 0.5, max: 4 },
   },
 ];
 
@@ -242,15 +242,6 @@ export const techById = (id: string): TechDef => {
   return t;
 };
 
-/** 同系拿兩個以上：每多一個，該系加深一次（效果各自讀 deep） */
-export const TECH_DEEPEN = {
-  /** 連鎖系：分裂多分 1 顆、彈跳多跳 1 次、歸巢回程多穿透 1 隻 */
-  chain: { targets: 1, homingPierce: 1 },
-  /** 近身系：繞身的環半徑 ×、環多 1 顆、護身充能時間 × */
-  near: { radius: 1.15, orbs: 1, wardCharge: 0.8 },
-  /** 佈置系：放在場上的地面、種子、柱子的傷害 ×（每多一個再乘一次） */
-  field: { damage: 1.25 },
-} as const;
 
 /** 技法最高幾級。D77（使用者 2026-11-10：「技法每一級升級請拿掉每一級升級強化，留下隨機詞條即可」）：拿掉 perLevel（每級 +12% × 稀有度），變強只靠卡上的詞條（src/data/affixes.ts）；等級只用在上限、進化條件、進化形態 6～8 級的專屬強化（D57） */
 export const TECH_LEVELS = { max: 8 } as const;
@@ -270,19 +261,17 @@ export const TECH_SWAP_PREFIX = 'tech-swap:';
 export const TECH_KEEP = 'tech-keep';
 export const isTechCard = (id: string): boolean => id.startsWith(TECH_CARD_PREFIX) || id.startsWith(TECH_SWAP_PREFIX) || id === TECH_KEEP;
 
-/** 兩個技法放在一起會怎樣（選卡提示用）：命中效果 × 出手方式 → 出手方式打中人類也會觸發命中效果；同系 → 加深 */
-export type TechMix = { kind: 'hit'; via: string; hit: string } | { kind: 'family'; family: TechFamily };
+/** 兩個技法放在一起會怎樣（選卡提示用）：命中效果 × 出手方式 → 出手方式打中人類也會觸發命中效果（D81 起沒有「同系加深」） */
+export type TechMix = { kind: 'hit'; via: string; hit: string };
 export function techMix(candidate: string, owned: readonly string[]): TechMix | null {
   const c = techById(candidate);
-  let family: TechMix | null = null;
   for (const id of owned) {
     if (id === candidate) continue;
     const o = techById(id);
     if (c.kind === 'onHit' && (o.kind === 'delivery' || o.kind === 'extra')) return { kind: 'hit', via: o.id, hit: c.id };
     if (o.kind === 'onHit' && (c.kind === 'delivery' || c.kind === 'extra')) return { kind: 'hit', via: c.id, hit: o.id };
-    if (!family && o.family === c.family) family = { kind: 'family', family: c.family };
   }
-  return family;
+  return null;
 }
 
 /** 主武器（鬼火）也是一個技法（D53）：它的等級就是主武器等級；適合的法具只是選卡提示（使用者 2026-11-06：「不要再有適合加成」，適合沒有加成） */
@@ -321,57 +310,57 @@ export const EVOS: readonly EvoDef[] = [
   {
     id: 'evoSplit',
     from: ['ghostfire', 'kitsunebi'],
-    set: { kitsunebi: { split: { children: 4, atMaxChildren: 5, damage: 0.75, range: 9, reSplit: 2 } } },
+    set: { kitsunebi: { split: { children: 4, damage: 0.75, range: 9, reSplit: 2 } } },
     weapon: { damage: 0.15, pierce: 1, volley: 0 },
     unlock: { mech: 'rain' },
   },
   {
     id: 'evoSoul',
     from: ['ghostfire', 'seed'],
-    set: { seed: { seed: { delay: 0.6, radius: 2.8, atMaxRadius: 3.4, damage: 1.0, max: 20 } } },
+    set: { seed: { seed: { delay: 0.6, radius: 2.8, damage: 1.0, max: 20 } } },
     weapon: { damage: 0.15, pierce: 0, volley: 0.5 },
   },
   {
     id: 'evoBounce',
     from: ['ghostfire', 'bounce'],
-    set: { bounce: { bounce: { range: 8, jumps: 5, atMaxJumps: 6, damage: 0.85 } } },
+    set: { bounce: { bounce: { range: 8, jumps: 5, damage: 0.85 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoHoming',
     from: ['ghostfire', 'homing'],
-    set: { homing: { homing: { returnPierce: 4, speedMult: 1.3, atMaxPierce: 2 } } },
+    set: { homing: { homing: { returnPierce: 4, speedMult: 1.3 } } },
     weapon: { damage: 0.1, pierce: 1, volley: 0 },
   },
   {
     id: 'evoPillar',
     from: ['ghostfire', 'pillar'],
-    set: { pillar: { pillar: { interval: 2.5, range: 12, radius: 2.2, damage: 3.5, atMaxCount: 3, life: 0.5, max: 6 } } },
+    set: { pillar: { pillar: { interval: 2.5, range: 12, radius: 2.2, damage: 3.5, life: 0.5, max: 6 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoRing',
     from: ['ghostfire', 'ring'],
-    set: { ring: { orbit: { baseOrbs: 3, atMaxOrbs: 2, radius: 3.6, damage: 1.7, innerDamage: 0.8 } } },
+    set: { ring: { orbit: { baseOrbs: 3, radius: 3.6, damage: 1.7, innerDamage: 0.8 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
     unlock: { mech: 'satellite' },
   },
   {
     id: 'evoWard',
     from: ['ghostfire', 'ward'],
-    set: { ward: { ward: { chargeSeconds: 3, atMaxChargeSeconds: 2, burstRadius: 3.8, burstDamage: 3 } } },
+    set: { ward: { ward: { chargeSeconds: 3, burstRadius: 3.8, burstDamage: 3 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoLamp',
     from: ['ghostfire', 'lamp'],
-    set: { lamp: { lamp: { count: 2, atMaxCount: 3, damage: 1.7 } } },
+    set: { lamp: { lamp: { count: 2, damage: 1.7 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoHellfire',
     from: ['ghostfire', 'hellfire'],
-    set: { hellfire: { burn: { radius: 2.2, seconds: 4, damage: 0.5, atMaxScale: 1.4 } } },
+    set: { hellfire: { burn: { radius: 2.2, seconds: 4, damage: 0.5 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
     unlock: { mech: 'oil' },
   },
@@ -379,37 +368,37 @@ export const EVOS: readonly EvoDef[] = [
   {
     id: 'evoTorrent',
     from: ['waterdisc', 'torrent'],
-    set: { torrent: { bounce: { range: 8, jumps: 5, atMaxJumps: 6, damage: 0.85 } } },
+    set: { torrent: { bounce: { range: 8, jumps: 5, damage: 0.85 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoSplash',
     from: ['waterdisc', 'splash'],
-    set: { splash: { split: { children: 4, atMaxChildren: 5, damage: 0.75, range: 9, reSplit: 2 } } },
+    set: { splash: { split: { children: 4, damage: 0.75, range: 9, reSplit: 2 } } },
     weapon: { damage: 0.15, pierce: 0, volley: 0 },
   },
   {
     id: 'evoWhirl',
     from: ['waterdisc', 'whirl'],
-    set: { whirl: { orbit: { baseOrbs: 3, atMaxOrbs: 2, radius: 3.6, damage: 1.7, innerDamage: 0.8 } } },
+    set: { whirl: { orbit: { baseOrbs: 3, radius: 3.6, damage: 1.7, innerDamage: 0.8 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoVeil',
     from: ['waterdisc', 'veil'],
-    set: { veil: { ward: { chargeSeconds: 3, atMaxChargeSeconds: 2, burstRadius: 3.8, burstDamage: 3 } } },
+    set: { veil: { ward: { chargeSeconds: 3, burstRadius: 3.8, burstDamage: 3 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoPond',
     from: ['waterdisc', 'pond'],
-    set: { pond: { burn: { radius: 2.2, seconds: 4, damage: 0.5, atMaxScale: 1.4 } } },
+    set: { pond: { burn: { radius: 2.2, seconds: 4, damage: 0.5 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoGeyser',
     from: ['waterdisc', 'geyser'],
-    set: { geyser: { pillar: { interval: 2.5, range: 12, radius: 2.2, damage: 3.5, atMaxCount: 3, life: 0.5, max: 6 } } },
+    set: { geyser: { pillar: { interval: 2.5, range: 12, radius: 2.2, damage: 3.5, life: 0.5, max: 6 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
 ];

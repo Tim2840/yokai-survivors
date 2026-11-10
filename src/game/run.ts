@@ -849,7 +849,7 @@ export class Run {
 
   /** 每顆鬼火的穿透次數：小數 = 機率多穿一隻 */
   private rollPierce(): number {
-    const p = this.pierceBonus + this.tech.pierceExtra + this.tech.evoPierce;
+    const p = this.pierceBonus + this.tech.evoPierce;
     const base = Math.floor(p);
     return base + (this.rngCombat.next() < p - base ? 1 : 0);
   }
@@ -1431,7 +1431,7 @@ export class Run {
     this.refreshEvolvable();
   }
 
-  /** 主武器滿級了嗎（變化的 atMax 加強） */
+  /** 主武器滿級了嗎（sim 統計用；D81 起技法不再因為主武器滿級而加強） */
   get weaponMaxed(): boolean {
     return this.weaponLevel >= itemById(this.weaponItemId).maxLevel;
   }

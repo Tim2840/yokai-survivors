@@ -1,5 +1,5 @@
 import { COMBAT } from '../data/combat';
-import { EVO, evosFor, mechOf, TECHS, TECH_CHOICES, TECH_DEEPEN, TECH_FAMILIES, TECH_LEVELS, TECH_MAX, TECH_OFFER, TECH_RULES, evoById, techById, techsFor, type EvoDef, type TechDef, type TechFamily, type TechMechanic } from '../data/techniques';
+import { EVO, evosFor, mechOf, TECHS, TECH_CHOICES, TECH_LEVELS, TECH_MAX, TECH_OFFER, TECH_RULES, evoById, techById, techsFor, type EvoDef, type TechDef, type TechMechanic } from '../data/techniques';
 import type { WeaponDef } from '../data/yokai';
 import { emptyAffixes, type Affix, type TechStat } from '../data/affixes';
 import type { Rng } from '../lib/random';
@@ -37,8 +37,6 @@ export class Techniques {
   readonly evolved: string[] = [];
   /** 現在作用中的技法（依機制；沒有 = null） */
   readonly act: Record<TechMechanic, TechDef | null> = { kitsunebi: null, bounce: null, homing: null, rain: null, ring: null, ward: null, satellite: null, lamp: null, hellfire: null, seed: null, pillar: null, oil: null };
-  /** 每系「多拿了幾個」（同系 N 個 → N − 1） */
-  readonly deep: Record<TechFamily, number> = { chain: 0, near: 0, field: 0 };
 
   // ── 繞身（燈籠環、衛星燈）──
   ringAngle = 0;
@@ -203,12 +201,12 @@ export class Techniques {
     if (d.rain) out.rain = { ...d.rain, range: d.rain.range * A, radius: d.rain.radius * A };
     if (d.homing) out.homing = { ...d.homing, speedMult: d.homing.speedMult * R };
     if (d.orbit) out.orbit = { ...d.orbit, radius: d.orbit.radius * A, hitRadius: d.orbit.hitRadius * A, tick: d.orbit.tick / R };
-    if (d.ward) out.ward = { ...d.ward, burstRadius: d.ward.burstRadius * A, chargeSeconds: d.ward.chargeSeconds / R, atMaxChargeSeconds: d.ward.atMaxChargeSeconds / R };
+    if (d.ward) out.ward = { ...d.ward, burstRadius: d.ward.burstRadius * A, chargeSeconds: d.ward.chargeSeconds / R };
     if (d.satellite) out.satellite = { ...d.satellite, radius: d.satellite.radius * A, hitRadius: d.satellite.hitRadius * A, tick: d.satellite.tick / R };
     if (d.lamp) out.lamp = { ...d.lamp, hitRadius: d.lamp.hitRadius * A, tick: d.lamp.tick / R };
-    if (d.oil) out.oil = { ...d.oil, spreadRange: d.oil.spreadRange * A, tick: d.oil.tick / R, seconds: d.oil.seconds * D, atMaxSeconds: d.oil.atMaxSeconds * D };
+    if (d.oil) out.oil = { ...d.oil, spreadRange: d.oil.spreadRange * A, tick: d.oil.tick / R, seconds: d.oil.seconds * D };
     if (d.burn) out.burn = { ...d.burn, radius: d.burn.radius * A, tick: d.burn.tick / R, seconds: d.burn.seconds * D };
-    if (d.seed) out.seed = { ...d.seed, radius: d.seed.radius * A, atMaxRadius: d.seed.atMaxRadius * A, delay: d.seed.delay / R };
+    if (d.seed) out.seed = { ...d.seed, radius: d.seed.radius * A, delay: d.seed.delay / R };
     if (d.pillar) out.pillar = { ...d.pillar, radius: d.pillar.radius * A, range: d.pillar.range * A, interval: d.pillar.interval / R };
     return out;
   }
@@ -317,12 +315,10 @@ export class Techniques {
   /** 重算作用中的技法與進化的參數（技法變動時呼叫） */
   recompute(): void {
     for (const k of Object.keys(this.act) as TechMechanic[]) this.act[k] = null;
-    const fam: Record<TechFamily, number> = { chain: 0, near: 0, field: 0 };
     this.owned.forEach((id, i) => {
       const d = techById(id);
       const ed = this.withAffix(this.withEvo(d), this.afx[i]);
       this.act[mechOf(d)] = ed;
-      fam[d.family]++;
       // 進化之後：併進來的舊招式（鬼火雨／衛星燈／燈油）開始作用（D57；D79 起進化當下就作用）
       const u = this.evoOf(id)?.unlock;
       if (u) {
@@ -330,7 +326,6 @@ export class Techniques {
         this.act[u.mech] = { id: d.id, weapon: d.weapon, family: d.family, kind: u.mech === 'satellite' ? 'extra' : 'onHit', likes: d.likes, excludes: d.excludes, [u.mech]: blk } as TechDef;
       }
     });
-    for (const f of TECH_FAMILIES) this.deep[f] = Math.max(0, fam[f] - 1);
     // 拿掉的技法留下的東西清掉
     if (!this.act.hellfire) this.zoneLife.fill(0);
     if (!this.act.seed) this.seedT.fill(0);
@@ -344,7 +339,7 @@ export class Techniques {
     const h = this.act.homing?.homing;
     const base = this.run.yokai.weapon;
     this.weapon = h ? { ...base, projectileSpeed: base.projectileSpeed * h.speedMult } : base;
-    this.run.projectiles.homeReturnPierce = h ? h.returnPierce + this.deep.chain * TECH_DEEPEN.chain.homingPierce : 0;
+    this.run.projectiles.homeReturnPierce = h ? h.returnPierce : 0;
     const hi = this.act.homing ? this.owned.indexOf(this.act.homing.id) : -1;
     this.run.projectiles.homeReturnDamage = hi >= 0 ? 1 + this.afx[hi].power : 1;
   }
@@ -461,35 +456,30 @@ export class Techniques {
   get homingFlag(): number {
     return this.act.homing ? 1 : 0;
   }
-  /** 歸巢滿級：穿透 +1 */
-  get pierceExtra(): number {
-    const h = this.act.homing?.homing;
-    return h && this.run.weaponMaxed ? h.atMaxPierce : 0;
-  }
 
   /** 燈籠環：繞身鬼火幾顆、半徑（公尺）；沒有燈籠環 = 0 */
   get ringCount(): number {
     const o = this.act.ring?.orbit;
     if (!o) return 0;
-    return Math.max(1, Math.floor(this.run.volleyExact) + o.baseOrbs + (this.run.weaponMaxed ? o.atMaxOrbs : 0) + this.deep.near * TECH_DEEPEN.near.orbs + this.countOf('ring'));
+    return Math.max(1, Math.floor(this.run.volleyExact) + o.baseOrbs + 0 + this.countOf('ring'));
   }
   get ringRadius(): number {
     const o = this.act.ring?.orbit;
     if (!o) return 0;
-    return o.radius * this.run.stats.value.area * (this.run.weaponMaxed ? o.atMaxRadius : 1) * Math.pow(TECH_DEEPEN.near.radius, this.deep.near);
+    return o.radius * this.run.stats.value.area * 1;
   }
   /** 衛星燈：幾盞、半徑（公尺） */
   get satCount(): number {
     const o = this.act.satellite?.satellite;
-    return o ? o.count + (this.run.weaponMaxed ? o.atMaxCount - o.count : 0) + this.countOf('satellite') : 0;
+    return o ? o.count + this.countOf('satellite') : 0;
   }
   get satRadius(): number {
     const o = this.act.satellite?.satellite;
-    return o ? o.radius * this.run.stats.value.area * Math.pow(TECH_DEEPEN.near.radius, this.deep.near) : 0;
+    return o ? o.radius * this.run.stats.value.area : 0;
   }
 
   private wardNeed(w: NonNullable<TechDef['ward']>): number {
-    return (this.run.weaponMaxed ? w.atMaxChargeSeconds : w.chargeSeconds) * Math.pow(TECH_DEEPEN.near.wardCharge, this.deep.near);
+    return w.chargeSeconds;
   }
   /** 護身火充能進度 0～1（HUD、畫面用） */
   get wardProgress(): number {
@@ -619,19 +609,19 @@ export class Techniques {
     if (a.kitsunebi?.split) this.splitFrom(a.kitsunebi.split, x, z, e, dmg * this.pw('kitsunebi') * this.fxCrit('kitsunebi', crit));
     if (a.bounce?.bounce) {
       const b = a.bounce.bounce;
-      const jumps = (this.run.weaponMaxed ? b.atMaxJumps : b.jumps) + this.deep.chain * TECH_DEEPEN.chain.targets + this.chainExtra('bounce');
+      const jumps = b.jumps + this.chainExtra('bounce');
       this.bounceFrom(b, x, z, e, dmg * b.damage * this.pw('bounce') * this.fxCrit('bounce', crit), jumps);
     }
-    if (a.hellfire?.burn) this.addZone(a.hellfire.burn, x, z, dmg * a.hellfire.burn.damage * this.pw('hellfire') * this.fxCrit('hellfire', crit) * Math.pow(TECH_DEEPEN.field.damage, this.deep.field));
+    if (a.hellfire?.burn) this.addZone(a.hellfire.burn, x, z, dmg * a.hellfire.burn.damage * this.pw('hellfire') * this.fxCrit('hellfire', crit));
     if (a.rain?.rain) this.rainFrom(a.rain.rain, x, z, dmg * this.pw('rain') * this.fxCrit('rain', crit));
-    if (a.oil?.oil) this.ignite(a.oil.oil, e, dmg * a.oil.oil.damage * this.pw('oil') * this.fxCrit('oil', crit) * Math.pow(TECH_DEEPEN.field.damage, this.deep.field));
+    if (a.oil?.oil) this.ignite(a.oil.oil, e, dmg * a.oil.oil.damage * this.pw('oil') * this.fxCrit('oil', crit));
   }
 
   /** 鬼火雨：在命中點 range 公尺內隨機落下幾顆小火，各自炸到半徑內的人（不追人，落點隨機） */
   private rainFrom(r: NonNullable<TechDef['rain']>, x: number, z: number, dmg: number): void {
     const run = this.run;
     const en = run.enemies;
-    const n = (run.weaponMaxed ? r.atMaxCount : r.count) + this.deep.chain * TECH_DEEPEN.chain.targets + this.chainExtra('rain');
+    const n = r.count + this.chainExtra('rain');
     for (let k = 0; k < n; k++) {
       const a = run.rand() * Math.PI * 2;
       const d = Math.sqrt(run.rand()) * r.range;
@@ -656,7 +646,7 @@ export class Techniques {
       if (live >= o.max) return;
       this.oilTick[e] = o.tick;
     }
-    this.oilT[e] = this.run.weaponMaxed ? o.atMaxSeconds : o.seconds;
+    this.oilT[e] = o.seconds;
     this.oilDmg[e] = burning ? Math.max(this.oilDmg[e], tickDamage) : tickDamage;
   }
   private oilStep(dt: number, o: NonNullable<TechDef['oil']>): void {
@@ -687,7 +677,7 @@ export class Techniques {
   /** 燒死的人把火傳給 spreadRange 公尺內最近的幾個還沒著火的人 */
   private spreadOil(o: NonNullable<TechDef['oil']>, x: number, z: number, from: number, tickDamage: number): void {
     const en = this.run.enemies;
-    const want = this.run.weaponMaxed ? o.atMaxSpread : o.spread;
+    const want = o.spread;
     const m = en.within(x, z, o.spreadRange, this.pick);
     for (let made = 0; made < want; made++) {
       let best = -1;
@@ -713,12 +703,12 @@ export class Techniques {
   /** 開路燈幾盞（含數量詞條，上限 LAMPS） */
   get lampCount(): number {
     const o = this.act.lamp?.lamp;
-    return o ? Math.min(LAMPS, (this.run.weaponMaxed ? o.atMaxCount : o.count) + this.countOf('lamp')) : 0;
+    return o ? Math.min(LAMPS, o.count + this.countOf('lamp')) : 0;
   }
   /** 鬼火柱一次噴幾根（含數量詞條） */
   get pillarCount(): number {
     const p = this.act.pillar?.pillar;
-    return p ? (this.run.weaponMaxed ? p.atMaxCount : 1) + this.countOf('pillar') : 0;
+    return p ? 1 + this.countOf('pillar') : 0;
   }
   private lampStep(dt: number, o: NonNullable<TechDef['lamp']>): void {
     const run = this.run;
@@ -744,7 +734,7 @@ export class Techniques {
   private splitFrom(sp: NonNullable<TechDef['split']>, x: number, z: number, e: number, dmg: number): void {
     const run = this.run;
     const en = run.enemies;
-    const want = (run.weaponMaxed ? sp.atMaxChildren : sp.children) + this.deep.chain * TECH_DEEPEN.chain.targets + this.chainExtra('kitsunebi');
+    const want = sp.children + this.chainExtra('kitsunebi');
     const m = en.within(x, z, sp.range, this.pick);
     let made = 0;
     while (made < want) {
@@ -810,7 +800,7 @@ export class Techniques {
     this.zoneNext = (this.zoneNext + 1) % Math.min(b.maxZones, ZONES);
     this.zoneX[i] = x;
     this.zoneZ[i] = z;
-    this.zoneR[i] = b.radius * this.run.stats.value.area * (this.run.weaponMaxed ? b.atMaxScale : 1);
+    this.zoneR[i] = b.radius * this.run.stats.value.area * 1;
     this.zoneLife[i] = b.seconds;
     this.zoneMaxLife[i] = b.seconds;
     this.zoneDmg[i] = tickDamage;
@@ -866,11 +856,11 @@ export class Techniques {
       if (this.seedT[i] <= 0) continue;
       this.seedT[i] -= dt;
       if (this.seedT[i] > 0) continue;
-      const R = (run.weaponMaxed ? sd.atMaxRadius : sd.radius) * run.stats.value.area;
+      const R = sd.radius * run.stats.value.area;
       const x = this.seedX[i];
       const z = this.seedZ[i];
       this.addFlash(x, z, R, 0.35, FLASH_KINDS.seed);
-      const dmg = run.shotDamage(false) * sd.damage * this.pw('seed') * Math.pow(TECH_DEEPEN.field.damage, this.deep.field);
+      const dmg = run.shotDamage(false) * sd.damage * this.pw('seed');
       const m = en.within(x, z, R, this.near);
       for (let j = 0; j < m; j++) {
         const e = this.near[j];
@@ -932,7 +922,7 @@ export class Techniques {
     this.pillarLife[slot] = p.life;
     this.pillarMax[slot] = p.life;
     this.addFlash(x, z, R, p.life, FLASH_KINDS.pillar);
-    const base = p.damage * this.pw('pillar') * Math.pow(TECH_DEEPEN.field.damage, this.deep.field);
+    const base = p.damage * this.pw('pillar');
     // 先收齊這一根打到的人（hitFx 會生出新的投射物，不能在迴圈裡改陣列）
     const m = en.within(x, z, R, this.near);
     for (let j = 0; j < m; j++) {

@@ -246,7 +246,7 @@ function techCardHtml(cardId: string, rarity: Rarity, owned: readonly string[], 
     tag = `${t(`rarity.${rarity}` as I18nKey)}・${t('card.techTag')}・${t(`tech.family.${techById(id).family}` as I18nKey)}`;
   }
   const mix = techMix(id, rest);
-  const mixText = !mix ? '' : mix.kind === 'hit' ? t('tech.mix.hit', { via: techName(mix.via), hit: techName(mix.hit) }) : t('tech.mix.family', { family: t(`tech.family.${mix.family}` as I18nKey) });
+  const mixText = !mix ? '' : t('tech.mix.hit', { via: techName(mix.via), hit: techName(mix.hit) });
   return `<span class="rname">${tag}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span>${affixHtml(affixes)}${mixText ? `<span class="ctech mix">${mixText}</span>` : ''}`;
 }
 
