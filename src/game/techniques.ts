@@ -1,5 +1,5 @@
 import { COMBAT } from '../data/combat';
-import { EVO, FORM_LEVEL0, evosFor, mechOf, TECHS, TECH_CHOICES, TECH_DEEPEN, TECH_FAMILIES, TECH_LEVELS, TECH_MAX, TECH_OFFER, TECH_RULES, evoById, techById, techsFor, type EvoDef, type TechDef, type TechFamily, type TechMechanic } from '../data/techniques';
+import { EVO, evosFor, mechOf, TECHS, TECH_CHOICES, TECH_DEEPEN, TECH_FAMILIES, TECH_LEVELS, TECH_MAX, TECH_OFFER, TECH_RULES, evoById, techById, techsFor, type EvoDef, type TechDef, type TechFamily, type TechMechanic } from '../data/techniques';
 import type { WeaponDef } from '../data/yokai';
 import { emptyAffixes, type Affix, type TechStat } from '../data/affixes';
 import type { Rng } from '../lib/random';
@@ -320,12 +320,12 @@ export class Techniques {
     const fam: Record<TechFamily, number> = { chain: 0, near: 0, field: 0 };
     this.owned.forEach((id, i) => {
       const d = techById(id);
-      const ed = this.withAffix(this.withEvo(d, this.levels[i]), this.afx[i]);
+      const ed = this.withAffix(this.withEvo(d), this.afx[i]);
       this.act[mechOf(d)] = ed;
       fam[d.family]++;
-      // 進化形態到指定等級：併進來的舊招式（鬼火雨／衛星燈／燈油）開始作用（D57）
+      // 進化之後：併進來的舊招式（鬼火雨／衛星燈／燈油）開始作用（D57；D79 起進化當下就作用）
       const u = this.evoOf(id)?.unlock;
-      if (u && this.levels[i] >= u.level) {
+      if (u) {
         const blk = (ed as unknown as Record<string, unknown>)[u.mech];
         this.act[u.mech] = { id: d.id, weapon: d.weapon, family: d.family, kind: u.mech === 'satellite' ? 'extra' : 'onHit', likes: d.likes, excludes: d.excludes, [u.mech]: blk } as TechDef;
       }
@@ -350,7 +350,7 @@ export class Techniques {
   }
 
   /** 套用進化：把進化指定的區塊欄位換成新值（回傳新的定義；沒有進化就回原本的） */
-  private withEvo(d: TechDef, level: number): TechDef {
+  private withEvo(d: TechDef): TechDef {
     let out: TechDef | null = null;
     for (const eid of this.evolved) {
       const e = evoById(eid);
@@ -358,15 +358,6 @@ export class Techniques {
       if (!blocks) continue;
       const o = (out ??= { ...d }) as unknown as Record<string, Record<string, number>>;
       for (const [name, vals] of Object.entries(blocks)) o[name] = { ...o[name], ...vals };
-      // 進化形態的升級（D57）：6、7、8 級各加一組（累積，數值加上去）
-      e.up.forEach((patch, k) => {
-        if (level < FORM_LEVEL0 + k) return;
-        for (const [name, vals] of Object.entries(patch[d.id] ?? {})) {
-          const cur = { ...o[name] };
-          for (const [f, v] of Object.entries(vals)) cur[f] = (cur[f] ?? 0) + v;
-          o[name] = cur;
-        }
-      });
     }
     return out ?? d;
   }

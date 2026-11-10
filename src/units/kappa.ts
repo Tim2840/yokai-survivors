@@ -27,7 +27,7 @@ export function buildKappa(): Character {
   const shellRimMat = m(soft('#a8925a'));
   const hairMat = m(soft('#2f6a4e'));
   const beakMat = m(soft(palette.yokai.kappa.accent));
-  const waterMat = m(glow('#7fd6e8', 1.6));
+  const waterMat = m(glow('#7fd6e8', 1.1));
   const dishMat = m(soft('#eef6f2'));
 
   // 身體：圓滾滾、淺色肚子、背後龜殼（帶一圈淺色殼緣）
@@ -83,9 +83,9 @@ export function buildKappa(): Character {
   const discBody = mesh(g(ball(KAPPA.discR, 20, 10)), waterMat, false, false);
   discBody.scale.set(1, 0.22, 1);
   const halo = new THREE.Sprite(
-    m(new THREE.SpriteMaterial({ map: haloTexture(), color: '#7fd6e8', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.7 })) as THREE.SpriteMaterial,
+    m(new THREE.SpriteMaterial({ map: haloTexture(), color: '#7fd6e8', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.3 })) as THREE.SpriteMaterial,
   );
-  halo.scale.setScalar(KAPPA.discR * 5);
+  halo.scale.setScalar(KAPPA.discR * 3.5);
   disc.add(discBody, halo);
   const discY = KAPPA.bodyY + 0.36;
   disc.position.set(KAPPA.bodyR + 0.2, discY, 0.2);

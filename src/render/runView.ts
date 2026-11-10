@@ -150,7 +150,8 @@ export class RunView {
 
     // 鬼火：發光小球
     const bg = ball(0.2, 12, 8);
-    const bm = glow(fxOf(run.yokai.id).mid, 3.2);
+    // 2026-11-10「太炫光」：發光倍率 3.2 → 1.7（亮、但只有一點點光暈，不糊成一片）
+    const bm = glow(fxOf(run.yokai.id).mid, 1.7);
     this.diskShot = run.yokai.id === 'kappa';
     this.bulletMesh = new THREE.InstancedMesh(bg, bm, run.projectiles.capacity);
     this.bulletMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -161,7 +162,7 @@ export class RunView {
 
     // 魂火：小的青白色光點
     const og = ball(0.12, 10, 8);
-    const om = glow(palette.fire.soul, 3.4);
+    const om = glow(palette.fire.soul, 2.0);
     this.orbMesh = new THREE.InstancedMesh(og, om, run.orbs.capacity);
     this.orbMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.orbMesh.count = 0;

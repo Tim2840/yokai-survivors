@@ -37,7 +37,7 @@ export function buildLanternMonk(): Character {
   const hatBandMat = m(soft(palette.pickup.red));
   const darkMat = m(soft(C.foot));
   const poleMat = m(soft('#9a7a4a'));
-  const lampMat = m(glow(palette.warm.amber, 2.6));
+  const lampMat = m(glow(palette.warm.amber, 1.7));
   const lampBandMat = m(glow('#ff6a4a', 1.8));
 
   // 身體：小小的袍子（下寬上窄）、腰帶、白色交領

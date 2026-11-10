@@ -337,12 +337,13 @@ describe('出手方式與命中效果', () => {
     expect(run.enemies.hp[hit] < 1e6 && run.enemies.hp[bystander] < 1e6, '炸開沒打到周圍的人').toBe(true);
     expect(run.tech.wardProgress).toBeLessThan(0.2);
   });
-  it('衛星燈（燈籠環進化形態 6 級解鎖）：外圈有一盞大燈籠打到經過的人；5 級還沒有', () => {
+  it('衛星燈（燈籠環進化時一起解鎖，D79）：外圈有一盞大燈籠打到經過的人；沒進化（5 級）沒有', () => {
     const r5 = make(15);
-    evolveTo(r5, 'ring', EVO.minLevel);
-    expect(r5.tech.satCount, '5 級不該有衛星燈').toBe(0);
+    r5.devAddTech('ring');
+    r5.devTechLevel('ring', EVO.minLevel);
+    expect(r5.tech.satCount, '沒進化不該有衛星燈').toBe(0);
     const run = make(15);
-    evolveTo(run, 'ring', 6);
+    evolveTo(run, 'ring', EVO.minLevel);
     const R = run.tech.satRadius;
     expect(R).toBeGreaterThan(4);
     const e = placeEnemy(run, R, 0);
@@ -408,13 +409,14 @@ describe('出手方式與命中效果', () => {
 });
 
 describe('第二步的三種技法', () => {
-  it('鬼火雨（狐火分裂進化形態 6 級解鎖）：命中時在命中點附近落下小火；5 級沒有；落點固定種子可重現', () => {
+  it('鬼火雨（狐火分裂進化時一起解鎖，D79）：命中時在命中點附近落下小火；沒進化沒有；落點固定種子可重現', () => {
     tuning.volley = 1;
     const r5 = make(40);
-    evolveTo(r5, 'kitsunebi', EVO.minLevel);
-    expect(r5.tech.act.rain, '5 級不該有鬼火雨').toBeNull();
+    r5.devAddTech('kitsunebi');
+    r5.devTechLevel('kitsunebi', EVO.minLevel);
+    expect(r5.tech.act.rain, '沒進化不該有鬼火雨').toBeNull();
     const run = make(40);
-    evolveTo(run, 'kitsunebi', 6);
+    evolveTo(run, 'kitsunebi', EVO.minLevel);
     expect(run.tech.act.rain?.rain).toBeTruthy();
     const r = techById('kitsunebi').rain!;
     expect(r.range).toBeGreaterThan(r.radius);
@@ -443,14 +445,15 @@ describe('第二步的三種技法', () => {
     for (let i = 0; i < 30; i++) run.step(DT);
     expect(run.enemies.hp[e], '前方的人沒被燈籠燒到').toBeLessThan(hp0);
   });
-  it('燈油（業火進化形態 6 級解鎖）：被打中的人身上沾火、持續燒、時間到停；燒死時火傳給附近的人；5 級沒有', () => {
+  it('燈油（業火進化時一起解鎖，D79）：被打中的人身上沾火、持續燒、時間到停；燒死時火傳給附近的人；沒進化沒有', () => {
     tuning.volley = 1;
     const r5 = make(42);
-    evolveTo(r5, 'hellfire', EVO.minLevel);
-    expect(r5.tech.act.oil, '5 級不該有燈油').toBeNull();
+    r5.devAddTech('hellfire');
+    r5.devTechLevel('hellfire', EVO.minLevel);
+    expect(r5.tech.act.oil, '沒進化不該有燈油').toBeNull();
     const run = make(42);
     run.director.active = false;
-    evolveTo(run, 'hellfire', 6);
+    evolveTo(run, 'hellfire', EVO.minLevel);
     const o = run.tech.act.oil!.oil!;
     const a = placeEnemy(run, 4, 0);
     const near = placeEnemy(run, 4, o.spreadRange * 0.95);

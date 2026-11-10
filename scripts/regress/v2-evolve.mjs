@@ -100,7 +100,7 @@ export async function run(browser) {
 
       await step(`${vp.name} 「能力」面板：技法進化列出已進化、技法列出適合的法具`, async () => {
         await dismiss();
-        await page.evaluate(() => window.__game.techLevel('ring', 7)); // 進化形態 7 級：前兩組強化已解鎖
+        await page.evaluate(() => window.__game.techLevel('ring', 7)); // 進化形態 7 級（D79：只顯示等級，沒有專屬強化）
         await press(ctx, '#btn-abilities');
         await page.waitForFunction(() => window.__game.screens.includes('pause'));
         const evo = await page.evaluate(() => [...document.querySelectorAll('#sum-evo li')].map((li) => ({ id: li.dataset.evo, done: li.classList.contains('fused'), t: li.innerText.replace(/\s+/g, ' ') })));
@@ -109,8 +109,7 @@ export async function run(browser) {
           const el = document.querySelector('#sum-evo li[data-evo="evoRing"] .evo-form');
           return el ? { lv: el.dataset.formLevel, items: [...el.querySelectorAll('i')].map((i) => ({ ok: i.classList.contains('ok'), t: i.innerText })) } : null;
         });
-        expect(form && form.lv === '7' && form.items.length === 4 && form.items[0].ok && /進化形態 Lv7\/8/.test(form.items[0].t) && form.items[1].ok && form.items[2].ok && !form.items[3].ok, `進化形態的等級列不對：${JSON.stringify(form)}`);
-        expect(/衛星|大燈籠/.test(form.items[1].t) && /Lv8/.test(form.items[3].t), `等級說明不對：${JSON.stringify(form)}`);
+        expect(form && form.lv === '7' && form.items.length === 1 && form.items[0].ok && /進化形態 Lv7\/8/.test(form.items[0].t), `進化形態的等級列不對（D79 起只有等級）：${JSON.stringify(form)}`);
         const txt = await page.locator('#sum-cards li[data-card="ghostfire"]').innerText();
         expect(/技法 燈籠環 Lv7：適合 .+/.test(txt) && /技法 鬼火 Lv\d：適合 .+/.test(txt), `技法列沒寫出適合的法具（詳細在暫停頁）：${txt}`);
         // 提燈小僧的畫面不准出現河童的字（新角色加進來之後最容易漏的是共用畫面）

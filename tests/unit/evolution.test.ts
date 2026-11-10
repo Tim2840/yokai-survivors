@@ -1,3 +1,4 @@
+import { zhTW } from '../../src/i18n/zh-TW';
 import { describe, it, expect, afterEach } from 'vitest';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
@@ -66,30 +67,16 @@ describe('技法進化資料（D53）', () => {
 });
 
 describe('進化形態的升級（D57）：5 級封頂、進化後才能升到 8 級、每級有專屬強化', () => {
-  it('資料全掃：每個進化有 6、7、8 級各一組強化（加上去的數值欄位真的存在）、有說明文字；併進來的招式有資料也有解鎖等級', () => {
+  it('D79：進化沒有 6～8 級的專屬強化（只有 set 與併進來的招式）；併進來的招式有資料；介面文字沒有 evoUp.*（舊版會紅）', () => {
     for (const e of EVOS) {
-      expect(e.up, e.id).toHaveLength(3);
-      e.up.forEach((patch, k) => {
-        expect(t(`evoUp.${e.id}.${6 + k}` as I18nKey), `${e.id} 的 ${6 + k} 級說明`).not.toBe(`evoUp.${e.id}.${6 + k}`);
-        for (const [tid, blocks] of Object.entries(patch)) {
-          expect(tid, `${e.id} 的強化只能改自己的技法`).toBe(e.from[1]);
-          const d = techById(tid) as unknown as Record<string, Record<string, number>>;
-          for (const [b, vals] of Object.entries(blocks)) {
-            expect(d[b], `${tid} 沒有區塊 ${b}`).toBeTruthy();
-            for (const f of Object.keys(vals)) expect(f in d[b], `${tid}.${b} 沒有欄位 ${f}`).toBe(true);
-          }
-        }
-      });
-      // 每個進化的 6～8 級加起來至少要有一項（不是空的）
-      expect(e.up.some((p) => Object.keys(p).length > 0) || !!e.unlock, `${e.id} 的升級是空的`).toBe(true);
+      expect('up' in (e as object), `${e.id} 還有 6～8 級的專屬強化`).toBe(false);
       if (e.unlock) {
         const d = techById(e.from[1]) as unknown as Record<string, unknown>;
         expect(d[e.unlock.mech], `${e.id} 解鎖的 ${e.unlock.mech} 沒有資料`).toBeTruthy();
-        expect(e.unlock.level).toBeGreaterThanOrEqual(6);
       }
     }
-    // 三個併進來的招式各自剛好被一個進化解鎖
     expect(EVOS.filter((e) => e.unlock).map((e) => e.unlock!.mech).sort()).toEqual(['oil', 'rain', 'satellite']);
+    expect(Object.keys(zhTW).filter((k) => k.startsWith('evoUp.'))).toEqual([]);
   });
   it('進化前最多 5 級、進化後才能繼續升到 8 級；進化前升不上去', () => {
     const run = make(31);
@@ -104,22 +91,18 @@ describe('進化形態的升級（D57）：5 級封頂、進化後才能升到 8
     expect(run.tech.levelOf('ring')).toBe(TECH_LEVELS.max);
     expect(run.tech.levelUp('ring')).toBe(false);
   });
-  it('進化形態每升一級就多一組強化（累積）：燈籠環 7 級多 1 顆；進化前（5 級）沒有', () => {
-    const a = make(32);
-    a.devAddTech('ring');
-    a.devTechLevel(BASE_TECH_ID, EVO.minLevel);
-    a.devTechLevel('ring', EVO.minLevel);
-    a.tech.evolve('evoRing');
-    const base = a.tech.act.ring!.orbit!.baseOrbs;
-    a.devTechLevel('ring', 6);
-    expect(a.tech.act.ring!.orbit!.baseOrbs, '6 級是解鎖衛星燈，沒有加顆數').toBe(base);
-    a.devTechLevel('ring', 7);
-    expect(a.tech.act.ring!.orbit!.baseOrbs).toBe(base + 1);
-    a.devTechLevel('ring', 8);
-    expect(a.tech.act.ring!.orbit!.damage).toBeCloseTo(evoById('evoRing').set.ring.orbit.damage + 0.3);
-    expect(a.tech.act.ring!.orbit!.baseOrbs, '7 級的強化要留著').toBe(base + 1);
-    expect(a.tech.act.satellite, '8 級衛星燈再多一盞').toBeTruthy();
-    expect(a.tech.satCount).toBeGreaterThanOrEqual(2);
+  it('D79：進化後升 6～8 級，技法的參數完全不變（變強只靠詞條）；舊版每級有強化會紅', () => {
+    for (const e of EVOS) {
+      const run = make(32, YOKAI_OF[e.from[0]]);
+      run.devAddTech(e.from[1]);
+      run.devTechLevel(e.from[0], EVO.minLevel);
+      run.devTechLevel(e.from[1], EVO.minLevel);
+      expect(run.tech.evolve(e.id), e.id).toBe(true);
+      const snap = () => JSON.stringify(run.tech.act) + run.tech.powerOf(e.from[1]) + run.tech.satCount + run.tech.ringCount;
+      const at5 = snap();
+      run.devTechLevel(e.from[1], TECH_LEVELS.max);
+      expect(snap(), `${e.id}：升到 8 級參數變了`).toBe(at5);
+    }
   });
   it('全掃：每個進化都能練到 8 級、每一級的資料不產生 NaN／負數的關鍵欄位', () => {
     for (const e of EVOS) {

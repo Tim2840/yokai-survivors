@@ -77,7 +77,7 @@ AMBIENCE['highlands@day'] = {
   // 白天沒有螢火（以前這裡的亮點在白天看起來像灰塵）
   motes: { count: 0, color: '#fff6c0', size: 0.25, height: [0.8, 3.0], range: 24 },
   terrainTint: '#dcf8bc',
-  playerLight: 0.35,
+  playerLight: 0.12, // 2026-11-10「太炫光」：白天身上那盞光只留一點點（照在地上會亮成一圈）
 };
 
 /** 黃昏版：橘紅的天、低斜的暖光、偏紫的影子 */
@@ -96,7 +96,7 @@ AMBIENCE['highlands@dusk'] = {
   terrainTint: '#f2e0b4',
   motes: { count: 60, color: '#ffe08a', size: 0.3, height: [0.8, 3.0], range: 24 },
   tufts: { count: 1700, height: [0.32, 0.55], colors: ['#8aa850', '#a0b45a', '#7a9a50', '#b8b866'] },
-  playerLight: 0.6,
+  playerLight: 0.3,
 };
 
 /**

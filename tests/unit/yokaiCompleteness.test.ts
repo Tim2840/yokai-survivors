@@ -25,7 +25,7 @@ describe('每隻可玩的妖怪都有完整的一套', () => {
       expect(ultsOf(id).length, '大招至少 2 招').toBeGreaterThanOrEqual(2);
       expect(defaultUltsOf(id).length, '要有一招一開始就有').toBeGreaterThanOrEqual(1);
       expect(palette.fx[id], '沒有特效色組（palette.fx）').toBeTruthy();
-      const keys = [`yokai.${id}`, `yokai.${id}.desc`, `card.${w}`, `tech.${w}`, ...techs.flatMap((t) => [`tech.${t.id}`, `tech.${t.id}.desc`]), ...evosFor(w).flatMap((e) => [`evo.${e.id}`, `evo.${e.id}.desc`, `evoUp.${e.id}.6`, `evoUp.${e.id}.7`, `evoUp.${e.id}.8`]), ...ultsOf(id).flatMap((u) => [`ult.${u.id}`, `ult.${u.id}.desc`])];
+      const keys = [`yokai.${id}`, `yokai.${id}.desc`, `card.${w}`, `tech.${w}`, ...techs.flatMap((t) => [`tech.${t.id}`, `tech.${t.id}.desc`]), ...evosFor(w).flatMap((e) => [`evo.${e.id}`, `evo.${e.id}.desc`]), ...ultsOf(id).flatMap((u) => [`ult.${u.id}`, `ult.${u.id}.desc`])];
       const missing = keys.filter((k) => !(k in zhTW));
       expect(missing, `缺少文字：${missing.join('、')}`).toEqual([]);
       // 這隻妖怪的名字不准出現在別隻的畫面字串裡的通用位置，由 genericTerms 全掃

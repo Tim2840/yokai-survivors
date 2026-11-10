@@ -48,21 +48,22 @@ export class TechFx {
     this.soul = new THREE.Color(fx.accent);
     this.ghost = new THREE.Color(fx.mid);
     const og = ball(0.32, 14, 10);
-    const om = glow(fx.mid, 3);
+    // 2026-11-10「太炫光」：發光倍率降低（繞身的球 3 → 1.6）
+    const om = glow(fx.mid, 1.6);
     this.orbs = this.instanced(og, om, MAX_ORBS);
     const zg = new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2);
-    const additive = (): THREE.MeshBasicMaterial => new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending });
+    const additive = (): THREE.MeshBasicMaterial => new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending });
     const zm = additive();
     this.zones = this.instanced(zg, zm, MAX_ZONES, true);
     this.zones.renderOrder = 2;
     const sg = ball(0.2, 12, 8);
-    const sm = glow(fx.main, 3.2);
+    const sm = glow(fx.main, 1.9);
     this.seeds = this.instanced(sg, sm, MAX_SEEDS);
     const og2 = ball(0.2, 10, 8);
-    const om2 = glow(fx.main, 2.6);
+    const om2 = glow(fx.main, 1.7);
     this.oil = this.instanced(og2, om2, MAX_OIL);
     const pg = new THREE.CylinderGeometry(1, 1, 1, 18, 1, true);
-    const pm = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+    const pm = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
     this.pillars = this.instanced(pg, pm, MAX_PILLARS, true);
     this.pillars.renderOrder = 3;
     const fm = additive();
