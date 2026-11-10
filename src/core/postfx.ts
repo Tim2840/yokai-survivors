@@ -71,7 +71,7 @@ export function createPipeline(container: HTMLElement, opts: { mode: Quality; on
   const composer = new EffectComposer(renderer, target);
   const look = currentLook();
   // 日系 RPG 樣張（docs/23 第 8 節）：低解析度畫面＋描線；一般是普通的 RenderPass
-  const pixelPass = look.pixelShort > 0 ? new PixelPass(look.pixelShort, new THREE.Scene(), new THREE.PerspectiveCamera(), { strength: look.edge, from: look.edgeFrom, to: look.edgeTo, levels: look.levels, dither: look.dither }) : null;
+  const pixelPass = look.pixelShort > 0 ? new PixelPass(look.pixelShort, new THREE.Scene(), new THREE.PerspectiveCamera(), { strength: look.edge, from: look.edgeFrom, to: look.edgeTo, levels: look.levels, dither: look.dither, tint: look.edgeTint }) : null;
   const renderPass = new RenderPass(new THREE.Scene(), new THREE.PerspectiveCamera());
   const b = QUALITY.bloom;
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), b.strength, b.radius, b.threshold);

@@ -30,6 +30,8 @@ export interface AmbienceDef {
   terrainTint?: string;
   /** 玩家身上那盞光的強度倍率（白天不需要那麼亮；沒寫 = 1） */
   playerLight?: number;
+  /** 邊緣光強度倍率（look.rim × 這個；沒寫 = 1）：夜晚的月光邊緣光可以重一點 */
+  rim?: number;
 }
 
 export const AMBIENCE: Record<string, AmbienceDef> = {
@@ -40,7 +42,7 @@ export const AMBIENCE: Record<string, AmbienceDef> = {
       top: '#0f1531',
       stars: { count: 260, size: 2.2, color: '#dfe6ff' },
       moon: { azimuth: 140, elevation: 14, size: 14, halo: 70, color: '#f2f4ff', light: 2.6 },
-      lightAzimuth: 25,
+      lightAzimuth: 65,
     },
     fog: { color: '#2d4d5e', near: 45, far: 140 },
     hemi: { sky: '#6a86c8', ground: '#33523f', intensity: 0.55 },
@@ -62,11 +64,11 @@ AMBIENCE['highlands@day'] = {
     mid: '#8cc4ec',
     top: '#4f93d8',
     stars: { count: 0, size: 2, color: '#ffffff' },
-    moon: { azimuth: 140, elevation: 22, size: 9, halo: 60, color: '#fff6dc', light: 3.4 },
-    lightAzimuth: 25,
+    moon: { azimuth: 140, elevation: 22, size: 9, halo: 60, color: '#fff2d6', light: 3.9 },
+    lightAzimuth: 65,
   },
-  fog: { color: '#cfe6f2', near: 55, far: 170 },
-  hemi: { sky: '#d6ecff', ground: '#6c8a4a', intensity: 1.1 },
+  fog: { color: '#cfe6f2', near: 40, far: 150 },
+  hemi: { sky: '#a9c6f0', ground: '#6c8a4a', intensity: 1.2 },
   groundDetail: { tile: 5, strength: 0.3 },
   tufts: { count: 1700, height: [0.32, 0.55], colors: ['#5fae54', '#74be5c', '#4c9a54', '#86c264'] },
   flowers: { clusters: 22, perCluster: 12, colors: ['#ffffff', '#ff9cc0', '#ffe066', '#b9a4ff'] },
@@ -87,10 +89,10 @@ AMBIENCE['highlands@dusk'] = {
     top: '#4a4f8f',
     stars: { count: 60, size: 2, color: '#ffe9d6' },
     moon: { azimuth: 140, elevation: 9, size: 16, halo: 90, color: '#ffd09a', light: 3.6 },
-    lightAzimuth: 40,
+    lightAzimuth: 75,
   },
-  fog: { color: '#f2b483', near: 50, far: 160 },
-  hemi: { sky: '#ffd8b0', ground: '#7a7090', intensity: 1.4 },
+  fog: { color: '#f2b483', near: 40, far: 150 },
+  hemi: { sky: '#c4a8d8', ground: '#7a7090', intensity: 1.35 },
   terrainTint: '#f2e0b4',
   motes: { count: 60, color: '#ffe08a', size: 0.3, height: [0.8, 3.0], range: 24 },
   tufts: { count: 1700, height: [0.32, 0.55], colors: ['#8aa850', '#a0b45a', '#7a9a50', '#b8b866'] },

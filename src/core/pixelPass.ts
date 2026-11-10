@@ -18,7 +18,7 @@ export class PixelPass extends Pass {
   private readonly res = new THREE.Vector2();
   private readonly res2 = new THREE.Vector2();
 
-  constructor(shortSide: number, scene: THREE.Scene, camera: THREE.Camera, edge: { strength: number; from: number; to: number; levels: number; dither: number }) {
+  constructor(shortSide: number, scene: THREE.Scene, camera: THREE.Camera, edge: { strength: number; from: number; to: number; levels: number; dither: number; tint: [number, number, number] }) {
     super();
     this.shortSide = shortSide;
     this.scene = scene;
@@ -33,6 +33,7 @@ export class PixelPass extends Pass {
         near: { value: 0.1 },
         far: { value: 100 },
         strength: { value: edge.strength },
+        edgeTint: { value: new THREE.Vector3(...edge.tint) },
         edgeFrom: { value: edge.from },
         edgeTo: { value: edge.to },
         levels: { value: edge.levels },
@@ -51,6 +52,7 @@ export class PixelPass extends Pass {
         uniform float near;
         uniform float far;
         uniform float strength;
+        uniform vec3 edgeTint;
         uniform float edgeFrom;
         uniform float edgeTo;
         uniform float levels;
@@ -67,7 +69,7 @@ export class PixelPass extends Pass {
           vec4 c = texture2D(tDiffuse, vUv);
           float d = viewDepth(vUv);
           float e = edgeAt(d, vUv + vec2(texel.x, 0.0)) + edgeAt(d, vUv - vec2(texel.x, 0.0)) + edgeAt(d, vUv + vec2(0.0, texel.y)) + edgeAt(d, vUv - vec2(0.0, texel.y));
-          c.rgb *= 1.0 - strength * clamp(e, 0.0, 1.0);
+          c.rgb *= mix(vec3(1.0), edgeTint, strength * clamp(e, 0.0, 1.0));
           if (levels > 0.5) {
             // palette quantization in gamma space with a 4x4 Bayer dither on the low-res pixel grid; HDR part (> 1, glow) is kept
             vec3 hdr = max(c.rgb - 1.0, 0.0);

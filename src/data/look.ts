@@ -34,14 +34,18 @@ export interface LookDef {
   shadowStrength: number;
   /** 卡通著色最暗那一階的亮度（0～1）：太低背光面會變黑塊 */
   rampMin: number;
+  /** 邊緣光強度（0 = 沒有）：角色、樹、建物的側面輪廓亮一圈，做出立體感（只有卡通著色有） */
+  rim: number;
+  /** 描線的顏色（乘上去的；冷色的深藍紫，不是純黑） */
+  edgeTint: [number, number, number];
 }
 
 /** 預設風格（D72：使用者「照你的，開始做」＝日系 RPG 像素風）。舊的樣子用 ?look=classic */
 export const DEFAULT_LOOK = 'jrpg';
 
 export const LOOKS: Record<string, LookDef> = {
-  classic: { id: 'classic', toonSteps: 0, shadows: false, shadow: { extent: 24, size: 1024, sizeTouch: 1024, bias: -0.0005, normalBias: 0.05 }, pixelShort: 0, levels: 0, dither: 0, edge: 0, edgeFrom: 0.05, edgeTo: 0.1, tiltShift: 0, tiltFocus: 0.5, timeOfDay: false, contrast: 1.06, saturation: 1.1, vignette: 0.28, shadowStrength: 1, rampMin: 0.38 },
-  jrpg: { id: 'jrpg', toonSteps: 4, shadows: true, shadow: { extent: 24, size: 2048, sizeTouch: 1024, bias: -0.0005, normalBias: 0.06 }, pixelShort: 520, levels: 20, dither: 0.25, edge: 0.3, edgeFrom: 0.08, edgeTo: 0.2, tiltShift: 0, tiltFocus: 0.5, timeOfDay: true, contrast: 1.08, saturation: 1.15, vignette: 0.16, shadowStrength: 0.55, rampMin: 0.6 },
+  classic: { id: 'classic', toonSteps: 0, shadows: false, shadow: { extent: 24, size: 1024, sizeTouch: 1024, bias: -0.0005, normalBias: 0.05 }, pixelShort: 0, levels: 0, dither: 0, edge: 0, edgeFrom: 0.05, edgeTo: 0.1, tiltShift: 0, tiltFocus: 0.5, timeOfDay: false, contrast: 1.06, saturation: 1.1, vignette: 0.28, shadowStrength: 1, rampMin: 0.38, rim: 0, edgeTint: [0, 0, 0] },
+  jrpg: { id: 'jrpg', toonSteps: 3, shadows: true, shadow: { extent: 24, size: 2048, sizeTouch: 1024, bias: -0.0005, normalBias: 0.06 }, pixelShort: 520, levels: 20, dither: 0.25, edge: 0.55, edgeFrom: 0.08, edgeTo: 0.2, tiltShift: 0, tiltFocus: 0.5, timeOfDay: true, contrast: 1.1, saturation: 1.15, vignette: 0.16, shadowStrength: 0.8, rampMin: 0.4, rim: 0.8, edgeTint: [0.32, 0.36, 0.55] },
 };
 
 /** 目前的畫面風格：網址 ?look= 優先（開發），其次打包時的 VITE_LOOK，都沒有就用 DEFAULT_LOOK */
@@ -56,3 +60,9 @@ export function currentLook(): LookDef {
   if (!id) id = (import.meta.env.VITE_LOOK as string | undefined) ?? '';
   return LOOKS[id] ?? LOOKS[DEFAULT_LOOK];
 }
+
+/**
+ * 地面的層次（2026-11-10 使用者：「不夠立體，太平了」）：
+ * bigPatch = 大片明暗色塊的幅度（亮處偏暖、暗處偏冷）；cavity = 比周圍低多少公尺就暗多少（每公尺）、上限 cavityMax、看周圍幾格（cavityRadius）。
+ */
+export const GROUND_LAYERS = { bigPatch: 0.26, cavity: 0.22, cavityMax: 0.3, cavityRadius: 2 };

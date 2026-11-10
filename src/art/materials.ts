@@ -21,6 +21,38 @@ export function toonRamp(steps: number): THREE.DataTexture {
 }
 
 /**
+ * 邊緣光（層次感，使用者 2026-11-10：「不夠立體，太平了」）：側面（不朝上的面）在輪廓附近亮一圈，亮度分兩階（卡通風格）。
+ * 顏色 = 主光色，乘上物體自己的顏色（不會變成一圈白邊）。地面、台地頂面朝上，不會有。
+ * 所有卡通材質共用同一段程式（customProgramCacheKey 'rim'），不會讓著色器程式數變多。
+ */
+export const rimUniforms = {
+  uRimColor: { value: new THREE.Color(1, 1, 1) },
+  uRimStrength: { value: 0 },
+};
+const RIM_HEAD = /* glsl */ `
+uniform vec3 uRimColor;
+uniform float uRimStrength;
+`;
+const RIM_BODY = /* glsl */ `
+  {
+    vec3 upV = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+    float side = 1.0 - smoothstep(0.45, 0.85, dot(normal, upV));
+    float nv = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
+    float rim = smoothstep(0.5, 0.56, nv) * 0.55 + smoothstep(0.72, 0.78, nv) * 0.45;
+    outgoingLight += diffuseColor.rgb * uRimColor * (rim * side * uRimStrength);
+  }
+`;
+function addRim(m: THREE.Material): void {
+  m.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, rimUniforms);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('void main() {', `${RIM_HEAD}\nvoid main() {`)
+      .replace('#include <opaque_fragment>', `${RIM_BODY}\n#include <opaque_fragment>`);
+  };
+  m.customProgramCacheKey = () => 'rim';
+}
+
+/**
  * 受光的材質（全專案共用的入口）：一般風格是平滑的標準材質；日系像素風（look.toonSteps > 0）是卡通著色——光影分成一塊一塊的色階。
  * 參數只用兩種材質都有的（color、vertexColors、map、emissive、side、transparent…）；roughness／metalness 只給標準材質。
  */
@@ -31,7 +63,9 @@ export function lit(params: THREE.MeshStandardMaterialParameters & { roughness?:
     void _r;
     void _m;
     void _e;
-    return new THREE.MeshToonMaterial({ ...(rest as THREE.MeshToonMaterialParameters), gradientMap: toonRamp(steps) });
+    const m = new THREE.MeshToonMaterial({ ...(rest as THREE.MeshToonMaterialParameters), gradientMap: toonRamp(steps) });
+    if (currentLook().rim > 0) addRim(m);
+    return m;
   }
   return new THREE.MeshStandardMaterial({ metalness: 0, ...params });
 }

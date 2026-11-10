@@ -7,6 +7,7 @@ import type { Quality } from './save';
 import type { AmbienceDef } from '../data/ambience';
 import { OVERLAY_LAYER } from '../render/overlay';
 import { currentLook } from '../data/look';
+import { rimUniforms } from '../art/materials';
 
 /**
  * 渲染器與鏡頭。後製與畫質分級在 postfx.ts（從燈落之境搬來）。
@@ -91,6 +92,8 @@ export class Renderer {
     this.moon.position.copy(this.lightDir).multiplyScalar(25);
     this.moon.color.set(a.sky.moon.color);
     this.moon.intensity = a.sky.moon.light;
+    rimUniforms.uRimColor.value.set(a.sky.moon.color);
+    rimUniforms.uRimStrength.value = currentLook().rim * (a.rim ?? 1);
   }
 
   /** 主光（和它的影子）跟著玩家走；目標點對齊陰影圖的像素格，影子才不會隨著移動閃爍 */

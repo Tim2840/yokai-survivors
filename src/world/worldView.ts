@@ -8,6 +8,7 @@ import { TERRAIN_IDS } from '../data/terrain';
 import type { TerrainMap } from './terrainMap';
 import { ambienceFor, type AmbienceDef } from '../data/ambience';
 import { groundDetailTexture, groundDetailGain } from '../art/groundTexture';
+import { GROUND_LAYERS } from '../data/look';
 
 /**
  * 地形與場景物件的 3D 外觀（高度圖網格、水面、石頭與石燈籠）。一局建一次、結束時 dispose。
@@ -72,7 +73,13 @@ export function buildWorldView(map: TerrainMap, seed: number, amb: AmbienceDef =
       const hu = map.heightAt(x, z - map.cell);
       const hd = map.heightAt(x, z + map.cell);
       const steep = Math.min(1, Math.max(0, (Math.hypot(hr - hl, hd - hu) / (2 * map.cell) - 0.45) / 0.5));
-      tmp.setRGB(1 + patch + lift, 1 + patch + lift, 1 + patch * 0.6 + lift);
+      // 大片的明暗（約 20 公尺一塊，層次感 2026-11-10）：亮的地方偏暖黃綠、暗的地方偏冷藍綠，像日系 RPG 手繪草地的色塊
+      const big = (fbm(x * 0.045 + 31, z * 0.045 - 17, seed ^ 0x9e37, 3) - 0.5) * GROUND_LAYERS.bigPatch;
+      // 低窪處（比周圍低：懸崖底、台地邊下方、水池周圍）變暗一點，像環境光遮蔽，高低差更明顯
+      const ring = GROUND_LAYERS.cavityRadius * map.cell;
+      const around = (map.heightAt(x - ring, z) + map.heightAt(x + ring, z) + map.heightAt(x, z - ring) + map.heightAt(x, z + ring)) / 4;
+      const occ = Math.min(GROUND_LAYERS.cavityMax, Math.max(0, around - h) * GROUND_LAYERS.cavity);
+      tmp.setRGB((1 + patch + lift + big * 0.75) * (1 - occ), (1 + patch + lift + big * 0.4) * (1 - occ * 0.9), (1 + patch * 0.6 + lift - big * 0.5) * (1 - occ * 0.6));
       c.multiply(tmp);
       if (steep > 0) c.lerp(rockColor, steep * 0.85);
       col[k * 3] = c.r * detailGain * tint.r;
