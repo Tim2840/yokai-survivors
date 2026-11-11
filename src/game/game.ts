@@ -14,7 +14,8 @@ import { summarizeBuild } from './buildSummary';
 import { buildCardPicker, buildIntermission, buildPause, buildResultCard, buildRunEnd, buildSetup, buildShrine, type PickerContext, type ShrineView } from '../ui/overlays';
 import { ULT_UPGRADE, ultMods, ultUpgradePrice, ultsOf } from '../data/ultimates';
 import { PLAYABLE_YOKAI } from '../data/yokai';
-import { buyUlt, equipUlt, equippedUlt, isUltUnlocked, loadoutFor, ultLevel, upgradeUlt } from './ultLoadout';
+import { buyTechSlot, buyUlt, equipUlt, equippedUlt, isUltUnlocked, loadoutFor, nextTechSlotPrice, ultLevel, upgradeUlt } from './ultLoadout';
+import { TECH_MAX, TECH_SLOTS } from '../data/techniques';
 import { t } from '../i18n';
 import type { I18nKey } from '../i18n/zh-TW';
 import { tuning } from '../data/tuning';
@@ -124,6 +125,9 @@ export class Game {
       onUpgrade: (u) => {
         if (upgradeUlt(this.save, u, this.unlockAll)) this.afterShrine('confirm');
       },
+      onBuySlot: () => {
+        if (buyTechSlot(this.save)) this.afterShrine('confirm');
+      },
       onCheat: tune
         ? () => {
             this.save.merit += 1000;
@@ -191,6 +195,7 @@ export class Game {
     const all = this.unlockAll;
     return {
       merit: this.save.merit,
+      slots: { have: TECH_MAX + this.save.techSlots, max: TECH_MAX + TECH_SLOTS.extraPrices.length, price: nextTechSlotPrice(this.save) },
       yokai: PLAYABLE_YOKAI.filter((y) => ultsOf(y).length > 0).map((y) => {
         const eq = equippedUlt(this.save, y, all);
         return {

@@ -13,7 +13,7 @@ describe('大招局外裝配（D52）：解鎖、升級、裝配', () => {
     expect(isUltUnlocked(s, first.id)).toBe(true);
     expect(isUltUnlocked(s, second.id)).toBe(false);
     expect(equippedUlt(s, Y)).toBe(first.id);
-    expect(loadoutFor(s, Y)).toEqual({ ults: [first.id], ultLevels: { [first.id]: 0 } });
+    expect(loadoutFor(s, Y)).toEqual({ ults: [first.id], ultLevels: { [first.id]: 0 }, techSlots: 0 });
   });
 
   it('解鎖：功德不夠不能買、夠了扣功德、買過不能再買；沒解鎖的不能裝配', () => {

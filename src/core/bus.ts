@@ -16,6 +16,8 @@ export interface GameEvents {
   paused: { paused: boolean; reason: 'user' | 'hidden' };
   /** 玩家升級（pending = 還有幾次待選）；UI 收到後暫停並開選卡面板 */
   levelUp: { level: number; pending: number };
+  /** 妖怪化身了（D84；form = 第幾階） */
+  formChange: { form: number; yokai: string };
   /** 選了一張卡 */
   cardChosen: { cardId: string; rarity: string };
   /** 關卡開始（stage 從 1 起） */

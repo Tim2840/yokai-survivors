@@ -113,6 +113,8 @@ export function installDevApi(ctx: DevContext): void {
           const s = r.elements.summonSlot;
           return { stage: r.summonStage, bossSpawned: r.director.bossSpawned, altar: s ? { x: s.x, z: s.z, announce: s.announce } : null };
         })(),
+        form: r.form,
+        techMax: r.tech.max,
         techs: [...r.tech.owned],
         techLevels: [...r.tech.levels],
         evolved: [...r.tech.evolved],

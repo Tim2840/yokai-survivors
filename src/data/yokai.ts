@@ -44,6 +44,30 @@ export interface WeaponDef {
   knockback: number;
 }
 
+/**
+ * 化身（妖怪自己進化，D84；設計 docs/17 第 6.5 節、docs/25）：玩家等級到 level 時化身一次——外型變大、基礎能力值跳一級，
+ * 並且這一階的「化身限定技法」（TechDef.form）開始會出現在選卡裡。pct 是「這一階總共」的加成（不是每階累加）。
+ */
+export interface FormDef {
+  level: number;
+  /** 模型放大倍率 */
+  scale: number;
+  pct: Partial<Record<StatId, number>>;
+}
+/** 所有妖怪共用的化身時間點與加成（起始提案；每隻的名字在 i18n `form.<妖怪>.<階>`） */
+export const FORMS: readonly FormDef[] = [
+  { level: 10, scale: 1.12, pct: { maxHp: 0.15, power: 0.06 } },
+  { level: 20, scale: 1.26, pct: { maxHp: 0.3, power: 0.12 } },
+];
+/** 化身提示在畫面上停留幾秒 */
+export const FORM_NOTE_SECONDS = 6;
+/** 玩家等級 → 第幾階化身（0 = 還沒） */
+export function formAt(level: number): number {
+  let f = 0;
+  for (const d of FORMS) if (level >= d.level) f++;
+  return f;
+}
+
 export interface YokaiDef {
   id: string;
   /** 基礎屬性的覆寫（沒寫的用 STAT_BASE） */

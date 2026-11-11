@@ -18,6 +18,8 @@ export interface SaveData {
   unlocked: { cards: string[]; elements: string[]; yokai: string[]; maps: string[] };
   /** 大招（D52）：已用功德解鎖的（價格 0 的一開始就有，不存）、各招的升級等級、每隻妖怪出發時裝配的那一招 */
   ult: { unlocked: string[]; levels: Record<string, number>; equipped: Record<string, string> };
+  /** 局外多解鎖的技法格子數（D84；0～2） */
+  techSlots: number;
   /** 圖鑑：人類 id → 擊敗數 */
   codex: { humans: Record<string, number> };
   maxNightDepth: number;
@@ -39,6 +41,7 @@ export function defaultSave(): SaveData {
       maps: ['village-field'],
     },
     ult: { unlocked: [], levels: {}, equipped: {} },
+    techSlots: 0,
     codex: { humans: {} },
     maxNightDepth: 0,
     settings: { sfx: 0.8, music: 0.6, quality: 'auto', lang: 'zh-TW' },

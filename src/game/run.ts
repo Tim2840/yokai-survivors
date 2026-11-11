@@ -1,9 +1,9 @@
 import { bus as defaultBus, type EventBus } from '../core/bus';
 import { COMBAT } from '../data/combat';
 import { MOVE } from '../data/movement';
-import { PLAYABLE_YOKAI, YOKAI, type YokaiDef } from '../data/yokai';
+import { FORMS, FORM_NOTE_SECONDS, PLAYABLE_YOKAI, YOKAI, formAt, type YokaiDef } from '../data/yokai';
 import { rollAffixes } from '../data/affixes';
-import { mechOf, techById } from '../data/techniques';
+import { TECH_MAX, TECH_SLOTS, mechOf, techById } from '../data/techniques';
 import { CARD_CHOICES, PROGRESSION, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
 import { DOSOJIN, FUSE, SUMMIT } from '../data/elements';
 import { itemPoolFor, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById, scaleWeaponStep } from '../data/items';
@@ -52,6 +52,8 @@ export interface RunOptions {
   clearedBefore?: boolean;
   /** 局外的功德加成（M3） */
   meritStat?: number;
+  /** 局外多解鎖了幾個技法格子（D84；0～TECH_SLOTS.extraPrices.length） */
+  techSlots?: number;
   /** 這一局裝配的大招 id（D52；沒給 = 這隻妖怪一開始就有的那一招）與各招的局外升級等級 */
   ults?: string[];
   ultLevels?: Record<string, number>;
@@ -273,6 +275,7 @@ export class Run {
     this.ultModsNow = ultMods(this.ults.length ? this.ultLevels.get(this.ults[0]) ?? 0 : 0);
     this.projectiles = new Projectiles(300);
     this.tech = new Techniques(this, this.maxEnemies);
+    this.tech.max = TECH_MAX + Math.max(0, Math.min(TECH_SLOTS.extraPrices.length, opts.techSlots ?? 0));
     this.orbs = new Orbs(PROGRESSION.maxOrbs);
     this.stats = new Stats(this.yokai.base);
     this.rngCombat = new Rng(subSeed(this.seed, 1));
@@ -1105,10 +1108,34 @@ export class Run {
       this.pendingPicks++;
       leveled++;
     }
+    if (leveled > 0) this.checkForm();
     if (leveled > 0 && this.offer === null) {
       this.makeOffer();
       this.bus.emit('levelUp', { level: this.level, pending: this.pendingPicks });
     }
+  }
+
+  /** 化身（D84）：第幾階（0 = 還沒）；剛化身時 formNote 記下時間（HUD 提示、畫面閃光） */
+  get form(): number {
+    return formAt(this.level);
+  }
+  /** 已經套用過能力值加成的那一階（等級是唯一的來源；這個只是避免重複套用） */
+  private formApplied = 0;
+  formNote: { form: number; until: number } | null = null;
+  private checkForm(): void {
+    const f = this.form;
+    if (f <= this.formApplied) return;
+    const hp0 = this.maxHp;
+    this.formApplied = f;
+    this.stats.setMod('form', { pct: { ...FORMS[f - 1].pct } });
+    // 最大生命變多：多出來的那一段直接補上
+    this.hp = Math.min(this.maxHp, this.hp + Math.max(0, this.maxHp - hp0));
+    this.formNote = { form: f, until: this.clock + FORM_NOTE_SECONDS };
+    this.bus.emit('formChange', { form: f, yokai: this.yokai.id });
+  }
+  /** 現在這一階的模型放大倍率 */
+  get formScale(): number {
+    return this.form > 0 ? FORMS[this.form - 1].scale : 1;
   }
 
   private makeOffer(): void {
@@ -1126,8 +1153,15 @@ export class Run {
     const forced = this.forceTechCard;
     this.forceTechCard = false;
     if (!forced && (this.level < TECH_OFFER.minLevel || roll >= tuning.techChance)) return;
+    if (offer.length === 0) return;
+    // 格子滿了、還有沒學的化身限定技法（D84）：有機率變成「換掉一招」的提案
+    const swap = this.tech.pickFormSwap(this.rngCards);
+    if (swap && this.rngCards.next() < TECH_OFFER.swapChance) {
+      offer[Math.floor(this.rngCards.next() * offer.length)] = { cardId: `${TECH_SWAP_PREFIX}${swap[0]}>${swap[1]}`, rarity: 'common' };
+      return;
+    }
     const id = this.tech.pickCard(this.rngCards);
-    if (!id || offer.length === 0) return;
+    if (!id) return;
     const at = Math.floor(this.rngCards.next() * offer.length);
     const rarity = this.dealer.rollRarity(this.level, this.stats.value.luck);
     offer[at] = { cardId: TECH_CARD_PREFIX + id, rarity, affixes: rollAffixes(this.rngCards, rarity, mechOf(techById(id))) };
@@ -1204,6 +1238,13 @@ export class Run {
       if (this.tech.evolve(e.id)) {
         this.lastEvolve = { id: e.id, at: this.clock };
         this.bus.emit('evolve', { id: e.id });
+      }
+    } else if (o.cardId.startsWith(TECH_SWAP_PREFIX)) {
+      // 升級卡裡的「換掉一招」（D84：格子滿了，換成化身限定技法）
+      const [from, to] = o.cardId.slice(TECH_SWAP_PREFIX.length).split('>');
+      if (this.tech.replace(from, to)) {
+        this.lastTechChange = { from, to, at: this.clock };
+        this.bus.emit('techChanged', { from, to });
       }
     } else if (isTechCard(o.cardId)) this.applyTechCard(o);
     else this.applyCard(o);

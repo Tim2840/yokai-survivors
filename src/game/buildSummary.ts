@@ -1,3 +1,4 @@
+import { FORMS } from '../data/yokai';
 import type { Run } from './run';
 import { cardById, slotsUsed } from '../systems/cards';
 import { ITEM_SLOTS, SHARDS, WEAPON_LEVELS, itemDown, itemValue, scaleWeaponStep, type ItemKind } from '../data/items';
@@ -22,6 +23,10 @@ export interface BuildSummary {
   /** 招式變化 id（還沒選是 null） */
   /** 這一局拿到的技法（D48）與各自的技法等級 */
   techs: { id: string; level: number; evolved: boolean; likes: string[] }[];
+  /** 化身（D84）：現在第幾階、下一次化身的等級（沒有了 = 0）、還沒解鎖的化身限定技法 [id, 第幾階] */
+  form: { now: number; nextLevel: number; locked: [string, number][] };
+  /** 技法格子：用了幾格／共幾格 */
+  techSlots: { used: number; max: number };
   /** 鬼火（主武器）適合的法具（能力面板詳細列出） */
   baseLikes: string[];
   /** 技法進化（D53）：兩個材料都拿到的配方、各自的技法等級（鬼火 = 主武器等級）、是否已進化 */
@@ -101,6 +106,8 @@ export function summarizeBuild(run: Run): BuildSummary {
     yokai: run.yokai.id,
     techs: run.tech.owned.map((id, i) => ({ id, level: run.tech.levels[i], evolved: run.tech.isEvolved(id), likes: [...techById(id).likes] })),
     baseLikes: baseLikesOf(run.yokai.id),
+    form: { now: run.form, nextLevel: FORMS[run.form]?.level ?? 0, locked: run.tech.lockedByForm() },
+    techSlots: { used: run.tech.slotsUsed, max: run.tech.max },
     evolutions: evosFor(run.weaponItemId).filter((e) => e.from.every((m) => run.tech.isBase(m) || run.tech.has(m))).map((e) => ({
       id: e.id,
       from: e.from.map((m) => ({ id: m, level: run.tech.techLevel(m) })),

@@ -86,6 +86,8 @@ export interface ShrineUlt {
 }
 export interface ShrineView {
   merit: number;
+  /** 技法格子（D84）：現在幾格、最多幾格、下一格的價格（null = 全開了） */
+  slots: { have: number; max: number; price: number | null };
   yokai: { id: string; ults: ShrineUlt[] }[];
 }
 export interface ShrineActions {
@@ -93,6 +95,7 @@ export interface ShrineActions {
   onEquip(yokai: string, ult: string): void;
   onBuy(ult: string): void;
   onUpgrade(ult: string): void;
+  onBuySlot(): void;
   /** 只有測試頁給：功德 +1000 */
   onCheat?: () => void;
 }
@@ -120,8 +123,9 @@ export function buildShrine(parent: HTMLElement, a: ShrineActions) {
   body.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-act]');
     if (!b || b.disabled) return;
-    const row = b.closest<HTMLElement>('[data-ult]')!;
     const act = b.dataset.act;
+    if (act === 'slot') return a.onBuySlot();
+    const row = b.closest<HTMLElement>('[data-ult]')!;
     if (act === 'equip') a.onEquip(row.dataset.yokai!, row.dataset.ult!);
     else if (act === 'buy') a.onBuy(row.dataset.ult!);
     else if (act === 'up') a.onUpgrade(row.dataset.ult!);
@@ -129,7 +133,11 @@ export function buildShrine(parent: HTMLElement, a: ShrineActions) {
   return Object.assign(o, {
     render(v: ShrineView) {
       o.el.querySelector('#shrine-merit')!.textContent = t('shrine.merit', { n: v.merit });
-      body.innerHTML = v.yokai
+      const sl = v.slots;
+      const slotHtml = `<section class="shrine-yokai" id="shrine-slots"><h3>${t('shrine.slots')}</h3><div class="shrine-ult" data-slots="${sl.have}">
+        <b>${t('shrine.slotsHave', { n: sl.have, max: sl.max })}</b><span class="d">${t('shrine.slotsDesc')}</span>
+        <span class="acts">${sl.price === null ? `<span class="badge">${t('shrine.max')}</span>` : `<button class="btn secondary" type="button" data-act="slot" ${v.merit >= sl.price ? '' : 'disabled'}>${t('shrine.slotBuy', { k: sl.have + 1, n: sl.price })}</button>`}</span></div></section>`;
+      body.innerHTML = slotHtml + v.yokai
         .map(
           (y) => `<section class="shrine-yokai"><h3>${t(`yokai.${y.id}` as I18nKey)}：${t('shrine.ults')}</h3>${y.ults
             .map((u) => {
@@ -245,6 +253,7 @@ function techCardHtml(cardId: string, rarity: Rarity, owned: readonly string[], 
     id = cardId.slice(TECH_CARD_PREFIX.length);
     tag = `${t(`rarity.${rarity}` as I18nKey)}・${t('card.techTag')}・${t(`tech.family.${techById(id).family}` as I18nKey)}`;
   }
+  if (techById(id).form) tag += `・${t('card.formTag')}`;
   const mix = techMix(id, rest);
   const mixText = !mix ? '' : t('tech.mix.hit', { via: techName(mix.via), hit: techName(mix.hit) });
   return `<span class="rname">${tag}</span><b>${techName(id)}</b><span class="cdesc">${t(`tech.${id}.desc` as I18nKey)}</span>${affixHtml(affixes)}${mixText ? `<span class="ctech mix">${mixText}</span>` : ''}`;
@@ -481,7 +490,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
     parent,
     'pause',
     `<div class="panel pause-panel"><h2>${t('pause.title')}</h2><p id="pause-status"></p>
-      <div class="sum"><section class="sum-col"><h3>${t('pause.cards')} <span id="sum-slots"></span></h3><ul class="sum-cards" id="sum-cards"></ul><div id="sum-evo"></div><div id="sum-ult"></div></section>
+      <div class="sum"><section class="sum-col"><h3>${t('pause.cards')} <span id="sum-slots"></span></h3><ul class="sum-cards" id="sum-cards"></ul><div id="sum-form"></div><div id="sum-evo"></div><div id="sum-ult"></div></section>
       <section class="sum-col"><h3>${t('pause.abilities')}</h3><dl class="sum-stats" id="sum-stats"></dl><div id="sum-curse"></div></section></div>
       <div class="row">${btn('btn-pause-quit', 'pause.quit', 'secondary')}${btn('btn-pause-resume', 'pause.resume')}</div></div>`,
   );
@@ -502,6 +511,10 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
         li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), lv: c.level, max: c.maxLevel })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}${cardLinkLines(c.id, sum.yokai).map((x) => `<br><span class="clink">${x}</span>`).join('')}${c.kind === 'weapon' ? `<br>${t('pause.techRow', { name: techName(c.id), lv: c.level, items: sum.baseLikes.map((x) => t(`card.${x}` as I18nKey)).join('、') })}` : ''}${c.kind === 'weapon' ? sum.techs.map((x) => `<br>${t('pause.techRow', { name: techName(x.id), lv: x.level, items: x.likes.map((l) => t(`card.${l}` as I18nKey)).join('、') })}`).join('') : ''}</em>`;
         cards.appendChild(li);
       }
+      const fm = q('sum-form');
+      fm.innerHTML = `<h3>${t('pause.formTitle')}</h3><ul class="sum-ult"><li data-form="${sum.form.now}"><b>${sum.form.now > 0 ? t(`form.${sum.yokai}.${sum.form.now}` as I18nKey) : t('pause.formNone')}</b><em>${sum.form.nextLevel ? t('pause.formNext', { lv: sum.form.nextLevel }) : t('pause.formMax')}</em>${
+        sum.form.locked.length ? `<span>${sum.form.locked.map(([id, n]) => `<i>${t('pause.formLocked', { name: techName(id), n })}</i>`).join('')}</span>` : ''
+      }</li></ul>`;
       const evo = q('sum-evo');
       evo.innerHTML = sum.evolutions.length
         ? `<h3>${t('pause.evolutions')}</h3><ul class="sum-ult">${sum.evolutions

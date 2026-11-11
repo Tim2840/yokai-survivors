@@ -1,5 +1,6 @@
 import type { SaveData } from '../core/save';
 import { ULT_SLOTS, ULT_UPGRADE, defaultUltsOf, ultById, ultUpgradePrice, ultsOf } from '../data/ultimates';
+import { TECH_SLOTS } from '../data/techniques';
 
 /**
  * 大招的局外裝配（D52）：解鎖、升級、裝配都在這裡，純資料運算（神社畫面與測試共用）。
@@ -22,10 +23,23 @@ export function equippedUlt(save: SaveData, yokai: string, unlockAll = false): s
 }
 
 /** 開局要帶的：裝配的大招與升級等級（給 Run 的選項） */
-export function loadoutFor(save: SaveData, yokai: string, unlockAll = false): { ults: string[]; ultLevels: Record<string, number> } {
+export function loadoutFor(save: SaveData, yokai: string, unlockAll = false): { ults: string[]; ultLevels: Record<string, number>; techSlots: number } {
   const id = equippedUlt(save, yokai, unlockAll);
   const ults = id ? [id].slice(0, ULT_SLOTS) : [];
-  return { ults, ultLevels: Object.fromEntries(ults.map((u) => [u, ultLevel(save, u)])) };
+  return { ults, ultLevels: Object.fromEntries(ults.map((u) => [u, ultLevel(save, u)])), techSlots: save.techSlots };
+}
+
+/** 下一個技法格子的價格（D84）；已經全開 = null */
+export function nextTechSlotPrice(save: SaveData): number | null {
+  return save.techSlots < TECH_SLOTS.extraPrices.length ? TECH_SLOTS.extraPrices[save.techSlots] : null;
+}
+/** 用功德多開一個技法格子。回傳是否成功 */
+export function buyTechSlot(save: SaveData): boolean {
+  const price = nextTechSlotPrice(save);
+  if (price === null || save.merit < price) return false;
+  save.merit -= price;
+  save.techSlots++;
+  return true;
 }
 
 /** 用功德解鎖。回傳是否成功（已解鎖、功德不夠都不成功） */

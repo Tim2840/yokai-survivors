@@ -356,6 +356,7 @@ describe('賽錢箱、神籤、寶箱（M2-2）', () => {
   it('神籤：每種結果的效果與持續時間；D78：好結果是整場的（過很久還在），壞結果（凶類）限時、到期恢復', () => {
     for (const res of OMIKUJI_RESULTS) {
       const { run } = make(24);
+      run.director.active = false; // 不出怪：這 120 秒內不升級、不化身（化身會改能力值，這裡只看神籤）
       const f = OMIKUJI_EFFECT[res];
       const before = { ...run.stats.value };
       const merit0 = run.bonusMerit;

@@ -13,6 +13,11 @@
  * 數字為起始提案，用 npm run sim -- --techs 全掃組合校準（docs/02 變更紀錄）。
  */
 export const TECH_MAX = 3;
+/**
+ * 技法格子（D83、D84，使用者 2026-11-11：「開技能格子是要玩家自己局外解鎖」「開局維持 3 格，局外解到 5 格」）：
+ * 開局 TECH_MAX 格；神社用功德再開 extraPrices.length 格（第 4 格、第 5 格的價格；起始提案，對照 docs/02 第 7 節的經濟）。
+ */
+export const TECH_SLOTS = { extraPrices: [600, 2000] as readonly number[] } as const;
 /** 道祖神換法提案用的抽選數（舊的三選一面板已拿掉） */
 export const TECH_CHOICES = 3;
 /**
@@ -27,7 +32,8 @@ export const TECH_CHOICES = 3;
  * 目標（sim 20 分鐘、貪輸出）：進化 ≥ 1 次的局 > 50%、技法 ≥ 6 級的局 30～40%、8 級 10～20%，過關率與主武器 4 級時間不變壞。
  */
 /** D50（使用者：「技法的養成速度太快」）：chance 0.15 → 0.12；已有的技法下一級要玩家等級 ≥ minLevel + levelGap × 目前技法等級。D59（使用者 2026-11-09：「放寬技法升級的玩家等級門檻，讓技法 6～8 級不用等到那麼晚」）：levelGap 3 → 2（6 級要玩家 16 級、7 級 18、8 級 20；原本 19／22／25） */
-export const TECH_OFFER = { chance: 0.35, minLevel: 4, fresh: 2, owned: 2.5, levelGap: 2, levelBias: 4 } as const;
+/** swapChance（D84）：格子滿了、又有還沒學的化身限定技法時，技法卡有這個機率變成「換掉一招」的提案（換掉等級最低的那招） */
+export const TECH_OFFER = { chance: 0.35, minLevel: 4, fresh: 2, owned: 2.5, levelGap: 2, levelBias: 4, swapChance: 0.5 } as const;
 
 export const TECH_FAMILIES = ['chain', 'near', 'field'] as const;
 export type TechFamily = (typeof TECH_FAMILIES)[number];
@@ -48,6 +54,8 @@ export interface TechDef {
   likes: readonly string[];
   /** 不能同時拿的技法 */
   excludes: readonly string[];
+  /** 化身限定（D84）：妖怪化身到第幾階之後才學得到（1 = 10 級、2 = 20 級；沒寫 = 一開始就能學） */
+  form?: number;
   /** 狐火分裂：命中時分裂出幾顆小火、小火傷害比例、找下一個目標的範圍（公尺）
    *  shardBonus：有碎火時每次多 1 片；碎片打中後再分裂 reSplit 片（D43：狐火分裂放大碎火） */
   split?: { children: number; damage: number; range: number; shardBonus: number; reSplit: number };
@@ -81,6 +89,7 @@ export const TECHS: readonly TechDef[] = [
   // ── 連鎖系（命中後延伸出去：分裂、彈跳、歸巢…）──
   {
     id: 'kitsunebi',
+    form: 1,
     weapon: 'ghostfire',
     family: 'chain',
     kind: 'onHit',
@@ -111,6 +120,7 @@ export const TECHS: readonly TechDef[] = [
   // ── 近身系（貼著身體運作：繞身、護身、前導…）──
   {
     id: 'ring',
+    form: 1,
     weapon: 'ghostfire',
     family: 'near',
     kind: 'delivery',
@@ -161,6 +171,7 @@ export const TECHS: readonly TechDef[] = [
   },
   {
     id: 'pillar',
+    form: 2,
     weapon: 'ghostfire',
     family: 'field',
     kind: 'extra',
@@ -192,6 +203,7 @@ export const TECHS: readonly TechDef[] = [
   },
   {
     id: 'splash',
+    form: 1,
     mech: 'kitsunebi',
     weapon: 'waterdisc',
     family: 'chain',
@@ -212,6 +224,7 @@ export const TECHS: readonly TechDef[] = [
   },
   {
     id: 'veil',
+    form: 1,
     mech: 'ward',
     weapon: 'waterdisc',
     family: 'near',
@@ -232,6 +245,7 @@ export const TECHS: readonly TechDef[] = [
   },
   {
     id: 'pond',
+    form: 2,
     mech: 'hellfire',
     weapon: 'waterdisc',
     family: 'field',

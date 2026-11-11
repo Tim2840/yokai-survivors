@@ -199,7 +199,8 @@ export function buildHud(parent: HTMLElement): Hud {
       const dslot = run.elements.dosojinSlot;
       const dosojin = dslot && dslot.announce <= 0 && dslot.age < DOSOJIN.hintSeconds ? dslot : null;
       const intro = run.enemyIntro && run.clock < run.enemyIntro.until ? run.enemyIntro.key : '';
-      const noteText = run.director.swarm ? t('hud.swarm') : intro ? t(intro as I18nKey) : run.portal.active ? t('hud.bossDown') : altar ? t('hud.summonNote') : shrine ? t('hud.fuseNote') : dosojin ? t('hud.dosojinNote') : summit && run.time < 15 ? t('hud.summitNote') : '';
+      const fnote = run.formNote && run.clock < run.formNote.until ? t('hud.formNote', { name: t(`form.${run.yokai.id}.${run.formNote.form}` as I18nKey) }) : '';
+      const noteText = run.director.swarm ? t('hud.swarm') : fnote ? fnote : intro ? t(intro as I18nKey) : run.portal.active ? t('hud.bossDown') : altar ? t('hud.summonNote') : shrine ? t('hud.fuseNote') : dosojin ? t('hud.dosojinNote') : summit && run.time < 15 ? t('hud.summitNote') : '';
       if (noteText !== lastNote) {
         lastNote = noteText;
         note.textContent = noteText;

@@ -231,6 +231,9 @@ export class RunView {
     const ground = map.heightAt(run.px, run.pz);
     this.player.root.position.set(run.px, run.py, run.pz);
     this.player.root.rotation.y = run.facing;
+    // 化身（D84）：模型慢慢長大到這一階的大小
+    const fs = this.player.root.scale.x + (run.formScale - this.player.root.scale.x) * Math.min(1, dt * 3);
+    this.player.root.scale.setScalar(fs);
     this.player.update(dt, t, run.moveSpeed > 0.1 && run.grounded, run.moveSpeed);
     if (run.invul > 0) this.player.setFlash(Math.min(1, run.invul / COMBAT.invulnerable));
     // 腳下陰影貼著地面，跳得越高越小

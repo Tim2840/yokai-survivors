@@ -373,6 +373,8 @@ export class Techniques {
   canOffer(id: string, skip?: string): boolean {
     if (this.has(id) && id !== skip) return false;
     const d = techById(id);
+    // 化身限定（D84）：妖怪還沒化身到那一階就不會出現
+    if ((d.form ?? 0) > this.run.form) return false;
     for (const o of this.owned) {
       if (o === skip) continue;
       if (d.excludes.includes(o) || techById(o).excludes.includes(id)) return false;
@@ -415,6 +417,31 @@ export class Techniques {
       if (t < 0) return ids[k];
     }
     return ids[ids.length - 1];
+  }
+
+  /**
+   * 格子滿了、還有沒學的化身限定技法（D84）：提案「換掉等級最低、還沒進化的那一招」→ [舊, 新]；沒有 = null。
+   * 玩家可以不選（那張卡只是三選一的其中一張）。
+   */
+  pickFormSwap(rng: Rng): [string, string] | null {
+    if (this.slotsUsed < this.max) return null;
+    let old = '';
+    let lo = Infinity;
+    this.owned.forEach((id, i) => {
+      if (this.isEvolved(id) || (techById(id).form ?? 0) > 0) return;
+      if (this.levels[i] < lo) {
+        lo = this.levels[i];
+        old = id;
+      }
+    });
+    if (!old) return null;
+    const pool = techsFor(this.run.weaponItemId).map((t) => t.id).filter((id) => (techById(id).form ?? 0) > 0 && !this.has(id) && this.canOffer(id, old));
+    if (pool.length === 0) return null;
+    return [old, pool[Math.floor(rng.next() * pool.length)]];
+  }
+  /** 還沒解鎖的化身限定技法（能力面板用）：[技法 id, 要第幾階] */
+  lockedByForm(): [string, number][] {
+    return techsFor(this.run.weaponItemId).filter((t) => (t.form ?? 0) > this.run.form).map((t) => [t.id, t.form!]);
   }
 
   /** 加深的候選（還沒到技法等級上限的，最多 n 個） */
