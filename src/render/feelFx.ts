@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { fxOf } from '../art/palette';
+import { fxOf, palette } from '../art/palette';
+import { addFade, inkBlotTexture, inkMaterial } from '../art/ink';
 import { FEEL } from '../data/feel';
 import { feel } from '../core/feel';
 import type { Run } from '../game/run';
@@ -9,13 +10,14 @@ import { setHugeBounds } from './instancedLayer';
  * 手感的外觀（D69）：擊殺爆圈（擴散的淡色圓環，一般／精英／頭目大小不同）與升級光環。
  * 讀 `Run.deathLog`（環形緩衝）決定哪裡要爆；固定大小的池，每幀不配置。顏色跟著妖怪的色組（palette.fx）。
  */
+const Z_AXIS = new THREE.Vector3(0, 0, 1);
+
 export class FeelFx {
   readonly group = new THREE.Group();
   private readonly mesh: THREE.InstancedMesh;
   private readonly mat: THREE.MeshBasicMaterial;
-  private readonly geo: THREE.RingGeometry;
+  private readonly geo: THREE.BufferGeometry;
   private readonly m = new THREE.Matrix4();
-  private readonly c = new THREE.Color();
   private readonly s = new THREE.Vector3();
   private readonly q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
   private readonly p = new THREE.Vector3();
@@ -27,6 +29,8 @@ export class FeelFx {
   private readonly rad = new Float32Array(FEEL.pop.pool);
   private readonly kind = new Uint8Array(FEEL.pop.pool);
   private next = 0;
+  private readonly fade: THREE.InstancedBufferAttribute;
+  private readonly q2 = new THREE.Quaternion();
   private seen = 0;
   private time = 0;
   /** 畫面上現在有幾個（測試用） */
@@ -37,12 +41,14 @@ export class FeelFx {
 
   constructor(private readonly run: Run) {
     const fx = fxOf(run.yokai.id);
-    this.cMain = new THREE.Color(fx.main);
-    this.cMid = new THREE.Color(fx.mid);
-    this.cAccent = new THREE.Color(fx.accent);
-    this.geo = new THREE.RingGeometry(0.82, 1, 40);
-    this.mat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+    this.cMain = new THREE.Color(fx.ink);
+    this.cMid = new THREE.Color(palette.ink.black);
+    this.cAccent = new THREE.Color(fx.inkLight);
+    // D85 水墨風：打倒敵人是一灘濺開的墨點（墨漬貼圖、一般混合、從邊緣乾掉），不是發光的圈
+    this.geo = new THREE.CircleGeometry(1, 24);
+    this.mat = inkMaterial(inkBlotTexture(), { opacity: 0.85, side: THREE.DoubleSide });
     this.mesh = new THREE.InstancedMesh(this.geo, this.mat, FEEL.pop.pool);
+    this.fade = addFade(this.mesh, FEEL.pop.pool);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(FEEL.pop.pool * 3), 3);
     this.mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
@@ -99,13 +105,16 @@ export class FeelFx {
       const sc = this.rad[i] * (0.35 + 0.65 * (1 - (1 - u) * (1 - u)));
       this.s.set(sc, sc, 1);
       this.p.set(this.px[i], run.map.heightAt(this.px[i], this.pz[i]) + 0.12, this.pz[i]);
-      this.m.compose(this.p, this.q, this.s);
+      // 每一灘轉不同角度（同一張貼圖看起來不重複）
+      this.q2.setFromAxisAngle(Z_AXIS, i * 2.399).premultiply(this.q);
+      this.m.compose(this.p, this.q2, this.s);
       this.mesh.setMatrixAt(count, this.m);
-      // 顏色隨年齡變暗（加色混合，等於淡出）：一般用亮色、精英用主色、頭目與升級用點綴色
-      this.c.copy(k === 0 ? this.cMid : k === 1 ? this.cMain : this.cAccent).multiplyScalar((1 - u) * (k === 3 ? 0.9 : 0.8));
-      this.mesh.setColorAt(count, this.c);
+      // 一般敵人是墨黑的墨點、精英用主色、頭目與升級用淡色；隨時間從邊緣乾掉
+      this.mesh.setColorAt(count, k === 0 ? this.cMid : k === 1 ? this.cMain : this.cAccent);
+      this.fade.setX(count, 0.1 + 0.85 * u);
       count++;
     }
+    this.fade.needsUpdate = true;
     this.active = count;
     this.mesh.count = count;
     this.mesh.instanceMatrix.needsUpdate = true;

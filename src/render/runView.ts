@@ -1,7 +1,7 @@
 import { lit } from '../art/materials';
 import * as THREE from 'three';
 import { fxOf, palette } from '../art/palette';
-import { glow } from '../art/materials';
+import { glow, soft } from '../art/materials';
 import { ball } from '../art/shapes';
 import type { Run } from '../game/run';
 import { COMBAT } from '../data/combat';
@@ -151,7 +151,9 @@ export class RunView {
     // 鬼火：發光小球
     const bg = ball(0.2, 12, 8);
     // 2026-11-10「太炫光」：發光倍率 3.2 → 1.7（亮、但只有一點點光暈，不糊成一片）
-    const bm = glow(fxOf(run.yokai.id).mid, 1.7);
+    // D85 水墨風：有顏色的墨團（自己只發一點光，夜晚看得到、不炫光）
+    const inkC = fxOf(run.yokai.id).ink;
+    const bm = soft(inkC, { emissive: inkC, emissiveIntensity: 0.6 });
     this.diskShot = run.yokai.id === 'kappa';
     this.bulletMesh = new THREE.InstancedMesh(bg, bm, run.projectiles.capacity);
     this.bulletMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -162,7 +164,7 @@ export class RunView {
 
     // 魂火：小的青白色光點
     const og = ball(0.12, 10, 8);
-    const om = glow(palette.fire.soul, 2.0);
+    const om = glow(palette.fire.soul, 1.3);
     this.orbMesh = new THREE.InstancedMesh(og, om, run.orbs.capacity);
     this.orbMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.orbMesh.count = 0;

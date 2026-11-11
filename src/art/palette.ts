@@ -25,12 +25,14 @@ export const palette = {
   minimap: { boon: '#7ddc8a', risk: '#ff6b6b', trade: '#ffd24d', reward: '#ffb347', luck: '#c79bff', boss: '#ff4d4d', upgrade: '#6fe3ff', swap: '#9fe8ff', challenge: '#ff9a3c', player: '#ffffff', portal: '#b88cff', elite: '#ff5a5a', water: '#2f6f9c', shallow: '#5aa2c4', land: '#4f7a55', rock: '#7b7d82', mud: '#6b5646', blocked: '#2e3a34' },
   /** 技法與大招特效的色組（每隻妖怪一組：main = 主色、mid = 亮色、accent = 點綴）；通用特效不寫死火的顏色（D65） */
   fx: {
-    'chochin-kozo': { main: '#ff9a3c', mid: '#ffc46b', accent: '#9fe8ff', aura: '#ffd27a', light: '#ffb35c' },
-    kappa: { main: '#3fb6de', mid: '#8fdcf0', accent: '#d6f5ff', aura: '#8fdcf0', light: '#8fd4ea' },
-  } as Record<string, { main: string; mid: string; accent: string; aura: string; light: string }>,
+    'chochin-kozo': { main: '#ff9a3c', mid: '#ffc46b', accent: '#9fe8ff', aura: '#ffd27a', light: '#ffb35c', ink: '#d8432a', inkLight: '#f08a4a' },
+    kappa: { main: '#3fb6de', mid: '#8fdcf0', accent: '#d6f5ff', aura: '#8fdcf0', light: '#8fd4ea', ink: '#1f6f9c', inkLight: '#58b4d6' },
+  } as Record<string, { main: string; mid: string; accent: string; aura: string; light: string; ink: string; inkLight: string }>,
+  /** 水墨特效（D85）：墨黑、紙白；每隻妖怪的主色在 fx.<妖怪>.ink（提燈小僧 朱、河童 藍青） */
+  ink: { black: '#1d1b24', paper: '#f4ecd8' },
   fire: { ghost: '#ffc46b', soul: '#9fe8ff', torch: '#ff9a3c' },
   ui: { text: '#f5efe2', textDim: '#b9b2a4', panel: '#1a1d2ecc', accent: '#ffb35c' },
 } as const;
 
 /** 這隻妖怪的特效色組（沒有的用提燈小僧的） */
-export const fxOf = (yokaiId: string): { main: string; mid: string; accent: string; aura: string; light: string } => palette.fx[yokaiId] ?? palette.fx['chochin-kozo'];
+export const fxOf = (yokaiId: string): { main: string; mid: string; accent: string; aura: string; light: string; ink: string; inkLight: string } => palette.fx[yokaiId] ?? palette.fx['chochin-kozo'];
