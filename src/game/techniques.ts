@@ -341,7 +341,7 @@ export class Techniques {
     this.weapon = h ? { ...base, projectileSpeed: base.projectileSpeed * h.speedMult } : base;
     this.run.projectiles.homeReturnPierce = h ? h.returnPierce : 0;
     const hi = this.act.homing ? this.owned.indexOf(this.act.homing.id) : -1;
-    this.run.projectiles.homeReturnDamage = hi >= 0 ? 1 + this.afx[hi].power : 1;
+    this.run.projectiles.homeReturnDamage = hi >= 0 ? (h?.returnDamage ?? 1) * (1 + this.afx[hi].power) : 1;
   }
 
   /** 套用進化：把進化指定的區塊欄位換成新值（回傳新的定義；沒有進化就回原本的） */

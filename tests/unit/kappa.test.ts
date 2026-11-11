@@ -41,9 +41,11 @@ describe('河童', () => {
     expect(run.maxHp).toBe(85);
     expect(run.yokai.weapon.kind).toBe('boomerang');
   });
-  it('技法池只有河童的 6 種；每種都有自己的進化；技法的機制名是鬼火那邊做好的（mech）', () => {
+  it('技法池只有河童的 9 種（連鎖、近身、佈置系各 3 種，和提燈小僧一樣，2026-11-11 補滿）；每種都有自己的進化；技法的機制名是鬼火那邊做好的（mech）；9 種對應 9 套不同的機制', () => {
     const t = techsFor('waterdisc');
-    expect(t.map((x) => x.id).sort()).toEqual(['geyser', 'pond', 'splash', 'torrent', 'veil', 'whirl']);
+    expect(t.map((x) => x.id).sort()).toEqual(['backwash', 'bubble', 'geyser', 'pond', 'splash', 'stream', 'torrent', 'veil', 'whirl']);
+    for (const f of ['chain', 'near', 'field']) expect(t.filter((x) => x.family === f).length, f).toBe(3);
+    expect(new Set(t.map((x) => mechOf(x))).size, '9 種技法要用 9 套不同的機制').toBe(9);
     expect(evosFor('waterdisc').map((e) => e.from[1]).sort()).toEqual(t.map((x) => x.id).sort());
     for (const x of t) expect(mechOf(x), x.id).not.toBe(x.id);
     const run = make(5);
@@ -67,6 +69,64 @@ describe('河童', () => {
     const far = place(r2, 8, 1, 1e6);
     stepN(r2, 120);
     expect(r2.enemies.hp[near] < 1e6 || r2.enemies.hp[far] < 1e6).toBe(true);
+  });
+  it('補滿的三招真的在河童身上生效：回潮（水盤回程傷害更高、飛得更快）、水路（水流跑在前方、沖到路上的人）、水泡（打倒的人留下水泡、破裂打到旁邊的人）', () => {
+    // 回潮：回程傷害倍率 1.5（沒有回潮 = 1）、水盤速度 ×1.15
+    const a = make(51);
+    expect(a.projectiles.homeReturnDamage).toBe(1);
+    const sp0 = a.tech.weapon.projectileSpeed;
+    a.devAddTech('backwash');
+    expect(a.tech.act.homing?.id).toBe('backwash');
+    expect(a.projectiles.homeReturnDamage).toBeCloseTo(techById('backwash').homing!.returnDamage!, 5);
+    expect(a.tech.weapon.projectileSpeed).toBeCloseTo(sp0 * techById('backwash').homing!.speedMult, 5);
+    // 回潮和渦盤互斥（渦盤不丟水盤）
+    expect(a.tech.canOffer('whirl')).toBe(false);
+    // 水路：燈籠那套機制，水流在移動方向前方；前方的人被沖到
+    const b = make(52);
+    b.devAddTech('stream');
+    const o = techById('stream').lamp!;
+    b.setMove(1, 0);
+    for (let i = 0; i < 30; i++) b.step(DT);
+    expect(b.tech.lampN).toBe(1);
+    expect(b.tech.lampX[0] - b.px, '水流該在 +x 前方').toBeGreaterThan(o.ahead * 0.6);
+    const e = place(b, o.ahead + 1, 0);
+    b.setMove(0, 0);
+    const hp0 = b.enemies.hp[e];
+    for (let i = 0; i < 45; i++) b.step(DT);
+    expect(b.enemies.hp[e], '前方的人沒被水流沖到').toBeLessThan(hp0);
+    // 水泡：被水盤打倒的人留下水泡，破裂打到旁邊的人
+    tuning.volley = 1;
+    const c = make(53);
+    c.devAddTech('bubble');
+    const sd = techById('bubble').seed!;
+    const dead = place(c, 4, 0, 1);
+    const near = place(c, 4 + sd.radius * 0.5, 0);
+    for (let i = 0; i < 120 && c.enemies.alive[dead]; i++) stepN(c, 1);
+    expect(c.enemies.alive[dead]).toBe(0);
+    expect(c.tech.seedCount, '沒有留下水泡').toBeGreaterThan(0);
+    const hp1 = c.enemies.hp[near];
+    stepN(c, Math.ceil((sd.delay + 0.3) / DT));
+    expect(c.enemies.hp[near], '水泡破裂沒打到旁邊的人').toBeLessThan(hp1);
+  });
+  it('河童的 9 種技法兩兩組合都能跑 6 秒不出錯、沒有 NaN（互斥的跳過）；9 種各自單獨跑也行', () => {
+    const ids = techsFor('waterdisc').map((t) => t.id);
+    let ran = 0;
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i; j < ids.length; j++) {
+        const run = make(60 + i * 11 + j);
+        run.devAddTech(ids[i]);
+        if (j !== i) {
+          if (!run.tech.canOffer(ids[j])) continue;
+          run.devAddTech(ids[j]);
+        }
+        for (let k = 0; k < 6; k++) place(run, 3 + k, k - 2);
+        stepN(run, 60 * 6);
+        expect(Number.isFinite(run.hp), `${ids[i]}＋${ids[j]}`).toBe(true);
+        for (let e = 0; e < run.enemies.capacity; e++) if (run.enemies.alive[e]) expect(Number.isFinite(run.enemies.hp[e]), `${ids[i]}＋${ids[j]} 的敵人血量`).toBe(true);
+        ran++;
+      }
+    }
+    expect(ran).toBeGreaterThan(30);
   });
   it('D67 一次一批：開局一次丟 1 個；上一個沒回到身邊之前不丟下一個；飛回來之後才丟下一個（舊版開局一次 2 發、不等回來會紅）', () => {
     const run = make(21);

@@ -114,7 +114,7 @@ export async function run(browser) {
         expect(/技法 燈籠環 Lv7：適合 .+/.test(txt) && /技法 鬼火 Lv\d：適合 .+/.test(txt), `技法列沒寫出適合的法具（詳細在暫停頁）：${txt}`);
         // 提燈小僧的畫面不准出現河童的字（新角色加進來之後最容易漏的是共用畫面）
         const body = await page.evaluate(() => document.body.innerText);
-        const foreign = ['水盤', '河童', '激流盤', '水花', '渦盤', '水衣', '水坑', '間歇泉', '雨乞', '大波'].filter((w) => body.includes(w));
+        const foreign = ['水盤', '河童', '激流盤', '水花', '渦盤', '水衣', '水坑', '間歇泉', '雨乞', '大波', '回潮', '水路', '水泡'].filter((w) => body.includes(w));
         expect(foreign.length === 0, `提燈小僧的能力面板出現別的角色的字：${foreign.join('、')}`);
         files.push(await shot(ctx, 'v2-pause'));
         await press(ctx, '#btn-pause-resume');

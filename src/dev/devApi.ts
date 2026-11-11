@@ -284,6 +284,8 @@ export function installDevApi(ctx: DevContext): void {
       r.devTechLevel(id, level);
       return true;
     },
+    /** 把一個已有的技法換成另一個（測試用：逐個看河童新補的技法在能力面板的樣子） */
+    replaceTech: (oldId: string, newId: string) => run()?.tech.replace(oldId, newId) ?? false,
     /** 直接給技法（不經面板，D48；給 TECH_MAX 以內） */
     giveTech: (...ids: string[]) => {
       const r = run();

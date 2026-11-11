@@ -65,7 +65,7 @@ export async function run(browser) {
         for (let g = 0; g < 60 && !(await page.evaluate(() => window.__game.screens)).includes('levelup'); g++) await page.evaluate(() => window.__game.addXp(10));
         const cs = await page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card')].map((c) => ({ id: c.dataset.card, t: c.innerText.replace(/\s+/g, ' ') })));
         const tech = cs.find((c) => c.id.startsWith('tech:'));
-        expect(tech && ['torrent', 'splash', 'whirl', 'veil', 'pond', 'geyser'].includes(tech.id.slice(5)), `技法卡不是河童的：${JSON.stringify(cs)}`);
+        expect(tech && ['torrent', 'backwash', 'splash', 'whirl', 'veil', 'stream', 'pond', 'bubble', 'geyser'].includes(tech.id.slice(5)), `技法卡不是河童的：${JSON.stringify(cs)}`);
         expect(!cs.some((c) => /鬼火/.test(c.t) && c.id === 'ghostfire'), '河童的選卡出現了鬼火');
         await leaks(page, '升級選卡');
         files.push(await shot(ctx, 'y1-pick'));
@@ -103,6 +103,28 @@ export async function run(browser) {
         files.push(await shot(ctx, 'y1-pause'));
         await press(ctx, '#btn-pause-resume');
         await page.waitForFunction(() => !window.__game.screens.includes('pause'));
+      });
+      await step(`${vp.name} 2026-11-11 補滿的三招（回潮、水路、水泡）：逐個換上去 → 能力面板寫出名稱與說明、沒有別的角色的字`, async () => {
+        const NEW = [['backwash', '回潮'], ['stream', '水路'], ['bubble', '水泡']];
+        for (const [id, name] of NEW) {
+          // 換掉現有的第一個技法（沒有就直接給）；本來就是這個就不換
+          const ok = await page.evaluate((b) => {
+            const g = window.__game;
+            const t = g.run.techs;
+            if (t.includes(b)) return true;
+            if (t.length === 0) return g.giveTech(b);
+            return g.replaceTech(t[0], b);
+          }, id);
+          expect(ok, `換不上去 ${id}`);
+          await press(ctx, '#btn-abilities');
+          await page.waitForFunction(() => window.__game.screens.includes('pause'));
+          const txt = await page.evaluate(() => document.querySelector('.overlay[data-screen="pause"]').innerText);
+          expect(txt.includes(name), `能力面板沒有寫出「${name}」：${txt.slice(0, 300)}`);
+          await leaks(page, `能力（${name}）`);
+          if (id === 'bubble') files.push(await shot(ctx, 'y1-newtechs'));
+          await press(ctx, '#btn-pause-resume');
+          await page.waitForFunction(() => !window.__game.screens.includes('pause'));
+        }
       });
       reportErrors(ctx);
     } finally {

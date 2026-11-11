@@ -56,7 +56,7 @@ export interface TechDef {
   /** 鬼火雨：命中時在命中點 range 公尺內隨機落下 count 顆小火（落點隨機、不追人；每顆在半徑 radius 內傷害 × damage，畫面停留 life 秒） */
   rain?: { count: number; range: number; radius: number; damage: number; life: number };
   /** 歸巢：鬼火飛到盡頭還沒用完時折返，飛回你身邊（回程也會打人，多穿透 returnPierce 隻）；所有鬼火飛行速度 × speedMult */
-  homing?: { returnPierce: number; speedMult: number };
+  homing?: { returnPierce: number; speedMult: number; /** 回程傷害倍率（沒寫 = 1；河童的水盤本來就會折返，「回潮」靠這個讓回程更痛） */ returnDamage?: number };
   /** 燈籠環：不再發射，鬼火繞身（數量 = 鬼火數量 + baseOrbs）；半徑（× 範圍）、角速度（弧度/秒）、命中半徑、
    *  每隔幾秒判定一次（÷ 攻速、× 冷卻）、傷害比例、擊退
    *  innerDamage／innerKnockback：環內護身（D46）：鑽進環內（離身體 < 半徑 − 命中半徑）的人類每次判定受「傷害比例 × innerDamage」並被推出去 */
@@ -180,6 +180,17 @@ export const TECHS: readonly TechDef[] = [
     bounce: { range: 6, jumps: 2, damage: 0.7 },
   },
   {
+    id: 'backwash',
+    mech: 'homing',
+    weapon: 'waterdisc',
+    family: 'chain',
+    kind: 'passive',
+    likes: ['atkSpeed', 'volley', 'power'],
+    excludes: ['whirl'],
+    // 河童的水盤本來就會折返：「回潮」讓水盤飛得更快、回程的傷害更高（歸巢那套機制，加上回程傷害倍率）
+    homing: { returnPierce: 2, speedMult: 1.15, returnDamage: 1.5 },
+  },
+  {
     id: 'splash',
     mech: 'kitsunebi',
     weapon: 'waterdisc',
@@ -196,7 +207,7 @@ export const TECHS: readonly TechDef[] = [
     family: 'near',
     kind: 'delivery',
     likes: ['area', 'hp', 'armor', 'atkSpeed'],
-    excludes: ['torrent'],
+    excludes: ['torrent', 'backwash'],
     orbit: { radius: 3.0, spin: 2.6, hitRadius: 1.0, tick: 0.25, damage: 1.3, knockback: 3, baseOrbs: 1, innerDamage: 0.5, innerKnockback: 6 },
   },
   {
@@ -210,6 +221,16 @@ export const TECHS: readonly TechDef[] = [
     ward: { chargeSeconds: 6, burstRadius: 2.5, burstDamage: 2 },
   },
   {
+    id: 'stream',
+    mech: 'lamp',
+    weapon: 'waterdisc',
+    family: 'near',
+    kind: 'extra',
+    likes: ['speed', 'area', 'atkSpeed'],
+    excludes: [],
+    lamp: { count: 1, ahead: 4, side: 1.6, hitRadius: 1.3, tick: 0.3, damage: 1.2, knockback: 4 },
+  },
+  {
     id: 'pond',
     mech: 'hellfire',
     weapon: 'waterdisc',
@@ -218,6 +239,16 @@ export const TECHS: readonly TechDef[] = [
     likes: ['area', 'power', 'atkSpeed'],
     excludes: [],
     burn: { radius: 1.6, seconds: 2.5, tick: 0.5, damage: 0.35, shotDamage: 1.2, interval: 1.25, maxZones: 24 },
+  },
+  {
+    id: 'bubble',
+    mech: 'seed',
+    weapon: 'waterdisc',
+    family: 'field',
+    kind: 'onHit',
+    likes: ['power', 'area', 'volley'],
+    excludes: [],
+    seed: { delay: 1, radius: 2, damage: 0.6, max: 12 },
   },
   {
     id: 'geyser',
@@ -372,6 +403,12 @@ export const EVOS: readonly EvoDef[] = [
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
+    id: 'evoBackwash',
+    from: ['waterdisc', 'backwash'],
+    set: { backwash: { homing: { returnPierce: 4, speedMult: 1.3, returnDamage: 2 } } },
+    weapon: { damage: 0.1, pierce: 0, volley: 0 },
+  },
+  {
     id: 'evoSplash',
     from: ['waterdisc', 'splash'],
     set: { splash: { split: { children: 4, damage: 0.75, range: 9, reSplit: 2 } } },
@@ -388,6 +425,18 @@ export const EVOS: readonly EvoDef[] = [
     from: ['waterdisc', 'veil'],
     set: { veil: { ward: { chargeSeconds: 3, burstRadius: 3.8, burstDamage: 3 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
+  },
+  {
+    id: 'evoStream',
+    from: ['waterdisc', 'stream'],
+    set: { stream: { lamp: { count: 2, damage: 1.7 } } },
+    weapon: { damage: 0.1, pierce: 0, volley: 0 },
+  },
+  {
+    id: 'evoBubble',
+    from: ['waterdisc', 'bubble'],
+    set: { bubble: { seed: { delay: 0.6, radius: 2.8, damage: 1.0, max: 20 } } },
+    weapon: { damage: 0.15, pierce: 0, volley: 0.5 },
   },
   {
     id: 'evoPond',
