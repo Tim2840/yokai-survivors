@@ -6,6 +6,7 @@ import { rollAffixes } from '../data/affixes';
 import { TECH_MAX, TECH_SLOTS, mechOf, techById } from '../data/techniques';
 import { CARD_CHOICES, PROGRESSION, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
 import { DOSOJIN, FUSE, SUMMIT } from '../data/elements';
+import { ENEMY_INTRO_SECONDS } from '../data/enemies';
 import { itemPoolFor, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById, scaleWeaponStep } from '../data/items';
 import { EVO_CARD_PREFIX, TECH_CARD_PREFIX, TECH_KEEP, TECH_OFFER, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard } from '../data/techniques';
 import { Techniques } from './techniques';
@@ -591,6 +592,11 @@ export class Run {
     this.director.hpCurse = 1 + this.curse.enemyHp;
     this.enemies.speedMult = this.frozenEnemies ? 0 : 1 + this.curse.enemySpeed;
     this.director.update(dt, this.px, this.pz, this.night, this.bossDefeated);
+    // 老練的人類第一次出現：提示一次（整局一次，不是每關）
+    if (this.director.veteranSeen && !this.veteranNoted) {
+      this.veteranNoted = true;
+      this.enemyIntro = { key: 'enemy.veteran.intro', until: this.clock + ENEMY_INTRO_SECONDS };
+    }
     this.checkEnemySeen();
 
     if (this.hp <= 0 && !this.god) {
@@ -613,6 +619,7 @@ export class Run {
   private readonly seenKinds = new Uint8Array(ENEMY_IDS.length);
   /** 新人類第一次出場的簡短提示（i18n 鍵與結束時間；由 Game 在存檔裡沒有紀錄時設定，HUD 顯示在波數旁） */
   enemyIntro: { key: string; until: number } | null = null;
+  private veteranNoted = false;
 
   private portalReached(): boolean {
     const p = this.portal;

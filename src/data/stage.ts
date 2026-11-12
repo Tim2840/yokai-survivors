@@ -23,6 +23,12 @@ export const STAGE = {
   spawnRingMax: 24,
   /** 精英：HP、傷害倍率與體型、魂火倍率（docs/04 第 3.2 節） */
   elite: { hp: 4, damage: 1.5, scale: 1.4, orbMult: 5 },
+  /**
+   * 老練的人類（D89、Q55，使用者 2026-11-12：「關卡越後面越多經驗的敵人、同時也越難打」「2 分鐘左右就可以穿插難一點的敵人」）：
+   * 關卡過了 from（比例）之後，每次湧出有一個機率是「老練」的——體型大一點、偏藍紫，血更厚（隨關卡時間從 hp[0] 漲到 hp[1]）、打人更痛、魂火（經驗）更多；速度不變。
+   * 機率從 startFrac 隨時間升到 maxFrac。起始提案，sim 校準（整關總經驗最多比以前多 15%）。
+   */
+  veteran: { from: 0.2, startFrac: 0.05, maxFrac: 0.3, hp: [1.8, 2.5], damage: 1.3, scale: 1.2, orbMult: 1.8 } as const,
   /** 定時事件（at = 佔關卡長度的比例） */
   events: [
     { at: 0.25, kind: 'elite', count: 1 },

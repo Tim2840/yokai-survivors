@@ -59,6 +59,8 @@ export class Enemies {
   readonly kind: Uint8Array;
   /** 0 一般、1 精英、2 頭目 */
   readonly variant: Uint8Array;
+  /** 老練的人類（Q55）：1 = 是（體型、血量、傷害、魂火都加強；variant 仍是 0 = 算一般敵人） */
+  readonly vet: Uint8Array;
   /** 渲染體型倍率 */
   readonly scale: Float32Array;
   /** 擊殺掉的魂火倍率後的點數 */
@@ -112,6 +114,7 @@ export class Enemies {
     this.aimZ = f();
     this.kind = new Uint8Array(capacity);
     this.variant = new Uint8Array(capacity);
+    this.vet = new Uint8Array(capacity);
     this.scale = new Float32Array(capacity).fill(1);
     this.pointsLeft = new Float32Array(capacity);
     this.alive = new Uint8Array(capacity);
@@ -142,7 +145,7 @@ export class Enemies {
    * 生一隻；滿了回傳 -1。virtualWave = 虛擬波數（docs/02 第 8.1 節）；variant 0 一般／1 精英／2 頭目；stageMult = 第 k 關的 HP 倍率。
    * 頭目不吃「虛擬波數」的 HP 加成（它的 HP 是固定的佔位值）。
    */
-  spawn(kind: number, x: number, z: number, virtualWave: number, night: number, phase: number, variant = 0, stageMult = 1): number {
+  spawn(kind: number, x: number, z: number, virtualWave: number, night: number, phase: number, variant = 0, stageMult = 1, vet = 0): number {
     let i: number;
     if (this.freeTop > 0) i = this.free[--this.freeTop];
     else if (this.high < this.capacity) i = this.high++;
@@ -156,12 +159,17 @@ export class Enemies {
     const elite = variant === 1;
     const boss = variant === 2;
     const hp = KIND_HP[kind] * (boss ? 1 : enemyHpMult(virtualWave, night, Number.isNaN(KIND_GROWTH[kind]) ? undefined : KIND_GROWTH[kind])) * stageMult * tuning.hpScale * (elite ? STAGE.elite.hp : 1);
-    this.hp[i] = hp;
-    this.maxHp[i] = hp;
-    this.damage[i] = KIND_CONTACT[kind] * (boss ? 1 : enemyDamageMult(virtualWave)) * (elite ? STAGE.elite.damage : 1);
+    const V = STAGE.veteran;
+    const isVet = vet === 1 && variant === 0;
+    // 老練：血量倍率隨關卡時間從 hp[0] 漲到 hp[1]（virtualWave 越大越晚）
+    const vetHp = isVet ? V.hp[0] + (V.hp[1] - V.hp[0]) * Math.min(1, Math.max(0, (virtualWave - STAGE.virtualStart) / (STAGE.virtualEnd - STAGE.virtualStart))) : 1;
+    this.hp[i] = hp * vetHp;
+    this.maxHp[i] = hp * vetHp;
+    this.damage[i] = KIND_CONTACT[kind] * (boss ? 1 : enemyDamageMult(virtualWave)) * (elite ? STAGE.elite.damage : 1) * (isVet ? V.damage : 1);
     this.variant[i] = variant;
-    this.scale[i] = boss ? 2.4 : elite ? STAGE.elite.scale : 1;
-    this.pointsLeft[i] = KIND_POINTS[kind] * (elite ? STAGE.elite.orbMult : 1);
+    this.vet[i] = isVet ? 1 : 0;
+    this.scale[i] = boss ? 2.4 : elite ? STAGE.elite.scale : isVet ? V.scale : 1;
+    this.pointsLeft[i] = KIND_POINTS[kind] * (elite ? STAGE.elite.orbMult : isVet ? V.orbMult : 1);
     this.speed[i] = KIND_SPEED[kind] * enemySpeedMult(night);
     this.flash[i] = 0;
     this.hold[i] = 0;

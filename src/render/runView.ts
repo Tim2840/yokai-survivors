@@ -333,9 +333,11 @@ export class RunView {
       // 精英偏紅、頭目更紅（一般人類的顏色不變）；弓手瞄準時偏紅閃爍（預告）
       const v = e.variant[i];
       const aim = e.wind[i] > 0 ? 0.6 + 0.4 * Math.sin(t * 28) : 0;
-      col[n * 3] = f * (v === 0 ? 1 : 1.5) * (1 + aim * 0.8);
-      col[n * 3 + 1] = f * (v === 0 ? 1 : v === 1 ? 0.7 : 0.5) * (1 - aim * 0.45);
-      col[n * 3 + 2] = f * (v === 0 ? 1 : v === 1 ? 0.7 : 0.5) * (1 - aim * 0.45);
+      // 老練（Q55）：偏藍紫（和精英的紅、頭目的深紅分得開）
+      const vt = e.vet[i] === 1;
+      col[n * 3] = f * (vt ? 0.8 : v === 0 ? 1 : 1.5) * (1 + aim * 0.8);
+      col[n * 3 + 1] = f * (vt ? 0.75 : v === 0 ? 1 : v === 1 ? 0.7 : 0.5) * (1 - aim * 0.45);
+      col[n * 3 + 2] = f * (vt ? 1.45 : v === 0 ? 1 : v === 1 ? 0.7 : 0.5) * (1 - aim * 0.45);
     }
     for (let k = 0; k < this.enemyMeshes.length; k++) {
       const mesh = this.enemyMeshes[k];

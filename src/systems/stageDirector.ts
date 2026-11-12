@@ -80,6 +80,7 @@ export class StageDirector {
     this.swarm = false;
     this.pendingElites = 0;
     this.nextSwarmElite = 0;
+    this.veteranSeen = false;
   }
 
   /** 召喚祭壇開了：召喚小頭目（越晚越強；時間到後召喚 = 最強） */
@@ -143,9 +144,20 @@ export class StageDirector {
     return this.kindVillager;
   }
 
-  private spawnOne(kind: number, variant: number, px: number, pz: number, night: number): number {
+  /** 這一關第一隻老練的人類出現了嗎（Run 用來顯示一次提示） */
+  veteranSeen = false;
+
+  /** 這個時間點每次湧出是「老練」的機率（Q55）：from 之前 0，之後從 startFrac 線性升到 maxFrac */
+  veteranChance(t = this.time): number {
+    const V = STAGE.veteran;
+    const u = t / this.duration;
+    if (u < V.from) return 0;
+    return V.startFrac + (V.maxFrac - V.startFrac) * Math.min(1, (u - V.from) / (1 - V.from));
+  }
+
+  private spawnOne(kind: number, variant: number, px: number, pz: number, night: number, vet = 0): number {
     if (!this.findSpot(px, pz)) return -1;
-    return this.enemies.spawn(kind, this.spot[0], this.spot[1], this.virtualWave(), night, this.rng.range(0, Math.PI * 2), variant, (variant === 2 ? this.stageMult * this.bossMult * this.summonMult * this.summitMult : this.stageMult) * this.hpCurse);
+    return this.enemies.spawn(kind, this.spot[0], this.spot[1], this.virtualWave(), night, this.rng.range(0, Math.PI * 2), variant, (variant === 2 ? this.stageMult * this.bossMult * this.summonMult * this.summitMult : this.stageMult) * this.hpCurse, vet);
   }
 
   update(dt: number, px: number, pz: number, night: number, bossDefeated: boolean): void {
@@ -191,8 +203,10 @@ export class StageDirector {
       n++;
     }
     while (this.pending >= 1 && n < WAVES.spawnPerStepMax && this.enemies.aliveCount < this.maxEnemies) {
-      const i = this.spawnOne(this.pickKind(), 0, px, pz, night);
+      const vet = this.rng.next() < this.veteranChance() ? 1 : 0;
+      const i = this.spawnOne(this.pickKind(), 0, px, pz, night, vet);
       if (i < 0) break;
+      if (vet) this.veteranSeen = true;
       this.pending -= this.enemies.points(i);
       n++;
     }
