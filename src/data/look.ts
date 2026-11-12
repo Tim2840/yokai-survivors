@@ -66,6 +66,8 @@ export function currentLook(): LookDef {
   }
   // 一定要寫成 import.meta.env.VITE_LOOK（Vite 打包時只認得這個寫法，才會換成字串）
   if (!id) id = (import.meta.env.VITE_LOOK as string | undefined) ?? '';
+  // 測試頁（build:single）預設用樣張風格 cel，Artifact 裡沒辦法加網址參數；?look=jrpg 看現在的像素風
+  if (!id && import.meta.env.MODE === 'single') id = 'cel';
   return LOOKS[id] ?? LOOKS[DEFAULT_LOOK];
 }
 

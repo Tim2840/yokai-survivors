@@ -47,12 +47,14 @@ export const AMBIENCE: Record<string, AmbienceDef> = {
     fog: { color: '#2d4d5e', near: 45, far: 140 },
     hemi: { sky: '#6a86c8', ground: '#33523f', intensity: 0.55 },
     groundDetail: { tile: 5, strength: 0.55 },
-    tufts: { count: 4800, height: [0.28, 0.5], colors: ['#78ad68', '#9bc474', '#5f9a64', '#b0c97a'] },
+    tufts: { count: 4300, height: [0.28, 0.5], colors: ['#78ad68', '#9bc474', '#5f9a64', '#b0c97a'] },
     flowers: { clusters: 36, perCluster: 14, colors: ['#f6f1e6', '#f6a6bf', '#ffe08a', '#c9b4ff'] },
     bushes: { count: 90, colors: ['#68a86c', '#7ab872', '#5a9a78', '#d08a4a'] },
     trees: { count: 90, canopy: ['#46805c', '#58935f', '#3a7066'], autumn: 0.28, autumnColors: ['#c9503a', '#e0793a', '#d9a23a'], trunk: '#5a4636' },
     motes: { count: 110, color: '#d6f08a', size: 0.36, height: [0.6, 3.2], range: 26 },
     mobileScale: 0.65,
+    // D88：夜晚變成一般關卡的時段（以前只有大頭目關是夜晚），身上那盞光太強會把角色曬成一團白橘 → 降到 0.22
+    playerLight: 0.22,
   },
 };
 
@@ -100,13 +102,21 @@ AMBIENCE['highlands@dusk'] = {
 };
 
 /**
- * 依關卡換時段（D72，使用者照預設）：每張地圖的第 1 關白天、第 2 關黃昏、大頭目那一關夜晚（妖怪感最強）。
- * 回傳 ambienceFor 用的後綴；夜晚就是沒有後綴的基本主題。
+ * 時段（D88，使用者 2026-11-12：「主題其實是想要在夜晚的，特殊情況才在白天」；取代 D72 的「第 1 關白天、第 2 關黃昏」）：
+ * **一般關卡一律是夜晚**（沒有後綴的基本主題）；黃昏與白天是「特殊情況」，由呼叫端傳進 special（目前還沒有任何地方傳：
+ * 什麼時候是特殊情況、各時段的加成是什麼，等使用者回答 Q58，見 docs/28）。開發版可用網址 ?tod=day／dusk 強制（截圖用）。
  */
-export const TIME_OF_DAY = ['@day', '@dusk'] as const;
-export function timeOfDaySuffix(stageIndex: number, bossStage: boolean): string {
-  if (bossStage) return '';
-  return TIME_OF_DAY[Math.min(stageIndex, TIME_OF_DAY.length - 1)];
+export const TIME_OF_DAY = { night: '', dusk: '@dusk', day: '@day' } as const;
+export type TimeOfDay = keyof typeof TIME_OF_DAY;
+export function timeOfDaySuffix(special: TimeOfDay = 'night'): string {
+  let forced: string | null = null;
+  try {
+    if (import.meta.env.MODE !== 'single-main') forced = new URLSearchParams(location.search).get('tod');
+  } catch {
+    /* 非瀏覽器環境 */
+  }
+  const t = (forced && forced in TIME_OF_DAY ? forced : special) as TimeOfDay;
+  return TIME_OF_DAY[t];
 }
 
 /** mapId 的主題；suffix（例 '@day'）有對應的就用，沒有就退回 mapId、再退回 highlands */

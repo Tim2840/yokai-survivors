@@ -34,8 +34,8 @@ export async function run(browser) {
       console.log(`    ${vp.name}：敵人 ${after.run.enemies}（上限 ${cap}）、鬼火 ${after.run.projectiles}、魂火 ${after.run.orbs}、draw call ${after.perf.calls}、三角形 ${after.perf.triangles}、程式 ${after.perf.programs}`);
       expect(after.run.enemies > cap * 0.6, `沒打到滿場（${vp.name}）：${after.run.enemies}`);
       expect(after.run.enemies <= cap, `敵人超過上限 ${cap}（${vp.name}）：${after.run.enemies}`);
-      // 三角形預算：每隻敵人 ≤ 700（造型減面後約 450），加地形（120×120 公尺 ≈ 29,000）與其他約 60,000
-      expect(after.perf.triangles <= after.run.enemies * 700 + 60000, `三角形 ${after.perf.triangles} 太多（${after.run.enemies} 隻，${vp.name}）`);
+      // 三角形預算：每隻敵人 ≤ 700（造型減面後約 450），加地形（120×120 公尺 ≈ 29,000）與其他約 80,000（D88：主角改成 Blender 模型，約 12,000 三角形、陰影再畫一次，比舊模型多約 18,000）
+      expect(after.perf.triangles <= after.run.enemies * 700 + 80000, `三角形 ${after.perf.triangles} 太多（${after.run.enemies} 隻，${vp.name}）`);
       expect(after.perf.calls <= budget, `draw call ${after.perf.calls} 超過預算 ${budget}（${vp.name}）`);
       expect(after.perf.programs === before.programs, `預編譯之後又編了新的著色器：${before.programs} → ${after.perf.programs}（${vp.name}）`);
       reportErrors(ctx);

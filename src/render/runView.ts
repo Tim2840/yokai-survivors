@@ -15,7 +15,6 @@ import { markOverlay, pruneShadowCasters } from './overlay';
 import { buildWorldView, type WorldView } from '../world/worldView';
 import { buildAmbienceView, type AmbienceView } from '../world/ambienceView';
 import { ambienceFor, timeOfDaySuffix, type AmbienceDef } from '../data/ambience';
-import { isBigBossStage } from '../data/stage';
 import { currentLook } from '../data/look';
 import { writeMatrix, setHugeBounds } from './instancedLayer';
 import { DamageNumbers } from './damageNumbers';
@@ -44,6 +43,8 @@ const SHARD_VIEW_SCALE = 0.55;
 
 /** 玩家身上那盞光的基準強度（Renderer 建立時的值；白天主題會打折） */
 const PLAYER_LIGHT_BASE = 30;
+/** 身上那盞光離腳底多高（公尺）：太近會把角色頂面曬白，高一點光照在地上是一圈、角色身上只是淡淡的暖色 */
+const PLAYER_LIGHT_HEIGHT = 2.4;
 /** 投影的最小零件大小（包圍球半徑，公尺）：小於這個的零件不投影（玩家的零件小，門檻低一點才有影子） */
 const SHADOW_MIN_RADIUS = { world: 0.55, player: 0.25 } as const;
 
@@ -88,7 +89,7 @@ export class RunView {
     const scene = renderer.scene;
     const { map } = run;
     // 場景主題：日系風格依關卡換時段（第 1 關白天、第 2 關黃昏、大頭目夜晚）
-    this.amb = ambienceFor(map.def.id, currentLook().timeOfDay ? timeOfDaySuffix(run.stageIndex, isBigBossStage(run.mapNumber, run.stageIndex)) : '');
+    this.amb = ambienceFor(map.def.id, currentLook().timeOfDay ? timeOfDaySuffix() : '');
     this.world = buildWorldView(map, run.seed, this.amb);
     this.group.add(this.world.group);
     // 場景氣氛（美術第一輪 A）：天空、月、星、草叢、花、遠景樹、光點；顏色與霧跟著地圖主題
@@ -102,8 +103,8 @@ export class RunView {
     renderer.playerLight.color.set(fxOf(run.yokai.id).light);
     renderer.playerLight.intensity = PLAYER_LIGHT_BASE * (this.amb.playerLight ?? 1);
     this.group.add(this.player.root);
-    // Blender 試作（docs/26，Q53）：網址帶 ?model=blender 才換成 Blender 版的提燈小僧，並在出生點旁邊放一座鳥居；主網址的打包不含
-    if (import.meta.env.MODE !== 'single-main' && new URLSearchParams(location.search).get('model') === 'blender') {
+    // Blender 試作（docs/26，Q53）：網址帶 ?model=blender（測試頁 build:single 預設就是；?model=code 看舊的）才換成 Blender 版的提燈小僧，並在出生點旁邊放一座鳥居；主網址的打包不含
+    if (import.meta.env.MODE !== 'single-main' && (new URLSearchParams(location.search).get('model') ?? (import.meta.env.MODE === 'single' ? 'blender' : '')) === 'blender') {
       void import('../units/blenderModels').then(async (mod) => {
         const torii = await mod.loadBlenderTorii();
         const monk = run.yokai.id === 'chochin-kozo' ? await mod.loadBlenderMonk() : null;
@@ -289,7 +290,7 @@ export class RunView {
     (this.aura.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
     // 自由視角鏡頭與玩家身上的光
     this.renderer.updateCamera(dt, run.px, run.py, run.pz, map);
-    this.renderer.playerLight.position.set(run.px, run.py + 1.6, run.pz);
+    this.renderer.playerLight.position.set(run.px, run.py + PLAYER_LIGHT_HEIGHT, run.pz);
     this.renderer.followLight(run.px, run.py, run.pz);
     this.numbers.refreshOrientation(this.renderer.camera);
     // 傳送門

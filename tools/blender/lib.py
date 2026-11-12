@@ -36,9 +36,18 @@ class Builder:
         for p in me.polygons:
             p.use_smooth = smooth
         attr = me.color_attributes.new(name='Color', type='FLOAT_COLOR', domain='CORNER')
-        col = hex_color(color) if isinstance(color, str) else color
-        for d in attr.data:
-            d.color = col
+        if isinstance(color, tuple) and len(color) == 2 and isinstance(color[0], str):
+            # 上下漸層（頂部色、底部色）：依零件自己的高度（z）內插，眼睛的虹彩、腮紅、帽子用
+            zs = [v.co.z for v in me.vertices]
+            lo, hi = min(zs), max(zs)
+            top, bot = hex_color(color[0]), hex_color(color[1])
+            for li, loop in enumerate(me.loops):
+                t = (me.vertices[loop.vertex_index].co.z - lo) / max(hi - lo, 1e-6)
+                attr.data[li].color = tuple(bot[k] + (top[k] - bot[k]) * t for k in range(4))
+        else:
+            col = hex_color(color) if isinstance(color, str) else color
+            for d in attr.data:
+                d.color = col
         if bone:
             vg = ob.vertex_groups.new(name=bone)
             vg.add(range(len(me.vertices)), 1.0, 'REPLACE')
@@ -46,6 +55,11 @@ class Builder:
         return ob
 
     def sphere(self, name, r, loc, color, bone=None, scale=(1, 1, 1), rot=(0, 0, 0), seg=20, rings=12):
+        # 小零件不需要那麼多分段（手機上看不出來；面數預算見 p1）：半徑越小、分段越少
+        if r < 0.05:
+            seg, rings = min(seg, 8), min(rings, 5)
+        elif r < 0.1:
+            seg, rings = min(seg, 12), min(rings, 8)
         bm = bmesh.new()
         bmesh.ops.create_uvsphere(bm, u_segments=seg, v_segments=rings, radius=r)
         return self._finish(bm, name, color, bone, loc, rot, scale)

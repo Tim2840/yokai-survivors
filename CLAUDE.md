@@ -25,6 +25,7 @@
 | 使用者提出新想法／要做設計決定時（我是使用者的設計夥伴） | `docs/20-design-gate.md`（設計審查卡格式、商業等級體檢、創新機會；**我主動研究與把關，使用者只拍板**） |
 | 小地圖 | `docs/21-minimap.md`（已做第一版 D66） |
 | 每隻妖怪的技法特色、化身限定技法、技法變化度體檢 | `docs/25-character-techs.md`（已實作 D83～D86：化身、化身限定技法、技法格子、河童自己的 5 招）；養成第二版（詞條、整場加成）`docs/24-buildcraft-v2.md` |
+| **夜晚為預設時段、時段加成、角色整體重新設計規格（D88）** | `docs/28-night-theme-and-character-redesign.md`（Q58 待回答） |
 | 關卡後段的敵人（老練的人類）、換招後失效的升級 | `docs/27-stage-ramp-dead-upgrades.md`（兩張審查卡，Q55、Q56 待回答，未實作） |
 | 引入 Blender（模型流程） | `docs/26-blender-pipeline.md`（試作完成 D87，`tools/blender/`、`?model=blender`；Q54 待回答；**還沒改「不使用外部模型檔」的鐵則**） |
 | 敵人設計、關卡變化、難度怎麼來 | `docs/22-enemy-design.md`（E-1 已完成 D70：足輕、弓手、出場配方；E-2 待開工） |
@@ -40,7 +41,7 @@
 - **固定時間步長**（1/60 秒）模擬 + 可變幀率渲染；暫停時模擬停、渲染照畫。分頁失焦自動暫停。
 - **敵人用 `THREE.InstancedMesh`**；超過 300 隻要用空間雜湊做碰撞；投射物、傷害數字、特效一律物件池；**熱路徑（每幀）不 `new`**。
 - 隨機一律用固定種子的 `Rng`（`src/lib/random.ts`）：地圖生成、卡片抽選、要素抽選都要能用種子重現（回報 bug 時帶種子）。
-- 顏色取自 `src/art/palette.ts`；材質用 `soft()`／`glow()`；風格是**和風、日系 RPG 像素風**（D72，使用者 2026-11-09 照預設）：3D 模型照舊用程式建、圓潤 Q 版（大頭、大眼睛，臉用 `src/units/chibiFace.ts`），畫面由後製像素化＋描線（`src/core/pixelPass.ts`、`src/data/look.ts`）；依關卡換時段（白天→黃昏→夜晚，`src/data/ambience.ts`）。不要 `flatShading`、不隨機推頂點、不留銳利的邊。
+- 顏色取自 `src/art/palette.ts`；材質用 `soft()`／`glow()`；風格是**和風、日系 RPG 像素風**（D72，使用者 2026-11-09 照預設）：3D 模型照舊用程式建、圓潤 Q 版（大頭、大眼睛，臉用 `src/units/chibiFace.ts`），畫面由後製像素化＋描線（`src/core/pixelPass.ts`、`src/data/look.ts`）；**一般關卡是夜晚，黃昏與白天是特殊情況**（D88，`src/data/ambience.ts`，`?tod=day|dusk` 開發版強制）。不要 `flatShading`、不隨機推頂點、不留銳利的邊。
 - 3D 鏡頭：**玩家可自由旋轉視角**（D23，取代原本的固定俯角鐵則）；第三人稱繞著玩家轉，俯仰有上下限，跟隨玩家的 3D 位置，**碰到地形時拉近（彈簧臂）不穿進地裡**；移動方向永遠相對鏡頭。參數在 `src/data/camera.ts`。操作：移動、轉視角、跳躍（D24）、號令。
 
 ## 工作方式（從燈落之境帶過來的教訓）
