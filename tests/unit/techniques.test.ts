@@ -58,7 +58,7 @@ describe('技法池（資料全掃）', () => {
       }
       for (const id of t.likes) expect(ITEM_POOL, `${t.id} 的 ${id}`).toContain(id);
       for (const x of t.excludes) expect(techById(x).excludes, `${t.id} ✕ ${x} 要雙向`).toContain(t.id);
-      const blocks = [t.split, t.bounce, t.homing, t.orbit, t.ward, t.lamp, t.burn, t.seed, t.pillar].filter(Boolean); // 鬼火雨／衛星燈／燈油的資料掛在併進去的技法上（D57）
+      const blocks = [t.split, t.bounce, t.homing, t.orbit, t.ward, t.lamp, t.burn, t.seed, t.pillar, t.vortex, t.wake, t.sumo, t.domain, t.prison].filter(Boolean); // 鬼火雨／衛星燈／燈油的資料掛在併進去的技法上（D57）
       expect(blocks, `${t.id} 的機制資料`).toHaveLength(1);
     }
     expect(TECH_OFFER.chance).toBeGreaterThan(0);

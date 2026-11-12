@@ -11,8 +11,8 @@ const MAX_ORBS = 18;
 const MAX_OIL = 24;
 const MAX_SEEDS = 16;
 const MAX_PILLARS = 6; // = techniques.ts 的 PILLARS（數量詞條會一次噴更多根）
-const MAX_FLASHES = 24;
-const MAX_ZONES = 32;
+const MAX_FLASHES = 32; // 爆圈 24 ＋ 河童的漩渦 6（漩渦用同一張筆刷圓，會轉）
+const MAX_ZONES = 64; // 燃燒地 32 ＋ 河童的水痕 28 ＋ 水域 4
 const DECAL_LIFT = 0.16;
 const PILLAR_HEIGHT = 7;
 /** 衛星燈比繞身的鬼火大幾倍 */
@@ -59,7 +59,8 @@ export class TechFx {
     this.inkLight = new THREE.Color(fx.inkLight);
     const blob = (c: string) => soft(c, { emissive: c, emissiveIntensity: BLOB_GLOW });
     const og = ball(0.32, 14, 10);
-    const om = blob(fx.inkLight);
+    // 繞身的球用主色（深一點才像墨，不是亮亮的球）
+    const om = blob(fx.ink);
     this.orbs = this.instanced(og, om, MAX_ORBS);
     const circle = () => new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2);
     const zg = circle();
@@ -180,6 +181,31 @@ export class TechFx {
       this.zoneFade.setX(zc, 0.08 + 0.75 * (1 - f) * (1 - f));
       zc++;
     }
+    // 河童的水痕（小墨漬，沿路一段一段）與水域（大片淡墨）：和燃燒地用同一組實例
+    for (let i = 0; i < tc.wakeX.length && zc < MAX_ZONES; i++) {
+      if (tc.wakeLife[i] <= 0) continue;
+      const x = tc.wakeX[i];
+      const z = tc.wakeZ[i];
+      const r = tc.wakeR * 1.35;
+      this.m.makeRotationY(i * 2.399).scale(this.v.set(r, 1, r)).setPosition(x, run.map.heightAt(x, z) + DECAL_LIFT, z);
+      this.zones.setMatrixAt(zc, this.m);
+      this.zones.setColorAt(zc, this.inkLight);
+      const f = Math.max(0, tc.wakeLife[i] / tc.wakeMax[i]);
+      this.zoneFade.setX(zc, 0.15 + 0.7 * (1 - f));
+      zc++;
+    }
+    for (let i = 0; i < tc.domX.length && zc < MAX_ZONES; i++) {
+      if (tc.domLife[i] <= 0) continue;
+      const x = tc.domX[i];
+      const z = tc.domZ[i];
+      const r = tc.domR[i] * 1.2;
+      this.m.makeRotationY(i * 1.3 + t * 0.15).scale(this.v.set(r, 1, r)).setPosition(x, run.map.heightAt(x, z) + DECAL_LIFT - 0.02, z);
+      this.zones.setMatrixAt(zc, this.m);
+      this.zones.setColorAt(zc, tc.inDomain ? this.ink : this.inkLight);
+      const f = Math.max(0, tc.domLife[i] / tc.domMax[i]);
+      this.zoneFade.setX(zc, 0.05 + 0.6 * (1 - f) * (1 - f));
+      zc++;
+    }
     this.zones.count = zc;
     this.zones.instanceMatrix.needsUpdate = true;
     if (this.zones.instanceColor) this.zones.instanceColor.needsUpdate = true;
@@ -237,9 +263,24 @@ export class TechFx {
       // 一筆畫出的圈（円相），每個轉不同角度；柱子落地用墨黑、護身用淡色、其他用主色
       this.m.makeRotationY(i * 2.1).scale(this.v.set(r * 1.3, 1, r * 1.3)).setPosition(x, run.map.heightAt(x, z) + DECAL_LIFT + 0.03, z);
       this.flashes.setMatrixAt(fc, this.m);
-      this.flashes.setColorAt(fc, tc.flashKind[i] === FLASH_KINDS.ward ? this.inkLight : tc.flashKind[i] === FLASH_KINDS.pillar ? this.black : this.ink);
+      this.flashes.setColorAt(fc, tc.flashKind[i] === FLASH_KINDS.ward ? this.inkLight : tc.flashKind[i] === FLASH_KINDS.pillar || tc.flashKind[i] === FLASH_KINDS.sumo ? this.black : this.ink);
       this.flashFade.setX(fc, 0.04 + 0.85 * (1 - f));
       fc++;
+    }
+    // 河童的漩渦：兩圈反方向轉的筆刷圓（大的主色、小的墨黑），快消失時乾掉
+    for (let i = 0; i < tc.vortX.length; i++) {
+      if (tc.vortLife[i] <= 0) continue;
+      const x = tc.vortX[i];
+      const z = tc.vortZ[i];
+      const f = Math.max(0, tc.vortLife[i] / tc.vortMax[i]);
+      for (let ring = 0; ring < 2 && fc < MAX_FLASHES; ring++) {
+        const r = tc.vortR[i] * (ring === 0 ? 1.15 : 0.6);
+        this.m.makeRotationY((ring === 0 ? -1 : 1.6) * t * 5 + i).scale(this.v.set(r, 1, r)).setPosition(x, run.map.heightAt(x, z) + DECAL_LIFT + 0.04 + ring * 0.01, z);
+        this.flashes.setMatrixAt(fc, this.m);
+        this.flashes.setColorAt(fc, ring === 0 ? this.ink : this.inkLight);
+        this.flashFade.setX(fc, 0.04 + 0.7 * (1 - f) * (1 - f));
+        fc++;
+      }
     }
     this.flashes.count = fc;
     this.flashes.instanceMatrix.needsUpdate = true;

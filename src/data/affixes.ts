@@ -41,7 +41,7 @@ export const AFFIX_COUNT: Record<Rarity, number> = { common: 2, rare: 2, epic: 3
  * 每條詞條的基準值（比例；chain 是連鎖數的增量；count 是整數、不吃稀有度與隨機），乘上稀有度倍率與隨機。
  * D77：拿掉每級 +12% 之後，攻擊力的基準從 0.1 提高（sim 校準，docs/02 變更紀錄）。
  */
-export const AFFIX_BASE: Record<TechStat, number> = { power: 0.3, area: 0.12, rate: 0.12, chain: 0.3, crit: 0.1, critDmg: 0.5, duration: 0.25, count: 1 };
+export const AFFIX_BASE: Record<TechStat, number> = { power: 0.24, area: 0.15, rate: 0.15, chain: 0.3, crit: 0.12, critDmg: 0.6, duration: 0.25, count: 1 };
 
 /** 隨機範圍：基準 × [lo, hi]（均勻），取整到 1% */
 export const AFFIX_ROLL = { lo: 0.6, hi: 1.4 } as const;
@@ -63,6 +63,11 @@ export const AFFIX_STATS: Record<TechMechanic, readonly TechStat[]> = {
   seed: ['power', 'area', 'rate', 'crit', 'critDmg'],
   pillar: ['power', 'area', 'rate', 'crit', 'critDmg', 'count'],
   oil: ['power', 'area', 'rate', 'crit', 'critDmg', 'duration'],
+  vortex: ['power', 'area', 'rate', 'duration'],
+  wake: ['power', 'area', 'rate', 'duration'],
+  sumo: ['power', 'area', 'rate', 'crit', 'critDmg'],
+  domain: ['power', 'area', 'duration'],
+  prison: ['power', 'area', 'duration', 'crit', 'critDmg'],
 };
 
 export interface Affix {

@@ -110,7 +110,7 @@ YOKAI.kappa = {
   weapon: {
     id: 'waterdisc',
     kind: 'boomerang',
-    damage: 8,
+    damage: 7.2,
     interval: 1.1,
     range: 9,
     volley: 1,

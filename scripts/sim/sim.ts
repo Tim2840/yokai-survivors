@@ -53,8 +53,8 @@ const GIVE_SETS = Number(arg('giveSets', '0'));
 /** --mobile：用手機的敵人上限（WAVES.maxEnemiesMobile） */
 const MOBILE = process.argv.includes('--mobile');
 const KAPPA_TECHS: Record<string, string[]> = {
-  dps: ['splash', 'torrent', 'geyser', 'pond', 'whirl', 'veil'],
-  survive: ['whirl', 'veil', 'pond', 'geyser', 'splash', 'torrent'],
+  dps: ['vortex', 'torrent', 'geyser', 'sumo', 'whirl', 'wake', 'prison', 'backwash', 'domain'],
+  survive: ['whirl', 'domain', 'sumo', 'geyser', 'wake', 'prison', 'vortex', 'torrent', 'backwash'],
 };
 const TECH_BY_STRATEGY: Record<string, string[]> = {
   dps: ['kitsunebi', 'bounce', 'pillar', 'seed', 'hellfire', 'lamp', 'homing', 'ring', 'ward'],

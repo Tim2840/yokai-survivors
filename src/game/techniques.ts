@@ -14,9 +14,14 @@ const PILLARS = 6;
 const LAMPS = 4;
 /** 同時畫出幾隻燒著的人類 */
 const OIL_SHOWN = 24;
+/** 河童：同時幾個漩渦、幾段水痕、幾片水域、幾個「落地」待結算 */
+const VORTS = 6;
+const WAKES = 28;
+const DOMAINS = 4;
+const LANDS = 8;
 
 /** 畫面上一閃而過的爆炸圈：0 = 火種、1 = 護身火、2 = 鬼火柱落地 */
-export const FLASH_KINDS = { seed: 0, ward: 1, pillar: 2, rain: 3 } as const;
+export const FLASH_KINDS = { seed: 0, ward: 1, pillar: 2, rain: 3, sumo: 4 } as const;
 
 /**
  * 技法系統（D48）：這一局拿到的技法、它們的狀態與效果。Run 在固定的幾個地方呼叫它：
@@ -36,7 +41,7 @@ export class Techniques {
   /** 已進化的配方 id（D53）：兩個材料技法併成一個，效果 × EVO.power、參數換成進化後的值 */
   readonly evolved: string[] = [];
   /** 現在作用中的技法（依機制；沒有 = null） */
-  readonly act: Record<TechMechanic, TechDef | null> = { kitsunebi: null, bounce: null, homing: null, rain: null, ring: null, ward: null, satellite: null, lamp: null, hellfire: null, seed: null, pillar: null, oil: null };
+  readonly act: Record<TechMechanic, TechDef | null> = { kitsunebi: null, bounce: null, homing: null, rain: null, ring: null, ward: null, satellite: null, lamp: null, hellfire: null, seed: null, pillar: null, oil: null, vortex: null, wake: null, sumo: null, domain: null, prison: null };
 
   // ── 繞身（燈籠環、衛星燈）──
   ringAngle = 0;
@@ -93,6 +98,42 @@ export class Techniques {
   readonly oilShow = new Int32Array(OIL_SHOWN);
   oilShown = 0;
 
+  // ── 河童：渦流、滑水、相撲、水域、間歇泉的落地（D86）──
+  readonly vortX = new Float32Array(VORTS);
+  readonly vortZ = new Float32Array(VORTS);
+  readonly vortR = new Float32Array(VORTS);
+  readonly vortLife = new Float32Array(VORTS);
+  readonly vortMax = new Float32Array(VORTS);
+  private readonly vortDmg = new Float32Array(VORTS);
+  private readonly vortTick = new Float32Array(VORTS);
+  readonly wakeX = new Float32Array(WAKES);
+  readonly wakeZ = new Float32Array(WAKES);
+  readonly wakeLife = new Float32Array(WAKES);
+  readonly wakeMax = new Float32Array(WAKES);
+  wakeR = 0;
+  private wakeNext = 0;
+  private wakeTimer = 0;
+  private wakeLastX = NaN;
+  private wakeLastZ = NaN;
+  private sumoTimer = 0;
+  /** 最近一次相撲推擊的時間與方向（畫面、測試用） */
+  sumoAt = -1;
+  sumoHits = 0;
+  readonly domX = new Float32Array(DOMAINS);
+  readonly domZ = new Float32Array(DOMAINS);
+  readonly domR = new Float32Array(DOMAINS);
+  readonly domLife = new Float32Array(DOMAINS);
+  readonly domMax = new Float32Array(DOMAINS);
+  /** 河童現在站在水域裡嗎 */
+  inDomain = false;
+  private readonly landX = new Float32Array(LANDS);
+  private readonly landZ = new Float32Array(LANDS);
+  private readonly landR = new Float32Array(LANDS);
+  private readonly landT = new Float32Array(LANDS);
+  private readonly landDmg = new Float32Array(LANDS);
+  /** 水牢困住人的累計次數（測試用） */
+  prisonTrips = 0;
+
   // ── 爆炸圈（只給畫面）──
   readonly flashX = new Float32Array(FLASHES);
   readonly flashZ = new Float32Array(FLASHES);
@@ -104,6 +145,8 @@ export class Techniques {
 
   /** 每隻人類下次可以被「繞身／火柱」觸發命中效果的時間（run.clock） */
   private readonly fxUntil: Float32Array;
+  /** 滑水：這隻人類這一步已經被水痕打過了（記時間） */
+  private readonly wakeMark: Float32Array;
   private readonly near = new Int32Array(COMBAT.queryMax);
   private readonly pick = new Int32Array(COMBAT.queryMax);
   /** 射出去的鬼火用的武器參數（歸巢加速） */
@@ -114,6 +157,7 @@ export class Techniques {
     capacity: number,
   ) {
     this.fxUntil = new Float32Array(capacity);
+    this.wakeMark = new Float32Array(capacity).fill(-1);
     this.oilT = new Float32Array(capacity);
     this.oilTick = new Float32Array(capacity);
     this.oilDmg = new Float32Array(capacity);
@@ -208,6 +252,11 @@ export class Techniques {
     if (d.burn) out.burn = { ...d.burn, radius: d.burn.radius * A, tick: d.burn.tick / R, seconds: d.burn.seconds * D };
     if (d.seed) out.seed = { ...d.seed, radius: d.seed.radius * A, delay: d.seed.delay / R };
     if (d.pillar) out.pillar = { ...d.pillar, radius: d.pillar.radius * A, range: d.pillar.range * A, interval: d.pillar.interval / R };
+    if (d.vortex) out.vortex = { ...d.vortex, radius: d.vortex.radius * A, tick: d.vortex.tick / R, seconds: d.vortex.seconds * D };
+    if (d.wake) out.wake = { ...d.wake, radius: d.wake.radius * A, tick: d.wake.tick / R, seconds: d.wake.seconds * D };
+    if (d.sumo) out.sumo = { ...d.sumo, reach: d.sumo.reach * A, chainRadius: d.sumo.chainRadius * A, interval: d.sumo.interval / R };
+    if (d.domain) out.domain = { ...d.domain, radius: d.domain.radius * A, seconds: d.domain.seconds * D };
+    if (d.prison) out.prison = { ...d.prison, radius: d.prison.radius * A, hold: d.prison.hold * D };
     return out;
   }
   /** 效果倍率（畫面、測試用） */
@@ -328,10 +377,16 @@ export class Techniques {
     });
     // 拿掉的技法留下的東西清掉
     if (!this.act.hellfire) this.zoneLife.fill(0);
-    if (!this.act.seed) this.seedT.fill(0);
     if (!this.act.pillar) this.pillarLife.fill(0);
     if (!this.act.ward) this.wardCharge = 0;
     if (!this.act.lamp) this.lampN = 0;
+    if (!this.act.vortex) this.vortLife.fill(0);
+    if (!this.act.wake) this.wakeLife.fill(0);
+    if (!this.act.domain) {
+      this.domLife.fill(0);
+      this.leaveDomain();
+    }
+    if (!this.act.prison && !this.act.seed) this.seedT.fill(0);
     if (!this.act.oil) {
       this.oilT.fill(0);
       this.oilShown = 0;
@@ -543,6 +598,12 @@ export class Techniques {
     if (a.ward?.ward && !this.wardReady) this.wardCharge += dt;
     if (a.hellfire?.burn) this.zonesStep(dt, a.hellfire.burn);
     if (a.seed?.seed) this.seedsStep(dt, a.seed.seed);
+    if (a.vortex?.vortex) this.vortexStep(dt, a.vortex.vortex);
+    if (a.wake?.wake) this.wakeStep(dt, a.wake.wake);
+    if (a.sumo?.sumo) this.sumoStep(dt, a.sumo.sumo);
+    if (a.domain?.domain) this.domainStep(dt, a.domain.domain);
+    if (a.prison?.prison) this.prisonStep(dt, a.prison.prison);
+    this.landStep(dt);
     for (let i = 0; i < PILLARS; i++) if (this.pillarLife[i] > 0) this.pillarLife[i] -= dt;
     for (let i = 0; i < FLASHES; i++) if (this.flashLife[i] > 0) this.flashLife[i] -= dt;
   }
@@ -555,6 +616,12 @@ export class Techniques {
     this.flashLife.fill(0);
     this.oilT.fill(0);
     this.oilShown = 0;
+    this.vortLife.fill(0);
+    this.wakeLife.fill(0);
+    this.domLife.fill(0);
+    this.landT.fill(0);
+    this.wakeLastX = NaN;
+    this.leaveDomain();
   }
 
   // ── 繞身 ─────────────────────────────────────────────────────
@@ -626,12 +693,14 @@ export class Techniques {
    */
   hitFx(e: number, x: number, z: number, dmg: number, direct: boolean, crit = false): void {
     const a = this.act;
-    if (!a.kitsunebi && !a.bounce && !a.hellfire && !a.rain && !a.oil) return;
+    if (!a.kitsunebi && !a.bounce && !a.hellfire && !a.rain && !a.oil && !a.vortex && !a.domain) return;
     if (!direct) {
       const now = this.run.clock;
       if (now < this.fxUntil[e]) return;
       this.fxUntil[e] = now + TECH_RULES.hitFxCooldown;
     }
+    if (a.vortex?.vortex) this.addVortex(a.vortex.vortex, x, z, dmg * a.vortex.vortex.damage * this.pw('vortex'));
+    if (a.domain?.domain) this.addDomain(a.domain.domain, x, z);
     // 每個命中效果各自套上自己的暴擊詞條（fxCrit）
     if (a.kitsunebi?.split) this.splitFrom(a.kitsunebi.split, x, z, e, dmg * this.pw('kitsunebi') * this.fxCrit('kitsunebi', crit));
     if (a.bounce?.bounce) {
@@ -858,6 +927,22 @@ export class Techniques {
   // ── 火種 ─────────────────────────────────────────────────────
   /** 人類被武器打倒：有火種技法就在那裡留一顆 */
   onWeaponKill(x: number, z: number): void {
+    const pr = this.act.prison?.prison;
+    if (pr) {
+      // 水牢：留下一顆水泡（和火種共用同一組位置陣列；seedT = 還會存在幾秒）
+      let live = 0;
+      let free = -1;
+      for (let i = 0; i < SEEDS; i++) {
+        if (this.seedT[i] > 0) live++;
+        else if (free < 0) free = i;
+      }
+      if (free >= 0 && live < pr.max) {
+        this.seedX[free] = x;
+        this.seedZ[free] = z;
+        this.seedT[free] = pr.life;
+      }
+      return;
+    }
     const sd = this.act.seed?.seed;
     if (!sd) return;
     let live = 0;
@@ -960,7 +1045,276 @@ export class Techniques {
       const ex = en.x[e];
       const ez = en.z[e];
       run.weaponHit(e, dmg, ex - x, ez - z, 0, crit);
+      // 間歇泉：把人沖上天（定身），落地再受一次傷害
+      if (p.launchSeconds && en.alive[e]) en.applyHold(e, p.launchSeconds);
       this.hitFx(e, ex, ez, dmg, false, crit);
+    }
+    if (p.launchSeconds && p.launchDamage) {
+      let slot = 0;
+      for (let i = 0; i < LANDS; i++) if (this.landT[i] <= this.landT[slot]) slot = i;
+      this.landX[slot] = x;
+      this.landZ[slot] = z;
+      this.landR[slot] = R;
+      this.landT[slot] = p.launchSeconds;
+      this.landDmg[slot] = run.shotDamage(false) * base * p.launchDamage;
+    }
+  }
+
+  // ── 河童：渦流、滑水、相撲、水域、水牢、落地（D86）──────────────
+  /** 渦流：命中處生出漩渦（離現有的太近就只把那個續時間） */
+  private addVortex(v: NonNullable<TechDef['vortex']>, x: number, z: number, tickDamage: number): void {
+    const R = v.radius * this.run.stats.value.area;
+    let slot = -1;
+    let live = 0;
+    for (let i = 0; i < VORTS; i++) {
+      if (this.vortLife[i] <= 0) {
+        if (slot < 0) slot = i;
+        continue;
+      }
+      live++;
+      if ((this.vortX[i] - x) ** 2 + (this.vortZ[i] - z) ** 2 < (R * 0.9) ** 2) {
+        this.vortLife[i] = Math.max(this.vortLife[i], v.seconds * 0.6);
+        return;
+      }
+    }
+    if (slot < 0 || live >= Math.min(v.max, VORTS)) return;
+    this.vortX[slot] = x;
+    this.vortZ[slot] = z;
+    this.vortR[slot] = R;
+    this.vortLife[slot] = v.seconds;
+    this.vortMax[slot] = v.seconds;
+    this.vortDmg[slot] = tickDamage;
+    this.vortTick[slot] = 0;
+  }
+  private vortexStep(dt: number, v: NonNullable<TechDef['vortex']>): void {
+    const run = this.run;
+    const en = run.enemies;
+    for (let i = 0; i < VORTS; i++) {
+      if (this.vortLife[i] <= 0) continue;
+      this.vortLife[i] -= dt;
+      const cx = this.vortX[i];
+      const cz = this.vortZ[i];
+      const m = en.within(cx, cz, this.vortR[i], this.near);
+      this.vortTick[i] -= dt;
+      const tick = this.vortTick[i] <= 0;
+      if (tick) this.vortTick[i] += v.tick;
+      for (let j = 0; j < m; j++) {
+        const e = this.near[j];
+        if (!en.alive[e]) continue;
+        // 往中心拉（頭目拉不動）：用擊退速度，會被地形擋住、不會穿牆
+        if (en.variant[e] !== 2) {
+          const dx = cx - en.x[e];
+          const dz = cz - en.z[e];
+          const d = Math.hypot(dx, dz);
+          if (d > 0.35) {
+            en.kx[e] = (dx / d) * v.pull;
+            en.kz[e] = (dz / d) * v.pull;
+          }
+        }
+        if (tick) run.weaponHit(e, this.vortDmg[i], 0, 0, 0, false, true);
+      }
+    }
+  }
+  get vortexCount(): number {
+    let n = 0;
+    for (let i = 0; i < VORTS; i++) if (this.vortLife[i] > 0) n++;
+    return n;
+  }
+
+  /** 滑水：移動時身後留下水痕；踩到的人受傷、變慢 */
+  private wakeStep(dt: number, w: NonNullable<TechDef['wake']>): void {
+    const run = this.run;
+    const en = run.enemies;
+    this.wakeR = w.radius * run.stats.value.area;
+    if (Number.isNaN(this.wakeLastX)) {
+      this.wakeLastX = run.px;
+      this.wakeLastZ = run.pz;
+    }
+    if ((run.px - this.wakeLastX) ** 2 + (run.pz - this.wakeLastZ) ** 2 >= w.spacing * w.spacing) {
+      const i = this.wakeNext;
+      this.wakeNext = (this.wakeNext + 1) % Math.min(w.max, WAKES);
+      this.wakeX[i] = this.wakeLastX;
+      this.wakeZ[i] = this.wakeLastZ;
+      this.wakeLife[i] = w.seconds;
+      this.wakeMax[i] = w.seconds;
+      this.wakeLastX = run.px;
+      this.wakeLastZ = run.pz;
+    }
+    this.wakeTimer -= dt;
+    const tick = this.wakeTimer <= 0;
+    if (tick) this.wakeTimer += w.tick;
+    const dmg = tick ? run.shotDamage(false) * w.damage * this.pw('wake') : 0;
+    for (let i = 0; i < WAKES; i++) {
+      if (this.wakeLife[i] <= 0) continue;
+      this.wakeLife[i] -= dt;
+      if (!tick) continue;
+      const m = en.within(this.wakeX[i], this.wakeZ[i], this.wakeR, this.near);
+      for (let j = 0; j < m; j++) {
+        const e = this.near[j];
+        if (!en.alive[e]) continue;
+        // 同一步踩到好幾段只算一次（用這一步的時間當記號）
+        if (this.wakeMark[e] === run.clock) continue;
+        en.applySlow(e, w.slow, w.tick * 1.5);
+        run.weaponHit(e, dmg, 0, 0, 0, false, true);
+        this.wakeMark[e] = run.clock;
+      }
+    }
+  }
+  get wakeCount(): number {
+    let n = 0;
+    for (let i = 0; i < WAKES; i++) if (this.wakeLife[i] > 0) n++;
+    return n;
+  }
+
+  /** 相撲：每隔幾秒把正前方的人一掌推飛；被推的人身後的人也受傷 */
+  private sumoStep(dt: number, sm: NonNullable<TechDef['sumo']>): void {
+    const run = this.run;
+    this.sumoTimer -= dt;
+    if (this.sumoTimer > 0) return;
+    const en = run.enemies;
+    const reach = sm.reach * run.stats.value.area;
+    const m = en.within(run.px, run.pz, reach, this.near);
+    const fx = Math.sin(run.facing);
+    const fz = Math.cos(run.facing);
+    const cosHalf = Math.cos(sm.arc / 2);
+    let any = false;
+    for (let j = 0; j < m; j++) {
+      const e = this.near[j];
+      if (!en.alive[e]) continue;
+      const dx = en.x[e] - run.px;
+      const dz = en.z[e] - run.pz;
+      const d = Math.hypot(dx, dz) || 1;
+      if ((dx * fx + dz * fz) / d < cosHalf) {
+        this.near[j] = -1;
+        continue;
+      }
+      any = true;
+    }
+    if (!any) {
+      this.sumoTimer = 0; // 前方沒有人：等有人再推
+      return;
+    }
+    this.sumoTimer += (sm.interval * run.cooldownMult) / run.stats.value.atkSpeed;
+    this.sumoAt = run.clock;
+    this.addFlash(run.px + fx * reach * 0.55, run.pz + fz * reach * 0.55, reach * 0.6, 0.3, FLASH_KINDS.sumo);
+    const base = run.shotDamage(false) * sm.damage * this.pw('sumo');
+    const cr = sm.chainRadius;
+    for (let j = 0; j < m; j++) {
+      const e = this.near[j];
+      if (e < 0 || !en.alive[e]) continue;
+      const ex = en.x[e];
+      const ez = en.z[e];
+      const dmg = base * this.ownCrit('sumo');
+      run.weaponHit(e, dmg, fx, fz, sm.knockback, this.lastCrit);
+      this.sumoHits++;
+      // 被推的人撞到身後的人：身後 chainRadius 公尺內（不在這次推擊名單裡的）也受傷
+      const k = en.within(ex + fx * cr, ez + fz * cr, cr, this.pick);
+      for (let q = 0; q < k; q++) {
+        const o = this.pick[q];
+        if (o === e || !en.alive[o]) continue;
+        const ox = en.x[o] - run.px;
+        const oz = en.z[o] - run.pz;
+        if (Math.hypot(ox, oz) <= reach && (ox * fx + oz * fz) / (Math.hypot(ox, oz) || 1) >= cosHalf) continue;
+        run.weaponHit(o, base * sm.chainDamage, fx, fz, sm.knockback * 0.4, false, true);
+      }
+    }
+  }
+
+  /** 水域：命中處留下一片水域（離現有的太近就續時間）；裡面的敵人變慢，河童自己在裡面變強 */
+  private addDomain(dm: NonNullable<TechDef['domain']>, x: number, z: number): void {
+    const R = dm.radius * this.run.stats.value.area;
+    let slot = -1;
+    let live = 0;
+    let oldest = 0;
+    for (let i = 0; i < DOMAINS; i++) {
+      if (this.domLife[i] <= 0) {
+        if (slot < 0) slot = i;
+        continue;
+      }
+      live++;
+      if (this.domLife[i] < this.domLife[oldest] || this.domLife[oldest] <= 0) oldest = i;
+      if ((this.domX[i] - x) ** 2 + (this.domZ[i] - z) ** 2 < R * R) {
+        this.domLife[i] = dm.seconds;
+        return;
+      }
+    }
+    if (live >= Math.min(dm.max, DOMAINS)) return;
+    if (slot < 0) slot = oldest;
+    this.domX[slot] = x;
+    this.domZ[slot] = z;
+    this.domR[slot] = R;
+    this.domLife[slot] = dm.seconds;
+    this.domMax[slot] = dm.seconds;
+  }
+  private domainStep(dt: number, dm: NonNullable<TechDef['domain']>): void {
+    const run = this.run;
+    const en = run.enemies;
+    let inside = false;
+    for (let i = 0; i < DOMAINS; i++) {
+      if (this.domLife[i] <= 0) continue;
+      this.domLife[i] -= dt;
+      if (this.domLife[i] <= 0) continue;
+      if ((run.px - this.domX[i]) ** 2 + (run.pz - this.domZ[i]) ** 2 <= this.domR[i] ** 2) inside = true;
+      const m = en.within(this.domX[i], this.domZ[i], this.domR[i], this.near);
+      for (let j = 0; j < m; j++) if (en.alive[this.near[j]]) en.applySlow(this.near[j], dm.slow, 0.25);
+    }
+    if (inside && !this.inDomain) {
+      const k = this.pw('domain');
+      run.stats.setMod('tech:domain', { pct: { atkSpeed: dm.selfAtkSpeed * k, speed: dm.selfSpeed * k }, flat: { regen: dm.selfRegen * k } });
+      this.inDomain = true;
+    } else if (!inside) this.leaveDomain();
+  }
+  private leaveDomain(): void {
+    if (!this.inDomain) return;
+    this.run.stats.clearMod('tech:domain');
+    this.inDomain = false;
+  }
+  get domainCount(): number {
+    let n = 0;
+    for (let i = 0; i < DOMAINS; i++) if (this.domLife[i] > 0) n++;
+    return n;
+  }
+
+  /** 水牢：水泡等人碰；有人碰到就把範圍內的人困住並造成傷害 */
+  private prisonStep(dt: number, pr: NonNullable<TechDef['prison']>): void {
+    const run = this.run;
+    const en = run.enemies;
+    const R = pr.radius * run.stats.value.area;
+    for (let i = 0; i < SEEDS; i++) {
+      if (this.seedT[i] <= 0) continue;
+      this.seedT[i] -= dt;
+      const x = this.seedX[i];
+      const z = this.seedZ[i];
+      const m = en.within(x, z, R * 0.55, this.near);
+      let touched = false;
+      for (let j = 0; j < m; j++) if (en.alive[this.near[j]]) touched = true;
+      if (!touched) continue;
+      this.seedT[i] = 0;
+      this.prisonTrips++;
+      this.addFlash(x, z, R, 0.4, FLASH_KINDS.seed);
+      const base = run.shotDamage(false) * pr.damage * this.pw('prison');
+      const k = en.within(x, z, R, this.near);
+      for (let j = 0; j < k; j++) {
+        const e = this.near[j];
+        if (!en.alive[e]) continue;
+        en.applyHold(e, pr.hold);
+        const c = this.ownCrit('prison');
+        run.weaponHit(e, base * c, 0, 0, 0, this.lastCrit);
+      }
+    }
+  }
+
+  /** 間歇泉沖上天的人落地：範圍內再受一次傷害 */
+  private landStep(dt: number): void {
+    const run = this.run;
+    const en = run.enemies;
+    for (let i = 0; i < LANDS; i++) {
+      if (this.landT[i] <= 0) continue;
+      this.landT[i] -= dt;
+      if (this.landT[i] > 0) continue;
+      this.addFlash(this.landX[i], this.landZ[i], this.landR[i], 0.3, FLASH_KINDS.pillar);
+      const m = en.within(this.landX[i], this.landZ[i], this.landR[i], this.near);
+      for (let j = 0; j < m; j++) if (en.alive[this.near[j]]) run.weaponHit(this.near[j], this.landDmg[i], 0, 0, 0, false, true);
     }
   }
 

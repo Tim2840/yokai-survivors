@@ -5,7 +5,7 @@ import { launch, openPage, press, waitState, VIEWPORTS } from '../regress/lib.mj
 const tag = process.argv[2] || 'now';
 const SETS = {
   'chochin-kozo': { field: ['hellfire', 'pillar', 'seed'], near: ['ring', 'ward', 'kitsunebi'] },
-  kappa: { field: ['pond', 'geyser', 'bubble'], near: ['whirl', 'veil', 'splash'] },
+  kappa: { field: ['domain', 'geyser', 'prison'], near: ['whirl', 'sumo', 'vortex'], move: ['wake', 'vortex', 'torrent'] },
 };
 const browser = await launch();
 for (const vp of VIEWPORTS.filter((v) => v.name !== 'phone-landscape')) {
@@ -32,6 +32,8 @@ for (const vp of VIEWPORTS.filter((v) => v.name !== 'phone-landscape')) {
         while ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await page.locator('.overlay[data-screen="levelup"] .card').first().click();
         await page.evaluate(() => { window.__game.spawn('villager', 12); for (let i = 0; i < 5; i++) window.__game.advance(0.2); });
       }
+      while ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await page.locator('.overlay[data-screen="levelup"] .card').first().click();
+      if (name === 'move') await page.evaluate(() => { const g = window.__game; g.driveWorld(1, 0.3); for (let i = 0; i < 12; i++) g.advance(0.1); g.driveWorld(0, 0); });
       while ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await page.locator('.overlay[data-screen="levelup"] .card').first().click();
       await page.evaluate(() => { window.__game.advance(0.15); window.__game.render(); window.__game.render(); });
       await page.screenshot({ path: `screenshots/ink-${tag}-${yokai}-${name}-${vp.name}.png` });

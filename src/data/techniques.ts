@@ -40,7 +40,7 @@ export type TechFamily = (typeof TECH_FAMILIES)[number];
 
 /** delivery：取代原本的發射；extra：照常發射，另外多一種出手方式；onHit：打中人類時多發生的事（出手方式打中也會觸發）；passive：自己運作，不吃也不給掛勾（歸巢、護身火） */
 export type TechKind = 'delivery' | 'extra' | 'onHit' | 'passive';
-export type TechMechanic = 'kitsunebi' | 'bounce' | 'homing' | 'rain' | 'ring' | 'ward' | 'satellite' | 'lamp' | 'hellfire' | 'seed' | 'pillar' | 'oil';
+export type TechMechanic = 'kitsunebi' | 'bounce' | 'homing' | 'rain' | 'ring' | 'ward' | 'satellite' | 'lamp' | 'hellfire' | 'seed' | 'pillar' | 'oil' | 'vortex' | 'wake' | 'sumo' | 'domain' | 'prison';
 
 export interface TechDef {
   id: string;
@@ -82,7 +82,18 @@ export interface TechDef {
   /** 火種：被鬼火打倒的人留下火種，delay 秒後爆炸（半徑、傷害比例）；最多 max 個 */
   seed?: { delay: number; radius: number; damage: number; max: number };
   /** 鬼火柱：每 interval 秒（÷ 攻速）在 range 公尺內人最多的地方噴火柱（半徑、傷害比例、畫面停留秒數） */
-  pillar?: { interval: number; range: number; radius: number; damage: number; life: number; max: number };
+  pillar?: { interval: number; range: number; radius: number; damage: number; life: number; max: number; /** 把噴到的人沖上天（河童的間歇泉）：定身幾秒、落地再受一次傷害（× damage 的比例） */ launchSeconds?: number; launchDamage?: number };
+  // ── 河童自己的機制（D86，docs/25：每隻妖怪每系有自己的特色）──
+  /** 渦流（連鎖）：命中處生出漩渦 seconds 秒，每 tick 秒把半徑內的人往中心拉（pull 公尺/秒）並造成傷害（命中傷害 × damage）；同時最多 max 個，離現有漩渦太近就不再生 */
+  vortex?: { radius: number; seconds: number; tick: number; pull: number; damage: number; max: number };
+  /** 滑水（近身）：移動時每走 spacing 公尺在身後留下一段水痕（seconds 秒）；踩到的人每 tick 秒受傷（主武器傷害 × damage）並減速 slow；最多 max 段 */
+  wake?: { spacing: number; radius: number; seconds: number; tick: number; damage: number; slow: number; max: number };
+  /** 相撲（近身）：每 interval 秒把正前方（reach 公尺、張角 arc 弧度）的人一掌推飛（主武器傷害 × damage、擊退 knockback）；被推的人身後 chainRadius 公尺內的人也受傷（× chainDamage） */
+  sumo?: { interval: number; reach: number; arc: number; damage: number; knockback: number; chainRadius: number; chainDamage: number };
+  /** 水域（佈置）：命中處留下一片水域 seconds 秒（不傷人）：裡面的敵人減速 slow；河童自己站在裡面攻擊速度 +selfAtkSpeed、移動速度 +selfSpeed、每秒回復 +selfRegen；最多 max 片 */
+  domain?: { radius: number; seconds: number; slow: number; selfAtkSpeed: number; selfSpeed: number; selfRegen: number; max: number };
+  /** 水牢（佈置）：被打倒的人留下水泡（存在 life 秒）；有人碰到（radius 公尺內）就把範圍內的人困住 hold 秒並造成傷害（主武器傷害 × damage）；最多 max 顆 */
+  prison?: { life: number; radius: number; hold: number; damage: number; max: number };
 }
 
 export const TECHS: readonly TechDef[] = [
@@ -95,7 +106,7 @@ export const TECHS: readonly TechDef[] = [
     kind: 'onHit',
     likes: ['volley', 'splash', 'atkSpeed', 'power'],
     excludes: [],
-    split: { children: 2, damage: 0.55, range: 7, shardBonus: 1, reSplit: 1 },
+    split: { children: 2, damage: 0.42, range: 7, shardBonus: 1, reSplit: 1 },
     // 併進來的「鬼火雨」（D57）：進化形態 Lv6 解鎖，命中處再落下幾顆小火
     rain: { count: 2, range: 3, radius: 1.2, damage: 0.5, life: 0.3 },
   },
@@ -202,15 +213,14 @@ export const TECHS: readonly TechDef[] = [
     homing: { returnPierce: 2, speedMult: 1.15, returnDamage: 1.5 },
   },
   {
-    id: 'splash',
+    id: 'vortex',
     form: 1,
-    mech: 'kitsunebi',
     weapon: 'waterdisc',
     family: 'chain',
     kind: 'onHit',
-    likes: ['volley', 'splash', 'atkSpeed', 'power'],
+    likes: ['area', 'power', 'atkSpeed'],
     excludes: [],
-    split: { children: 2, damage: 0.55, range: 7, shardBonus: 1, reSplit: 1 },
+    vortex: { radius: 3.2, seconds: 2.2, tick: 0.4, pull: 5, damage: 0.3, max: 3 },
   },
   {
     id: 'whirl',
@@ -223,46 +233,42 @@ export const TECHS: readonly TechDef[] = [
     orbit: { radius: 3.0, spin: 2.6, hitRadius: 1.0, tick: 0.25, damage: 1.3, knockback: 3, baseOrbs: 1, innerDamage: 0.5, innerKnockback: 6 },
   },
   {
-    id: 'veil',
+    id: 'sumo',
     form: 1,
-    mech: 'ward',
-    weapon: 'waterdisc',
-    family: 'near',
-    kind: 'passive',
-    likes: ['armor', 'hp', 'regen', 'area'],
-    excludes: [],
-    ward: { chargeSeconds: 6, burstRadius: 2.5, burstDamage: 2 },
-  },
-  {
-    id: 'stream',
-    mech: 'lamp',
     weapon: 'waterdisc',
     family: 'near',
     kind: 'extra',
-    likes: ['speed', 'area', 'atkSpeed'],
+    likes: ['power', 'atkSpeed', 'hp', 'armor'],
     excludes: [],
-    lamp: { count: 1, ahead: 4, side: 1.6, hitRadius: 1.3, tick: 0.3, damage: 1.2, knockback: 4 },
+    sumo: { interval: 2.6, reach: 3.4, arc: 2.2, damage: 2.4, knockback: 14, chainRadius: 2.2, chainDamage: 0.6 },
   },
   {
-    id: 'pond',
+    id: 'wake',
+    weapon: 'waterdisc',
+    family: 'near',
+    kind: 'extra',
+    likes: ['speed', 'area', 'power'],
+    excludes: [],
+    wake: { spacing: 1.1, radius: 1.1, seconds: 2.4, tick: 0.4, damage: 0.45, slow: 0.3, max: 24 },
+  },
+  {
+    id: 'domain',
     form: 2,
-    mech: 'hellfire',
     weapon: 'waterdisc',
     family: 'field',
     kind: 'onHit',
-    likes: ['area', 'power', 'atkSpeed'],
+    likes: ['area', 'atkSpeed', 'regen', 'speed'],
     excludes: [],
-    burn: { radius: 1.6, seconds: 2.5, tick: 0.5, damage: 0.35, shotDamage: 1.2, interval: 1.25, maxZones: 24 },
+    domain: { radius: 3.4, seconds: 5, slow: 0.35, selfAtkSpeed: 0.25, selfSpeed: 0.15, selfRegen: 2, max: 2 },
   },
   {
-    id: 'bubble',
-    mech: 'seed',
+    id: 'prison',
     weapon: 'waterdisc',
     family: 'field',
     kind: 'onHit',
     likes: ['power', 'area', 'volley'],
     excludes: [],
-    seed: { delay: 1, radius: 2, damage: 0.6, max: 12 },
+    prison: { life: 5, radius: 1.9, hold: 2, damage: 1.2, max: 10 },
   },
   {
     id: 'geyser',
@@ -272,7 +278,8 @@ export const TECHS: readonly TechDef[] = [
     kind: 'extra',
     likes: ['power', 'area', 'atkSpeed'],
     excludes: [],
-    pillar: { interval: 4, range: 10, radius: 1.8, damage: 2.5, life: 0.5, max: 4 },
+    // 河童的間歇泉把人沖上天：定身 1 秒，落地再受一次傷害（傷害本身調低一點，總量和原本相近）
+    pillar: { interval: 4, range: 10, radius: 1.8, damage: 1.8, life: 0.5, max: 4, launchSeconds: 1, launchDamage: 0.45 },
   },
 ];
 
@@ -423,9 +430,9 @@ export const EVOS: readonly EvoDef[] = [
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
-    id: 'evoSplash',
-    from: ['waterdisc', 'splash'],
-    set: { splash: { split: { children: 4, damage: 0.75, range: 9, reSplit: 2 } } },
+    id: 'evoVortex',
+    from: ['waterdisc', 'vortex'],
+    set: { vortex: { vortex: { radius: 4.2, seconds: 3, pull: 7, damage: 0.45, max: 4 } } },
     weapon: { damage: 0.15, pierce: 0, volley: 0 },
   },
   {
@@ -435,33 +442,33 @@ export const EVOS: readonly EvoDef[] = [
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
-    id: 'evoVeil',
-    from: ['waterdisc', 'veil'],
-    set: { veil: { ward: { chargeSeconds: 3, burstRadius: 3.8, burstDamage: 3 } } },
+    id: 'evoSumo',
+    from: ['waterdisc', 'sumo'],
+    set: { sumo: { sumo: { interval: 1.9, reach: 4.2, damage: 3.2, knockback: 18, chainDamage: 0.9 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
-    id: 'evoStream',
-    from: ['waterdisc', 'stream'],
-    set: { stream: { lamp: { count: 2, damage: 1.7 } } },
+    id: 'evoWake',
+    from: ['waterdisc', 'wake'],
+    set: { wake: { wake: { radius: 1.5, seconds: 3.4, damage: 0.65, slow: 0.45 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
-    id: 'evoBubble',
-    from: ['waterdisc', 'bubble'],
-    set: { bubble: { seed: { delay: 0.6, radius: 2.8, damage: 1.0, max: 20 } } },
+    id: 'evoPrison',
+    from: ['waterdisc', 'prison'],
+    set: { prison: { prison: { radius: 2.6, hold: 3, damage: 1.9, max: 16 } } },
     weapon: { damage: 0.15, pierce: 0, volley: 0.5 },
   },
   {
-    id: 'evoPond',
-    from: ['waterdisc', 'pond'],
-    set: { pond: { burn: { radius: 2.2, seconds: 4, damage: 0.5 } } },
+    id: 'evoDomain',
+    from: ['waterdisc', 'domain'],
+    set: { domain: { domain: { radius: 4.4, seconds: 7, slow: 0.5, selfAtkSpeed: 0.4, selfRegen: 3.5, max: 3 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoGeyser',
     from: ['waterdisc', 'geyser'],
-    set: { geyser: { pillar: { interval: 2.5, range: 12, radius: 2.2, damage: 3.5, life: 0.5, max: 6 } } },
+    set: { geyser: { pillar: { interval: 2.5, range: 12, radius: 2.2, damage: 2.6, life: 0.5, max: 6, launchSeconds: 1.3, launchDamage: 0.45 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
 ];

@@ -64,9 +64,23 @@ export class Enemies {
   /** 擊殺掉的魂火倍率後的點數 */
   readonly pointsLeft: Float32Array;
   readonly alive: Uint8Array;
+  /** 定身剩幾秒（> 0 不能移動；河童的水牢、間歇泉；頭目不吃）與減速（slowT 秒內速度 × (1 − slowBy)） */
+  readonly hold: Float32Array;
+  readonly slowT: Float32Array;
+  readonly slowBy: Float32Array;
   /** 用過的最大索引 + 1（渲染與迴圈的上界） */
   high = 0;
   aliveCount = 0;
+  /** 減速（取比較強的那個；頭目減半） */
+  applySlow(i: number, by: number, seconds: number): void {
+    const v = this.variant[i] === 2 ? by * 0.5 : by;
+    if (this.slowT[i] <= 0 || v >= this.slowBy[i]) this.slowBy[i] = v;
+    this.slowT[i] = Math.max(this.slowT[i], seconds);
+  }
+  /** 定身（頭目不吃） */
+  applyHold(i: number, seconds: number): void {
+    if (this.variant[i] !== 2) this.hold[i] = Math.max(this.hold[i], seconds);
+  }
   private readonly free: Int32Array;
   private freeTop = 0;
   readonly hash: SpatialHash;
@@ -101,6 +115,9 @@ export class Enemies {
     this.scale = new Float32Array(capacity).fill(1);
     this.pointsLeft = new Float32Array(capacity);
     this.alive = new Uint8Array(capacity);
+    this.hold = new Float32Array(capacity);
+    this.slowT = new Float32Array(capacity);
+    this.slowBy = new Float32Array(capacity);
     this.free = new Int32Array(capacity);
     this.hash = new SpatialHash(map.minX, map.minZ, map.maxX - map.minX, map.maxZ - map.minZ, COMBAT.hashCell, capacity);
   }
@@ -147,6 +164,9 @@ export class Enemies {
     this.pointsLeft[i] = KIND_POINTS[kind] * (elite ? STAGE.elite.orbMult : 1);
     this.speed[i] = KIND_SPEED[kind] * enemySpeedMult(night);
     this.flash[i] = 0;
+    this.hold[i] = 0;
+    this.slowT[i] = 0;
+    this.slowBy[i] = 0;
     this.contactCd[i] = 0;
     this.yaw[i] = 0;
     this.phase[i] = phase;
@@ -251,6 +271,14 @@ export class Enemies {
       }
       let spd = this.speed[i] * this.speedMult * map.speedAt(ex, ez);
       if (d2 < auraR2) spd *= 1 - auraSlow;
+      if (this.slowT[i] > 0) {
+        this.slowT[i] -= dt;
+        spd *= 1 - this.slowBy[i];
+      }
+      if (this.hold[i] > 0) {
+        this.hold[i] -= dt;
+        spd = 0;
+      }
       const beh = KIND_BEHAVIOR[this.kind[i]];
       let faceYaw = NaN;
       if (beh === BEH_SHIELD) {
