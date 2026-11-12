@@ -182,6 +182,10 @@ export function installDevApi(ctx: DevContext): void {
       return { calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs ? i.programs.length : 0 };
     },
     /** 不畫圖，只讓鏡頭與畫面物件追上（鏡頭掃描測試用，比 render() 快很多） */
+    /** Blender 試作的模型載好了嗎（?model=blender；docs/26） */
+    get blenderReady() {
+      return ctx.game.view?.blenderReady ?? false;
+    },
     settle: () => ctx.game.frame(1),
     advance: (dt: number) => ctx.loop.advance(dt),
     render: () => {

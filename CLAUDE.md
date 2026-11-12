@@ -25,7 +25,8 @@
 | 使用者提出新想法／要做設計決定時（我是使用者的設計夥伴） | `docs/20-design-gate.md`（設計審查卡格式、商業等級體檢、創新機會；**我主動研究與把關，使用者只拍板**） |
 | 小地圖 | `docs/21-minimap.md`（已做第一版 D66） |
 | 每隻妖怪的技法特色、化身限定技法、技法變化度體檢 | `docs/25-character-techs.md`（已實作 D83～D86：化身、化身限定技法、技法格子、河童自己的 5 招）；養成第二版（詞條、整場加成）`docs/24-buildcraft-v2.md` |
-| 引入 Blender（模型流程） | `docs/26-blender-pipeline.md`（設計審查卡，Q53 待回答；**還沒改「不使用外部模型檔」的鐵則**） |
+| 關卡後段的敵人（老練的人類）、換招後失效的升級 | `docs/27-stage-ramp-dead-upgrades.md`（兩張審查卡，Q55、Q56 待回答，未實作） |
+| 引入 Blender（模型流程） | `docs/26-blender-pipeline.md`（試作完成 D87，`tools/blender/`、`?model=blender`；Q54 待回答；**還沒改「不使用外部模型檔」的鐵則**） |
 | 敵人設計、關卡變化、難度怎麼來 | `docs/22-enemy-design.md`（E-1 已完成 D70：足輕、弓手、出場配方；E-2 待開工） |
 | 美術：日系 RPG 像素風（D72）、場景氣氛、角色 Q 版造型、地圖精緻化排程 | `docs/23-art-pass.md` |
 | **新增任何「所有角色共用」或「新角色」的內容前** | `docs/19-generalization.md`（舉一反三檢查表：已發生的錯、可預見的場景、5 個自問） |

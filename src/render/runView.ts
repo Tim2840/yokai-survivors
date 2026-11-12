@@ -49,7 +49,12 @@ const SHADOW_MIN_RADIUS = { world: 0.55, player: 0.25 } as const;
 
 export class RunView {
   private readonly world: WorldView;
-  private readonly player: Character;
+  private player: Character;
+  /** Blender 試作（docs/26）：載進來的鳥居，結束時要丟掉 */
+  private trialProps: { dispose(): void }[] = [];
+  private disposed = false;
+  /** 試作模型載好了（截圖腳本等這個） */
+  blenderReady = false;
   /** 投射物畫成扁盤（河童）還是圓球（鬼火） */
   private diskShot = false;
   private readonly enemyMeshes: THREE.InstancedMesh[];
@@ -97,6 +102,30 @@ export class RunView {
     renderer.playerLight.color.set(fxOf(run.yokai.id).light);
     renderer.playerLight.intensity = PLAYER_LIGHT_BASE * (this.amb.playerLight ?? 1);
     this.group.add(this.player.root);
+    // Blender 試作（docs/26，Q53）：網址帶 ?model=blender 才換成 Blender 版的提燈小僧，並在出生點旁邊放一座鳥居；主網址的打包不含
+    if (import.meta.env.MODE !== 'single-main' && new URLSearchParams(location.search).get('model') === 'blender') {
+      void import('../units/blenderModels').then(async (mod) => {
+        const torii = await mod.loadBlenderTorii();
+        const monk = run.yokai.id === 'chochin-kozo' ? await mod.loadBlenderMonk() : null;
+        if (this.disposed) {
+          torii.dispose();
+          monk?.dispose();
+          return;
+        }
+        const tx = run.px + 5;
+        const tz = run.pz - 6;
+        torii.root.position.set(tx, map.heightAt(tx, tz), tz);
+        this.group.add(torii.root);
+        this.trialProps.push(torii);
+        if (monk) {
+          this.group.remove(this.player.root);
+          this.player.dispose();
+          this.player = monk;
+          this.group.add(monk.root);
+        }
+        this.blenderReady = true;
+      });
+    }
 
     // 敵人：每種人類一個實例化圖層（各自的幾何＋頂點色），頂點著色器做彈跳與傾斜（T2：頂點著色器動畫）
     // 走路：腳（CHIBI.footY 以下的頂點）左右輪流前後擺（D72）。材質的 onBeforeCompile 在每個材質上是同一份程式碼 → 著色器程式共用（p1 程式數不變）

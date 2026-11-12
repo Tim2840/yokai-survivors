@@ -35,6 +35,8 @@ export default defineConfig(({ mode }) => {
   const single = mode === 'single' || mode === 'single-main';
   return {
     base: './',
+    // Blender 試作（docs/26）：.glb 當成資源，`?inline` 內嵌成 data URL（單一檔案的測試頁也帶得走）
+    assetsInclude: ['**/*.glb'],
     plugins: single ? [viteSingleFile()] : [pwa()],
     build: { outDir: single ? 'dist-single' : 'dist', chunkSizeWarningLimit: 1500, copyPublicDir: !single },
   };
