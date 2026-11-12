@@ -165,7 +165,7 @@ export function itemValue(d: ItemDef, rarity: Rarity): number {
  * 主鬼火命中時，從被打中的人類身上飛出幾片小鬼火，各自追向 range 公尺內其他（不同的）人類，每片傷害 = 那一發 × damage。
  * 一次最多 max 片。碎片本身不再飛出碎片（招式變化「狐火分裂」例外：碎片打中後再分裂 1 次，片數 +1）。
  */
-export const SHARDS = { damage: 0.35, range: 6, max: 5 } as const;
+export const SHARDS = { damage: 0.3, range: 6, max: 4 } as const;
 /**
  * 換招後失效的升級（D89、Q56，使用者 2026-11-12：「換了一些招式後，主武器拿到的東西會對某些技法無用了」）：
  * 「取代發射」的技法（燈籠環、渦盤）讓主武器不再發射，穿透、濺射、碎裂本來會完全沒用。改成**自動轉換**：

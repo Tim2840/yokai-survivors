@@ -62,6 +62,6 @@ describe('取代發射的技法：穿透、濺射、碎裂自動轉換', () => {
   });
 
   it('碎片傷害比例沿用 SHARDS.damage（沒有另外放大）', () => {
-    expect(SHARDS.damage).toBeLessThanOrEqual(0.35);
+    expect(SHARDS.damage).toBeLessThanOrEqual(0.3);
   });
 });
