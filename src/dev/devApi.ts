@@ -219,10 +219,10 @@ export function installDevApi(ctx: DevContext): void {
     /** 清場：敵人、敵方的箭都清掉，並解除無敵時間（測試人類行為用） */
     clearEnemies: () => run()?.devClearEnemies(),
     /** 在玩家相對位置 (dx, dz) 放一隻指定的人類（截圖用；不動、打不死）；回傳索引 */
-    spawnAt: (id: string, dx: number, dz: number, variant = 0) => {
+    spawnAt: (id: string, dx: number, dz: number, variant = 0, vet = 0) => {
       const r = run();
       if (!r) return -1;
-      const i = r.enemies.spawn(kindIndex(id), r.px + dx, r.pz + dz, 1, 0, dx * 0.7 + dz, variant);
+      const i = r.enemies.spawn(kindIndex(id), r.px + dx, r.pz + dz, 1, 0, dx * 0.7 + dz, variant, 1, vet);
       if (i >= 0) {
         r.enemies.hp[i] = r.enemies.maxHp[i] = 1e9;
         r.enemies.speed[i] = 0;

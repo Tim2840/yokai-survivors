@@ -135,7 +135,7 @@ export const TECHS: readonly TechDef[] = [
     weapon: 'ghostfire',
     family: 'near',
     kind: 'delivery',
-    likes: ['area', 'hp', 'armor', 'atkSpeed'],
+    likes: ['area', 'hp', 'armor', 'atkSpeed', 'pierce', 'splash'],
     excludes: ['bounce', 'homing'],
     orbit: { radius: 3.0, spin: 2.6, hitRadius: 1.0, tick: 0.25, damage: 1.3, knockback: 3, baseOrbs: 1, innerDamage: 0.5, innerKnockback: 6 },
     // 併進來的「衛星燈」（D57）：進化形態 Lv6 解鎖，外圈多一盞大燈籠慢慢繞
@@ -228,7 +228,7 @@ export const TECHS: readonly TechDef[] = [
     weapon: 'waterdisc',
     family: 'near',
     kind: 'delivery',
-    likes: ['area', 'hp', 'armor', 'atkSpeed'],
+    likes: ['area', 'hp', 'armor', 'atkSpeed', 'splash'],
     excludes: ['torrent', 'backwash'],
     orbit: { radius: 3.0, spin: 2.6, hitRadius: 1.0, tick: 0.25, damage: 1.3, knockback: 3, baseOrbs: 1, innerDamage: 0.5, innerKnockback: 6 },
   },

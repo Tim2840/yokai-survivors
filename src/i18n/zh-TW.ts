@@ -92,6 +92,7 @@ export const zhTW = {
   'sum.volley': '發射數',
   'sum.splash': '濺射半徑',
   'sum.converted': '繞身中：穿透、濺射改為擴大繞身判定',
+  'sum.convertedNoPierce': '繞身中：濺射改為擴大繞身判定',
   'sum.shardsNote': '碎裂只對主武器、分裂、繞身的命中有效',
   'sum.shards': '碎裂（每次命中）',
   'sum.shardsVal': '平均 {v} 片、每片 {d}%',

@@ -51,6 +51,8 @@ export async function run(browser) {
       }, 60);
 
       await step(`${vp.name} 雨乞：量表滿了按大招 → 回血`, async () => {
+        // 戰鬥中升級的選卡會擋住大招鈕（玩家一定要先選卡）：先用真實點擊選掉
+        while ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await page.locator('.overlay[data-screen="levelup"] .card').first().click();
         await page.evaluate(() => { window.__game.god = false; window.__game.setHp(20); window.__game.chargeUlt(); window.__game.advance(0.1); window.__game.render(); });
         const hp0 = await page.evaluate(() => window.__game.run.hp);
         await press(ctx, '#btn-ult');
