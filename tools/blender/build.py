@@ -14,20 +14,20 @@ import lib  # noqa: E402
 from lib import Builder  # noqa: E402
 
 # 顏色（和 src/art/palette.ts 對齊）
-ROBE = '#f2e6cf'
-ROBE_SHADE = '#d9c7a6'
-SASH = '#e8873a'
-SKIN = '#ffd9b8'
-BLUSH = '#ff9d8a'
-STRAW = '#d9b877'
-STRAW_DARK = '#b08a4a'
-RED = '#d8432a'
+ROBE = '#fff1d6'
+ROBE_SHADE = '#f0c48a'
+SASH = '#ff7a1f'
+SKIN = '#ffe0c2'
+BLUSH = '#ff7f7a'
+STRAW = '#ffc24d'
+STRAW_DARK = '#d98a22'
+RED = '#ff3b30'
 DARK = '#2b2530'
 WHITE = '#ffffff'
 WOOD = '#8a5a34'
 BAMBOO = '#9aa860'
 LAMP = '#ffcf7a'
-VERMILION = '#d24a2c'
+VERMILION = '#f0361f'
 STONE = '#9a9488'
 ROPE = '#e6d6a8'
 
@@ -66,8 +66,9 @@ def build_chochin():
     b.sphere('head', 0.36, (0, 0, 0.94), SKIN, 'head', scale=(1.05, 0.98, 0.97), seg=28, rings=18)
     for sx in (-1, 1):
         b.sphere('ear', 0.075, (sx * 0.365, 0.02, 0.9), SKIN, 'head', scale=(0.55, 0.8, 1), seg=10, rings=8)
-        b.sphere('eye', 0.075, (sx * 0.135, -0.322, 0.915), DARK, 'head', scale=(0.82, 0.42, 1.2), seg=14, rings=10)
-        b.sphere('eyehl', 0.026, (sx * 0.118, -0.358, 0.955), WHITE, 'head', scale=(1, 0.5, 1), seg=8, rings=6)
+        b.sphere('eye', 0.098, (sx * 0.135, -0.322, 0.915), DARK, 'head', scale=(0.85, 0.42, 1.22), seg=16, rings=12)
+        b.sphere('iris', 0.07, (sx * 0.135, -0.345, 0.9), '#4a8cff', 'head', scale=(0.8, 0.3, 1.0), seg=12, rings=8)
+        b.sphere('eyehl', 0.034, (sx * 0.118, -0.358, 0.955), WHITE, 'head', scale=(1, 0.5, 1), seg=8, rings=6)
         b.sphere('eyehl2', 0.013, (sx * 0.158, -0.352, 0.885), WHITE, 'head', scale=(1, 0.5, 1), seg=6, rings=4)
         b.sphere('blush', 0.06, (sx * 0.235, -0.268, 0.83), BLUSH, 'head', scale=(1.1, 0.3, 0.6), seg=10, rings=6)
         b.sphere('brow', 0.03, (sx * 0.14, -0.318, 1.03), '#8a6a4a', 'head', scale=(1.6, 0.4, 0.45), rot=(0, sx * 0.25, 0), seg=8, rings=6)

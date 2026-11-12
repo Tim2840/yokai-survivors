@@ -52,6 +52,8 @@ export const DEFAULT_LOOK = 'jrpg';
 export const LOOKS: Record<string, LookDef> = {
   classic: { id: 'classic', toonSteps: 0, shadows: false, shadow: { extent: 24, size: 1024, sizeTouch: 1024, bias: -0.0005, normalBias: 0.05 }, pixelShort: 0, levels: 0, dither: 0, edge: 0, edgeFrom: 0.05, edgeTo: 0.1, tiltShift: 0, tiltFocus: 0.5, timeOfDay: false, contrast: 1.06, saturation: 1.1, vignette: 0.28, shadowStrength: 1, rampMin: 0.38, rim: 0, edgeTint: [0, 0, 0], bloom: { strength: 0.5, radius: 0.3, threshold: 1.05 } },
   jrpg: { id: 'jrpg', toonSteps: 3, shadows: true, shadow: { extent: 24, size: 2048, sizeTouch: 1024, bias: -0.0005, normalBias: 0.06 }, pixelShort: 520, levels: 20, dither: 0.25, edge: 0.55, edgeFrom: 0.08, edgeTo: 0.2, tiltShift: 0, tiltFocus: 0.5, timeOfDay: true, contrast: 1.1, saturation: 1.15, vignette: 0.16, shadowStrength: 0.8, rampMin: 0.4, rim: 0.8, edgeTint: [0.32, 0.36, 0.55], bloom: { strength: 0.28, radius: 0.15, threshold: 1.9 } },
+  /** 樣張（Q57）：參考妖怪手錶那種乾淨、高飽和、暖色暗部的卡通渲染；不像素化、描線偏暖。只有 ?look=cel 才用 */
+  cel: { id: 'cel', toonSteps: 3, shadows: true, shadow: { extent: 24, size: 2048, sizeTouch: 1024, bias: -0.0005, normalBias: 0.06 }, pixelShort: 1100, levels: 0, dither: 0, edge: 0.7, edgeFrom: 0.08, edgeTo: 0.2, tiltShift: 0, tiltFocus: 0.5, timeOfDay: true, contrast: 1.06, saturation: 1.45, vignette: 0.06, shadowStrength: 0.8, rampMin: 0.62, rim: 0.8, edgeTint: [0.3, 0.16, 0.2], bloom: { strength: 0.28, radius: 0.15, threshold: 1.9 } },
 };
 
 /** 目前的畫面風格：網址 ?look= 優先（開發），其次打包時的 VITE_LOOK，都沒有就用 DEFAULT_LOOK */

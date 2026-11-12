@@ -5,13 +5,14 @@ import { launch, openPage, startRun, VIEWPORTS } from '../regress/lib.mjs';
 const tag = process.argv[2] || 'now';
 const VIEWS = [
   { name: 'close', yaw: 20, pitch: 14, dist: 4.2 },
+  { name: 'face', yaw: 200, pitch: 8, dist: 3.4 },
   { name: 'play', yaw: 0, pitch: 40, dist: 0 },
   { name: 'torii', yaw: 40, pitch: 12, dist: 11 },
 ];
 const browser = await launch();
 for (const vp of VIEWPORTS.filter((v) => v.name !== 'phone-landscape')) {
   for (const kind of ['code', 'blender']) {
-    const ctx = await openPage(browser, vp, '?q=1&seed=93' + (kind === 'blender' ? '&model=blender' : ''));
+    const ctx = await openPage(browser, vp, '?q=1&seed=93' + (kind === 'blender' ? '&model=blender' : '') + (process.env.LOOK ? '&look=' + process.env.LOOK : ''));
     const { page } = ctx;
     await startRun(ctx);
     if (kind === 'blender') await page.waitForFunction(() => window.__game.blenderReady, null, { timeout: 30000 });
