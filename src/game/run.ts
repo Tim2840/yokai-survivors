@@ -872,11 +872,7 @@ export class Run {
     else if (gen === 3) this.tech.onBounceHit(e, hx, hz, dmg, pr.chain[p]);
     // 碎火（D43）：主鬼火命中 → 飛出幾片；狐火分裂時碎片打中後再分裂一次
     if (gen === 0) {
-      const exact = this.shardsExact;
-      if (exact > 0) {
-        const n = Math.min(SHARDS.max, Math.floor(exact) + (this.rngCombat.next() < exact - Math.floor(exact) ? 1 : 0));
-        this.emitShards(hx, hz, e, dmg * SHARDS.damage, n, 1);
-      }
+      this.emitHitShards(hx, hz, e, dmg);
     } else if (gen === 1 && this.tech.act.kitsunebi?.split && this.shardsExact > 0) {
       this.emitShards(hx, hz, e, dmg, this.tech.act.kitsunebi.split.reSplit, 2);
     }
@@ -1508,6 +1504,14 @@ export class Run {
     const base = this.shardBonus;
     if (base <= 0) return 0;
     return base + (this.tech.act.kitsunebi?.split?.shardBonus ?? 0);
+  }
+
+  /** 一次命中（主鬼火、取代發射的繞身）飛出的碎火：平均 shardsExact 片（小數 = 機率多一片），每片 SHARDS.damage 倍 */
+  emitHitShards(hx: number, hz: number, e: number, dmg: number): void {
+    const exact = this.shardsExact;
+    if (exact <= 0) return;
+    const n = Math.min(SHARDS.max, Math.floor(exact) + (this.rngCombat.next() < exact - Math.floor(exact) ? 1 : 0));
+    this.emitShards(hx, hz, e, dmg * SHARDS.damage, n, 1);
   }
 
   /** 碎火：從 (x,z) 朝 range 內最近的 n 隻其他人類各飛一片（不同的人類；第 gen 代） */

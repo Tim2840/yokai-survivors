@@ -34,7 +34,7 @@ export interface BuildSummary {
   /** 屬性：id、目前值（內部單位）、基礎值 */
   stats: { id: StatId; value: number; base: number }[];
   /** 武器：鬼火數量、濺射半徑（公尺）、穿透 */
-  weapon: { volley: number; splash: number; pierce: number; shards: number; shardDamage: number };
+  weapon: { volley: number; splash: number; pierce: number; shards: number; shardDamage: number; /** 取代發射的技法在場（穿透、濺射、碎裂已轉換成繞身的效果，Q56） */ converted: boolean };
   /** 詛咒：讓敵人變強，> 0 才列 */
   curses: { id: CurseId; v: number }[];
   /** 難度 %（關卡、地圖；0.5 = +50%） */
@@ -123,6 +123,7 @@ export function summarizeBuild(run: Run): BuildSummary {
       pierce: w.pierce + run.pierceBonus,
       shards: run.shardsExact,
       shardDamage: SHARDS.damage,
+      converted: !!run.tech.act.ring,
     },
     curses,
     difficulty: run.difficulty,

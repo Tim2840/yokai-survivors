@@ -166,3 +166,13 @@ export function itemValue(d: ItemDef, rarity: Rarity): number {
  * 一次最多 max 片。碎片本身不再飛出碎片（招式變化「狐火分裂」例外：碎片打中後再分裂 1 次，片數 +1）。
  */
 export const SHARDS = { damage: 0.35, range: 6, max: 5 } as const;
+/**
+ * 換招後失效的升級（D89、Q56，使用者 2026-11-12：「換了一些招式後，主武器拿到的東西會對某些技法無用了」）：
+ * 「取代發射」的技法（燈籠環、渦盤）讓主武器不再發射，穿透、濺射、碎裂本來會完全沒用。改成**自動轉換**：
+ *  - 穿透 +1、濺射 +1 公尺 → 繞身的判定半徑變大（每點／每公尺加幾成，總共最多加 cap 成）；
+ *  - 碎裂 → 繞身打中人類時也飛出碎片（每隻人類 TECH_RULES.hitFxCooldown 秒一次，避免高頻判定放大）；
+ *  - 發射數 → 本來就會多一顆繞身（既有）。
+ * 沒有被轉換的（沿用 D65 的過濾）：揮擊武器的投射物類升級。**碎裂只掛在「主武器命中、狐火分裂的小火、繞身命中」**，
+ * 彈跳、護身、衛星、火柱、開路燈、業火、燈油、雨、種子與河童其他技法的傷害都不會飛出碎片（暫停頁列出）。
+ */
+export const DELIVERY_CONVERT = { hitRadiusPerPierce: 0.08, hitRadiusPerSplashMeter: 0.2, hitRadiusCap: 0.4 } as const;

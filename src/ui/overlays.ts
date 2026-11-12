@@ -549,6 +549,9 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
       if (has('splash')) rows.push(`<div data-stat="splash"><dt>${t('sum.splash')}</dt><dd>${t('sum.meters', { v: fix(sum.weapon.splash, 1) })}</dd></div>`);
       if (has('splash')) rows.push(`<div data-stat="shards"><dt>${t('sum.shards')}</dt><dd>${t('sum.shardsVal', { v: fix(sum.weapon.shards, 1), d: fix(sum.weapon.shardDamage * 100, 0) })}</dd></div>`);
       if (has('pierce')) rows.push(`<div data-stat="pierce"><dt>${t('sum.pierce')}</dt><dd>${fix(sum.weapon.pierce)}</dd></div>`);
+      // 取代發射的技法在場：穿透、濺射、碎裂改成別的效果，說明一次（Q56）；碎裂只對少數出手方式有效，也寫清楚
+      if (sum.weapon.converted) rows.push(`<div data-stat="converted" class="weapon-note"><dt>${t('sum.converted')}</dt><dd></dd></div>`);
+      if (has('splash')) rows.push(`<div data-stat="shardsNote" class="weapon-note"><dt>${t('sum.shardsNote')}</dt><dd></dd></div>`);
       stats.innerHTML = rows.join('');
       const curse = q('sum-curse');
       const diff = sum.difficulty > 0 ? `<h3>${t('pause.difficulty', { d: fix(sum.difficulty * 100, 0) })}</h3><p class="sum-diff">${t('pause.difficultyDesc', { hp: fix(sum.difficulty * DIFFICULTY.hp * 100, 0), dmg: fix(sum.difficulty * DIFFICULTY.damage * 100, 0), n: fix(sum.difficulty * DIFFICULTY.spawn * 100, 0) })}</p>` : '';

@@ -15,6 +15,7 @@ import { TECHS, TECH_OFFER } from '../../src/data/techniques';
 import { PROGRESSION } from '../../src/data/progression';
 import { WAVES } from '../../src/data/waves';
 import { STAGE } from '../../src/data/stage';
+import { SHARDS } from '../../src/data/items';
 import { ELEMENT_WEIGHTS } from '../../src/data/elements';
 import type { TerrainMap } from '../../src/world/terrainMap';
 
@@ -60,7 +61,7 @@ const TECH_BY_STRATEGY: Record<string, string[]> = {
   dps: ['kitsunebi', 'bounce', 'pillar', 'seed', 'hellfire', 'lamp', 'homing', 'ring', 'ward'],
   survive: ['ring', 'ward', 'lamp', 'hellfire', 'pillar', 'seed', 'kitsunebi', 'bounce', 'homing'],
 };
-/** --tune countScale=3,hpScale=1.2,xp.needPerLevel=4,w.hpPerWave=0.2,tech.levelGap=2：臨時改旋鈕比較（不改檔案）；xp. 開頭是 PROGRESSION、w. 開頭是 WAVES、tech. 開頭是 TECH_OFFER、chapter. 開頭是 STAGE.chapter（例：chapter.normalStages=3） */
+/** --tune countScale=3,hpScale=1.2,xp.needPerLevel=4,w.hpPerWave=0.2,tech.levelGap=2：臨時改旋鈕比較（不改檔案）；xp. 開頭是 PROGRESSION、w. 開頭是 WAVES、shards. 開頭是 SHARDS（碎裂，Q56：shards.damage=0.25）、tech. 開頭是 TECH_OFFER、chapter. 開頭是 STAGE.chapter（例：chapter.normalStages=3） */
 import { SPAWN_RECIPES } from '../../src/data/spawnRecipes';
 const TUNE = arg('tune', '');
 function applyTune(): void {
@@ -79,6 +80,7 @@ function applyTune(): void {
     else if (k.startsWith('drops.')) (STAGE.drops as unknown as Record<string, number>)[k.slice(6)] = Number(v);
     else if (k.startsWith('w.')) (WAVES as unknown as Record<string, number>)[k.slice(2)] = Number(v);
     else if (k.startsWith('tech.')) (TECH_OFFER as unknown as Record<string, number>)[k.slice(5)] = Number(v);
+    else if (k.startsWith('shards.')) (SHARDS as unknown as Record<string, number>)[k.slice(7)] = Number(v);
     else if (k.startsWith('xp.')) (PROGRESSION as unknown as Record<string, number>)[k.slice(3)] = Number(v);
     else (tuning as unknown as Record<string, number>)[k] = Number(v);
   }

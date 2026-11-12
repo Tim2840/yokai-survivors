@@ -1,4 +1,5 @@
 import { COMBAT } from '../data/combat';
+import { DELIVERY_CONVERT } from '../data/items';
 import { EVO, evosFor, mechOf, TECHS, TECH_CHOICES, TECH_LEVELS, TECH_MAX, TECH_OFFER, TECH_RULES, evoById, techById, techsFor, type EvoDef, type TechDef, type TechMechanic } from '../data/techniques';
 import type { WeaponDef } from '../data/yokai';
 import { emptyAffixes, type Affix, type TechStat } from '../data/affixes';
@@ -648,8 +649,15 @@ export class Techniques {
     }
     for (let k = 0; k < n; k++) {
       const a = this.ringAngle + (k / n) * Math.PI * 2;
-      this.sweepAt(run.px + Math.cos(a) * R, run.pz + Math.sin(a) * R, o.hitRadius, o.damage * power, o.knockback, 'ring');
+      this.sweepAt(run.px + Math.cos(a) * R, run.pz + Math.sin(a) * R, o.hitRadius * this.ringHitMult, o.damage * power, o.knockback, 'ring');
     }
+  }
+
+  /** 繞身的判定半徑倍率：主武器的穿透、濺射在取代發射的技法上轉換成這個（DELIVERY_CONVERT，Q56） */
+  get ringHitMult(): number {
+    const C = DELIVERY_CONVERT;
+    const add = this.run.pierceBonus * C.hitRadiusPerPierce + this.run.splashBonus * C.hitRadiusPerSplashMeter;
+    return 1 + Math.min(C.hitRadiusCap, add);
   }
 
   private sweepSatellites(o: NonNullable<TechDef['satellite']>, power: number): void {
@@ -693,12 +701,15 @@ export class Techniques {
    */
   hitFx(e: number, x: number, z: number, dmg: number, direct: boolean, crit = false): void {
     const a = this.act;
-    if (!a.kitsunebi && !a.bounce && !a.hellfire && !a.rain && !a.oil && !a.vortex && !a.domain) return;
+    // 碎裂的轉換（Q56）：取代發射的技法（繞身）命中時也飛出碎片
+    const ringShards = !direct && !!a.ring && this.run.shardBonus > 0;
+    if (!ringShards && !a.kitsunebi && !a.bounce && !a.hellfire && !a.rain && !a.oil && !a.vortex && !a.domain) return;
     if (!direct) {
       const now = this.run.clock;
       if (now < this.fxUntil[e]) return;
       this.fxUntil[e] = now + TECH_RULES.hitFxCooldown;
     }
+    if (ringShards) this.run.emitHitShards(x, z, e, dmg);
     if (a.vortex?.vortex) this.addVortex(a.vortex.vortex, x, z, dmg * a.vortex.vortex.damage * this.pw('vortex'));
     if (a.domain?.domain) this.addDomain(a.domain.domain, x, z);
     // 每個命中效果各自套上自己的暴擊詞條（fxCrit）

@@ -189,6 +189,8 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 .sum-stats > div:nth-child(odd) { background: rgba(255,255,255,0.05); }
 .sum-stats dt { color: var(--text-dim); } .sum-stats dd { margin: 0; font-weight: 700; }
 .sum-stats .weapon-head { margin-top: 6px; }
+.sum-stats .weapon-note { font-size: 12px; padding-top: 0; padding-bottom: 0; }
+.sum-stats .weapon-note dt { color: var(--text-dim); opacity: 0.85; }
 #sum-curse { margin-top: 10px; }
 @media (max-width: 640px) { .sum { grid-template-columns: 1fr; } }
 @media (max-height: 520px) { .sum { grid-template-columns: 1fr 1fr; gap: 8px 14px; font-size: 13px; } .pause-panel h3 { font-size: 13px; } }
