@@ -66,36 +66,24 @@ def build_chochin():
         rod(b, 'sleeve', sh, sh + (hand - sh) * 0.86, 0.075, 0.12, ROBE, bone, seg=14)
         b.torus('cuff', 0.105, 0.016, tuple(sh + (hand - sh) * 0.86), HEM, bone, rot=tuple(Vector((0, 0, 1)).rotation_difference((hand - sh).normalized()).to_euler()), seg=14, tube=6)
         b.sphere('hand', 0.085, tuple(hand), SKIN, bone, seg=12, rings=8)
-    # ── 頭（第二版）：臉頰圓一點；眼睛大而乾淨（細的深色眼框、上深下亮的虹彩、一個大高光、細的上眼瞼）；小小的笑嘴 ──
+    # ── 頭（第三版，使用者：「方向對但臉很亂」）：照 Q 版的通則大砍——五官只留「眼睛、腮紅、小嘴」；
+    # 眼睛放低（留大額頭）、眼距約一個眼寬、一個大眼睛形狀（上深下亮的漸層）＋**一個**大高光；沒有眼瞼線、睫毛、瞳孔、眉毛、鼻子、舌頭、耳內；
+    # 細線在像素化後會變雜點，所以沒有任何細於 0.014 的零件。頭髮只留髮帽＋一撮圓潤的瀏海。 ──
     b.sphere('head', 0.36, (0, 0, 0.94), SKIN, 'head', scale=(1.1, 0.98, 0.96), seg=28, rings=18)
-    # 頭髮：後腦與頭頂的髮帽（從背後看不是光頭）＋兩側弧形的瀏海，**中間留空**（以前中間的髮束像一字眉）
     b.sphere('haircap', 0.372, (0, 0.13, 0.99), HAIR, 'head', scale=(1.1, 0.97, 0.97), seg=24, rings=16)
     for sx in (-1, 1):
-        b.sphere('ear', 0.075, (sx * 0.385, 0.02, 0.9), SKIN, 'head', scale=(0.55, 0.8, 1), seg=10, rings=8)
-        b.sphere('earin', 0.04, (sx * 0.415, 0.0, 0.9), BLUSH, 'head', scale=(0.35, 0.7, 0.9), seg=8, rings=6)
-        cx, cz = sx * 0.145, 0.9
-        b.sphere('eye', 0.098, (cx, -0.322, cz), INK, 'head', scale=(0.9, 0.36, 1.15), seg=18, rings=12)
-        b.sphere('iris', 0.088, (cx, -0.34, cz - 0.003), ('#7a3a1c', '#ffc760'), 'head', scale=(0.86, 0.34, 1.1), seg=18, rings=12)
-        b.sphere('pupil', 0.034, (cx, -0.356, cz + 0.005), INK, 'head', scale=(0.8, 0.3, 1.25), seg=12, rings=8)
-        b.sphere('hl', 0.034, (cx - sx * 0.028, -0.364, cz + 0.05), WHITE, 'head', scale=(1.0, 0.35, 1.3), seg=10, rings=8)
-        pts = []
-        for k in range(9):
-            th = math.radians(200 - k * 20)
-            pts.append((cx + sx * 0.098 * math.cos(th) * -1, -0.348, cz + 0.12 * math.sin(th) * 0.95 + 0.004))
-        pts.append((cx + sx * 0.138, -0.34, cz + 0.045))
-        for i in range(len(pts) - 1):
-            r1 = 0.012 - 0.0004 * i
-            rod(b, 'lid', pts[i], pts[i + 1], r1, max(0.006, r1 - 0.0004), INK, 'head', seg=6)
-        rod(b, 'lash', pts[-1], (cx + sx * 0.17, -0.33, cz + 0.08), 0.007, 0.003, INK, 'head', seg=5)
-        b.sphere('blush', 0.062, (sx * 0.255, -0.255, 0.815), ('#ff9a92', '#ff7f86'), 'head', scale=(1.15, 0.3, 0.62), seg=12, rings=8)
-        rod(b, 'brow', (sx * 0.085, -0.318, 1.045), (sx * 0.2, -0.3, 1.035), 0.011, 0.006, '#6a4630', 'head', seg=6)
-        # 瀏海：從頭頂往兩側垂下的弧形髮束
-        b.sphere('bang1', 0.15, (sx * 0.13, -0.275, 1.085), HAIR, 'head', scale=(1.05, 0.4, 0.62), rot=(0, sx * 0.42, 0), seg=14, rings=10)
-        b.sphere('bang2', 0.09, (sx * 0.265, -0.2, 0.99), HAIR, 'head', scale=(0.6, 0.55, 1.2), rot=(0, sx * 0.1, 0), seg=10, rings=8)
-        rod(b, 'sidelock', (sx * 0.34, -0.1, 1.0), (sx * 0.38, -0.12, 0.78), 0.05, 0.006, HAIR, 'head', seg=7)
-    b.sphere('nose', 0.015, (0, -0.358, 0.86), '#eea386', 'head', scale=(1, 0.6, 0.8), seg=8, rings=6)
-    b.sphere('mouth', 0.036, (0, -0.348, 0.8), '#7a2030', 'head', scale=(1.0, 0.3, 0.55), seg=12, rings=8)
-    b.sphere('tongue', 0.02, (0, -0.353, 0.79), '#ff8a98', 'head', scale=(1.1, 0.3, 0.5), seg=8, rings=6)
+        b.sphere('ear', 0.075, (sx * 0.385, 0.02, 0.88), SKIN, 'head', scale=(0.55, 0.8, 1), seg=10, rings=8)
+        cx, cz = sx * 0.165, 0.83
+        b.sphere('eye', 0.092, (cx, -0.322, cz), ('#2a1830', '#a8601e'), 'head', scale=(0.76, 0.36, 1.22), seg=20, rings=14)
+        b.sphere('hl', 0.034, (cx - sx * 0.022, -0.352, cz + 0.058), WHITE, 'head', scale=(1.0, 0.3, 1.2), seg=10, rings=8)
+        b.sphere('blush', 0.058, (sx * 0.265, -0.235, 0.755), ('#ff9a92', '#ff8088'), 'head', scale=(1.1, 0.3, 0.6), seg=12, rings=8)
+    # 瀏海：貼著髮際線的一道弧（中間微微分開），兩側各一小撮往下
+    for sx in (-1, 1):
+        b.sphere('fringe', 0.2, (sx * 0.15, -0.255, 1.14), HAIR, 'head', scale=(1.0, 0.32, 0.45), rot=(0, sx * 0.3, 0), seg=16, rings=10)
+        b.sphere('temple', 0.07, (sx * 0.3, -0.19, 1.0), HAIR, 'head', scale=(0.6, 0.5, 1.25), seg=10, rings=8)
+    # 嘴：一條小小的微笑弧線（兩小段）
+    rod(b, 'mouth1', (-0.045, -0.3, 0.74), (0.0, -0.308, 0.722), 0.014, 0.014, '#7a2030', 'head', seg=6)
+    rod(b, 'mouth2', (0.0, -0.308, 0.722), (0.045, -0.3, 0.74), 0.014, 0.014, '#7a2030', 'head', seg=6)
     # ── 斗笠（第二版）：抬高、小一圈、前緣微微翹起，露出額頭與瀏海；去掉下巴的紅帶 ──
     HZ = 1.2
     TILT = -0.15
