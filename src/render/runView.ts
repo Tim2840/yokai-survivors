@@ -125,7 +125,7 @@ export class RunView {
           this.group.add(monk.root);
         }
         this.blenderReady = true;
-      }).catch((err) => console.error('Blender 模型載入失敗，沿用舊模型', err));
+      }).catch((err) => console.error('blender model load failed, keeping the code model', err));
     }
 
     // 敵人：每種人類一個實例化圖層（各自的幾何＋頂點色），頂點著色器做彈跳與傾斜（T2：頂點著色器動畫）
