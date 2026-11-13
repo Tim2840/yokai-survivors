@@ -14,14 +14,14 @@ import lib  # noqa: E402
 from lib import Builder  # noqa: E402
 
 # 顏色（和 src/art/palette.ts 對齊）
-ROBE = '#33449e'
-ROBE_SHADE = '#222f78'
-SASH = '#ff7a1f'
-SKIN = '#ffe0c2'
+ROBE = '#3b52a8'
+ROBE_SHADE = '#27387f'
+SASH = '#f08a3c'
+SKIN = '#ffd8bd'
 BLUSH = '#ff7f7a'
-STRAW = '#ffc24d'
-STRAW_DARK = '#d98a22'
-RED = '#ff3b30'
+STRAW = '#f2bd5a'
+STRAW_DARK = '#c98f34'
+RED = '#e4503f'
 DARK = '#2b2530'
 WHITE = '#ffffff'
 WOOD = '#8a5a34'
@@ -30,6 +30,9 @@ LAMP = '#ffcf7a'
 VERMILION = '#f0361f'
 STONE = '#9a9488'
 ROPE = '#e6d6a8'
+HAIR = '#5a3b33'
+HEM = '#f3f0ff'
+INK = '#3a2438'
 
 
 def rod(b, name, p1, p2, r1, r2, color, bone, seg=10):
@@ -43,76 +46,65 @@ def rod(b, name, p1, p2, r1, r2, color, bone, seg=10):
 def build_chochin():
     lib.reset()
     b = Builder()
-    # ── 身體：下襬外擴的僧衣、下襬滾邊、腰帶與背後的結、交領 ──
-    b.lathe('robe', [(0.29, 0.2), (0.33, 0.24), (0.32, 0.32), (0.275, 0.44), (0.21, 0.57), (0.12, 0.64)], (0, 0, 0), ROBE, 'body', seg=28)
-    b.torus('hem', 0.32, 0.026, (0, 0, 0.225), '#dfe6ff', 'body', seg=28, tube=6)
-    for k in range(15):
-        th = math.radians(k * 24)
-        b.sphere('wave', 0.05, (0.318 * math.cos(th), 0.318 * math.sin(th), 0.27), '#e8ecff', 'body', scale=(1, 1, 0.55), seg=8, rings=5)
-    b.torus('sash', 0.287, 0.045, (0, 0, 0.39), SASH, 'body', seg=28, tube=8, scale=(1, 1, 1.25))
+    # ── 身體（D88 第二版）：短胖的僧衣，下襬一條淺色滾邊、細腰帶＋背後的蝴蝶結、清楚的白色交領 ──
+    b.lathe('robe', [(0.28, 0.2), (0.325, 0.24), (0.315, 0.32), (0.27, 0.44), (0.205, 0.57), (0.115, 0.64)], (0, 0, 0), ROBE, 'body', seg=28)
+    b.torus('hem', 0.322, 0.024, (0, 0, 0.212), HEM, 'body', seg=28, tube=6)
+    b.torus('hem2', 0.318, 0.012, (0, 0, 0.262), ROBE_SHADE, 'body', seg=28, tube=5)
+    b.torus('sash', 0.286, 0.032, (0, 0, 0.4), SASH, 'body', seg=28, tube=8, scale=(1, 1, 1.15))
     for sx in (-1, 1):
-        b.sphere('knot', 0.075, (sx * 0.075, 0.3, 0.4), SASH, 'body', scale=(1.1, 0.55, 0.8), seg=12, rings=8)
-        b.box('tail', (0.07, 0.03, 0.2), (sx * 0.05, 0.31, 0.27), SASH, 'body', rot=(0.15, 0, sx * 0.18), bevel=0.01)
-    b.sphere('knotc', 0.045, (0, 0.31, 0.4), '#c96f2a', 'body', seg=10, rings=6)
-    # 交領：左右兩片白領在胸前交叉
+        b.sphere('loop', 0.07, (sx * 0.085, 0.3, 0.42), SASH, 'body', scale=(1.2, 0.5, 0.85), rot=(0, sx * 0.3, 0), seg=12, rings=8)
+        b.box('tail', (0.06, 0.025, 0.17), (sx * 0.05, 0.31, 0.3), SASH, 'body', rot=(0.15, 0, sx * 0.2), bevel=0.01)
+    b.sphere('knotc', 0.04, (0, 0.305, 0.415), '#d06f2a', 'body', seg=10, rings=6)
+    # 交領：左右兩片白領在胸前交叉成 V
     for sx in (-1, 1):
-        rod(b, 'collar', (sx * 0.13, -0.1, 0.62), (-sx * 0.05, -0.245, 0.44), 0.028, 0.028, WHITE, 'body', seg=8)
+        rod(b, 'collar', (sx * 0.12, -0.11, 0.635), (-sx * 0.025, -0.268, 0.43), 0.04, 0.034, WHITE, 'body', seg=8)
     b.sphere('neck', 0.11, (0, 0, 0.63), SKIN, 'body', seg=12, rings=8)
     # ── 袖子（寬口）與手 ──
     for sx, bone in ((-1, 'armL'), (1, 'armR')):
         sh = Vector((sx * 0.22, 0, 0.55))
         hand = Vector((sx * 0.43, -0.03, 0.36)) if sx < 0 else Vector((0.44, -0.12, 0.6))
         rod(b, 'sleeve', sh, sh + (hand - sh) * 0.86, 0.075, 0.12, ROBE, bone, seg=14)
-        b.torus('cuff', 0.105, 0.016, tuple(sh + (hand - sh) * 0.86), ROBE_SHADE, bone, rot=tuple(Vector((0, 0, 1)).rotation_difference((hand - sh).normalized()).to_euler()), seg=14, tube=6)
-        b.sphere('hand', 0.07, tuple(hand), SKIN, bone, seg=12, rings=8)
-    # ── 大頭（D88 重新設計：不再是「黑眼珠＋兩個小圈圈高光」）──
-    # 眼睛：深色眼框、上下漸層的琥珀色虹彩（上深下亮，像被燈籠從下面照亮）、小瞳孔、**一個**大的柔和高光、粗上眼瞼加外翹的睫毛；
-    # 眉毛有弧度、鼻子一點、笑嘴張開有舌頭與小虎牙；瀏海與鬢角從斗笠底下露出來。
-    b.sphere('head', 0.36, (0, 0, 0.94), SKIN, 'head', scale=(1.05, 0.98, 0.97), seg=28, rings=18)
-    INK = '#2a1a3a'
+        b.torus('cuff', 0.105, 0.016, tuple(sh + (hand - sh) * 0.86), HEM, bone, rot=tuple(Vector((0, 0, 1)).rotation_difference((hand - sh).normalized()).to_euler()), seg=14, tube=6)
+        b.sphere('hand', 0.085, tuple(hand), SKIN, bone, seg=12, rings=8)
+    # ── 頭（第二版）：臉頰圓一點；眼睛大而乾淨（細的深色眼框、上深下亮的虹彩、一個大高光、細的上眼瞼）；小小的笑嘴 ──
+    b.sphere('head', 0.36, (0, 0, 0.94), SKIN, 'head', scale=(1.1, 0.98, 0.96), seg=28, rings=18)
+    # 頭髮：後腦與頭頂的髮帽（從背後看不是光頭）＋兩側弧形的瀏海，**中間留空**（以前中間的髮束像一字眉）
+    b.sphere('haircap', 0.372, (0, 0.13, 0.99), HAIR, 'head', scale=(1.1, 0.97, 0.97), seg=24, rings=16)
     for sx in (-1, 1):
-        b.sphere('ear', 0.075, (sx * 0.365, 0.02, 0.9), SKIN, 'head', scale=(0.55, 0.8, 1), seg=10, rings=8)
-        b.sphere('earin', 0.04, (sx * 0.395, 0.0, 0.9), BLUSH, 'head', scale=(0.35, 0.7, 0.9), seg=8, rings=6)
-        cx, cz = sx * 0.135, 0.915
-        b.sphere('eye', 0.1, (cx, -0.318, cz), INK, 'head', scale=(0.9, 0.38, 1.18), seg=18, rings=12)
-        b.sphere('iris', 0.088, (cx, -0.338, cz - 0.004), ('#6a2418', '#ffb23c'), 'head', scale=(0.86, 0.34, 1.1), seg=18, rings=12)
-        b.sphere('irisring', 0.09, (cx, -0.336, cz - 0.004), '#c4601e', 'head', scale=(0.9, 0.3, 1.14), seg=18, rings=12)
-        b.sphere('pupil', 0.038, (cx, -0.356, cz + 0.006), INK, 'head', scale=(0.8, 0.3, 1.25), seg=12, rings=8)
-        b.sphere('hl', 0.03, (cx - sx * 0.026, -0.364, cz + 0.05), WHITE, 'head', scale=(1.0, 0.35, 1.35), seg=10, rings=8)
-        # 上眼瞼：沿眼睛上緣的粗弧線，外側多一小撮上翹的睫毛
+        b.sphere('ear', 0.075, (sx * 0.385, 0.02, 0.9), SKIN, 'head', scale=(0.55, 0.8, 1), seg=10, rings=8)
+        b.sphere('earin', 0.04, (sx * 0.415, 0.0, 0.9), BLUSH, 'head', scale=(0.35, 0.7, 0.9), seg=8, rings=6)
+        cx, cz = sx * 0.145, 0.9
+        b.sphere('eye', 0.098, (cx, -0.322, cz), INK, 'head', scale=(0.9, 0.36, 1.15), seg=18, rings=12)
+        b.sphere('iris', 0.088, (cx, -0.34, cz - 0.003), ('#7a3a1c', '#ffc760'), 'head', scale=(0.86, 0.34, 1.1), seg=18, rings=12)
+        b.sphere('pupil', 0.034, (cx, -0.356, cz + 0.005), INK, 'head', scale=(0.8, 0.3, 1.25), seg=12, rings=8)
+        b.sphere('hl', 0.034, (cx - sx * 0.028, -0.364, cz + 0.05), WHITE, 'head', scale=(1.0, 0.35, 1.3), seg=10, rings=8)
         pts = []
         for k in range(9):
             th = math.radians(200 - k * 20)
-            pts.append((cx + sx * 0.098 * math.cos(th) * -1, -0.347, cz + 0.122 * math.sin(th) * 0.95 + 0.004))
-        pts.append((cx + sx * 0.14, -0.34, cz + 0.045))
+            pts.append((cx + sx * 0.098 * math.cos(th) * -1, -0.348, cz + 0.12 * math.sin(th) * 0.95 + 0.004))
+        pts.append((cx + sx * 0.138, -0.34, cz + 0.045))
         for i in range(len(pts) - 1):
-            r1 = 0.017 - 0.0008 * i
-            rod(b, 'lid', pts[i], pts[i + 1], r1, max(0.006, r1 - 0.0008), INK, 'head', seg=6)
-        rod(b, 'lash', pts[-1], (cx + sx * 0.175, -0.33, cz + 0.085), 0.008, 0.003, INK, 'head', seg=5)
-        # 下眼線：很淡的一小段
-        rod(b, 'lower', (cx - sx * 0.05, -0.345, cz - 0.1), (cx + sx * 0.06, -0.345, cz - 0.1), 0.006, 0.006, '#6a3a3a', 'head', seg=5)
-        b.sphere('blush', 0.062, (sx * 0.238, -0.262, 0.825), ('#ff9a92', '#ff6f7c'), 'head', scale=(1.15, 0.3, 0.62), seg=12, rings=8)
-        # 眉毛：兩段有弧度、尾端變細
-        rod(b, 'brow1', (sx * 0.075, -0.325, 1.045), (sx * 0.135, -0.322, 1.062), 0.014, 0.012, '#4a2f22', 'head', seg=6)
-        rod(b, 'brow2', (sx * 0.135, -0.322, 1.062), (sx * 0.205, -0.292, 1.03), 0.012, 0.005, '#4a2f22', 'head', seg=6)
-    b.sphere('nose', 0.016, (0, -0.358, 0.862), '#eea386', 'head', scale=(1, 0.6, 0.8), seg=8, rings=6)
-    b.sphere('mouth', 0.05, (0, -0.344, 0.795), '#6a1c2c', 'head', scale=(1.0, 0.3, 0.58), seg=14, rings=8)
-    b.sphere('tongue', 0.03, (0, -0.351, 0.782), '#ff7a8c', 'head', scale=(1.1, 0.3, 0.5), seg=10, rings=6)
-    b.sphere('fang', 0.013, (0.028, -0.353, 0.815), WHITE, 'head', scale=(0.8, 0.5, 1.3), seg=6, rings=4)
-    HAIR = '#2c1f3a'
-    for x in (-0.24, -0.12, 0.0, 0.12, 0.24):
-        rod(b, 'fringe', (x, -0.31, 1.075), (x * 0.9 + (0.02 if x < 0 else -0.02), -0.335, 0.985 - 0.015 * (abs(x) < 0.1)), 0.055, 0.004, HAIR, 'head', seg=7)
-    for sx in (-1, 1):
-        rod(b, 'sidelock', (sx * 0.33, -0.12, 1.0), (sx * 0.36, -0.14, 0.8), 0.05, 0.006, HAIR, 'head', seg=7)
-    # ── 斗笠：寬帽簷、帽緣滾邊、紅帶、帽頂小結、下巴的繩子 ──
-    b.lathe('hat', [(0.6, 0.0), (0.61, 0.025), (0.4, 0.13), (0.17, 0.29), (0.03, 0.36)], (0, 0, 1.11), STRAW, 'head', seg=32)
-    b.torus('hatrim', 0.605, 0.02, (0, 0, 1.122), STRAW_DARK, 'head', seg=32, tube=6)
-    for r, z in ((0.5, 0.075), (0.3, 0.2)):
-        b.torus('hatline', r, 0.008, (0, 0, 1.11 + z), STRAW_DARK, 'head', seg=28, tube=4)
-    b.torus('hatband', 0.2, 0.03, (0, 0, 1.11 + 0.265), RED, 'head', seg=20, tube=6)
-    b.sphere('hatknob', 0.045, (0, 0, 1.49), RED, 'head', seg=10, rings=6)
-    for sx in (-1, 1):
-        rod(b, 'strap', (sx * 0.36, -0.06, 1.12), (sx * 0.1, -0.2, 0.62), 0.012, 0.012, RED, 'head', seg=6)
+            r1 = 0.012 - 0.0004 * i
+            rod(b, 'lid', pts[i], pts[i + 1], r1, max(0.006, r1 - 0.0004), INK, 'head', seg=6)
+        rod(b, 'lash', pts[-1], (cx + sx * 0.17, -0.33, cz + 0.08), 0.007, 0.003, INK, 'head', seg=5)
+        b.sphere('blush', 0.062, (sx * 0.255, -0.255, 0.815), ('#ff9a92', '#ff7f86'), 'head', scale=(1.15, 0.3, 0.62), seg=12, rings=8)
+        rod(b, 'brow', (sx * 0.085, -0.318, 1.045), (sx * 0.2, -0.3, 1.035), 0.011, 0.006, '#6a4630', 'head', seg=6)
+        # 瀏海：從頭頂往兩側垂下的弧形髮束
+        b.sphere('bang1', 0.15, (sx * 0.13, -0.275, 1.085), HAIR, 'head', scale=(1.05, 0.4, 0.62), rot=(0, sx * 0.42, 0), seg=14, rings=10)
+        b.sphere('bang2', 0.09, (sx * 0.265, -0.2, 0.99), HAIR, 'head', scale=(0.6, 0.55, 1.2), rot=(0, sx * 0.1, 0), seg=10, rings=8)
+        rod(b, 'sidelock', (sx * 0.34, -0.1, 1.0), (sx * 0.38, -0.12, 0.78), 0.05, 0.006, HAIR, 'head', seg=7)
+    b.sphere('nose', 0.015, (0, -0.358, 0.86), '#eea386', 'head', scale=(1, 0.6, 0.8), seg=8, rings=6)
+    b.sphere('mouth', 0.036, (0, -0.348, 0.8), '#7a2030', 'head', scale=(1.0, 0.3, 0.55), seg=12, rings=8)
+    b.sphere('tongue', 0.02, (0, -0.353, 0.79), '#ff8a98', 'head', scale=(1.1, 0.3, 0.5), seg=8, rings=6)
+    # ── 斗笠（第二版）：抬高、小一圈、前緣微微翹起，露出額頭與瀏海；去掉下巴的紅帶 ──
+    HZ = 1.2
+    TILT = -0.15
+    b.lathe('hat', [(0.52, 0.0), (0.53, 0.02), (0.36, 0.11), (0.16, 0.25), (0.03, 0.31)], (0, 0, HZ), STRAW, 'head', seg=32, rot=(TILT, 0, 0))
+    b.torus('hatrim', 0.525, 0.018, (0, 0, HZ + 0.012), STRAW_DARK, 'head', seg=32, tube=6, rot=(TILT, 0, 0))
+    for r, z in ((0.43, 0.065), (0.26, 0.19)):
+        b.torus('hatline', r, 0.007, (0, -z * math.sin(TILT), HZ + z), STRAW_DARK, 'head', seg=28, tube=4, rot=(TILT, 0, 0))
+    b.torus('hatband', 0.17, 0.028, (0, -0.22 * math.sin(TILT), HZ + 0.22), RED, 'head', seg=20, tube=6, rot=(TILT, 0, 0))
+    b.sphere('hatknob', 0.04, (0, -0.33 * math.sin(TILT), HZ + 0.325), RED, 'head', seg=10, rings=6)
     # ── 腳：白襪＋木屐（兩齒） ──
     for sx, bone in ((-1, 'legL'), (1, 'legR')):
         b.sphere('tabi', 0.11, (sx * 0.14, -0.1, 0.14), WHITE, bone, scale=(1, 1.45, 0.85), seg=12, rings=8)
