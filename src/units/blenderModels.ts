@@ -11,8 +11,16 @@ import toriiUrl from '../assets/models/torii.glb?inline';
  * **試作期間不影響現有的模型**：只有網址帶 `?model=blender`（開發版與測試頁）才會載入；主網址的打包不含這個檔案。
  * 模型的顏色在頂點色裡，一個模型一個材質（卡通著色，和其他東西同一套光影與邊緣光）；名字以 Glow 開頭的網格是發光的（燈籠紙）。
  */
+function dataUrlToBuffer(url: string): ArrayBuffer {
+  const bin = atob(url.slice(url.indexOf(',') + 1));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out.buffer;
+}
+
 async function load(url: string): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }> {
-  const buf = await (await fetch(url)).arrayBuffer();
+  // 內嵌的 data URL 直接解碼，不用 fetch：Artifact 之類的沙盒可能擋掉 fetch（connect-src），載入失敗就會靜默退回舊模型（2026-11-13 使用者看到的「舊造型」）
+  const buf = url.startsWith('data:') ? dataUrlToBuffer(url) : await (await fetch(url)).arrayBuffer();
   return new Promise((resolve, reject) => new GLTFLoader().parse(buf, '', (g) => resolve({ scene: g.scene, animations: g.animations }), reject));
 }
 
