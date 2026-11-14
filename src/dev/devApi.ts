@@ -1,3 +1,4 @@
+import { CAMERA } from '../data/camera';
 import { kindIndex } from '../systems/enemies';
 import { ENEMY_IDS } from '../data/enemies';
 import { collectMarkers, markers } from '../game/minimapMarkers';
@@ -191,6 +192,12 @@ export function installDevApi(ctx: DevContext): void {
     render: () => {
       ctx.game.frame(1);
       ctx.loop.render();
+    },
+    /** 遊玩時的預設鏡頭（俯仰角度、距離）：轉檯圖的「遊玩視角」那一格用 */
+    playCamera: { pitch: CAMERA.pitchDeg, dist: CAMERA.distance },
+    /** 玩家角色面向的方向（度）：鏡頭的 yaw 設成這個值，鏡頭就在角色的正前方（轉檯圖用，docs/29） */
+    get facingDeg() {
+      return ((run()?.facing ?? 0) * 180) / Math.PI;
     },
     /** 鏡頭的朝向與俯仰（度；測試與截圖用，鏡頭會被夾在上下限內）；回傳實際值 */
     setCamera: (yawDeg?: number, pitchDeg?: number, dist?: number) => {

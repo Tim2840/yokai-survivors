@@ -12,6 +12,7 @@ import bpy  # noqa: E402
 import bmesh  # noqa: E402
 from mathutils import Vector  # noqa: E402
 import lib  # noqa: E402
+import audit  # noqa: E402
 from lib import Builder  # noqa: E402
 
 # 顏色（和 src/art/palette.ts 對齊）
@@ -77,7 +78,8 @@ def hairline(x, y):
     back = 0.72
     h = back + (front - back) * f
     # 耳朵上方：髮際線平滑地抬到 0.97（用平滑權重，不是硬切換，不然耳邊會有階梯）
-    e = smooth((ax - 0.24) / 0.1) * smooth((y + 0.2) / 0.1) * smooth((0.28 - y) / 0.1)
+    # 前緣從臉側就開始（y = -0.36），不然耳朵前面會先掉下去再抬起來，形成一個缺口（轉檯圖左側那一格抓到的）
+    e = smooth((ax - 0.24) / 0.1) * smooth((y + 0.36) / 0.1) * smooth((0.28 - y) / 0.1)
     return h + (max(h, 0.97) - h) * e
 
 
@@ -107,6 +109,10 @@ def hair_shell(b, name):
     return b._finish(bm, name, HAIR, 'head', (0, 0, HC_Z), (0, 0, 0), HS)
 
 
+# 稽核用：哪些零件是頭、頭髮、眼睛、嘴（名稱是 Builder 零件名，不含 .001 這種流水號）
+CHOCHIN_SPEC = {'head': ['head'], 'hair': ['hair'], 'eyes': ['eye'], 'mouth': ['mouth']}
+
+
 def build_chochin():
     lib.reset()
     b = Builder()
@@ -126,7 +132,7 @@ def build_chochin():
     # ── 袖子（寬口）與手 ──
     for sx, bone in ((-1, 'armL'), (1, 'armR')):
         sh = Vector((sx * 0.22, 0, 0.55))
-        hand = Vector((sx * 0.43, -0.03, 0.36)) if sx < 0 else Vector((0.44, -0.12, 0.6))
+        hand = Vector((sx * 0.43, -0.03, 0.36)) if sx < 0 else Vector((0.485, -0.073, 0.6))
         rod(b, 'sleeve', sh, sh + (hand - sh) * 0.86, 0.075, 0.12, ROBE, bone, seg=14)
         b.torus('cuff', 0.105, 0.016, tuple(sh + (hand - sh) * 0.86), HEM, bone, rot=tuple(Vector((0, 0, 1)).rotation_difference((hand - sh).normalized()).to_euler()), seg=14, tube=6)
         b.sphere('hand', 0.085, tuple(hand), SKIN, bone, seg=12, rings=8)
@@ -137,7 +143,7 @@ def build_chochin():
     hair_shell(b, 'hair')
     for sx in (-1, 1):
         b.sphere('ear', 0.075, (sx * 0.385, 0.02, 0.88), SKIN, 'head', scale=(0.55, 0.8, 1), seg=10, rings=8)
-        ex, ez = sx * 0.14, 0.865
+        ex, ez = sx * 0.132, 0.865
         rx, rz = head_tilt(ex, ez)
         b.sphere('eye', 0.086, (ex, head_y(ex, ez) + 0.004, ez), ('#2a1830', '#a8601e'), 'head', scale=(0.76, 0.36, 1.22), rot=(rx, 0, rz), seg=20, rings=14)
         hx, hz = ex - sx * 0.02, ez + 0.052
@@ -153,7 +159,7 @@ def build_chochin():
     TILT = -0.15
     b.lathe('hat', [(0.52, 0.0), (0.53, 0.02), (0.36, 0.11), (0.16, 0.25), (0.03, 0.31)], (0, 0, HZ), STRAW, 'head', seg=32, rot=(TILT, 0, 0))
     b.torus('hatrim', 0.525, 0.018, (0, 0, HZ + 0.012), STRAW_DARK, 'head', seg=32, tube=6, rot=(TILT, 0, 0))
-    for r, z in ((0.43, 0.065), (0.26, 0.19)):
+    for r, z in ((0.445, 0.065), (0.247, 0.19)):  # 半徑 = 帽面在那個高度的半徑（稽核抓到以前第二圈浮在外面）
         b.torus('hatline', r, 0.007, (0, -z * math.sin(TILT), HZ + z), STRAW_DARK, 'head', seg=28, tube=4, rot=(TILT, 0, 0))
     b.torus('hatband', 0.17, 0.028, (0, -0.22 * math.sin(TILT), HZ + 0.22), RED, 'head', seg=20, tube=6, rot=(TILT, 0, 0))
     b.sphere('hatknob', 0.04, (0, -0.33 * math.sin(TILT), HZ + 0.325), RED, 'head', seg=10, rings=6)
@@ -165,13 +171,13 @@ def build_chochin():
             b.box('tooth', (0.19, 0.05, 0.045), (sx * 0.14, -0.1 + dy, 0.022), WOOD, bone)
         rod(b, 'thong', (sx * 0.14, -0.24, 0.09), (sx * 0.14, -0.1, 0.2), 0.012, 0.012, RED, bone, seg=6)
     # ── 竹竿（有節）與掛繩 ──
-    tip = Vector((0.52, -0.22, 1.32))
+    tip = Vector((0.66, -0.1, 0.97))  # 燈籠舉在身體右側外面：提在胸口高度、身體右側外面。以前在臉的高度，右前方看過去會擋住臉（轉檯圖第 2 格抓到的）
     base = Vector((0.4, -0.06, 0.42))
     rod(b, 'pole', base, tip, 0.024, 0.02, BAMBOO, 'armR', seg=8)
     for k in (0.3, 0.62, 0.9):
         p = base + (tip - base) * k
         b.torus('node', 0.026, 0.007, tuple(p), '#6f7d40', 'armR', rot=tuple(Vector((0, 0, 1)).rotation_difference((tip - base).normalized()).to_euler()), seg=10, tube=4)
-    lam = Vector((0.52, -0.22, 1.02))
+    lam = Vector((0.66, -0.1, 0.68))
     rod(b, 'string', tip, lam + Vector((0, 0, 0.2)), 0.008, 0.008, DARK, 'lantern', seg=5)
     # 燈籠的骨架、上下蓋、流蘇（燈籠紙本體是另一個會發光的網格）
     for z in (-0.14, -0.07, 0.0, 0.07, 0.14):
@@ -179,10 +185,12 @@ def build_chochin():
         b.torus('rib', rr * 1.02, 0.009, tuple(lam + Vector((0, 0, z))), RED, 'lantern', seg=18, tube=4)
     b.cone('captop', 0.11, 0.09, 0.05, tuple(lam + Vector((0, 0, 0.215))), DARK, 'lantern', seg=14)
     b.cone('capbot', 0.09, 0.11, 0.05, tuple(lam + Vector((0, 0, -0.215))), DARK, 'lantern', seg=14)
-    rod(b, 'tassel', lam + Vector((0, 0, -0.24)), lam + Vector((0, 0, -0.36)), 0.02, 0.006, RED, 'lantern', seg=6)
-    body = b.join('Monk')
+    rod(b, 'tassel', lam + Vector((0, 0, -0.22)), lam + Vector((0, 0, -0.36)), 0.02, 0.006, RED, 'lantern', seg=6)
+    # 數字稽核（docs/29）：頭髮連續、五官位置、懸空零件；不過就不匯出
     g = Builder()
     g.sphere('paper', 0.17, tuple(lam), LAMP, 'lantern', scale=(1, 1, 1.25), seg=18, rings=12)
+    audit.run(b.parts + g.parts, CHOCHIN_SPEC, '提燈小僧')
+    body = b.join('Monk')
     glow = g.join('GlowLantern')
 
     arm = lib.make_armature('MonkRig', {
@@ -193,7 +201,7 @@ def build_chochin():
         'armR': ((0.22, 0, 0.55), (0.22, 0, 0.75), 'body'),
         'legL': ((-0.14, 0, 0.26), (-0.14, 0, 0.4), 'root'),
         'legR': ((0.14, 0, 0.26), (0.14, 0, 0.4), 'root'),
-        'lantern': ((0.52, -0.22, 1.32), (0.52, -0.22, 1.5), 'armR'),
+        'lantern': ((0.66, -0.1, 0.97), (0.66, -0.1, 1.15), 'armR'),
     })
     lib.bind(body, arm)
     lib.bind(glow, arm)

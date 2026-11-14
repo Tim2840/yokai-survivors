@@ -16,6 +16,8 @@
     "check:main": "npm run build:single:main && node scripts/check-main-build.mjs",
     "regress": "node scripts/regress.mjs",
     "sim": "vite build -c vite.sim.config.ts && node dist-sim/sim.mjs",
+    "model:build": "python3 tools/blender/audit_selftest.py \"$BPY_HOME\" && python3 tools/blender/build.py \"$BPY_HOME\" src/assets/models",
+    "model:turnaround": "node scripts/shots/turnaround.mjs",
     "pack:test": "npm run build:single && python3 scripts/pack-artifact.py dist-artifact/yokai-test.html \"百鬼陣 測試版\""
   },
   "dependencies": {
