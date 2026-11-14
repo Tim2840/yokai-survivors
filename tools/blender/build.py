@@ -9,6 +9,7 @@ OUT = sys.argv[2]
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 
 import bpy  # noqa: E402
+import bmesh  # noqa: E402
 from mathutils import Vector  # noqa: E402
 import lib  # noqa: E402
 from lib import Builder  # noqa: E402
@@ -43,6 +44,69 @@ def rod(b, name, p1, p2, r1, r2, color, bone, seg=10):
     return b.cone(name, r1, r2, d.length, tuple((p1 + p2) / 2), color, bone, rot=tuple(rot), seg=seg)
 
 
+# ── 頭的幾何（D88 第四版）：五官位置用橢球公式算在表面上，不憑感覺 ──
+HC_Z = 0.94
+HR = 0.36
+HS = (1.1, 0.98, 0.96)
+
+
+def head_y(x, z):
+    """頭（橢球）表面在 (x, z) 處的 y（臉朝 -Y，所以是負的）"""
+    t = 1 - (x / (HR * HS[0])) ** 2 - ((z - HC_Z) / (HR * HS[2])) ** 2
+    return -HS[1] * HR * math.sqrt(max(t, 0.0))
+
+
+def head_tilt(x, z):
+    """表面法線的傾角（繞 X、Z 軸的弧度）：貼在表面上的五官依它轉，才不會在臉頰兩側翹出來"""
+    a, b, c = HR * HS[0], HR * HS[1], HR * HS[2]
+    y = head_y(x, z)
+    nx, nz, ny = x / a ** 2, (z - HC_Z) / c ** 2, y / b ** 2
+    return -math.atan2(nz, -ny), math.atan2(nx, -ny)
+
+
+def smooth(t):
+    t = max(0.0, min(1.0, t))
+    return t * t * (3 - 2 * t)
+
+
+def hairline(x, y):
+    """髮際線高度：前面是瀏海（中間微微分開、兩側垂下、有兩個瀏海尖），側面在耳朵上方，後面一路到後頸。頭髮是一整片，所以瀏海和後腦自然連在一起"""
+    f = smooth((-y + 0.02) / 0.32)
+    ax = abs(x)
+    front = 1.05 - 0.08 * smooth(ax / 0.30) + 0.025 * (1 - smooth(ax / 0.07)) - 0.04 * math.exp(-(((ax - 0.17) / 0.05) ** 2))
+    back = 0.72
+    h = back + (front - back) * f
+    # 耳朵上方：髮際線平滑地抬到 0.97（用平滑權重，不是硬切換，不然耳邊會有階梯）
+    e = smooth((ax - 0.24) / 0.1) * smooth((y + 0.2) / 0.1) * smooth((0.28 - y) / 0.1)
+    return h + (max(h, 0.97) - h) * e
+
+
+def hair_shell(b, name):
+    """貼著頭骨的一整片頭髮外殼：一顆比頭略大的橢球，低於髮際線的頂點沿球面收到髮際線上"""
+    r = HR * 1.045
+    bm = bmesh.new()
+    bmesh.ops.create_uvsphere(bm, u_segments=56, v_segments=36, radius=r)
+    def is_low(v):
+        return HC_Z + v.co.z * HS[2] < hairline(v.co.x * HS[0], v.co.y * HS[1])
+
+    # 整面都低於髮際線的面刪掉（不然下半球會攤開蓋在臉上）；留下的面裡低於髮際線的邊界點，沿球面貼到髮際線上
+    dead = [f for f in bm.faces if all(is_low(v) for v in f.verts)]
+    bmesh.ops.delete(bm, geom=dead, context='FACES')
+    for v in list(bm.verts):
+        if not v.link_faces:
+            bm.verts.remove(v)
+    for v in bm.verts:
+        if is_low(v):
+            H = hairline(v.co.x * HS[0], v.co.y * HS[1])
+            zl = (H - HC_Z) / HS[2]
+            den = math.sqrt(max(r * r - v.co.z ** 2, 1e-9))
+            k = math.sqrt(max(r * r - zl * zl, 0.0)) / den
+            v.co.x *= k
+            v.co.y *= k
+            v.co.z = zl
+    return b._finish(bm, name, HAIR, 'head', (0, 0, HC_Z), (0, 0, 0), HS)
+
+
 def build_chochin():
     lib.reset()
     b = Builder()
@@ -66,24 +130,24 @@ def build_chochin():
         rod(b, 'sleeve', sh, sh + (hand - sh) * 0.86, 0.075, 0.12, ROBE, bone, seg=14)
         b.torus('cuff', 0.105, 0.016, tuple(sh + (hand - sh) * 0.86), HEM, bone, rot=tuple(Vector((0, 0, 1)).rotation_difference((hand - sh).normalized()).to_euler()), seg=14, tube=6)
         b.sphere('hand', 0.085, tuple(hand), SKIN, bone, seg=12, rings=8)
-    # ── 頭（第三版，使用者：「方向對但臉很亂」）：照 Q 版的通則大砍——五官只留「眼睛、腮紅、小嘴」；
-    # 眼睛放低（留大額頭）、眼距約一個眼寬、一個大眼睛形狀（上深下亮的漸層）＋**一個**大高光；沒有眼瞼線、睫毛、瞳孔、眉毛、鼻子、舌頭、耳內；
-    # 細線在像素化後會變雜點，所以沒有任何細於 0.014 的零件。頭髮只留髮帽＋一撮圓潤的瀏海。 ──
-    b.sphere('head', 0.36, (0, 0, 0.94), SKIN, 'head', scale=(1.1, 0.98, 0.96), seg=28, rings=18)
-    b.sphere('haircap', 0.372, (0, 0.13, 0.99), HAIR, 'head', scale=(1.1, 0.97, 0.97), seg=24, rings=16)
+    # ── 頭（第四版，使用者：「五官正確的位置」「瀏海跟後面頭髮分離」）──
+    # 五官：眼睛在臉的上半部偏下（髮際線到下巴的 45% 處）、眼距約一個眼寬、嘴在 75% 處；位置用 head_y 算在表面上、依法線傾斜。
+    # 頭髮：一整片貼著頭骨的外殼（hair_shell），髮際線是連續曲線，瀏海、鬢角、後頸同一片。
+    b.sphere('head', HR, (0, 0, HC_Z), SKIN, 'head', scale=HS, seg=32, rings=20)
+    hair_shell(b, 'hair')
     for sx in (-1, 1):
         b.sphere('ear', 0.075, (sx * 0.385, 0.02, 0.88), SKIN, 'head', scale=(0.55, 0.8, 1), seg=10, rings=8)
-        cx, cz = sx * 0.165, 0.83
-        b.sphere('eye', 0.092, (cx, -0.322, cz), ('#2a1830', '#a8601e'), 'head', scale=(0.76, 0.36, 1.22), seg=20, rings=14)
-        b.sphere('hl', 0.034, (cx - sx * 0.022, -0.352, cz + 0.058), WHITE, 'head', scale=(1.0, 0.3, 1.2), seg=10, rings=8)
-        b.sphere('blush', 0.058, (sx * 0.265, -0.235, 0.755), ('#ff9a92', '#ff8088'), 'head', scale=(1.1, 0.3, 0.6), seg=12, rings=8)
-    # 瀏海：貼著髮際線的一道弧（中間微微分開），兩側各一小撮往下
-    for sx in (-1, 1):
-        b.sphere('fringe', 0.2, (sx * 0.15, -0.255, 1.14), HAIR, 'head', scale=(1.0, 0.32, 0.45), rot=(0, sx * 0.3, 0), seg=16, rings=10)
-        b.sphere('temple', 0.07, (sx * 0.3, -0.19, 1.0), HAIR, 'head', scale=(0.6, 0.5, 1.25), seg=10, rings=8)
-    # 嘴：一條小小的微笑弧線（兩小段）
-    rod(b, 'mouth1', (-0.045, -0.3, 0.74), (0.0, -0.308, 0.722), 0.014, 0.014, '#7a2030', 'head', seg=6)
-    rod(b, 'mouth2', (0.0, -0.308, 0.722), (0.045, -0.3, 0.74), 0.014, 0.014, '#7a2030', 'head', seg=6)
+        ex, ez = sx * 0.14, 0.865
+        rx, rz = head_tilt(ex, ez)
+        b.sphere('eye', 0.086, (ex, head_y(ex, ez) + 0.004, ez), ('#2a1830', '#a8601e'), 'head', scale=(0.76, 0.36, 1.22), rot=(rx, 0, rz), seg=20, rings=14)
+        hx, hz = ex - sx * 0.02, ez + 0.052
+        b.sphere('hl', 0.032, (hx, head_y(hx, hz) - 0.02, hz), WHITE, 'head', scale=(1.0, 0.3, 1.2), rot=head_tilt(hx, hz)[0:1] + (0, head_tilt(hx, hz)[1]), seg=10, rings=8)
+        bx, bz = sx * 0.255, 0.765
+        b.sphere('blush', 0.056, (bx, head_y(bx, bz) + 0.004, bz), ('#ff9a92', '#ff8088'), 'head', scale=(1.1, 0.3, 0.6), rot=(head_tilt(bx, bz)[0], 0, head_tilt(bx, bz)[1]), seg=12, rings=8)
+    # 嘴：一條小小的微笑弧線（兩小段），在眼睛和下巴之間偏下
+    mz = 0.715
+    for a, c in (((-0.04, mz + 0.012), (0.0, mz)), ((0.0, mz), (0.04, mz + 0.012))):
+        rod(b, 'mouth', (a[0], head_y(a[0], a[1]) + 0.004, a[1]), (c[0], head_y(c[0], c[1]) + 0.004, c[1]), 0.014, 0.014, '#7a2030', 'head', seg=6)
     # ── 斗笠（第二版）：抬高、小一圈、前緣微微翹起，露出額頭與瀏海；去掉下巴的紅帶 ──
     HZ = 1.2
     TILT = -0.15
