@@ -27,7 +27,7 @@
 | 每隻妖怪的技法特色、化身限定技法、技法變化度體檢 | `docs/25-character-techs.md`（已實作 D83～D86：化身、化身限定技法、技法格子、河童自己的 5 招）；養成第二版（詞條、整場加成）`docs/24-buildcraft-v2.md` |
 | **夜晚為預設時段、時段加成、角色整體重新設計規格（D88）** | `docs/28-night-theme-and-character-redesign.md`（Q58 待回答） |
 | 關卡後段的敵人（老練的人類）、換招後失效的升級 | `docs/27-stage-ramp-dead-upgrades.md`（兩張審查卡，Q55、Q56 待回答，未實作） |
-| 技法特效重製（浮世繪、華麗、火與水的樣子）設計審查卡 | `docs/30-vfx-ukiyoe.md`（Q59 待回答，未實作） |
+| 技法特效重製（浮世繪、華麗、火與水的樣子）設計審查卡 | `docs/30-vfx-ukiyoe.md`（Q59 照預設；第一批火已做 D90：`src/art/flame.ts`、`src/render/fireFx.ts`、`src/data/vfx.ts`；**改特效要跑 `scripts/shots/vfx-catalog.mjs` 並逐格看**） |
 | **模型驗收（數字稽核＋轉檯圖；做或改任何模型前必讀）** | `docs/29-model-acceptance.md` |
 | 引入 Blender（模型流程） | `docs/26-blender-pipeline.md`（試作完成 D87，`tools/blender/`、`?model=blender`；Q54 待回答；**還沒改「不使用外部模型檔」的鐵則**） |
 | 敵人設計、關卡變化、難度怎麼來 | `docs/22-enemy-design.md`（E-1 已完成 D70：足輕、弓手、出場配方；E-2 待開工） |

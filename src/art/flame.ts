@@ -7,7 +7,7 @@ import { palette } from './palette';
  * - 片段著色器用雜訊畫出火舌：下寬上尖、尖端分叉往一邊捲、整條會搖、雜訊往上捲動（燃燒的感覺）；
  *   顏色是平塗的色帶（木版畫的分色），最外圈一條暗紅描邊；aFade 越大火越小、色帶往外縮（快熄的火只剩紅與暗紅）。
  * - 剪影式透明（discard）：不需要排序、可以寫深度；邊緣靠多重取樣抗鋸齒。
- * 全部程式產生，不用貼圖檔。顏色在 palette.flame。
+ * 全部程式產生，不用貼圖檔。顏色在 palette.flame。著色器字串裡的註解用英文（原始碼掃描不准字串裡有中文）。
  */
 export function flameMaterial(time: { value: number }): THREE.ShaderMaterial {
   const C = palette.flame;
@@ -27,7 +27,7 @@ export function flameMaterial(time: { value: number }): THREE.ShaderMaterial {
     vertexShader: /* glsl */ `
       #include <common>
       #include <fog_pars_vertex>
-      attribute vec3 aInfo; // x = seed, y = fade(0..1), z = kind(0 火舌, 1 火星)
+      attribute vec3 aInfo; // x = seed, y = fade(0..1), z = kind (0 flame tongue, 1 spark)
       varying vec2 vUv;
       varying vec3 vInfo;
       void main() {
@@ -61,7 +61,7 @@ export function flameMaterial(time: { value: number }): THREE.ShaderMaterial {
         return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
       }
       float fbm(vec2 p) { return 0.5 * vn(p) + 0.25 * vn(p * 2.03 + 1.7) + 0.125 * vn(p * 4.01 + 3.1); }
-      // 平塗色帶：edge 附近一點點過渡（抗鋸齒），不是漸層
+      // flat colour bands (woodblock style); tiny transition at each edge for anti-aliasing
       vec3 band(float f, float fade) {
         float w = 0.02;
         vec3 c = cOutline;
@@ -76,7 +76,7 @@ export function flameMaterial(time: { value: number }): THREE.ShaderMaterial {
         float fade = vInfo.y;
         vec3 c;
         if (vInfo.z > 0.5) {
-          // 火星：小菱形，越老越暗越紅
+          // spark: small diamond, darker and redder as it ages
           vec2 q = abs(vUv * 2.0 - 1.0);
           if (q.x + q.y > 1.0 - fade * 0.3) discard;
           c = mix(cCore, cRed, fade);
@@ -85,17 +85,17 @@ export function flameMaterial(time: { value: number }): THREE.ShaderMaterial {
           float t = uTime + seed * 17.0;
           float u = vUv.x * 2.0 - 1.0;
           float v = vUv.y;
-          // 整條火往一邊搖；越往上越往一邊勾（浮世繪的火焰紋，尖端捲成鉤）
+          // sway; the tip hooks to one side (ukiyo-e flame pattern)
           float sway = sin(t * 1.9 + seed * 6.0);
           u += v * v * 0.38 * sway + v * 0.1 * sin(t * 4.3 + seed * 3.0);
           u += v * v * v * 0.55 * sign(sway + 0.001) * (0.6 + 0.4 * sin(t * 2.7 + seed));
-          // 往上捲動的雜訊：火舌一條條往上竄
+          // noise scrolling upward: tongues rise
           float nz = fbm(vec2(u * 2.0 + seed * 9.0, v * 2.2 - t * 2.1));
           float nz2 = vn(vec2(u * 4.5 - seed * 4.0, v * 3.6 - t * 3.3));
-          // 身體：底部圓、中段最寬、往上收尖
+          // body: round base, widest low, tapering to the top
           float w = 0.8 * pow(max(1.0 - v, 0.0), 0.75) * smoothstep(-0.04, 0.22, v);
           float shape = w - abs(u);
-          // 分叉：上半部依橫向的波紋切出 2～3 條火舌（波紋本身也被雜訊推著走）
+          // forks: a horizontal wave (pushed by noise) splits the upper half into 2-3 tongues
           float tg = 0.5 + 0.5 * cos((u + (nz - 0.5) * 0.7) * 8.5 + seed * 2.0);
           float f = shape * 2.0 + (nz - 0.5) * (0.3 + 0.7 * v) + (nz2 - 0.5) * 0.16 * v
                   - v * v * 0.75 * tg - fade * 0.55;
