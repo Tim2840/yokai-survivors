@@ -31,7 +31,7 @@
 | **模型驗收（數字稽核＋轉檯圖；做或改任何模型前必讀）** | `docs/29-model-acceptance.md` |
 | 引入 Blender（模型流程） | `docs/26-blender-pipeline.md`（試作完成 D87，`tools/blender/`、`?model=blender`；Q54 待回答；**還沒改「不使用外部模型檔」的鐵則**） |
 | 敵人設計、關卡變化、難度怎麼來 | `docs/22-enemy-design.md`（E-1 已完成 D70：足輕、弓手、出場配方；E-2 待開工） |
-| 美術：日系 RPG 像素風（D72）、場景氣氛、角色 Q 版造型、地圖精緻化排程 | `docs/23-art-pass.md` |
+| 美術：日系 RPG 像素風（D72，**D89 起已被乾淨卡通取代**，歷史紀錄）、場景氣氛、角色 Q 版造型、地圖精緻化排程 | `docs/23-art-pass.md` |
 | **新增任何「所有角色共用」或「新角色」的內容前** | `docs/19-generalization.md`（舉一反三檢查表：已發生的錯、可預見的場景、5 個自問） |
 
 ## 架構鐵則（細節見 docs/06）
@@ -43,7 +43,7 @@
 - **固定時間步長**（1/60 秒）模擬 + 可變幀率渲染；暫停時模擬停、渲染照畫。分頁失焦自動暫停。
 - **敵人用 `THREE.InstancedMesh`**；超過 300 隻要用空間雜湊做碰撞；投射物、傷害數字、特效一律物件池；**熱路徑（每幀）不 `new`**。
 - 隨機一律用固定種子的 `Rng`（`src/lib/random.ts`）：地圖生成、卡片抽選、要素抽選都要能用種子重現（回報 bug 時帶種子）。
-- 顏色取自 `src/art/palette.ts`；材質用 `soft()`／`glow()`；風格是**和風、日系 RPG 像素風**（D72，使用者 2026-11-09 照預設）：3D 模型照舊用程式建、圓潤 Q 版（大頭、大眼睛，臉用 `src/units/chibiFace.ts`），畫面由後製像素化＋描線（`src/core/pixelPass.ts`、`src/data/look.ts`）；**一般關卡是夜晚，黃昏與白天是特殊情況**（D88，`src/data/ambience.ts`，`?tod=day|dusk` 開發版強制）。不要 `flatShading`、不隨機推頂點、不留銳利的邊。
+- 顏色取自 `src/art/palette.ts`；材質用 `soft()`／`glow()`；風格是**和風、乾淨卡通**（D89，使用者 2026-11-15「換」，**取代 D72 的像素風**；預設畫面 `cel`：不像素化、多重取樣抗鋸齒、高飽和色塊、暖色描線，`src/core/pixelPass.ts`、`src/data/look.ts`，`?look=jrpg` 還看得到像素風）：圓潤 Q 版（大頭、大眼睛）；**玩家角色與敵人正在用 Blender 重做（docs/28、29；測試頁用 `?model=blender` 或 `build:single`，主網址仍是程式建的舊模型，Q54 待回答），舊模型的臉用 `src/units/chibiFace.ts`**；**一般關卡是夜晚，黃昏與白天是特殊情況**（D88，`src/data/ambience.ts`，`?tod=day|dusk` 開發版強制）。不要 `flatShading`、不隨機推頂點、不留銳利的邊。
 - 3D 鏡頭：**玩家可自由旋轉視角**（D23，取代原本的固定俯角鐵則）；第三人稱繞著玩家轉，俯仰有上下限，跟隨玩家的 3D 位置，**碰到地形時拉近（彈簧臂）不穿進地裡**；移動方向永遠相對鏡頭。參數在 `src/data/camera.ts`。操作：移動、轉視角、跳躍（D24）、號令。
 
 ## 工作方式（從燈落之境帶過來的教訓）

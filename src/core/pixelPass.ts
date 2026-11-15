@@ -23,7 +23,9 @@ export class PixelPass extends Pass {
     this.shortSide = shortSide;
     this.scene = scene;
     this.camera = camera;
-    this.target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+    // 乾淨卡通（D89，使用者「換」：levels = 0 表示不量化、不是像素風）：多重取樣抗鋸齒＋線性取樣；像素風（levels > 0）維持最近鄰、不取樣
+    const clean = edge.levels <= 0;
+    this.target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, minFilter: clean ? THREE.LinearFilter : THREE.NearestFilter, magFilter: clean ? THREE.LinearFilter : THREE.NearestFilter, samples: clean ? 4 : 0 });
     this.target.depthTexture = new THREE.DepthTexture(1, 1);
     this.mat = new THREE.ShaderMaterial({
       uniforms: {

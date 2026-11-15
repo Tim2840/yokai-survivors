@@ -2,7 +2,7 @@
  * 畫面風格（美術方向評估，docs/23 第 8 節）：
  * - classic：現在的樣子（夜晚、平滑的 3D 卡通）。
  * - jrpg：日系 RPG 樣張——整個畫面先畫在低解析度再放大（像素風）、物件邊緣描線、上下移軸景深（模型屋感）、白天的光。
- * D72 起預設是 jrpg；開發版可用 ?look=classic 看舊的樣子（打包時也可用 VITE_LOOK）。
+ * D89 起預設是 cel（乾淨卡通）；開發版可用 ?look=jrpg 看像素風、?look=classic 看最舊的樣子（打包時也可用 VITE_LOOK）。
  */
 export interface LookDef {
   id: string;
@@ -46,13 +46,13 @@ export interface LookDef {
   bloom: { strength: number; radius: number; threshold: number };
 }
 
-/** 預設風格（D72：使用者「照你的，開始做」＝日系 RPG 像素風）。舊的樣子用 ?look=classic */
-export const DEFAULT_LOOK = 'jrpg';
+/** 預設風格：**乾淨卡通 cel**（D89，使用者 2026-11-15「換」，取代 D72 的像素風；參考妖怪手錶那種乾淨、高飽和、色塊對比強的畫面）。像素風用 ?look=jrpg、最舊的用 ?look=classic */
+export const DEFAULT_LOOK = 'cel';
 
 export const LOOKS: Record<string, LookDef> = {
   classic: { id: 'classic', toonSteps: 0, shadows: false, shadow: { extent: 24, size: 1024, sizeTouch: 1024, bias: -0.0005, normalBias: 0.05 }, pixelShort: 0, levels: 0, dither: 0, edge: 0, edgeFrom: 0.05, edgeTo: 0.1, tiltShift: 0, tiltFocus: 0.5, timeOfDay: false, contrast: 1.06, saturation: 1.1, vignette: 0.28, shadowStrength: 1, rampMin: 0.38, rim: 0, edgeTint: [0, 0, 0], bloom: { strength: 0.5, radius: 0.3, threshold: 1.05 } },
   jrpg: { id: 'jrpg', toonSteps: 3, shadows: true, shadow: { extent: 24, size: 2048, sizeTouch: 1024, bias: -0.0005, normalBias: 0.06 }, pixelShort: 520, levels: 20, dither: 0.25, edge: 0.55, edgeFrom: 0.08, edgeTo: 0.2, tiltShift: 0, tiltFocus: 0.5, timeOfDay: true, contrast: 1.1, saturation: 1.15, vignette: 0.16, shadowStrength: 0.8, rampMin: 0.4, rim: 0.8, edgeTint: [0.32, 0.36, 0.55], bloom: { strength: 0.28, radius: 0.15, threshold: 1.9 } },
-  /** 樣張（Q57）：參考妖怪手錶那種乾淨、高飽和、暖色暗部的卡通渲染；不像素化、描線偏暖。只有 ?look=cel 才用 */
+  /** 正式預設（D89）：乾淨、高飽和、暖色暗部的卡通渲染；不像素化（短邊 1100，手機以下就是原生解析度）、多重取樣抗鋸齒、描線偏暖 */
   cel: { id: 'cel', toonSteps: 3, shadows: true, shadow: { extent: 24, size: 2048, sizeTouch: 1024, bias: -0.0005, normalBias: 0.06 }, pixelShort: 1100, levels: 0, dither: 0, edge: 0.7, edgeFrom: 0.08, edgeTo: 0.2, tiltShift: 0, tiltFocus: 0.5, timeOfDay: true, contrast: 1.06, saturation: 1.45, vignette: 0.06, shadowStrength: 0.8, rampMin: 0.62, rim: 0.8, edgeTint: [0.3, 0.16, 0.2], bloom: { strength: 0.28, radius: 0.15, threshold: 1.9 } },
 };
 
@@ -66,8 +66,6 @@ export function currentLook(): LookDef {
   }
   // 一定要寫成 import.meta.env.VITE_LOOK（Vite 打包時只認得這個寫法，才會換成字串）
   if (!id) id = (import.meta.env.VITE_LOOK as string | undefined) ?? '';
-  // 測試頁（build:single）預設用樣張風格 cel，Artifact 裡沒辦法加網址參數；?look=jrpg 看現在的像素風
-  if (!id && import.meta.env.MODE === 'single') id = 'cel';
   return LOOKS[id] ?? LOOKS[DEFAULT_LOOK];
 }
 
