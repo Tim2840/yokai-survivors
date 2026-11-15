@@ -61,8 +61,10 @@ const TECH_BY_STRATEGY: Record<string, string[]> = {
   dps: ['kitsunebi', 'bounce', 'pillar', 'seed', 'hellfire', 'lamp', 'homing', 'ring', 'ward'],
   survive: ['ring', 'ward', 'lamp', 'hellfire', 'pillar', 'seed', 'kitsunebi', 'bounce', 'homing'],
 };
-/** --tune countScale=3,hpScale=1.2,xp.needPerLevel=4,w.hpPerWave=0.2,tech.levelGap=2：臨時改旋鈕比較（不改檔案）；xp. 開頭是 PROGRESSION、w. 開頭是 WAVES、shards. 開頭是 SHARDS（碎裂，Q56：shards.damage=0.25）、tech. 開頭是 TECH_OFFER、chapter. 開頭是 STAGE.chapter（例：chapter.normalStages=3） */
+/** --tune countScale=3,hpScale=1.2,xp.needPerLevel=4,w.hpPerWave=0.2,tech.levelGap=2：臨時改旋鈕比較（不改檔案）；xp. 開頭是 PROGRESSION、w. 開頭是 WAVES、shards. 開頭是 SHARDS（碎裂，Q56：shards.damage=0.25）、tech. 開頭是 TECH_OFFER、rarity.<階>.<欄位> 是升級卡稀有度權重（CARD_RARITY）、rarity.unlock=4 開放到極、chapter. 開頭是 STAGE.chapter（例：chapter.normalStages=3） */
 import { SPAWN_RECIPES } from '../../src/data/spawnRecipes';
+import { CARD_RARITY, RARITIES } from '../../src/data/rarity';
+import { RARITIES_UNLOCKED_M1 } from '../../src/data/progression';
 const TUNE = arg('tune', '');
 function applyTune(): void {
   // --noTrade：不出狐面商（取捨道具只在狐面商拿得到，D38；對照組）
@@ -82,6 +84,15 @@ function applyTune(): void {
     else if (k.startsWith('tech.')) (TECH_OFFER as unknown as Record<string, number>)[k.slice(5)] = Number(v);
     else if (k.startsWith('shards.')) (SHARDS as unknown as Record<string, number>)[k.slice(7)] = Number(v);
     else if (k.startsWith('xp.')) (PROGRESSION as unknown as Record<string, number>)[k.slice(3)] = Number(v);
+    else if (k === 'rarity.unlock') {
+      // rarity.unlock=4：升級卡開放到第幾階（2 = 凡良、3 = 到珍、4 = 到極）
+      const u = RARITIES_UNLOCKED_M1 as unknown as string[];
+      u.splice(0, u.length, ...RARITIES.slice(0, Number(v)));
+    } else if (k.startsWith('rarity.')) {
+      // rarity.rare.max=50、rarity.epic.perLevel=1.5
+      const [, tier, field] = k.split('.');
+      (CARD_RARITY as unknown as Record<string, Record<string, number>>)[tier][field] = Number(v);
+    }
     else (tuning as unknown as Record<string, number>)[k] = Number(v);
   }
 }
