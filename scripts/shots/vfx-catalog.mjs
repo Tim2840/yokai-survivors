@@ -46,9 +46,16 @@ for (let k = 0; k < cells.length; k++) {
     }
     // 前方一排人類（打不死）：讓技法有東西打
     for (let j = 0; j < 7; j++) g.spawnAt('villager', -3 + j, -4.5 - (j % 2), 0, 0);
-    for (let s = 0; s < 40; s++) {
+    // 跑到「畫面上真的有夠多特效」為止（最多 8 秒）：固定步數會剛好拍到空檔（第一版就是這樣，一半的格子是空的）
+    let best = 0;
+    for (let s = 0; s < 160; s++) {
       g.advance(0.05);
       while (document.querySelector('.overlay[data-screen="levelup"] .card')) document.querySelector('.overlay[data-screen="levelup"] .card').click();
+      if (s < 30) continue;
+      g.render();
+      const n = g.fxCount;
+      if (n > best) best = n;
+      if (n >= 8 && n >= best * 0.8) break;
     }
     g.freeze(true);
     g.setCamera(g.facingDeg + 25, 30, 9);

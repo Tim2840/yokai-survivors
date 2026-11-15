@@ -79,6 +79,10 @@ export class RunView {
   /** 浮世繪的火（docs/30）：只有火屬性的妖怪才有 */
   private readonly fireFx: FireFx | null;
   private lastFxT = 0;
+  /** 開發用：這一幀畫了幾個火舌＋火星（特效目錄等到有東西才截圖） */
+  get fxCount(): number {
+    return this.fireFx?.mesh.count ?? 0;
+  }
   readonly feelFx: FeelFx;
   private readonly portal: THREE.Group;
   private readonly portalRing: THREE.Mesh;

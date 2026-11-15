@@ -159,8 +159,10 @@ export class TechFx {
       const e = this.orbs.instanceMatrix.array as Float32Array;
       for (let i = 0; i < k; i++) {
         const sc = e[i * 16];
-        fire.flame(e[i * 16 + 12], e[i * 16 + 13] - 0.28 * sc, e[i * 16 + 14], O.w * sc, O.h * sc, i * 1.37);
+        fire.flame(e[i * 16 + 12], e[i * 16 + 13] - O.base * sc, e[i * 16 + 14], O.w * sc, O.h * sc, i * 1.37);
       }
+      // 火的繞身是「飄著的火」（鬼火），不畫墨團球
+      this.orbs.count = 0;
     }
     // 環內護身：平常很淡；這一幀有推開人類就亮一下再退
     const o = tc.act.ring?.orbit;
@@ -178,7 +180,17 @@ export class TechFx {
     }
     // 護身火：充好了身邊一圈淡青光環；充能中很淡
     const hasWard = !!tc.act.ward;
-    this.ward.visible = hasWard;
+    this.ward.visible = hasWard && !fire;
+    if (hasWard && fire) {
+      // 火：身邊一圈小火，充好了竄高、充能中只有小小的火苗
+      const W = FIRE_FX.ward;
+      const g = tc.wardReady ? 1 + 0.12 * Math.sin(t * 6) : 0.25 + 0.4 * tc.wardProgress;
+      const gy = run.map.heightAt(run.px, run.pz);
+      for (let j = 0; j < W.n; j++) {
+        const a = (j / W.n) * Math.PI * 2 + t * 0.6;
+        fire.flame(run.px + Math.cos(a) * W.r, gy, run.pz + Math.sin(a) * W.r, W.w * g, W.h * g, j * 1.9, tc.wardReady ? 0 : 0.5);
+      }
+    }
     if (hasWard) {
       this.ward.scale.set(1.75, 1, 1.75);
       this.ward.rotation.y = t * 0.6;

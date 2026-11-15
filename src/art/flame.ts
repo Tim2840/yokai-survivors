@@ -85,14 +85,20 @@ export function flameMaterial(time: { value: number }): THREE.ShaderMaterial {
           float t = uTime + seed * 17.0;
           float u = vUv.x * 2.0 - 1.0;
           float v = vUv.y;
-          // 整條火往一邊搖、尖端捲（浮世繪的火焰紋往一邊勾）
-          u += v * v * 0.42 * sin(t * 1.9 + seed * 6.0) + v * 0.12 * sin(t * 4.3 + seed * 3.0);
-          // 往上捲動的雜訊：火舌一條條往上竄、尖端分叉
-          float nz = fbm(vec2(u * 2.3 + seed * 9.0, v * 2.4 - t * 2.1));
-          float nz2 = vn(vec2(u * 5.0 - seed * 4.0, v * 4.0 - t * 3.3));
-          float w = 0.66 * pow(max(1.0 - v, 0.0), 0.62) * smoothstep(-0.02, 0.12, v);
+          // 整條火往一邊搖；越往上越往一邊勾（浮世繪的火焰紋，尖端捲成鉤）
+          float sway = sin(t * 1.9 + seed * 6.0);
+          u += v * v * 0.38 * sway + v * 0.1 * sin(t * 4.3 + seed * 3.0);
+          u += v * v * v * 0.55 * sign(sway + 0.001) * (0.6 + 0.4 * sin(t * 2.7 + seed));
+          // 往上捲動的雜訊：火舌一條條往上竄
+          float nz = fbm(vec2(u * 2.0 + seed * 9.0, v * 2.2 - t * 2.1));
+          float nz2 = vn(vec2(u * 4.5 - seed * 4.0, v * 3.6 - t * 3.3));
+          // 身體：底部圓、中段最寬、往上收尖
+          float w = 0.8 * pow(max(1.0 - v, 0.0), 0.75) * smoothstep(-0.04, 0.22, v);
           float shape = w - abs(u);
-          float f = shape * 2.1 + (nz - 0.5) * (0.35 + 0.9 * v) + (nz2 - 0.5) * 0.18 * v - fade * 0.55;
+          // 分叉：上半部依橫向的波紋切出 2～3 條火舌（波紋本身也被雜訊推著走）
+          float tg = 0.5 + 0.5 * cos((u + (nz - 0.5) * 0.7) * 8.5 + seed * 2.0);
+          float f = shape * 2.0 + (nz - 0.5) * (0.3 + 0.7 * v) + (nz2 - 0.5) * 0.16 * v
+                  - v * v * 0.75 * tg - fade * 0.55;
           if (f < 0.0) discard;
           c = band(f, fade);
         }

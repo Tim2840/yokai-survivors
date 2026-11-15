@@ -23,18 +23,20 @@ export const FIRE_FX = {
   /** 火舌搖動的速度 */
   speed: 1.0,
   /** 投射物（鬼火）：寬、高（公尺）、離地；碎片縮小倍率在 runView */
-  bullet: { w: 0.62, h: 0.95, lift: 0.5, sparkRate: 3 },
+  bullet: { w: 0.8, h: 1.1, lift: 0.45, sparkRate: 3 },
   /** 繞身的火球、衛星燈、開路燈：火舌疊在球上 */
-  orb: { w: 0.75, h: 1.15 },
+  orb: { w: 1.0, h: 1.45, base: 0.55 },
   /** 火種、身上的火（燈油） */
   seed: { w: 0.6, h: 0.9 },
   oil: { w: 0.5, h: 0.8 },
   /** 燃燒地：每灘幾條火舌（依半徑）、每條的大小（相對半徑）、焦痕顏色、每秒噴幾顆火星 */
-  zone: { tonguesBase: 2, tonguesPerMeter: 1.6, tonguesMax: 7, w: 0.42, h: 0.7, scorch: '#3a1712', sparkRate: 2.5 },
+  zone: { tonguesBase: 2, tonguesPerMeter: 1.4, tonguesMax: 6, w: 0.62, h: 0.62, scorch: '#3a1712', sparkRate: 2.5 },
   /** 火柱：主火＋兩側的副火；高度（公尺） */
   pillar: { h: 6.5, sideH: 3.6, sparkRate: 18 },
   /** 爆開（火種、火柱落地…）：一圈火舌、一次噴的火星 */
   burst: { tongues: 6, h: 0.65, sparks: 10 },
+  /** 護身火：充好時身邊一圈小火（數量、半徑、大小）；充能中火很小 */
+  ward: { n: 10, r: 1.75, w: 0.45, h: 0.7 },
   /** 火星：大小、往上的初速、壽命（秒）、往上的浮力、左右晃 */
   spark: { size: 0.13, up: 2.4, spread: 1.6, life: 0.9, lift: 1.2, sway: 1.4 },
 } as const;

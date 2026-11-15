@@ -198,6 +198,10 @@ export function installDevApi(ctx: DevContext): void {
       const r = run();
       if (r) r.enemies.yaw[i] = (deg * Math.PI) / 180;
     },
+    /** 特效目錄用：這一幀畫了幾個特效實例（火舌＋火星） */
+    get fxCount() {
+      return (ctx.game.view as unknown as { fxCount?: number } | null)?.fxCount ?? 0;
+    },
     /** 截圖用：凍結模擬（遊戲迴圈照樣畫圖，但敵人不會轉回去面向玩家）；false 解除 */
     freeze: (on = true) => (on ? ctx.loop.hold('dev-freeze') : ctx.loop.release('dev-freeze')),
     /** 敵人轉檯圖用：把玩家角色藏起來（不擋鏡頭）；只給截圖用 */
