@@ -773,7 +773,9 @@ export class Techniques {
       this.oilTick[e] += o.tick;
       const x = en.x[e];
       const z = en.z[e];
+      run.hitDot = true;
       run.weaponHit(e, this.oilDmg[e], 0, 0, 0, false);
+      run.hitDot = false;
       if (!en.alive[e]) {
         this.oilT[e] = 0;
         this.spreadOil(o, x, z, e, this.oilDmg[e]);
@@ -930,7 +932,9 @@ export class Techniques {
       const m = en.within(this.zoneX[i], this.zoneZ[i], this.zoneR[i], this.near);
       for (let j = 0; j < m; j++) {
         const e = this.near[j];
+        run.hitDot = true;
         if (en.alive[e]) run.weaponHit(e, this.zoneDmg[i], 0, 0, 0, false);
+        run.hitDot = false;
       }
     }
   }

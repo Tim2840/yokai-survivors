@@ -8,6 +8,8 @@ export class HitFeed {
   readonly z: Float32Array;
   readonly dmg: Float32Array;
   readonly crit: Uint8Array;
+  /** 1 = 持續傷害的一跳（燒傷、燃燒地…）：畫面用比較安靜的效果 */
+  readonly dot: Uint8Array;
   /** 累計寫入數（單調遞增） */
   head = 0;
 
@@ -17,14 +19,16 @@ export class HitFeed {
     this.z = new Float32Array(cap);
     this.dmg = new Float32Array(cap);
     this.crit = new Uint8Array(cap);
+    this.dot = new Uint8Array(cap);
   }
 
-  push(x: number, z: number, dmg: number, crit: boolean): void {
+  push(x: number, z: number, dmg: number, crit: boolean, dot = false): void {
     const i = this.head % this.cap;
     this.x[i] = x;
     this.z[i] = z;
     this.dmg[i] = dmg;
     this.crit[i] = crit ? 1 : 0;
+    this.dot[i] = dot ? 1 : 0;
     this.head++;
   }
 }

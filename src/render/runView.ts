@@ -22,7 +22,8 @@ import { ElementsView } from './elementsView';
 import { PickupsView } from './pickupsView';
 import { UltFx } from './ultFx';
 import { TechFx } from './techFx';
-import { FireFx } from './fireFx';
+import { FireFx, GLOW_HALO } from './fireFx';
+import { FireReact } from './fireReact';
 import { FIRE_FX, vfxStyleOf } from '../data/vfx';
 import { FeelFx } from './feelFx';
 import type { Renderer } from '../core/renderer';
@@ -78,10 +79,26 @@ export class RunView {
   private readonly techFx: TechFx;
   /** 浮世繪的火（docs/30）：只有火屬性的妖怪才有 */
   private readonly fireFx: FireFx | null;
+  private readonly fireReact: FireReact | null;
   private lastFxT = 0;
   /** 開發用：這一幀畫了幾個火舌＋火星（特效目錄等到有東西才截圖） */
+  /** 畫面上的打倒／升級效果數（手感回歸 f1）：墨點爆圈＋火的打倒效果 */
+  get popsActive(): number {
+    return this.feelFx.active + (this.fireReact?.activeKills ?? 0);
+  }
+  private glowOn = true;
+  /** 開發用：開關火的兩個網格（量 draw call 用） */
+  fxVisible(flames: boolean, glow: boolean): void {
+    if (!this.fireFx) return;
+    this.fireFx.mesh.visible = flames;
+    this.glowOn = glow;
+    this.fireFx.glowMesh.visible = glow;
+  }
+  get fxStats(): { flames: number; particles: number; glows: number } | null {
+    return this.fireFx?.stats ?? null;
+  }
   get fxCount(): number {
-    return this.fireFx?.mesh.count ?? 0;
+    return this.fireFx?.count ?? 0;
   }
   readonly feelFx: FeelFx;
   private readonly portal: THREE.Group;
@@ -242,13 +259,14 @@ export class RunView {
     this.group.add(this.elementsView.group);
     this.pickupsView = new PickupsView(run);
     this.group.add(this.pickupsView.group);
-    this.ultFx = new UltFx(run);
-    this.group.add(this.ultFx.group);
     this.fireFx = vfxStyleOf(run.yokai.id) === 'fire' ? new FireFx() : null;
-    if (this.fireFx) this.group.add(this.fireFx.mesh);
+    if (this.fireFx) this.group.add(...this.fireFx.objects);
+    this.fireReact = this.fireFx ? new FireReact(run, this.fireFx) : null;
+    this.ultFx = new UltFx(run, this.fireFx);
+    this.group.add(this.ultFx.group);
     this.techFx = new TechFx(run, this.fireFx);
     this.group.add(this.techFx.group);
-    this.feelFx = new FeelFx(run);
+    this.feelFx = new FeelFx(run, !!this.fireFx);
     this.group.add(this.feelFx.group);
     this.numbers = new DamageNumbers(renderer.camera, run.feed);
     this.group.add(this.numbers.mesh);
@@ -324,10 +342,13 @@ export class RunView {
 
     this.elementsView.update(t);
     this.pickupsView.update(t);
-    this.ultFx.update();
     const fxDt = Math.min(0.1, Math.max(0, t - this.lastFxT));
     this.lastFxT = t;
     this.fireFx?.begin();
+    // 火光是裝飾：畫質最省（自動降到底或手動選「低」）時不畫，省一次繪製（p1：手機滿場 draw call 預算）
+    if (this.fireFx) this.fireFx.glowMesh.visible = this.glowOn && this.renderer.pipeline.level < FIRE_FX.glow.offAtQuality;
+    this.ultFx.update(fxDt);
+    this.fireReact?.update(fxDt);
     this.techFx.update(t);
     this.feelFx.update(dt);
     this.timeUniform.value = t % TWO_PI;
@@ -389,6 +410,7 @@ export class RunView {
         const B = FIRE_FX.bullet;
         const y = map.heightAt(pr.x[i], pr.z[i]) + B.lift;
         this.fireFx.flame(pr.x[i], y, pr.z[i], B.w * sc, B.h * sc, i * 0.61);
+        this.fireFx.glow(pr.x[i], y + 0.45 * sc, pr.z[i], B.halo * sc, 1, GLOW_HALO);
         this.fireFx.emitRate(pr.x[i], y + 0.4 * sc, pr.z[i], B.sparkRate * sc, fxDt, 0.3);
         continue;
       }

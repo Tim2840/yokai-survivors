@@ -7,24 +7,34 @@ import { launch, openPage, startRun, waitState, press } from '../regress/lib.mjs
 
 const tag = process.argv[2] || 'now';
 const yokai = process.argv[3] || 'chochin-kozo';
+// 每格：[標籤, { tech, evolve（進化後才有的效果：鬼火雨、燈油）, ult（大招 id）, kill（敵人打得死：看打倒的效果）, elite, minFx（等到畫面上至少這麼多特效：火柱這種隔一陣子才出手的）}]
 const SETS = {
   'chochin-kozo': [
-    ['主武器・鬼火', null],
-    ['狐火分裂', 'kitsunebi'],
-    ['燈籠環', 'ring'],
-    ['業火', 'hellfire'],
-    ['鬼火柱', 'pillar'],
-    ['火種', 'seed'],
-    ['開路燈', 'lamp'],
-    ['護身火', 'ward'],
-    ['彈跳', 'bounce'],
+    ['主武器・鬼火（命中）', {}],
+    ['狐火分裂', { tech: 'kitsunebi' }],
+    ['燈籠環', { tech: 'ring' }],
+    ['業火', { tech: 'hellfire' }],
+    ['鬼火柱', { tech: 'pillar', minFx: 70 }],
+    ['火種', { tech: 'seed', kill: true }],
+    ['開路燈', { tech: 'lamp' }],
+    ['護身火', { tech: 'ward' }],
+    ['彈跳', { tech: 'bounce' }],
+    ['打倒・一般', { kill: true }],
+    ['打倒・精英', { kill: true, elite: true }],
+    ['燒傷（燈油）', { tech: 'hellfire', evolve: true }],
+    ['鬼火雨', { tech: 'kitsunebi', evolve: true }],
+    ['大招・大火圈', { ult: 'infernoLantern' }],
+    ['大招・狐火之舞', { ult: 'ghostfireDance' }],
+    ['大招・火牆護罩', { ult: 'bulwarkLantern' }],
   ],
 };
+const only = process.argv[4] ? process.argv[4].split(',').map(Number) : null;
 const cells = SETS[yokai];
 const browser = await launch();
 const files = [];
 for (let k = 0; k < cells.length; k++) {
-  const [label, tech] = cells[k];
+  if (only && !only.includes(k + 1)) continue;
+  const [label, opt] = cells[k];
   const ctx = await openPage(browser, { name: 'desktop', width: 960, height: 640 }, '?q=1&seed=93&model=blender');
   const { page } = ctx;
   if (yokai !== 'chochin-kozo') {
@@ -36,32 +46,65 @@ for (let k = 0; k < cells.length; k++) {
     await waitState(page, 'COMBAT');
   } else await startRun(ctx);
   await page.waitForFunction(() => window.__game.blenderReady, null, { timeout: 30000 }).catch(() => {});
-  await page.evaluate(({ tech }) => {
+  await page.evaluate((opt) => {
     const g = window.__game;
     g.god = true;
+    g.setCamera(g.facingDeg + 25, 30, opt.ult ? 14 : 9);
     g.clearEnemies();
-    if (tech) {
-      g.giveTech(tech);
-      g.techLevel(tech, 5);
+    if (opt.tech) {
+      g.giveTech(opt.tech);
+      g.techLevel(opt.tech, 5);
+      if (opt.evolve && !g.evolveTech(opt.tech)) throw new Error('evolve failed: ' + opt.tech);
     }
-    // 前方一排人類（打不死）：讓技法有東西打
-    for (let j = 0; j < 7; j++) g.spawnAt('villager', -3 + j, -4.5 - (j % 2), 0, 0);
+    // 前方一排人類：平常打不死（讓技法有東西打）；看打倒的格子用一下就倒的
+    for (let j = 0; j < 7; j++) g.spawnAt('villager', -3 + j, -4.5 - (j % 2), opt.elite ? 1 : 0, 0, opt.kill ? 1 : 1e9);
+    if (opt.ult) {
+      g.setUlt(opt.ult, 0);
+      g.chargeUlt();
+    }
+  }, opt);
+  if (opt.ult) {
+    await page.keyboard.down('f');
+    await page.evaluate(() => window.__game.advance(0.1));
+    await page.keyboard.up('f');
+  }
+  await page.evaluate((opt) => {
+    const g = window.__game;
     // 跑到「畫面上真的有夠多特效」為止（最多 8 秒）：固定步數會剛好拍到空檔（第一版就是這樣，一半的格子是空的）
+    // 打倒：等到真的有人倒下，再跑 0.12 秒（火團正竄起）；大招：發動後 0.25 秒（火圈擴散到一半）
     let best = 0;
+    const k0 = g.run.kills;
     for (let s = 0; s < 160; s++) {
       g.advance(0.05);
       while (document.querySelector('.overlay[data-screen="levelup"] .card')) document.querySelector('.overlay[data-screen="levelup"] .card').click();
+      if (opt.ult) {
+        if (s >= 4) break;
+        continue;
+      }
+      if (opt.kill) {
+        // 火種：倒下的地方才種火種，等它快爆（0.6 秒）
+        if (g.run.kills > k0 && opt.tech === 'seed') {
+          for (let w = 0; w < 12; w++) g.advance(0.05);
+          break;
+        }
+        if (g.run.kills > k0) {
+          g.advance(0.06);
+          g.advance(0.06);
+          break;
+        }
+        continue;
+      }
       if (s < 30 || s % 5) continue;
       g.render();
       const n = g.fxCount;
       if (n > best) best = n;
-      if (n >= 8 && n >= best * 0.8) break;
+      if (n >= (opt.minFx ?? 8) && n >= best * 0.8) break;
     }
+    // 凍結後只畫圖：setCamera 會跑 game.frame(1)，等於時間往前 1 秒（大火圈 0.95 秒就結束了，第一次因此拍不到火圈），所以鏡頭在開頭就設好
     g.freeze(true);
-    g.setCamera(g.facingDeg + 25, 30, 9);
     g.render();
     g.render();
-  }, { tech });
+  }, opt);
   await page.addStyleTag({ content: 'body *:not(canvas){visibility:hidden !important} canvas{visibility:visible !important}' });
   await page.evaluate(() => { window.__game.render(); });
   const f = `screenshots/vfx-${tag}-${k + 1}.png`;
@@ -80,16 +123,16 @@ try:
     font = ImageFont.truetype('/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc', 26)
 except Exception:
     font = ImageFont.load_default()
-rows = (len(cells) + 2) // 3
-sheet = Image.new('RGB', (W * 3, H * rows), (20, 20, 28))
+rows = (len(cells) + 3) // 4
+sheet = Image.new("RGB", (W * 4, H * rows), (20, 20, 28))
 for i, (f, label) in enumerate(cells):
     im = Image.open(f).convert('RGB')
     w, h = im.size
-    t = im.crop(((w - W) // 2, (h - H) // 2 + 40, (w + W) // 2, (h + H) // 2 + 40))
+    t = im.crop(((w - W) // 2, (h - H) // 2 - 20, (w + W) // 2, (h + H) // 2 - 20))
     d = ImageDraw.Draw(t)
     d.rectangle((0, 0, 20 + 28 * len(label), 40), fill=(0, 0, 0))
     d.text((10, 4), label, fill=(255, 255, 255), font=font)
-    sheet.paste(t, ((i % 3) * W, (i // 3) * H))
+    sheet.paste(t, ((i % 4) * W, (i // 4) * H))
 sheet.save('screenshots/vfx-${tag}.png')
 `;
 execFileSync('python3', ['-c', py], { stdio: 'inherit' });

@@ -509,7 +509,7 @@ export class Game {
 
   /** 開發介面：手感現在的狀態（震動強度、頓幀剩餘、暈邊、畫面上的爆圈數） */
   get feelState() {
-    return { shake: this.renderer.rig.shake.trauma, hitStop: this.hitStop.left, pops: this.view?.feelFx.active ?? 0, vignette: Number(this.d.ui.querySelector<HTMLElement>('#hurt-vignette')?.style.opacity ?? 0) };
+    return { shake: this.renderer.rig.shake.trauma, hitStop: this.hitStop.left, pops: this.view?.popsActive ?? 0, vignette: Number(this.d.ui.querySelector<HTMLElement>('#hurt-vignette')?.style.opacity ?? 0) };
   }
   /** 開發用：畫面上有幾支箭、幾條預告線 */
   get humansView() {

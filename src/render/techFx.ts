@@ -7,7 +7,7 @@ import type { Run } from '../game/run';
 import { FLASH_KINDS } from '../game/techniques';
 import { setHugeBounds } from './instancedLayer';
 import { FIRE_FX, vfxStyleOf } from '../data/vfx';
-import type { FireFx } from './fireFx';
+import { GLOW_GROUND, GLOW_HALO, type FireFx } from './fireFx';
 
 const MAX_ORBS = 18;
 const MAX_OIL = 24;
@@ -160,6 +160,8 @@ export class TechFx {
       for (let i = 0; i < k; i++) {
         const sc = e[i * 16];
         fire.flame(e[i * 16 + 12], e[i * 16 + 13] - O.base * sc, e[i * 16 + 14], O.w * sc, O.h * sc, i * 1.37);
+        fire.glow(e[i * 16 + 12], e[i * 16 + 13] + 0.1, e[i * 16 + 14], O.halo * sc, 1, GLOW_HALO);
+        fire.emitRate(e[i * 16 + 12], e[i * 16 + 13] + 0.4 * sc, e[i * 16 + 14], O.sparkRate, dt, 0.25);
       }
       // 火的繞身是「飄著的火」（鬼火），不畫墨團球
       this.orbs.count = 0;
@@ -171,6 +173,17 @@ export class TechFx {
     if (tc.innerHits !== this.lastInner) {
       this.lastInner = tc.innerHits;
       this.flash = 1;
+      if (fire && inner > 0) {
+        // 火：環內推開人類那一下，貼地竄起一圈往外倒的火、往外噴火星
+        const gy = run.map.heightAt(run.px, run.pz);
+        const G = FIRE_FX.guard;
+        for (let j = 0; j < G.n; j++) {
+          const a = (j / G.n) * Math.PI * 2 + fire.rand();
+          fire.part(0, run.px + Math.cos(a) * inner * 0.7, gy, run.pz + Math.sin(a) * inner * 0.7, Math.cos(a) * G.speed, 0, Math.sin(a) * G.speed, G.w, G.h, G.life, 0, 4, -0.3);
+        }
+        fire.emit(run.px, gy + 0.5, run.pz, G.sparks, 0.5, G.speed * 1.4);
+        fire.flash(run.px, gy + 0.06, run.pz, inner * 1.3, 1.2, 0.35, GLOW_GROUND);
+      }
     }
     this.flash = Math.max(0, this.flash - dt * 4);
     if (inner > 0) {
@@ -190,6 +203,7 @@ export class TechFx {
         const a = (j / W.n) * Math.PI * 2 + t * 0.6;
         fire.flame(run.px + Math.cos(a) * W.r, gy, run.pz + Math.sin(a) * W.r, W.w * g, W.h * g, j * 1.9, tc.wardReady ? 0 : 0.5);
       }
+      if (tc.wardReady) fire.glow(run.px, gy + 0.05, run.pz, W.r * 1.5, 0.8, GLOW_GROUND);
     }
     if (hasWard) {
       this.ward.scale.set(1.75, 1, 1.75);
@@ -223,6 +237,9 @@ export class TechFx {
           fire.flame(tx, gy, tz, Z.w * r * big + 0.25, Z.h * r * big + 0.4, i * 3.1 + j, 1 - f);
         }
         fire.emitRate(x, gy + 0.3, z, Z.sparkRate * f, dt, r * 0.5);
+        fire.smokeRate(x, gy + 0.8 + r * 0.3, z, Z.smokeRate * f, dt, 0.35 + r * 0.12);
+        // 地上的火光（慢慢呼吸）
+        fire.glow(x, gy + 0.05, z, r * 1.35, (0.55 + 0.45 * f) * (0.9 + 0.1 * Math.sin(t * 7 + i)), GLOW_GROUND);
       }
       // 墨慢慢乾：快消失時從邊緣一塊一塊不見
       this.zoneFade.setX(zc, 0.08 + 0.75 * (1 - f) * (1 - f));
@@ -266,7 +283,14 @@ export class TechFx {
       const s = 1 + 0.5 * (1 - Math.min(1, tc.seedT[i])) + 0.15 * Math.sin(t * 14 + i);
       this.m.makeScale(s, s, s).setPosition(x, run.map.heightAt(x, z) + 0.25, z);
       this.seeds.setMatrixAt(sc++, this.m);
-      if (fire) fire.flame(x, run.map.heightAt(x, z), z, FIRE_FX.seed.w * s, FIRE_FX.seed.h * s, i * 2.3);
+      if (fire) {
+        // 火種：一小團火，快炸時引信的火星越噴越多
+        const gy = run.map.heightAt(x, z);
+        const fuse = 1 - Math.min(1, tc.seedT[i]);
+        fire.flame(x, gy, z, FIRE_FX.seed.w * s, FIRE_FX.seed.h * s, i * 2.3);
+        fire.glow(x, gy + 0.05, z, 1.0 + fuse, 0.6 + 0.6 * fuse, GLOW_GROUND);
+        fire.emitRate(x, gy + 0.5, z, FIRE_FX.seed.sparkRate * (0.3 + fuse), dt, 0.4);
+      }
     }
     this.seeds.count = fire ? 0 : sc;
     this.seeds.instanceMatrix.needsUpdate = true;
@@ -279,7 +303,20 @@ export class TechFx {
       const s = 1 + 0.25 * Math.sin(t * 13 + i);
       this.m.makeScale(s, s, s).setPosition(x, run.map.heightAt(x, z) + 1.5, z);
       this.oil.setMatrixAt(oc++, this.m);
-      if (fire) fire.flame(x, run.map.heightAt(x, z) + 1.05, z, FIRE_FX.oil.w * s, FIRE_FX.oil.h * s, e * 0.71);
+      if (fire) {
+        // 燒傷：身上繞著幾條火舌（不是只有頭頂一朵）、冒煙、掉火星
+        const B = FIRE_FX.burning;
+        const gy = run.map.heightAt(x, z);
+        const sc = run.enemies.scale[e];
+        for (let j = 0; j < B.tongues; j++) {
+          const a = (j / B.tongues) * Math.PI * 2 + t * 1.3 + e;
+          const lift = j === 0 ? 0.95 : 0.35 + 0.25 * j;
+          fire.flame(x + Math.cos(a) * B.r * sc, gy + lift * sc, z + Math.sin(a) * B.r * sc, B.w * s * sc, B.h * s * sc, e * 0.71 + j * 1.3);
+        }
+        fire.smokeRate(x, gy + 1.6 * sc, z, B.smokeRate, dt, 0.32);
+        fire.emitRate(x, gy + 1.0 * sc, z, B.sparkRate, dt, 0.4);
+        fire.glow(x, gy + 0.9 * sc, z, 1.1 * sc, 0.8, GLOW_HALO);
+      }
     }
     this.oil.count = fire ? 0 : oc;
     this.oil.instanceMatrix.needsUpdate = true;
@@ -305,6 +342,9 @@ export class TechFx {
         fire.flame(x + r * 0.7, gy, z + r * 0.3, r * 1.5 * g, P.sideH * g, i * 5.3 + 1, 1 - f);
         fire.flame(x - r * 0.6, gy, z - r * 0.4, r * 1.4 * g, P.sideH * 0.85 * g, i * 5.3 + 2, 1 - f);
         fire.emitRate(x, gy + 1, z, P.sparkRate * f, dt, r);
+        fire.glow(x, gy + 0.05, z, r * 3.2, f, GLOW_GROUND);
+        fire.glow(x, gy + P.h * 0.45 * g, z, r * 3, 0.9 * f, GLOW_HALO);
+        if (f < 0.5) fire.smokeRate(x, gy + P.h * 1.05 * g, z, P.smokeRate, dt, 0.6); // 煙從火尖上方冒（放在火裡面會變成火裡的黑塊）
       }
     }
     this.pillars.count = fire ? 0 : pc;
@@ -335,7 +375,19 @@ export class TechFx {
           const rr = tc.flashR[i] * 0.75;
           fire.flame(x + Math.cos(a) * rr, gy, z + Math.sin(a) * rr, 0.5 + rr * 0.35, (B.h + rr * 0.6) * rise, i + j * 0.37, 1 - f);
         }
-        if (tc.flashLife[i] > this.prevFlash[i] + 1e-4) fire.emit(x, gy + 0.4, z, B.sparks, rr0(tc.flashR[i]));
+        if (tc.flashLife[i] > this.prevFlash[i] + 1e-4) {
+          // 剛爆開：火星、飛出去的小火團、一圈地上的火光、一朵煙；鬼火雨再加一顆從天上落下的火
+          const R = tc.flashR[i];
+          fire.emit(x, gy + 0.4, z, B.sparks, rr0(R), R * 1.2);
+          fire.blobs(x, gy + 0.3, z, B.blobs, 2 + R * 1.5, 0.35 + R * 0.08, 0.45);
+          fire.flash(x, gy + 0.06, z, R * 1.6, 1.3, 0.45, GLOW_GROUND);
+          fire.flash(x, gy + 0.8, z, R * 1.1, 1, 0.25, GLOW_HALO);
+          fire.smoke(x, gy + 0.9, z, B.smoke, 0.4 + R * 0.12, R * 0.4);
+          if (tc.flashKind[i] === FLASH_KINDS.rain) {
+            const F = FIRE_FX.rain;
+            fire.part(0, x, gy + F.from, z, 0, -F.from / F.fall, 0, F.w, F.h, F.fall, 0, 0, -0.2);
+          }
+        }
       }
     }
     for (let i = 0; i < tc.flashLife.length; i++) this.prevFlash[i] = tc.flashLife[i];

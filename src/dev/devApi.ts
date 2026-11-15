@@ -4,6 +4,7 @@ import { ENEMY_IDS } from '../data/enemies';
 import { collectMarkers, markers } from '../game/minimapMarkers';
 import { OMIKUJI_RESULTS, type ElementKind, type OmikujiResult } from '../data/elements';
 import { PICKUP_KINDS, type PickupKind } from '../data/pickups';
+import { EVO, evosFor } from '../data/techniques';
 import type { AudioEngine } from '../core/audio';
 import type { FixedLoop } from '../core/loop';
 import type { Renderer } from '../core/renderer';
@@ -199,6 +200,12 @@ export function installDevApi(ctx: DevContext): void {
       if (r) r.enemies.yaw[i] = (deg * Math.PI) / 180;
     },
     /** 特效目錄用：這一幀畫了幾個特效實例（火舌＋火星） */
+    /** 開關火的網格（量 draw call） */
+    fxVisible: (flames: boolean, glow: boolean) => (ctx.game.view as unknown as { fxVisible?: (a: boolean, b: boolean) => void } | null)?.fxVisible?.(flames, glow),
+    /** 火特效分項：每幀的火舌、粒子、光（沒有火的妖怪是 null） */
+    get fxStats() {
+      return (ctx.game.view as unknown as { fxStats?: unknown } | null)?.fxStats ?? null;
+    },
     get fxCount() {
       return (ctx.game.view as unknown as { fxCount?: number } | null)?.fxCount ?? 0;
     },
@@ -239,15 +246,27 @@ export function installDevApi(ctx: DevContext): void {
       });
       return { n, tris };
     },
+    /** 看得到、會畫的物件清單（draw call 分析用）：名稱或父層名稱、種類、實例數、是否投影 */
+    drawList: () => {
+      const out: string[] = [];
+      ctx.renderer.scene.traverseVisible((o) => {
+        const m = o as import('three').Mesh;
+        if (!(m.isMesh || (o as import('three').Points).isPoints || (o as import('three').Line).isLine || (o as import('three').Sprite).isSprite)) return;
+        const n = (m as import('three').InstancedMesh).isInstancedMesh ? (m as import('three').InstancedMesh).count : 1;
+        if (n === 0) return;
+        out.push(`${o.name || o.parent?.name || o.parent?.parent?.name || '?'}|${o.type}|${n}|${m.castShadow ? 'S' : ''}|${(Array.isArray(m.material) ? m.material[0] : m.material)?.type ?? ''}`);
+      });
+      return out;
+    },
     /** 清場：敵人、敵方的箭都清掉，並解除無敵時間（測試人類行為用） */
     clearEnemies: () => run()?.devClearEnemies(),
     /** 在玩家相對位置 (dx, dz) 放一隻指定的人類（截圖用；不動、打不死）；回傳索引 */
-    spawnAt: (id: string, dx: number, dz: number, variant = 0, vet = 0) => {
+    spawnAt: (id: string, dx: number, dz: number, variant = 0, vet = 0, hp = 1e9) => {
       const r = run();
       if (!r) return -1;
       const i = r.enemies.spawn(kindIndex(id), r.px + dx, r.pz + dz, 1, 0, dx * 0.7 + dz, variant, 1, vet);
       if (i >= 0) {
-        r.enemies.hp[i] = r.enemies.maxHp[i] = 1e9;
+        r.enemies.hp[i] = r.enemies.maxHp[i] = hp;
         r.enemies.speed[i] = 0;
         r.enemies.yaw[i] = Math.atan2(-dx, -dz);
       }
@@ -315,6 +334,15 @@ export function installDevApi(ctx: DevContext): void {
     },
     /** 把一個已有的技法換成另一個（測試用：逐個看河童新補的技法在能力面板的樣子） */
     replaceTech: (oldId: string, newId: string) => run()?.tech.replace(oldId, newId) ?? false,
+    /** 直接進化（特效目錄用）：找含這個技法的進化，把材料練到門檻再進化；回傳有沒有成功 */
+    evolveTech: (id: string) => {
+      const r = run();
+      if (!r) return false;
+      const e = evosFor(r.weaponItemId).find((v) => v.from.includes(id));
+      if (!e) return false;
+      for (const m of e.from) if (r.tech.techLevel(m) < EVO.minLevel) r.devTechLevel(m, EVO.minLevel);
+      return r.tech.evolve(e.id);
+    },
     /** 直接給技法（不經面板，D48；給 TECH_MAX 以內） */
     giveTech: (...ids: string[]) => {
       const r = run();

@@ -38,12 +38,18 @@ export class FeelFx {
   private readonly cMain: THREE.Color;
   private readonly cMid: THREE.Color;
   private readonly cAccent: THREE.Color;
+  private readonly cLevel: THREE.Color;
 
-  constructor(private readonly run: Run) {
+  /** 火（D91）：打倒的效果整個交給 FireReact（竄起的火＋地上的火光），這裡不畫墨點（也省一次繪製）；升級光環照畫 */
+  private readonly skipKills: boolean;
+
+  constructor(private readonly run: Run, fire = false) {
     const fx = fxOf(run.yokai.id);
+    this.skipKills = fire;
     this.cMain = new THREE.Color(fx.ink);
     this.cMid = new THREE.Color(palette.ink.black);
     this.cAccent = new THREE.Color(fx.inkLight);
+    this.cLevel = new THREE.Color(fx.inkLight);
     // D85 水墨風：打倒敵人是一灘濺開的墨點（墨漬貼圖、一般混合、從邊緣乾掉），不是發光的圈
     this.geo = new THREE.CircleGeometry(1, 24);
     this.mat = inkMaterial(inkBlotTexture(), { opacity: 0.85, side: THREE.DoubleSide });
@@ -81,7 +87,7 @@ export class FeelFx {
     // 新的擊殺 → 爆圈（每幀最多 perFrame 個；落後太多就直接跳到最新的 pool 筆）
     const behind = run.deathHead - this.seen;
     if (behind > FEEL.deathLog) this.seen = run.deathHead - FEEL.deathLog;
-    if (feel.pops > 0) {
+    if (feel.pops > 0 && !this.skipKills) {
       let n = 0;
       while (this.seen < run.deathHead && n < FEEL.pop.perFrame) {
         const di = (this.seen % FEEL.deathLog) * 4;
@@ -110,7 +116,7 @@ export class FeelFx {
       this.m.compose(this.p, this.q2, this.s);
       this.mesh.setMatrixAt(count, this.m);
       // 一般敵人是墨黑的墨點、精英用主色、頭目與升級用淡色；隨時間從邊緣乾掉
-      this.mesh.setColorAt(count, k === 0 ? this.cMid : k === 1 ? this.cMain : this.cAccent);
+      this.mesh.setColorAt(count, k === 0 ? this.cMid : k === 1 ? this.cMain : k === 3 ? this.cLevel : this.cAccent);
       this.fade.setX(count, 0.1 + 0.85 * u);
       count++;
     }

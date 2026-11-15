@@ -219,7 +219,8 @@ export class Run {
   private summonPlaced = false;
   lastCast: { ids: string[]; at: number; x: number; z: number; dx: number; dz: number } | null = null;
   /** 狂亂（暫時強化）與護罩結束的時間（clock）、狂亂額外鬼火 */
-  private frenzyUntil = 0;
+  /** 狐火之舞（frenzy）到幾秒（畫面讀） */
+  frenzyUntil = 0;
   private frenzyVolley = 0;
   shieldUntil = 0;
   private frenzyTotal = 1;
@@ -899,12 +900,15 @@ export class Run {
    * 武器傷害（鬼火、繞身、燃燒地、火柱…）打中 e：頭目不被擊退、跳傷害數字（quiet = 不跳）、打倒就結算；
    * 技法系統（火種）會知道這隻是被武器打倒的。dx, dz 是擊退方向（不用單位向量）。
    */
+  /** 技法系統在持續傷害的一跳前後設 true／false（只給畫面分辨打中的效果，不影響模擬） */
+  hitDot = false;
+
   weaponHit(e: number, dmg: number, dx: number, dz: number, knock: number, crit: boolean, quiet = false): void {
     const en = this.enemies;
     const x = en.x[e];
     const z = en.z[e];
     dmg = en.guard(e, dmg); // 盾面正面減傷（E-1）：傷害數字也顯示減傷後的
-    if (!quiet) this.feed.push(x, z, dmg, crit);
+    if (!quiet) this.feed.push(x, z, dmg, crit, this.hitDot);
     const l = Math.hypot(dx, dz);
     if (en.hurt(e, dmg, l > 1e-6 ? dx / l : 0, l > 1e-6 ? dz / l : 0, en.variant[e] === 2 ? 0 : knock)) {
       this.onKill(e);
