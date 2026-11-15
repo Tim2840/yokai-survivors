@@ -71,7 +71,10 @@ function applyTune(): void {
   if (process.argv.includes('--noTrade')) (ELEMENT_WEIGHTS as Record<string, number>).fox = 0;
   for (const kv of TUNE.split(',').filter(Boolean)) {
     const [k, v] = kv.split('=');
-    if (k === 'recipes' && v === 'off') {
+    if (k === 'rings' && v === 'off') {
+      // 對照組：沒有包圍圈（Q60 之前）
+      for (const ev of STAGE.events) if (ev.kind === 'ring') (ev as { count: number }).count = 0;
+    } else if (k === 'recipes' && v === 'off') {
       // 對照組：只出村人（E-1 之前的敵人）
       for (let i = 0; i < SPAWN_RECIPES.length; i++) (SPAWN_RECIPES as unknown as unknown[])[i] = [{ id: 'villager', from: 0, weight: 1 }];
     } else if (k.startsWith('recipes.')) {
@@ -80,6 +83,8 @@ function applyTune(): void {
     } else if (k.startsWith('chapter.')) (STAGE.chapter as unknown as Record<string, number>)[k.slice(8)] = Number(v);
     else if (k.startsWith('summon.')) (STAGE.summon as unknown as Record<string, number>)[k.slice(7)] = Number(v);
     else if (k.startsWith('drops.')) (STAGE.drops as unknown as Record<string, number>)[k.slice(6)] = Number(v);
+    else if (k.startsWith('late.')) (STAGE.late as unknown as Record<string, number>)[k.slice(5)] = Number(v);
+    else if (k.startsWith('recycle.')) (STAGE.recycle as unknown as Record<string, number>)[k.slice(8)] = Number(v);
     else if (k.startsWith('w.')) (WAVES as unknown as Record<string, number>)[k.slice(2)] = Number(v);
     else if (k.startsWith('tech.')) (TECH_OFFER as unknown as Record<string, number>)[k.slice(5)] = Number(v);
     else if (k.startsWith('shards.')) (SHARDS as unknown as Record<string, number>)[k.slice(7)] = Number(v);
@@ -167,6 +172,8 @@ interface Result {
   techLvSum: number;
   techMaxLv: number;
   aliveAvg: number;
+  aliveQ: number[];
+  hurtQ: number[];
   alivePeak: number;
   /** 死在召喚之後幾秒（沒死或沒召喚 = -1） */
   diedAfterSummon: number;
@@ -207,6 +214,12 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   let weaponMaxAt = -1;
   let weapon4At = -1;
   let aliveSum = 0;
+  // 關卡四個時段（0～25%、25～50%、50～75%、75～100%）各自的場上敵人平均（使用者 2026-11-15：「後期難度跟前面差不多，主要是敵人數量」）
+  const qSum = [0, 0, 0, 0];
+  const qN = [0, 0, 0, 0];
+  // 四個時段各被打掉多少生命（後段有沒有變難）
+  const qHurt = [0, 0, 0, 0];
+  let lastHp = -1;
   let aliveN = 0;
   let alivePeak = 0;
   let sampleT = 0;
@@ -303,6 +316,8 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     }
     if (run.director.bossIndex >= 0) bossSeen = true;
     run.step(DT);
+    if (lastHp >= 0 && run.hp < lastHp && run.time < SECONDS) qHurt[Math.min(3, Math.floor((run.time / SECONDS) * 4))] += lastHp - run.hp;
+    lastHp = run.hp;
     if (weapon4At < 0 && run.weaponLevel >= 4) weapon4At = totalTime + run.time;
     if (weaponMaxAt < 0 && run.weaponMaxed) weaponMaxAt = totalTime + run.time;
     sampleT += DT;
@@ -310,6 +325,11 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
       sampleT -= 1;
       aliveSum += run.enemies.aliveCount;
       aliveN++;
+      const q = Math.min(3, Math.floor((run.time / SECONDS) * 4));
+      if (run.time < SECONDS) {
+        qSum[q] += run.enemies.aliveCount;
+        qN[q]++;
+      }
       alivePeak = Math.max(alivePeak, run.enemies.aliveCount);
     }
     t += DT;
@@ -344,6 +364,8 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     techLvSum: run.tech.levels.reduce((a, b) => a + b, 0),
     techMaxLv: run.tech.levels.reduce((a, b) => Math.max(a, b), 0),
     aliveAvg: aliveN ? aliveSum / aliveN : 0,
+    aliveQ: qSum.map((v, i) => (qN[i] ? v / qN[i] : -1)),
+    hurtQ: qHurt.map((v, i) => (qN[i] ? v / (qN[i] / 60) : -1)),
     alivePeak,
     diedAfterSummon: run.phase === 'ended' && run.result === 'death' && summonedAt >= 0 && run.director.bossSpawned ? run.time - summonedAt : -1,
     curseTotal: run.curse.enemyHp + run.curse.enemySpeed + run.curse.enemyDamage + run.curse.spawnRate,
@@ -501,7 +523,7 @@ function summarize(rs: Result[]): string {
     `補給品 ${avg(rs.map((r) => r.pickups)).toFixed(1)} 個`,
     `主武器 4 級中位第 ${pct(rs.filter((r) => r.weapon4At >= 0).map((r) => r.weapon4At), 50)?.toFixed(0) ?? '-'} 秒、滿級 ${((rs.filter((r) => r.weaponMaxAt >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.weaponMaxAt >= 0).map((r) => r.weaponMaxAt), 50)?.toFixed(0) ?? '-'} 秒）、結束時平均 ${avg(rs.map((r) => r.weaponLv)).toFixed(1)} 級`,
     `技法等級合計 ${avg(rs.map((r) => r.techLvSum)).toFixed(1)}、最高技法 Lv${avg(rs.map((r) => r.techMaxLv)).toFixed(1)}（≥5 級 ${share(rs, (r) => r.techMaxLv >= 5)}、≥6 級 ${share(rs, (r) => r.techMaxLv >= 6)}、8 級 ${share(rs, (r) => r.techMaxLv >= 8)}；進化≥1 次 ${share(rs, (r) => r.evolved >= 1)}）`,
-    `場上敵人 平均 ${avg(rs.map((r) => r.aliveAvg)).toFixed(0)}、最多 ${avg(rs.map((r) => r.alivePeak)).toFixed(0)}`,
+    `場上敵人 平均 ${avg(rs.map((r) => r.aliveAvg)).toFixed(0)}、最多 ${avg(rs.map((r) => r.alivePeak)).toFixed(0)}（四個時段 ${[0, 1, 2, 3].map((i) => { const v = rs.map((r) => r.aliveQ[i]).filter((x) => x >= 0); return v.length ? avg(v).toFixed(0) : '-'; }).join('／')}；每分鐘被打掉生命 ${[0, 1, 2, 3].map((i) => { const v = rs.map((r) => r.hurtQ[i]).filter((x) => x >= 0); return v.length ? avg(v).toFixed(0) : '-'; }).join('／')}）`,
     `死在召喚後 ${rs.filter((r) => r.diedAfterSummon >= 0).length} 局（中位 ${pct(rs.filter((r) => r.diedAfterSummon >= 0).map((r) => r.diedAfterSummon), 50)?.toFixed(0) ?? '-'} 秒）`,
     `召喚頭目 ${((rs.filter((r) => r.summonedAt >= 0).length / rs.length) * 100).toFixed(0)}%（平均第 ${avg(rs.filter((r) => r.summonedAt >= 0).map((r) => r.summonedAt)).toFixed(0)} 秒）`,
   ].join('；');

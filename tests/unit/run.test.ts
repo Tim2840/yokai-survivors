@@ -63,9 +63,54 @@ describe('連續計時關卡（D22）', () => {
     expect(d.virtualWave(d.duration * 2)).toBe(20);
     expect(d.rate(0)).toBeLessThan(d.rate(d.duration / 2));
     expect(d.rate(d.duration / 2)).toBeLessThan(d.rate(d.duration));
-    // 倍率 ×countScale 時開場 13/20、尾聲 108/20（再乘倍率） 點／秒（docs/02 第 8.1 節）
+    // 倍率 ×countScale 時開場 13/20、尾聲 108/20（再乘倍率） 點／秒（docs/02 第 8.1 節）；尾聲再乘後段加壓（Q60）
     expect(d.rate(0)).toBeCloseTo((13 / 20) * tuning.countScale, 5);
-    expect(d.rate(d.duration)).toBeCloseTo((108 / 20) * tuning.countScale, 5);
+    expect(d.rate(d.duration)).toBeCloseTo((108 / 20) * tuning.countScale * STAGE.late.mult, 5);
+    // 後段加壓從 late.from 才開始：那一刻之前和沒有加壓一樣
+    const t0 = STAGE.late.from * d.duration;
+    const n0 = d.virtualWave(t0);
+    expect(d.rate(t0)).toBeCloseTo(((8 + 5 * n0) / 20) * tuning.countScale, 5);
+  });
+
+  it('定時事件照時間排序（關卡導演一個一個往下檢查；亂序會讓前面的事件被拖到後面才觸發）', () => {
+    for (let i = 1; i < STAGE.events.length; i++) expect(STAGE.events[i].at, `第 ${i} 個事件比前一個早`).toBeGreaterThanOrEqual(STAGE.events[i - 1].at);
+  });
+
+  it('包圍圈（Q60）：60% 時在身邊 14 公尺圍一圈；後段經驗打折、前段不打折', () => {
+    const { run } = make(5);
+    const e = run.enemies;
+    const d = run.director;
+    const ring = STAGE.events.find((v) => v.kind === 'ring')!;
+    (d as unknown as { time: number }).time = ring.at * d.duration - 0.001;
+    // 先跳過前面的定時事件（只看包圍圈）
+    (d as unknown as { eventsFired: number }).eventsFired = STAGE.events.filter((v) => v.at * d.duration <= ring.at * d.duration - 0.001).length;
+    for (let k = 0; k < 10; k++) d.update(1 / 60, run.px, run.pz, 0, false);
+    let onRing = 0;
+    for (let i = 0; i < e.high; i++) if (e.alive[i] && Math.abs(Math.hypot(e.x[i] - run.px, e.z[i] - run.pz) - STAGE.ring.radius) < 0.5) onRing++;
+    expect(d.ringsSpawned).toBeGreaterThan(ring.count * 0.6);
+    expect(onRing).toBe(d.ringsSpawned);
+    expect(d.xpScale(0)).toBe(1);
+    expect(d.xpScale(d.duration)).toBeCloseTo(1 / STAGE.late.mult, 5);
+  });
+
+  it('同畫面滿了還要湧出（Q60）：遠遠落後的一般敵人被搬回生成圈，總數不超過上限', () => {
+    const { run } = make(3);
+    const e = run.enemies;
+    const d = run.director;
+    // 塞滿：全部放在玩家 60 公尺外
+    let n = 0;
+    while (e.aliveCount < (d as unknown as { maxEnemies: number }).maxEnemies && n < 1000) {
+      if (e.spawn(0, run.px + 60, run.pz, 1, 0, 0) < 0) break;
+      n++;
+    }
+    const before = e.aliveCount;
+    d.pending = 10;
+    d.update(1 / 60, run.px, run.pz, 0, false);
+    expect(e.aliveCount).toBe(before);
+    expect(d.recycled).toBeGreaterThan(0);
+    let near = 0;
+    for (let i = 0; i < e.high; i++) if (e.alive[i] && Math.hypot(e.x[i] - run.px, e.z[i] - run.pz) <= STAGE.spawnRingMax + 0.01) near++;
+    expect(near).toBe(d.recycled);
   });
 
   it('定時事件：精英在 25% 出現、召喚祭壇在 30% 顯現、小高潮在 50% 速率加倍；一般關的頭目不會自己出來（D34，縮短成 60 秒的關卡）', () => {
@@ -216,7 +261,7 @@ describe('連續計時關卡（D22）', () => {
     for (let i = 0; i < 20; i++) run.step(DT);
     expect(run.director.swarm).toBe(true);
     expect(run.director.rate()).toBeCloseTo(run.director.rate(30) , 5);
-    expect(run.director.rate() / ((108 / 20) * 1)).toBeCloseTo(STAGE.swarm.rateMult, 5);
+    expect(run.director.rate() / ((108 / 20) * STAGE.late.mult)).toBeCloseTo(STAGE.swarm.rateMult, 5);
     expect(run.portal.active).toBe(false);
     expect(run.timeLeft).toBe(0);
   });

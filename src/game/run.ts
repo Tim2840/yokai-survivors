@@ -10,7 +10,7 @@ import { ENEMY_INTRO_SECONDS } from '../data/enemies';
 import { itemPoolFor, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById, scaleWeaponStep } from '../data/items';
 import { EVO_CARD_PREFIX, TECH_CARD_PREFIX, TECH_KEEP, TECH_OFFER, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard } from '../data/techniques';
 import { Techniques } from './techniques';
-import { RARITY_MULT } from '../data/rarity';
+import { RARITIES, RARITY_MULT } from '../data/rarity';
 import { STAGE, stagesForMap, bossHpMult, isBigBossStage } from '../data/stage';
 import { FEEL } from '../data/feel';
 import { DIFFICULTY } from '../data/difficulty';
@@ -940,7 +940,8 @@ export class Run {
     this.deathLog[di + 3] = this.enemies.scale[e];
     if (this.enemies.variant[e] === 1) this.eliteKills++;
     if (!this.ultCooling) this.ultCharge = Math.min(ULT.max, this.ultCharge + (this.enemies.variant[e] === 2 ? ULT.perBoss : this.enemies.variant[e] === 1 ? ULT.perElite : ULT.perKill) * this.ultModsNow.charge);
-    const value = this.enemies.points(e) * PROGRESSION.orbPerPoint;
+    // 後段加壓（Q60）：一般人類的經驗打折（數量翻倍、總經驗不翻倍）
+    const value = this.enemies.points(e) * PROGRESSION.orbPerPoint * (this.enemies.variant[e] === 0 ? this.director.xpScale() : 1);
     const x = this.enemies.x[e];
     const z = this.enemies.z[e];
     const isBoss = this.enemies.variant[e] === 2;
@@ -1164,14 +1165,29 @@ export class Run {
     // 格子滿了、還有沒學的化身限定技法（D84）：有機率變成「換掉一招」的提案
     const swap = this.tech.pickFormSwap(this.rngCards);
     if (swap && this.rngCards.next() < TECH_OFFER.swapChance) {
-      offer[Math.floor(this.rngCards.next() * offer.length)] = { cardId: `${TECH_SWAP_PREFIX}${swap[0]}>${swap[1]}`, rarity: 'common' };
+      offer[this.lowestCardSlot(offer)] = { cardId: `${TECH_SWAP_PREFIX}${swap[0]}>${swap[1]}`, rarity: 'common' };
       return;
     }
     const id = this.tech.pickCard(this.rngCards);
     if (!id) return;
-    const at = Math.floor(this.rngCards.next() * offer.length);
+    const at = this.lowestCardSlot(offer);
     const rarity = this.dealer.rollRarity(this.level, this.stats.value.luck);
     offer[at] = { cardId: TECH_CARD_PREFIX + id, rarity, affixes: rollAffixes(this.rngCards, rarity, mechOf(techById(id))) };
+  }
+
+  /**
+   * 技法卡要換掉哪一張：稀有度最低的那幾張裡隨機挑（Q60：珍、極開放後，里程碑保證的珍／極會被技法卡蓋掉——
+   * 20 級的里程碑極卡被換成技法卡，截圖時發現）。
+   */
+  private lowestCardSlot(offer: CardOffer[]): number {
+    const rank = (r: string) => (RARITIES as readonly string[]).indexOf(r);
+    let lo = Infinity;
+    for (const o of offer) lo = Math.min(lo, rank(o.rarity));
+    const idx: number[] = [];
+    offer.forEach((o, i) => {
+      if (rank(o.rarity) === lo) idx.push(i);
+    });
+    return idx[Math.floor(this.rngCards.next() * idx.length)];
   }
 
   /** 選了升級卡裡的技法卡：沒有就學會、有就升一級（效果吃那張卡的稀有度） */

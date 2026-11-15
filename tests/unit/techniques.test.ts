@@ -1,3 +1,4 @@
+import { RARITIES_UNLOCKED_M1 } from '../../src/data/progression';
 import { describe, it, expect, afterEach } from 'vitest';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
@@ -106,12 +107,22 @@ describe('技法怎麼拿（D49：機率出現在升級卡裡、8 級、分稀�
     expect(hit / N).toBeGreaterThan(TECH_OFFER.chance - 0.03);
     expect(hit / N).toBeLessThan(TECH_OFFER.chance + 0.03);
   });
+  it('技法卡不會蓋掉里程碑的高稀有度卡（Q60：20 級第一張保證極，以前會被技法卡換掉）', () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const run = make(seed);
+      run.level = 20;
+      (run as unknown as { forceTechCard: boolean }).forceTechCard = true;
+      const offer = deal(run);
+      expect(offer.some((c) => c.cardId.startsWith('tech:') || c.cardId.includes('>')), `種子 ${seed} 沒有技法卡`).toBe(true);
+      expect(offer.some((c) => c.rarity === 'legend'), `種子 ${seed} 里程碑的極不見了：${JSON.stringify(offer)}`).toBe(true);
+    }
+  });
   it('技法卡分稀有度（只有已解鎖的）；選了學會、再選同一個升一級，稀有度越高效果越強；到進化前的上限（5 級）就不再出現', () => {
     const run = make(7);
     run.level = 10;
     const seen = new Set<string>();
     for (let k = 0; k < 3000; k++) for (const c of deal(run)) if (c.cardId.startsWith('tech:')) seen.add(c.rarity);
-    expect([...seen].every((r) => ['common', 'rare'].includes(r)), `出現了沒解鎖的稀有度：${[...seen]}`).toBe(true);
+    expect([...seen].every((r) => (RARITIES_UNLOCKED_M1 as readonly string[]).includes(r)), `出現了沒解鎖的稀有度：${[...seen]}`).toBe(true);
     expect(seen.size).toBeGreaterThan(1);
     // 學會（凡）→ 良升一級
     const a = make(8);

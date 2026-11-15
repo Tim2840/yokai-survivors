@@ -1,3 +1,4 @@
+import { RARITIES_UNLOCKED_M1 } from '../../src/data/progression';
 import { describe, expect, it } from 'vitest';
 import { RARITIES, RARITY_MULT, cardRarityWeights } from '../../src/data/rarity';
 import { ITEMS, ITEM_RARITY_MULT, GHOSTFIRE_LEVELS } from '../../src/data/items';
@@ -9,12 +10,23 @@ describe('稀有度', () => {
   it('倍率隨階級遞增', () => {
     for (let i = 1; i < RARITIES.length; i++) expect(RARITY_MULT[RARITIES[i]]).toBeGreaterThan(RARITY_MULT[RARITIES[i - 1]]);
   });
-  it('權重：L=10、幸運 0 時 凡77%／良18%／珍5%／極0%（docs/02 4.1）', () => {
-    const w = cardRarityWeights(10, 0, [...RARITIES]);
-    const sum = RARITIES.reduce((s, r) => s + w[r], 0);
-    expect(w.common / sum).toBeCloseTo(0.77, 2);
-    expect(w.rare / sum).toBeCloseTo(0.185, 2);
-    expect(w.legend).toBe(0);
+  it('權重（Q60）：L=10、幸運 0 時 凡75%／良18%／珍6%／極0.7%；L=20 凡62%／良22%／珍13%／極4%（docs/02 4.1）', () => {
+    const pct = (L: number) => {
+      const w = cardRarityWeights(L, 0, [...RARITIES]);
+      const sum = RARITIES.reduce((s, r) => s + w[r], 0);
+      return RARITIES.map((r) => w[r] / sum);
+    };
+    const a = pct(10);
+    expect(a[0]).toBeCloseTo(0.75, 2);
+    expect(a[1]).toBeCloseTo(0.18, 2);
+    expect(a[2]).toBeCloseTo(0.063, 2);
+    expect(a[3]).toBeCloseTo(0.0075, 3);
+    const b = pct(20);
+    expect(b[0]).toBeCloseTo(0.62, 2);
+    expect(b[2]).toBeCloseTo(0.126, 2);
+    expect(b[3]).toBeCloseTo(0.037, 2);
+    // 升級卡現在四階全開（Q60）
+    expect([...RARITIES_UNLOCKED_M1]).toEqual([...RARITIES]);
   });
   it('幸運 100 讓非凡權重加倍', () => {
     const a = cardRarityWeights(12, 0, [...RARITIES]);

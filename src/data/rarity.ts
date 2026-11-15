@@ -11,8 +11,9 @@ export const RARITY_MULT: Record<Rarity, number> = { common: 1.0, rare: 1.6, epi
 export const CARD_RARITY = {
   common: 100,
   rare: { from: 0, base: 12, perLevel: 1.2, max: 40 },
-  epic: { from: 4, base: 0, perLevel: 1.0, max: 16 },
-  legend: { from: 10, base: 0, perLevel: 0.4, max: 5 },
+  // Q60（使用者 2026-11-15「先開放珍極即可」）：珍、極在升級卡出現，權重也調高（原本 珍 from 4 ×1.0 上限 16、極 from 10 ×0.4 上限 5）
+  epic: { from: 3, base: 0, perLevel: 1.2, max: 22 },
+  legend: { from: 8, base: 0, perLevel: 0.5, max: 8 },
 };
 
 /** 升級卡片的稀有度權重；L = 玩家等級，luck = 幸運 */

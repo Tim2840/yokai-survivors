@@ -33,7 +33,8 @@ export const TECH_CHOICES = 3;
  */
 /** D50（使用者：「技法的養成速度太快」）：chance 0.15 → 0.12；已有的技法下一級要玩家等級 ≥ minLevel + levelGap × 目前技法等級。D59（使用者 2026-11-09：「放寬技法升級的玩家等級門檻，讓技法 6～8 級不用等到那麼晚」）：levelGap 3 → 2（6 級要玩家 16 級、7 級 18、8 級 20；原本 19／22／25） */
 /** swapChance（D84）：格子滿了、又有還沒學的化身限定技法時，技法卡有這個機率變成「換掉一招」的提案（換掉等級最低的那招） */
-export const TECH_OFFER = { chance: 0.35, minLevel: 4, fresh: 2, owned: 2.5, levelGap: 2, levelBias: 4, swapChance: 0.5 } as const;
+/** chance：Q60（使用者 2026-11-15「技法的卡片也可以機率高一點」）0.35 → 0.5 */
+export const TECH_OFFER = { chance: 0.5, minLevel: 4, fresh: 2, owned: 2.5, levelGap: 2, levelBias: 4, swapChance: 0.5 } as const;
 
 export const TECH_FAMILIES = ['chain', 'near', 'field'] as const;
 export type TechFamily = (typeof TECH_FAMILIES)[number];

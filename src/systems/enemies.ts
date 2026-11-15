@@ -190,6 +190,29 @@ export class Enemies {
   }
 
   /** 場上滿了：擠掉離 (px,pz) 最遠的一隻「一般」敵人（不動精英與頭目），回傳是否擠掉了 */
+  /** 離 (px, pz) 超過 beyond 公尺、最遠的一般敵人（精英、頭目不算）；沒有回傳 -1（Q60 搬回生成圈用） */
+  farthestNormal(px: number, pz: number, beyond: number): number {
+    let best = -1;
+    let bd = beyond * beyond;
+    for (let i = 0; i < this.high; i++) {
+      if (!this.alive[i] || this.variant[i] !== 0) continue;
+      const d = (this.x[i] - px) ** 2 + (this.z[i] - pz) ** 2;
+      if (d > bd) {
+        bd = d;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  /** 把一隻敵人搬到 (x, z)（保留血量與狀態；空間雜湊下一步重建） */
+  relocate(i: number, x: number, z: number): void {
+    this.x[i] = x;
+    this.z[i] = z;
+    this.kx[i] = 0;
+    this.kz[i] = 0;
+  }
+
   evictFarthest(px: number, pz: number): boolean {
     let best = -1;
     let bd = -1;

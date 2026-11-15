@@ -29,12 +29,21 @@ export const STAGE = {
    * 機率從 startFrac 隨時間升到 maxFrac。起始提案，sim 校準（整關總經驗最多比以前多 15%）。
    */
   veteran: { from: 0.2, startFrac: 0.05, maxFrac: 0.3, hp: [1.8, 2.5], damage: 1.3, scale: 1.2, orbMult: 1.8 } as const,
-  /** 定時事件（at = 佔關卡長度的比例） */
+  /**
+   * 定時事件（at = 佔關卡長度的比例）。**一定要照 at 由小到大排**：關卡導演一個一個往下檢查（單元測試守著；
+   * Q60 第一版把包圍圈加在最後，60% 那次被拖到 75% 才出來）。
+   * 包圍圈（ring，Q60）：在身邊圍一圈人類（count = 隻數，不是精英）。
+   */
   events: [
     { at: 0.25, kind: 'elite', count: 1 },
     { at: 0.5, kind: 'surge', count: 2, surgeSeconds: 30, surgeMult: 2 },
+    { at: 0.6, kind: 'ring', count: 36 },
     { at: 0.75, kind: 'elite', count: 3 },
+    { at: 0.75, kind: 'ring', count: 52 },
+    { at: 0.9, kind: 'ring', count: 70 },
   ] as readonly StageEvent[],
+  /** 包圍圈：離玩家幾公尺（看得到被圍住；一般湧出在 18～24 公尺外；14 公尺在手機直式畫面外，看不到被圍，改 11） */
+  ring: { radius: 11 },
   /** 大頭目那一關（D26 大關的最後一關）：頭目自動出現的時間點（比例）。其他關改用召喚祭壇（D34） */
   bossAt: 0.8,
   /** 召喚小頭目的祭壇（D34，docs/02 第 8.1.1 節）：顯現時間（比例）、離玩家多遠、按住幾秒、召喚越晚越強（HP ×(1 + hpGrowth × 經過比例)） */
@@ -47,6 +56,18 @@ export const STAGE = {
   /** 找位置時四周多少公尺內也要不擋路（排除岩石圍住的小島） */
   dropClearance: 1.5,
   dropSearchRadii: [0, 1.5, 3, 5, 8, 12, 18, 26] as readonly number[],
+  /**
+   * 後段加壓（Q60，使用者 2026-11-15：「遊戲倒數後期要難一點，沒有挑戰性，感覺難度都跟前面差不多，主要是敵人數量問題」）：
+   * 關卡過了 from（比例）之後，湧出速率再乘上一個從 1 平滑升到 mult 的倍率（smoothstep）。
+   * 那段時間打倒的人類經驗 ÷ 倍率^xpDamp（1 = 總經驗和以前一樣）：第一版只加數量，sim 顯示玩家多拿經驗、等級更高，反而沒變難。
+   * 一般人類的血量也照同一條曲線乘到 hp（sim：後段被打掉的血只有開場的 1/3～1/2，敵人一靠近就被秒，光加數量沒有壓力）。
+   */
+  late: { from: 0.5, mult: 2.0, xpDamp: 1, hp: 4.0 },
+  /**
+   * 同畫面滿了（手機 200 隻）時，還有要湧出的點數 → 把落在玩家 beyond 公尺外的一般敵人搬回生成圈（保留血量），
+   * 每步最多 perStep 隻。不然手機在後段一直卡在上限，玩家感覺數量跟中段一樣（Q60）。
+   */
+  recycle: { beyond: 30, perStep: 3 },
   /** 最終蜂群：湧出速率倍率、每幾秒一隻精英 */
   swarm: { rateMult: 3, eliteEvery: 20 },
   /** 傳送門：進入距離（公尺）、垂直容許差（公尺） */
@@ -56,7 +77,7 @@ export const STAGE = {
 
 export interface StageEvent {
   at: number;
-  kind: 'elite' | 'surge';
+  kind: 'elite' | 'surge' | 'ring';
   count: number;
   surgeSeconds?: number;
   surgeMult?: number;

@@ -92,6 +92,34 @@ export class StageDirector {
     return true;
   }
 
+  /** 這一關搬回生成圈的敵人數（sim、測試用） */
+  recycled = 0;
+
+  /** 後段加壓倍率（Q60）：late.from 之前 1，之後平滑升到 late.mult */
+  lateFactor(t = this.time): number {
+    const u = Math.min(1, t / this.duration);
+    const L = STAGE.late;
+    if (u <= L.from) return 1;
+    const k = (u - L.from) / (1 - L.from);
+    return 1 + (L.mult - 1) * k * k * (3 - 2 * k);
+  }
+
+  /** 後段一般人類的血量倍率（Q60）：和數量同一條曲線，從 1 升到 late.hp */
+  lateHp(t = this.time): number {
+    const f = this.lateFactor(t);
+    const L = STAGE.late;
+    return L.mult > 1 ? 1 + ((f - 1) / (L.mult - 1)) * (L.hp - 1) : 1;
+  }
+
+  /** 現在打倒的一般人類經驗倍率（後段加壓時打折，總經驗不跟著翻倍） */
+  xpScale(t = this.time): number {
+    return 1 / Math.pow(this.lateFactor(t), STAGE.late.xpDamp);
+  }
+
+  /** 包圍圈還沒生完的隻數（一步生不完就留到下一步） */
+  private ringLeft = 0;
+  private ringTotal = 0;
+
   get duration(): number {
     return tuning.stageSeconds;
   }
@@ -108,6 +136,7 @@ export class StageDirector {
     let r = ((threat(n) / STAGE.rateBaseSeconds) * tuning.countScale);
     if (this.surgeUntil > t) r *= this.surgeMult;
     if (this.swarm) r *= STAGE.swarm.rateMult;
+    r *= this.lateFactor(t); // 後段加壓（Q60）
     r *= this.extraMult;
     return r;
   }
@@ -155,9 +184,41 @@ export class StageDirector {
     return V.startFrac + (V.maxFrac - V.startFrac) * Math.min(1, (u - V.from) / (1 - V.from));
   }
 
+  private spawnRing(px: number, pz: number, night: number): number {
+    const m = this.map;
+    const R = STAGE.ring.radius;
+    let made = 0;
+    let tries = 0;
+    while (this.ringLeft > 0 && made < WAVES.spawnPerStepMax * 2 && tries < WAVES.spawnPerStepMax * 4) {
+      tries++;
+      const k = this.ringTotal - this.ringLeft;
+      this.ringLeft--;
+      const a = (k / Math.max(1, this.ringTotal)) * Math.PI * 2 + this.rng.range(-0.05, 0.05);
+      const x = px + Math.cos(a) * R;
+      const z = pz + Math.sin(a) * R;
+      if (x < m.minX + 1 || x > m.maxX - 1 || z < m.minZ + 1 || z > m.maxZ - 1) continue;
+      if (m.isBlocked(x, z) || (!this.flow.isolated && !this.flow.reachable(x, z))) continue;
+      if (this.enemies.aliveCount >= this.maxEnemies) {
+        const far = this.enemies.farthestNormal(px, pz, STAGE.recycle.beyond);
+        if (far < 0) continue;
+        this.enemies.relocate(far, x, z);
+        this.recycled++;
+        made++;
+        continue;
+      }
+      const vet = this.rng.next() < this.veteranChance() ? 1 : 0;
+      if (this.enemies.spawn(this.pickKind(), x, z, this.virtualWave(), night, this.rng.range(0, Math.PI * 2), 0, this.stageMult * this.lateHp() * this.hpCurse, vet) >= 0) made++;
+    }
+    this.ringsSpawned += made;
+    return made;
+  }
+
+  /** 包圍圈一共生（或搬）了幾隻（sim、測試用） */
+  ringsSpawned = 0;
+
   private spawnOne(kind: number, variant: number, px: number, pz: number, night: number, vet = 0): number {
     if (!this.findSpot(px, pz)) return -1;
-    return this.enemies.spawn(kind, this.spot[0], this.spot[1], this.virtualWave(), night, this.rng.range(0, Math.PI * 2), variant, (variant === 2 ? this.stageMult * this.bossMult * this.summonMult * this.summitMult : this.stageMult) * this.hpCurse, vet);
+    return this.enemies.spawn(kind, this.spot[0], this.spot[1], this.virtualWave(), night, this.rng.range(0, Math.PI * 2), variant, (variant === 2 ? this.stageMult * this.bossMult * this.summonMult * this.summitMult : this.stageMult * (variant === 0 ? this.lateHp() : 1)) * this.hpCurse, vet);
   }
 
   update(dt: number, px: number, pz: number, night: number, bossDefeated: boolean): void {
@@ -167,6 +228,11 @@ export class StageDirector {
     // 定時事件
     while (this.eventsFired < STAGE.events.length && this.time >= STAGE.events[this.eventsFired].at * dur) {
       const ev = STAGE.events[this.eventsFired++];
+      if (ev.kind === 'ring') {
+        this.ringLeft += ev.count;
+        this.ringTotal = this.ringLeft;
+        continue;
+      }
       this.pendingElites += ev.count;
       if (ev.kind === 'surge') {
         this.surgeUntil = this.time + (ev.surgeSeconds ?? 0);
@@ -188,6 +254,8 @@ export class StageDirector {
     // 持續湧出
     this.pending += this.rate() * dt;
     let n = 0;
+    // 包圍圈（Q60）：均勻圍在玩家身邊；滿了先把遠遠落後的搬過來，再不行就少生幾隻
+    if (this.ringLeft > 0) n += this.spawnRing(px, pz, night);
     if (this.bossPending) {
       // 頭目是這一關的重點：場上滿了就擠掉最遠的一般敵人，不能因為同畫面上限而生不出來
       if (this.enemies.aliveCount >= this.enemies.capacity) this.enemies.evictFarthest(px, pz);
@@ -209,6 +277,17 @@ export class StageDirector {
       if (vet) this.veteranSeen = true;
       this.pending -= this.enemies.points(i);
       n++;
+    }
+    // 同畫面滿了、還有要湧出的：把遠遠落後的一般敵人搬回生成圈（Q60；手機上限 200 時後段才感覺得到數量變多）
+    if (this.pending >= 1 && this.enemies.aliveCount >= this.maxEnemies) {
+      const R = STAGE.recycle;
+      for (let k = 0; k < R.perStep && this.pending >= 1; k++) {
+        const i = this.enemies.farthestNormal(px, pz, R.beyond);
+        if (i < 0 || !this.findSpot(px, pz)) break;
+        this.enemies.relocate(i, this.spot[0], this.spot[1]);
+        this.pending -= this.enemies.points(i);
+        this.recycled++;
+      }
     }
     // 同畫面滿了：多出來的點數只保留一小段（不無限累積成一次爆出）
     if (this.pending > 40) this.pending = 40;
