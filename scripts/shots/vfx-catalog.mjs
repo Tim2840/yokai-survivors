@@ -51,7 +51,7 @@ for (let k = 0; k < cells.length; k++) {
     for (let s = 0; s < 160; s++) {
       g.advance(0.05);
       while (document.querySelector('.overlay[data-screen="levelup"] .card')) document.querySelector('.overlay[data-screen="levelup"] .card').click();
-      if (s < 30) continue;
+      if (s < 30 || s % 5) continue;
       g.render();
       const n = g.fxCount;
       if (n > best) best = n;
@@ -65,7 +65,8 @@ for (let k = 0; k < cells.length; k++) {
   await page.addStyleTag({ content: 'body *:not(canvas){visibility:hidden !important} canvas{visibility:visible !important}' });
   await page.evaluate(() => { window.__game.render(); });
   const f = `screenshots/vfx-${tag}-${k + 1}.png`;
-  await page.screenshot({ path: f });
+  await page.screenshot({ path: f, timeout: 120000 });
+  console.log(`${k + 1}/${cells.length} ${label}：特效實例 ${await page.evaluate(() => window.__game.fxCount)}`);
   files.push([f, label]);
   await ctx.close();
 }
