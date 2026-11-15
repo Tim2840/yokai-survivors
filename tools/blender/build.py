@@ -379,6 +379,103 @@ def build_villager():
     return tris
 
 
+# ── 敵人共用的底子（村人、足輕、弓手、退魔僧）：身體、手、腳、頭、頭髮、眼睛；各自再加帽子、武器 ──
+def enemy_base(b, robe, bscale=(1.0, 0.95, 1.1), hair=V_HAIR, collar=True, eye_z=0.8, head_seg=(10, 7)):
+    b.sphere('robe', 0.27, (0, 0, 0.36), robe, None, scale=bscale, seg=8, rings=6)
+    for sx in (-1, 1):
+        if collar:
+            rod(b, 'collar', (sx * 0.1, -0.2, 0.6), (0, -0.25, 0.47), 0.03, 0.03, '#f4efe4', None, seg=4)
+        b.sphere('hand', 0.075, (sx * 0.3 * bscale[0], -0.04, 0.38), V_SKIN, None, seg=4, rings=3)
+        b.sphere('foot', 0.085, (sx * 0.11, -0.03, 0.065), V_FOOT, None, scale=(1, 1.35, 0.75), seg=4, rings=3)
+    b.sphere('head', HR, (0, 0, HC_Z), V_SKIN, None, scale=HS, seg=head_seg[0], rings=head_seg[1])
+    if hair:
+        hair_shell(b, 'hair', enemy_hairline, hair, seg=(12, 8), grow=1.08)
+    for sx in (-1, 1):
+        ex, ez = sx * 0.088, eye_z
+        rx, rz = head_tilt(ex, ez)
+        b.sphere('eye', 0.07, (ex, head_y(ex, ez) + 0.004, ez), V_EYE, None, scale=(0.7, 0.36, 1.2), rot=(rx, 0, rz), seg=6, rings=3)
+        hx, hz = ex - sx * 0.014, ez + 0.04
+        t = head_tilt(hx, hz)
+        b.sphere('hl', 0.026, (hx, head_y(hx, hz) - 0.016, hz), WHITE, None, scale=(1.0, 0.3, 1.2), rot=(t[0], 0, t[1]), seg=5, rings=3)
+
+
+def finish_enemy(b, spec, label, name, fname):
+    audit.run(b.parts, spec, label)
+    ob = b.join(name)
+    lib.export_glb(OUT + '/' + fname, [ob], animations=False)
+    tris = sum(len(p.vertices) - 2 for p in ob.data.polygons)
+    use_head(0.94, 0.36, (1.1, 0.98, 0.96))
+    return tris
+
+
+def arc(b, name, x0, z0, radius, half_deg, r, color, n=6, sign=-1):
+    """半圓弧（弓）：弧在 x–z 平面，兩端在 x = x0、最凸處離身體最遠（sign = -1 往 -x 凸）。沿弧排 n 段的細桿，回傳兩端點"""
+    ha = math.radians(half_deg)
+    pts = []
+    for i in range(n + 1):
+        a = -ha + 2 * ha * i / n
+        pts.append((x0 + sign * radius * (math.cos(a) - math.cos(ha)), -0.14, z0 + radius * math.sin(a)))
+    for i in range(n):
+        rod(b, name, pts[i], pts[i + 1], r, r, color, None, seg=4)
+    return pts
+
+
+ASHIGARU_SPEC = {'head': ['head'], 'hair': ['hair'], 'eyes': ['eye'], 'max_tris': 700, 'loose_ok': ['hl']}
+YUMI_SPEC = {'head': ['head'], 'hair': ['hair'], 'eyes': ['eye'], 'max_tris': 700}
+TAIMASOU_SPEC = {'head': ['head'], 'hair': [], 'eyes': ['eye'], 'bald': True, 'max_tris': 900}
+
+
+def build_ashigaru():
+    """足輕：藍灰胴甲、草黃陣笠（帽頂紅點）、胸前一面大圓盾（朱色，金色盾心）——輪廓靠「大斗笠＋大圓盾」"""
+    lib.reset()
+    use_head(0.86, 0.31, (1.02, 0.98, 0.96))
+    b = Builder()
+    enemy_base(b, '#6b7a8f', bscale=(1.12, 1.0, 1.1), collar=False, head_seg=(9, 6))
+    # 陣笠：寬寬的圓錐帽，蓋到眉毛上
+    b.lathe('jingasa', [(0.42, 0.0), (0.43, 0.02), (0.3, 0.07), (0.1, 0.17), (0.0, 0.21)], (0, 0, HC_Z + 0.2), '#c9a86a', None, seg=9)
+    b.sphere('crest', 0.05, (0, 0, HC_Z + 0.4), '#d8453a', None, seg=5, rings=3)
+    # 盾：胸前的大圓盾（朱色）＋深色盾緣＋金色中心
+    b.cone('shield', 0.36, 0.36, 0.07, (0, -0.36, 0.42), '#d88a3a', None, rot=(math.pi / 2, 0, 0), seg=10)
+    b.torus('shieldrim', 0.36, 0.035, (0, -0.4, 0.42), V_FOOT, None, rot=(math.pi / 2, 0, 0), seg=10, tube=3)
+    b.sphere('boss', 0.08, (0, -0.42, 0.42), '#e8c25a', None, scale=(1, 0.6, 1), seg=5, rings=3)
+    return finish_enemy(b, ASHIGARU_SPEC, '足輕', 'Ashigaru', 'ashigaru.glb')
+
+
+def build_yumi():
+    """弓手：綠衣、白頭帶（兩條飄帶）、左手邊一把豎著的大弓＋弦、背後一筒箭——輪廓靠「大弓」"""
+    lib.reset()
+    use_head(0.86, 0.31, (1.02, 0.98, 0.96))
+    b = Builder()
+    enemy_base(b, '#5f8a74', bscale=(0.95, 0.92, 1.15))
+    b.torus('band', HR * 1.03, 0.036, (0, 0, HC_Z + HR * 0.3), '#f4efe4', None, rot=(-0.12, 0, 0), seg=10, tube=3, scale=(HS[0], HS[1], 1))
+    rod(b, 'tail', (0.05, HR * 1.0, HC_Z + 0.08), (0.12, HR * 1.18, HC_Z - 0.12), 0.03, 0.02, '#f4efe4', None, seg=4)
+    # 弓：左手邊（-x）一把豎著的半圓大弓，最凸處離身體約 0.35 公尺；弦在兩端之間
+    pts = arc(b, 'bow', -0.3, 0.55, 0.5, 70, 0.032, '#6a4b2e', n=6, sign=-1)
+    rod(b, 'string', pts[0], pts[-1], 0.012, 0.012, '#f4efe4', None, seg=4)
+    # 背後的箭筒＋箭羽
+    rod(b, 'quiver', (0.1, 0.22, 0.4), (0.18, 0.28, 0.84), 0.07, 0.07, '#7a5a38', None, seg=6)
+    b.sphere('fletch', 0.055, (0.2, 0.28, 0.9), '#f4efe4', None, seg=5, rings=3)
+    return finish_enemy(b, YUMI_SPEC, '弓手', 'Yumi', 'yumi.glb')
+
+
+def build_taimasou():
+    """退魔僧（小頭目，遊戲裡放大 2.4 倍）：光頭、紫色僧衣、金色袈裟斜披、脖子一串大念珠、右手錫杖＋金環"""
+    lib.reset()
+    use_head(0.86, 0.31, (1.02, 0.98, 0.96))
+    b = Builder()
+    enemy_base(b, '#6a4a9a', bscale=(1.15, 1.05, 1.15), hair=None, eye_z=0.82)
+    # 袈裟：從左肩斜到右腰的一條金帶
+    rod(b, 'kesa', (-0.17, -0.27, 0.58), (0.2, -0.32, 0.2), 0.05, 0.05, '#e8c25a', None, seg=5)
+    # 念珠：脖子一圈深色大珠
+    for i in range(8):
+        a = math.radians(i * 45)
+        b.sphere('bead', 0.04, (0.2 * math.sin(a), -0.2 * math.cos(a), 0.62), '#3a2a20', None, seg=4, rings=3)
+    # 錫杖：右手一根長杖＋頂端金色的環
+    rod(b, 'staff', (0.36, -0.1, 0.0), (0.36, -0.1, 1.25), 0.026, 0.026, '#6a4b2e', None, seg=5)
+    b.torus('ring', 0.1, 0.022, (0.36, -0.1, 1.3), '#e8c25a', None, rot=(math.pi / 2, 0, 0), seg=10, tube=3)
+    return finish_enemy(b, TAIMASOU_SPEC, '退魔僧', 'Taimasou', 'taimasou.glb')
+
+
 def build_torii():
     lib.reset()
     b = Builder()
@@ -424,5 +521,6 @@ if __name__ == '__main__':
     n1 = build_chochin()
     n3 = build_kappa()
     n4 = build_villager()
+    n5 = [build_ashigaru(), build_yumi(), build_taimasou()]
     n2 = build_torii()
-    print('faces: chochin', n1, 'kappa', n3, 'torii', n2, 'villager tris', n4)
+    print('faces: chochin', n1, 'kappa', n3, 'torii', n2, 'villager tris', n4, 'ashigaru/yumi/taimasou tris', n5)

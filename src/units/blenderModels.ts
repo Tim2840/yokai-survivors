@@ -7,6 +7,9 @@ import monkUrl from '../assets/models/chochin-kozo.glb?inline';
 import toriiUrl from '../assets/models/torii.glb?inline';
 import kappaUrl from '../assets/models/kappa.glb?inline';
 import villagerUrl from '../assets/models/villager.glb?inline';
+import ashigaruUrl from '../assets/models/ashigaru.glb?inline';
+import yumiUrl from '../assets/models/yumi.glb?inline';
+import taimasouUrl from '../assets/models/taimasou.glb?inline';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /**
@@ -158,4 +161,7 @@ const ENEMY_BRIGHT = 1.15;
 const ENEMY_FIRE_BOOST = 2.0; // 3.2 會被色調壓縮成淡膚色、看不出是火（敵人轉檯圖抓到的）
 export const BLENDER_ENEMIES: Record<string, { url: string; fire?: string }> = {
   villager: { url: villagerUrl, fire: palette.fire.torch },
+  ashigaru: { url: ashigaruUrl },
+  yumi: { url: yumiUrl },
+  taimasou: { url: taimasouUrl },
 };
