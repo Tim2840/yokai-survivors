@@ -124,6 +124,16 @@ export class RunView {
           this.player = monk;
           this.group.add(monk.root);
         }
+        // 敵人（村人先）：換掉實例化網格的幾何；aPhase（每隻的走路相位）搬到新幾何上，材質不換 → 著色器不會多編一份
+        for (const [id, e] of Object.entries(mod.BLENDER_ENEMIES)) {
+          const k = ENEMY_IDS.indexOf(id);
+          if (k < 0 || this.disposed) continue;
+          const geo = await mod.loadBlenderEnemyGeometry(e.url, e.fire);
+          const mesh = this.enemyMeshes[k];
+          geo.setAttribute('aPhase', mesh.geometry.getAttribute('aPhase'));
+          mesh.geometry = geo;
+          this.disposables.push(geo);
+        }
         this.blenderReady = true;
       }).catch((err) => console.error('blender model load failed, keeping the code model', err));
     }

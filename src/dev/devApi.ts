@@ -193,6 +193,18 @@ export function installDevApi(ctx: DevContext): void {
       ctx.game.frame(1);
       ctx.loop.render();
     },
+    /** 敵人轉檯圖用（docs/29）：設定第 i 隻敵人的朝向（度；0 = 臉朝 +z）。只要不 advance，它就維持這個朝向 */
+    enemyYaw: (i: number, deg: number) => {
+      const r = run();
+      if (r) r.enemies.yaw[i] = (deg * Math.PI) / 180;
+    },
+    /** 截圖用：凍結模擬（遊戲迴圈照樣畫圖，但敵人不會轉回去面向玩家）；false 解除 */
+    freeze: (on = true) => (on ? ctx.loop.hold('dev-freeze') : ctx.loop.release('dev-freeze')),
+    /** 敵人轉檯圖用：把玩家角色藏起來（不擋鏡頭）；只給截圖用 */
+    hidePlayer: (hide = true) => {
+      const v = ctx.game.view as unknown as { player?: { root: { visible: boolean } } } | null;
+      if (v?.player) v.player.root.visible = !hide;
+    },
     /** 遊玩時的預設鏡頭（俯仰角度、距離）：轉檯圖的「遊玩視角」那一格用 */
     playCamera: { pitch: CAMERA.pitchDeg, dist: CAMERA.distance },
     /** 玩家角色面向的方向（度）：鏡頭的 yaw 設成這個值，鏡頭就在角色的正前方（轉檯圖用，docs/29） */

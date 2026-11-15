@@ -83,12 +83,18 @@ def hairline(x, y):
     return h + (max(h, 0.97) - h) * e
 
 
-def hair_shell(b, name, line=None, color=None):
+def use_head(cz, r, sc):
+    """切換「目前的頭」（head_y、head_tilt、hair_shell 都讀這組）：玩家角色的頭與敵人的頭大小不同"""
+    global HC_Z, HR, HS
+    HC_Z, HR, HS = cz, r, sc
+
+
+def hair_shell(b, name, line=None, color=None, seg=(56, 36), grow=1.045):
     """貼著頭骨的一整片頭髮外殼：一顆比頭略大的橢球，低於髮際線的頂點沿球面收到髮際線上"""
     line = line or hairline
-    r = HR * 1.045
+    r = HR * grow  # 低面數時頭的稜角會刺穿頭髮，要放大一點（稽核會抓）
     bm = bmesh.new()
-    bmesh.ops.create_uvsphere(bm, u_segments=56, v_segments=36, radius=r)
+    bmesh.ops.create_uvsphere(bm, u_segments=seg[0], v_segments=seg[1], radius=r)
     def is_low(v):
         return HC_Z + v.co.z * HS[2] < line(v.co.x * HS[0], v.co.y * HS[1])
 
@@ -327,6 +333,52 @@ def build_kappa():
     return sum(len(o.data.polygons) for o in (body, glow))
 
 
+# ── 敵人：村人（D88，Blender 版；實例化網格一次畫幾百隻 → 低面數，三角形 ≤ 600）──
+# 遊戲裡敵人只有約 20 像素高：重點是輪廓（頭巾、火把）與主色，臉照同一套規則但面數很少。
+# 約定同 src/units/humans.ts：腳底 z = 0、身高約 1.3、腳的頂點在 0.16 以下（頂點著色器用它做走路）。
+V_EARTH, V_BELT, V_SKIN, V_HAIR, V_BAND, V_WOOD, V_FOOT, V_EYE, V_FIRE = '#a58563', '#2b2b30', '#f8dcbc', '#6b4532', '#d88a3a', '#6a4b2e', '#3a3029', '#1e1a24', '#ff9a3c'
+VILLAGER_SPEC = {'head': ['head'], 'hair': ['hair'], 'eyes': ['eye'], 'max_tris': 600, 'loose_ok': ['flame']}
+
+
+def enemy_hairline(x, y):
+    """敵人的髮際線（相對頭的大小）：前面到額頭、兩側在耳朵上方、後面到後頸"""
+    yn = -y / (HR * HS[1])
+    f = smooth((yn + 0.05) / 0.9)
+    front = HC_Z + HR * (0.5 - 0.18 * smooth(abs(x) / (0.8 * HR)))
+    back = HC_Z - HR * 0.45
+    return back + (front - back) * f
+
+
+def build_villager():
+    lib.reset()
+    use_head(0.86, 0.31, (1.02, 0.98, 0.96))
+    b = Builder()
+    b.sphere('robe', 0.27, (0, 0, 0.36), V_EARTH, None, scale=(1.0, 0.95, 1.1), seg=8, rings=6)
+    for sx in (-1, 1):
+        b.sphere('hand', 0.075, (sx * 0.3, -0.04, 0.38), V_SKIN, None, seg=4, rings=3)
+        b.sphere('foot', 0.085, (sx * 0.11, -0.03, 0.065), V_FOOT, None, scale=(1, 1.35, 0.75), seg=4, rings=3)
+    b.sphere('head', HR, (0, 0, HC_Z), V_SKIN, None, scale=HS, seg=10, rings=7)
+    hair_shell(b, 'hair', enemy_hairline, V_HAIR, seg=(12, 8), grow=1.08)
+    for sx in (-1, 1):
+        ex, ez = sx * 0.088, 0.8
+        rx, rz = head_tilt(ex, ez)
+        b.sphere('eye', 0.07, (ex, head_y(ex, ez) + 0.004, ez), V_EYE, None, scale=(0.7, 0.36, 1.2), rot=(rx, 0, rz), seg=6, rings=3)
+        hx, hz = ex - sx * 0.014, ez + 0.04
+        t = head_tilt(hx, hz)
+        b.sphere('hl', 0.026, (hx, head_y(hx, hz) - 0.016, hz), WHITE, None, scale=(1.0, 0.3, 1.2), rot=(t[0], 0, t[1]), seg=5, rings=3)
+    # 頭巾：額頭一圈橙色帶子（壓在髮際線上）＋後面的結
+    b.torus('band', HR * 1.03, 0.038, (0, 0, HC_Z + HR * 0.35), V_BAND, None, rot=(-0.18, 0, 0), seg=10, tube=3, scale=(HS[0], HS[1], 1))
+    # 火把：左手斜舉的木棒＋火焰（火焰在遊戲裡會被調亮、發光）
+    rod(b, 'torch', (-0.3, -0.06, 0.38), (-0.44, -0.14, 0.8), 0.03, 0.03, V_WOOD, None, seg=5)
+    b.lathe('flame', [(0.0, 0.0), (0.09, 0.02), (0.06, 0.16), (0.0, 0.26)], (-0.44, -0.14, 0.8), V_FIRE, None, seg=5, close_bottom=False)
+    audit.run(b.parts, VILLAGER_SPEC, '村人')
+    ob = b.join('Villager')
+    lib.export_glb(OUT + '/villager.glb', [ob], animations=False)
+    tris = sum(len(p.vertices) - 2 for p in ob.data.polygons)
+    use_head(0.94, 0.36, (1.1, 0.98, 0.96))
+    return tris
+
+
 def build_torii():
     lib.reset()
     b = Builder()
@@ -371,5 +423,6 @@ def build_torii():
 if __name__ == '__main__':
     n1 = build_chochin()
     n3 = build_kappa()
+    n4 = build_villager()
     n2 = build_torii()
-    print('faces: chochin', n1, 'kappa', n3, 'torii', n2)
+    print('faces: chochin', n1, 'kappa', n3, 'torii', n2, 'villager tris', n4)

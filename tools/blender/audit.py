@@ -10,6 +10,7 @@
   D. 五官貼在臉上：每個五官都要和頭的表面相交（不能浮在外面，也不能整個埋進去）。
   E. 沒有懸空的零件：每個零件都要和至少一個別的零件相交。
   F. 太細的零件（警告）：像素化後會變雜點。
+  G. 三角形上限（規格有 max_tris 時）：敵人一次畫幾百隻。
 
 比例的範圍是 Q 版的一般通則（docs/28 第六節查到的：眼睛放低、眼距約一個眼寬、五官精簡），加上我對第三、四版的量測；
 不是哪一款遊戲的官方數字。之後覺得某條太嚴或太鬆，改 RULES 並在 docs/29 記一行原因。
@@ -214,6 +215,13 @@ def audit_character(parts, spec, label='character'):
                 break
         if not touching:
             problems.append(f'零件「{o.name}」懸空：沒有碰到任何別的零件')
+
+    # ── G：三角形上限（敵人一次畫幾百隻，每隻有預算；p1 的上限是每隻 700）──
+    if spec.get('max_tris'):
+        tris = sum(len(pl.vertices) - 2 for o in parts for pl in o.data.polygons)
+        m['三角形'] = tris
+        if tris > spec['max_tris']:
+            problems.append(f'三角形太多：{tris}（上限 {spec["max_tris"]}）')
 
     # ── F：太細（警告）──
     for o, _, (alo, ahi) in trees:

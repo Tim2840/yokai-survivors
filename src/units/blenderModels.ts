@@ -6,6 +6,8 @@ import type { Character } from './lanternMonk';
 import monkUrl from '../assets/models/chochin-kozo.glb?inline';
 import toriiUrl from '../assets/models/torii.glb?inline';
 import kappaUrl from '../assets/models/kappa.glb?inline';
+import villagerUrl from '../assets/models/villager.glb?inline';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /**
  * Blender 試作（docs/26，Q53 照預設）：用 Blender 腳本（tools/blender/build.py）建的模型，匯出 .glb 後內嵌進來。
@@ -109,3 +111,51 @@ export async function loadBlenderTorii(): Promise<{ root: THREE.Group; dispose()
     },
   };
 }
+
+/**
+ * 敵人（Blender 版，靜態）：整個 .glb 合成一個幾何（位置、法線、頂點色 RGB），給實例化網格用；走路靠既有的頂點著色器（腳的頂點在 CHIBI.footY 以下）。
+ * 頂點色換成 3 個分量（4 個分量會讓著色器多一個版本，p1 的程式數會變）；整體調亮一點（舊模型的 paint() 有 1.1～1.3 倍的亮度加成）；
+ * 火焰（顏色接近 fireColor 的頂點）調到很亮，讓光暈抓得到。
+ */
+export async function loadBlenderEnemyGeometry(url: string, fireColor?: string): Promise<THREE.BufferGeometry> {
+  const { scene } = await load(url);
+  scene.updateMatrixWorld(true);
+  const parts: THREE.BufferGeometry[] = [];
+  const fire = fireColor ? new THREE.Color(fireColor) : null;
+  scene.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const g = (m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone()).applyMatrix4(m.matrixWorld);
+    const src = g.getAttribute('color');
+    const n = g.getAttribute('position').count;
+    const col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      let r = src ? src.getX(i) : 1;
+      let gg = src ? src.getY(i) : 1;
+      let b = src ? src.getZ(i) : 1;
+      const isFire = fire && Math.abs(r - fire.r) + Math.abs(gg - fire.g) + Math.abs(b - fire.b) < 0.06;
+      const k = isFire ? ENEMY_FIRE_BOOST : ENEMY_BRIGHT;
+      r *= k;
+      gg *= k;
+      b *= k;
+      col.set([r, gg, b], i * 3);
+    }
+    const out = new THREE.BufferGeometry();
+    out.setAttribute('position', g.getAttribute('position'));
+    out.setAttribute('normal', g.getAttribute('normal'));
+    out.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    out.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
+    parts.push(out);
+    g.dispose();
+  });
+  const merged = mergeGeometries(parts, false);
+  parts.forEach((p) => p.dispose());
+  merged.computeBoundingSphere();
+  return merged;
+}
+/** 敵人整體亮度（舊模型 paint() 的加成約 1.1～1.3）、火焰的發光倍率（舊模型 3.2） */
+const ENEMY_BRIGHT = 1.15;
+const ENEMY_FIRE_BOOST = 2.0; // 3.2 會被色調壓縮成淡膚色、看不出是火（敵人轉檯圖抓到的）
+export const BLENDER_ENEMIES: Record<string, { url: string; fire?: string }> = {
+  villager: { url: villagerUrl, fire: palette.fire.torch },
+};
