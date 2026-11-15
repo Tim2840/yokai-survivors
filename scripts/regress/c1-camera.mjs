@@ -94,7 +94,7 @@ export async function run(browser) {
         await page.evaluate(() => window.__game.settle());
         const lo = (await cam()).pitch;
         expect(Math.abs(lo - (8 * Math.PI) / 180) < 1e-6, `向上拖到底，俯角應該是 8°：${(lo * 180) / Math.PI}`);
-      }, 75); // 18 次拖曳、每次 8 步：無頭瀏覽器在日系風格（多一道後製）下要 30～45 秒
+      }, 150); // 18 次拖曳、每次 8 步：無頭瀏覽器（軟體繪圖）下 30～45 秒；乾淨卡通（D89，多重取樣）再慢約五成，所以放寬到 150
 
       await step(`${vp.name} 暫停面板開著時，拖曳不轉視角`, async () => {
         // 這一路上可能剛好升級（模擬暫停、選卡面板蓋住 HUD）：像玩家一樣先選完卡

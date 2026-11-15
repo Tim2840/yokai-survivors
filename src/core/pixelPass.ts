@@ -7,6 +7,15 @@ import { OVERLAY_LAYER, overlayUniforms } from '../render/overlay';
  * 再用深度找邊界、在「邊界外側（比較遠的那一側）」描深色線（鄰居比自己近＝前景物體的邊；用相對深度差，遠近一樣粗），最後最近點放大到畫面。
  * Three.js 內建的 RenderPixelatedPass 會為了法線多畫一次整個場景（手機 draw call 翻倍、頂到預算），所以自己寫一個只用深度的版本。
  */
+/** 多重取樣的倍數：桌面 4×；觸控裝置（手機）2×，省一點（真機成本沒量過，docs/23 第 17 節） */
+function msaaSamples(): number {
+  try {
+    return window.matchMedia('(pointer: coarse)').matches ? 2 : 4;
+  } catch {
+    return 4;
+  }
+}
+
 export class PixelPass extends Pass {
   scene: THREE.Scene;
   camera: THREE.Camera;
@@ -25,7 +34,7 @@ export class PixelPass extends Pass {
     this.camera = camera;
     // 乾淨卡通（D89，使用者「換」：levels = 0 表示不量化、不是像素風）：多重取樣抗鋸齒＋線性取樣；像素風（levels > 0）維持最近鄰、不取樣
     const clean = edge.levels <= 0;
-    this.target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, minFilter: clean ? THREE.LinearFilter : THREE.NearestFilter, magFilter: clean ? THREE.LinearFilter : THREE.NearestFilter, samples: clean ? 4 : 0 });
+    this.target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, minFilter: clean ? THREE.LinearFilter : THREE.NearestFilter, magFilter: clean ? THREE.LinearFilter : THREE.NearestFilter, samples: clean ? msaaSamples() : 0 });
     this.target.depthTexture = new THREE.DepthTexture(1, 1);
     this.mat = new THREE.ShaderMaterial({
       uniforms: {
