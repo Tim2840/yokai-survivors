@@ -31,6 +31,8 @@ export const palette = {
   /** 水墨特效（D85）：墨黑、紙白；每隻妖怪的主色在 fx.<妖怪>.ink（提燈小僧 朱、河童 藍青） */
   ink: { black: '#1d1b24', paper: '#f4ecd8' },
   fire: { ghost: '#ffc46b', soul: '#9fe8ff', torch: '#ff9a3c' },
+  /** 浮世繪的火（docs/30）：平塗色帶，由外而內：暗紅描邊 → 朱 → 橙 → 山吹 → 白芯 */
+  flame: { outline: '#4a0d16', red: '#d8341f', orange: '#ff7f1e', yellow: '#ffc93c', core: '#fff3cf' },
   ui: { text: '#f5efe2', textDim: '#b9b2a4', panel: '#1a1d2ecc', accent: '#ffb35c' },
 } as const;
 

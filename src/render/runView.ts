@@ -22,6 +22,8 @@ import { ElementsView } from './elementsView';
 import { PickupsView } from './pickupsView';
 import { UltFx } from './ultFx';
 import { TechFx } from './techFx';
+import { FireFx } from './fireFx';
+import { FIRE_FX, vfxStyleOf } from '../data/vfx';
 import { FeelFx } from './feelFx';
 import type { Renderer } from '../core/renderer';
 
@@ -74,6 +76,9 @@ export class RunView {
   private readonly pickupsView: PickupsView;
   private readonly ultFx: UltFx;
   private readonly techFx: TechFx;
+  /** 浮世繪的火（docs/30）：只有火屬性的妖怪才有 */
+  private readonly fireFx: FireFx | null;
+  private lastFxT = 0;
   readonly feelFx: FeelFx;
   private readonly portal: THREE.Group;
   private readonly portalRing: THREE.Mesh;
@@ -235,7 +240,9 @@ export class RunView {
     this.group.add(this.pickupsView.group);
     this.ultFx = new UltFx(run);
     this.group.add(this.ultFx.group);
-    this.techFx = new TechFx(run);
+    this.fireFx = vfxStyleOf(run.yokai.id) === 'fire' ? new FireFx() : null;
+    if (this.fireFx) this.group.add(this.fireFx.mesh);
+    this.techFx = new TechFx(run, this.fireFx);
     this.group.add(this.techFx.group);
     this.feelFx = new FeelFx(run);
     this.group.add(this.feelFx.group);
@@ -314,6 +321,9 @@ export class RunView {
     this.elementsView.update(t);
     this.pickupsView.update(t);
     this.ultFx.update();
+    const fxDt = Math.min(0.1, Math.max(0, t - this.lastFxT));
+    this.lastFxT = t;
+    this.fireFx?.begin();
     this.techFx.update(t);
     this.feelFx.update(dt);
     this.timeUniform.value = t % TWO_PI;
@@ -370,9 +380,18 @@ export class RunView {
       // 碎火、分裂出來的小火畫小一點（看得出是碎片）
       const sc = pr.gen[i] === 0 ? 1 : SHARD_VIEW_SCALE;
       // 河童的水盤：扁扁的圓盤；鬼火：圓球
+      if (this.fireFx) {
+        // 浮世繪的火：鬼火就是一團飄著的火舌，尾巴掉火星
+        const B = FIRE_FX.bullet;
+        const y = map.heightAt(pr.x[i], pr.z[i]) + B.lift;
+        this.fireFx.flame(pr.x[i], y, pr.z[i], B.w * sc, B.h * sc, i * 0.61);
+        this.fireFx.emitRate(pr.x[i], y + 0.4 * sc, pr.z[i], B.sparkRate * sc, fxDt, 0.3);
+        continue;
+      }
       writeMatrix(bm, b++, pr.x[i], map.heightAt(pr.x[i], pr.z[i]) + 0.8, pr.z[i], 0, this.diskShot ? sc * 1.3 : sc, this.diskShot ? sc * 0.35 : sc, this.diskShot ? sc * 1.3 : sc);
     }
     this.bulletMesh.count = b;
+    this.fireFx?.end(fxDt, t);
     this.bulletMesh.instanceMatrix.needsUpdate = true;
 
     // 魂火（上下輕輕飄）
@@ -401,6 +420,7 @@ export class RunView {
     this.pickupsView.dispose();
     this.ultFx.dispose();
     this.techFx.dispose();
+    this.fireFx?.dispose();
     this.feelFx.dispose();
     this.player.dispose();
     this.world.dispose();

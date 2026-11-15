@@ -6,6 +6,8 @@ import { ball } from '../art/shapes';
 import type { Run } from '../game/run';
 import { FLASH_KINDS } from '../game/techniques';
 import { setHugeBounds } from './instancedLayer';
+import { FIRE_FX, vfxStyleOf } from '../data/vfx';
+import type { FireFx } from './fireFx';
 
 const MAX_ORBS = 18;
 const MAX_OIL = 24;
@@ -17,6 +19,7 @@ const DECAL_LIFT = 0.16;
 const PILLAR_HEIGHT = 7;
 /** 衛星燈比繞身的鬼火大幾倍 */
 const SAT_SCALE = 1.7;
+const rr0 = (r: number) => Math.max(0.8, r * 0.8);
 
 /** 墨團（繞身的球、火種、身上的火）自己發的光：夜晚也看得到，但遠低於光暈門檻（不炫光） */
 const BLOB_GLOW = 0.55;
@@ -52,8 +55,14 @@ export class TechFx {
   private lastInner = 0;
   private flash = 0;
   private lastT = 0;
+  /** 火（docs/30）：有這個就走浮世繪的火，沒有就是 D85 的水墨 */
+  private readonly fire: FireFx | null;
+  private readonly scorch = new THREE.Color(FIRE_FX.zone.scorch);
+  /** 爆開的偵測：上一幀每個爆圈剩多少壽命（變多 = 新的一個） */
+  private readonly prevFlash: Float32Array;
 
-  constructor(private readonly run: Run) {
+  constructor(private readonly run: Run, fire: FireFx | null = null) {
+    this.fire = vfxStyleOf(run.yokai.id) === 'fire' ? fire : null;
     const fx = fxOf(run.yokai.id);
     this.ink = new THREE.Color(fx.ink);
     this.inkLight = new THREE.Color(fx.inkLight);
@@ -84,6 +93,7 @@ export class TechFx {
     this.flashes = this.instanced(fg, fm, MAX_FLASHES, true);
     this.flashes.renderOrder = 3;
     this.flashFade = addFade(this.flashes, MAX_FLASHES);
+    this.prevFlash = new Float32Array(run.tech.flashLife.length);
     // 環內護身：腳下一片很淡的墨暈；護身火：身邊一個筆刷圓（不用 aFade，一般的貼圖材質）
     const gg = circle();
     this.guardMat = new THREE.MeshBasicMaterial({ map: inkBlotTexture(), color: fx.inkLight, transparent: true, opacity: 0, depthWrite: false });
@@ -142,6 +152,16 @@ export class TechFx {
     }
     this.orbs.count = k;
     this.orbs.instanceMatrix.needsUpdate = true;
+    const fire = this.fire;
+    if (fire) {
+      // 火：每顆火球上疊一條火舌（球本身是火芯）
+      const O = FIRE_FX.orb;
+      const e = this.orbs.instanceMatrix.array as Float32Array;
+      for (let i = 0; i < k; i++) {
+        const sc = e[i * 16];
+        fire.flame(e[i * 16 + 12], e[i * 16 + 13] - 0.28 * sc, e[i * 16 + 14], O.w * sc, O.h * sc, i * 1.37);
+      }
+    }
     // 環內護身：平常很淡；這一幀有推開人類就亮一下再退
     const o = tc.act.ring?.orbit;
     const inner = o ? R - o.hitRadius : 0;
@@ -176,7 +196,22 @@ export class TechFx {
       this.m.makeRotationY(i * 2.399).scale(this.v.set(r * 1.2, 1, r * 1.2)).setPosition(x, run.map.heightAt(x, z) + DECAL_LIFT, z);
       this.zones.setMatrixAt(zc, this.m);
       const f = Math.max(0, tc.zoneLife[i] / tc.zoneMaxLife[i]);
-      this.zones.setColorAt(zc, this.ink);
+      this.zones.setColorAt(zc, fire ? this.scorch : this.ink);
+      if (fire) {
+        // 燒焦的地上舔著幾條火舌（半徑越大越多）、往上噴火星；快熄時火舌變小變紅
+        const Z = FIRE_FX.zone;
+        const n = Math.min(Z.tonguesMax, Math.round(Z.tonguesBase + r * Z.tonguesPerMeter));
+        const gy = run.map.heightAt(x, z);
+        for (let j = 0; j < n; j++) {
+          const a = j * 2.399 + i * 1.7;
+          const rr = r * 0.78 * Math.sqrt((j + 0.5) / n);
+          const tx = x + Math.cos(a) * rr;
+          const tz = z + Math.sin(a) * rr;
+          const big = (0.75 + 0.5 * ((j * 7 + i * 3) % 5) / 4) * (0.45 + 0.55 * f);
+          fire.flame(tx, gy, tz, Z.w * r * big + 0.25, Z.h * r * big + 0.4, i * 3.1 + j, 1 - f);
+        }
+        fire.emitRate(x, gy + 0.3, z, Z.sparkRate * f, dt, r * 0.5);
+      }
       // 墨慢慢乾：快消失時從邊緣一塊一塊不見
       this.zoneFade.setX(zc, 0.08 + 0.75 * (1 - f) * (1 - f));
       zc++;
@@ -219,8 +254,9 @@ export class TechFx {
       const s = 1 + 0.5 * (1 - Math.min(1, tc.seedT[i])) + 0.15 * Math.sin(t * 14 + i);
       this.m.makeScale(s, s, s).setPosition(x, run.map.heightAt(x, z) + 0.25, z);
       this.seeds.setMatrixAt(sc++, this.m);
+      if (fire) fire.flame(x, run.map.heightAt(x, z), z, FIRE_FX.seed.w * s, FIRE_FX.seed.h * s, i * 2.3);
     }
-    this.seeds.count = sc;
+    this.seeds.count = fire ? 0 : sc;
     this.seeds.instanceMatrix.needsUpdate = true;
     // 燈油：燒著的人頭上一朵小火
     let oc = 0;
@@ -231,8 +267,9 @@ export class TechFx {
       const s = 1 + 0.25 * Math.sin(t * 13 + i);
       this.m.makeScale(s, s, s).setPosition(x, run.map.heightAt(x, z) + 1.5, z);
       this.oil.setMatrixAt(oc++, this.m);
+      if (fire) fire.flame(x, run.map.heightAt(x, z) + 1.05, z, FIRE_FX.oil.w * s, FIRE_FX.oil.h * s, e * 0.71);
     }
-    this.oil.count = oc;
+    this.oil.count = fire ? 0 : oc;
     this.oil.instanceMatrix.needsUpdate = true;
     // 鬼火柱：一根往上的光柱，快速淡出
     let pc = 0;
@@ -247,8 +284,18 @@ export class TechFx {
       this.pillars.setColorAt(pc, this.ink);
       this.pillarFade.setX(pc, 0.05 + 0.8 * (1 - f));
       pc++;
+      if (fire) {
+        // 火柱：一條沖天的大火舌＋兩側較矮的副火，往上噴大量火星
+        const P = FIRE_FX.pillar;
+        const gy = run.map.heightAt(x, z);
+        const g = 0.55 + 0.45 * f;
+        fire.flame(x, gy, z, r * 2.4 * g, P.h * g, i * 5.3, 1 - f);
+        fire.flame(x + r * 0.7, gy, z + r * 0.3, r * 1.5 * g, P.sideH * g, i * 5.3 + 1, 1 - f);
+        fire.flame(x - r * 0.6, gy, z - r * 0.4, r * 1.4 * g, P.sideH * 0.85 * g, i * 5.3 + 2, 1 - f);
+        fire.emitRate(x, gy + 1, z, P.sparkRate * f, dt, r);
+      }
     }
-    this.pillars.count = pc;
+    this.pillars.count = fire ? 0 : pc;
     this.pillars.instanceMatrix.needsUpdate = true;
     if (this.pillars.instanceColor) this.pillars.instanceColor.needsUpdate = true;
     this.pillarFade.needsUpdate = true;
@@ -266,7 +313,20 @@ export class TechFx {
       this.flashes.setColorAt(fc, tc.flashKind[i] === FLASH_KINDS.ward ? this.inkLight : tc.flashKind[i] === FLASH_KINDS.pillar || tc.flashKind[i] === FLASH_KINDS.sumo ? this.black : this.ink);
       this.flashFade.setX(fc, 0.04 + 0.85 * (1 - f));
       fc++;
+      if (fire && tc.flashKind[i] !== FLASH_KINDS.ward) {
+        // 爆開：一圈往外倒的火舌（先竄高再縮）＋一次噴一把火星
+        const B = FIRE_FX.burst;
+        const gy = run.map.heightAt(x, z);
+        const rise = Math.sin(Math.PI * Math.min(1, (1 - f) * 1.4));
+        for (let j = 0; j < B.tongues; j++) {
+          const a = (j / B.tongues) * Math.PI * 2 + i;
+          const rr = tc.flashR[i] * 0.75;
+          fire.flame(x + Math.cos(a) * rr, gy, z + Math.sin(a) * rr, 0.5 + rr * 0.35, (B.h + rr * 0.6) * rise, i + j * 0.37, 1 - f);
+        }
+        if (tc.flashLife[i] > this.prevFlash[i] + 1e-4) fire.emit(x, gy + 0.4, z, B.sparks, rr0(tc.flashR[i]));
+      }
     }
+    for (let i = 0; i < tc.flashLife.length; i++) this.prevFlash[i] = tc.flashLife[i];
     // 河童的漩渦：兩圈反方向轉的筆刷圓（大的主色、小的墨黑），快消失時乾掉
     for (let i = 0; i < tc.vortX.length; i++) {
       if (tc.vortLife[i] <= 0) continue;
