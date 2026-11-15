@@ -5,6 +5,7 @@ import { palette } from '../art/palette';
 import type { Character } from './lanternMonk';
 import monkUrl from '../assets/models/chochin-kozo.glb?inline';
 import toriiUrl from '../assets/models/torii.glb?inline';
+import kappaUrl from '../assets/models/kappa.glb?inline';
 
 /**
  * Blender 試作（docs/26，Q53 照預設）：用 Blender 腳本（tools/blender/build.py）建的模型，匯出 .glb 後內嵌進來。
@@ -24,14 +25,14 @@ async function load(url: string): Promise<{ scene: THREE.Group; animations: THRE
   return new Promise((resolve, reject) => new GLTFLoader().parse(buf, '', (g) => resolve({ scene: g.scene, animations: g.animations }), reject));
 }
 
-function dress(root: THREE.Object3D, mats: THREE.Material[]): THREE.MeshStandardMaterial[] {
+function dress(root: THREE.Object3D, mats: THREE.Material[], glowColor: string = palette.warm.amber, glowPower = 1.7): THREE.MeshStandardMaterial[] {
   const body: THREE.MeshStandardMaterial[] = [];
   root.traverse((o) => {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     (m.material as THREE.Material).dispose();
     if (m.name.startsWith('Glow') || m.parent?.name.startsWith('Glow')) {
-      m.material = glow(palette.warm.amber, 1.7);
+      m.material = glow(glowColor, glowPower);
       m.castShadow = false;
     } else {
       const mat = lit({ vertexColors: true, roughness: 0.8 }) as THREE.MeshStandardMaterial;
@@ -45,13 +46,18 @@ function dress(root: THREE.Object3D, mats: THREE.Material[]): THREE.MeshStandard
   return body;
 }
 
-/** 提燈小僧（Blender 版）：骨架動畫「walk」「idle」，依移動速度切換並調整播放速度 */
-export async function loadBlenderMonk(): Promise<Character> {
-  const { scene, animations } = await load(monkUrl);
+/** 提燈小僧（Blender 版） */
+export const loadBlenderMonk = (): Promise<Character> => loadRigged(monkUrl);
+/** 河童（Blender 版）：頭頂的水與手上的水盤是發光的網格（顏色取河童的特效色，只發一點光） */
+export const loadBlenderKappa = (): Promise<Character> => loadRigged(kappaUrl, palette.fx.kappa.light, 0.6);
+
+/** 帶骨架的角色：骨架動畫「walk」「idle」，依移動速度切換並調整播放速度 */
+async function loadRigged(url: string, glowColor?: string, glowPower?: number): Promise<Character> {
+  const { scene, animations } = await load(url);
   const root = new THREE.Group();
   root.add(scene);
   const mats: THREE.Material[] = [];
-  const bodyMats = dress(scene, mats);
+  const bodyMats = dress(scene, mats, glowColor, glowPower);
   const mixer = new THREE.AnimationMixer(scene);
   const walk = mixer.clipAction(animations.find((a) => a.name === 'walk')!);
   const idle = mixer.clipAction(animations.find((a) => a.name === 'idle')!);

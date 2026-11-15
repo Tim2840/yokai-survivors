@@ -1,9 +1,9 @@
 // 角色轉檯圖（docs/29 模型驗收第二道）：固定 9 個視角，從「真正的正面」算起（讀角色面向，不靠猜角度），沒有 HUD。
 // 正面、右前 45°、右側、背面、左側、左前 45°、俯視、臉部特寫、手機遊玩大小。每格左上角有標籤。
-// 用法：NODE_PATH=node_modules node scripts/shots/turnaround.mjs <標籤> [look] → screenshots/turnaround-<標籤>.png
+// 用法：NODE_PATH=node_modules node scripts/shots/turnaround.mjs <標籤> [look] [角色，例 kappa] → screenshots/turnaround-<標籤>.png
 // **回報任何模型改動前一定要跑，並把整張圖逐格讀過**（只看斜前方一個角度，側面與背面的缺陷看不到）。
 import { execFileSync } from 'node:child_process';
-import { launch, openPage, startRun } from '../regress/lib.mjs';
+import { launch, openPage, startRun, waitState, press } from '../regress/lib.mjs';
 
 const tag = process.argv[2] || 'now';
 const look = process.argv[3] ?? 'cel';
@@ -21,7 +21,16 @@ const VIEWS = [
 const browser = await launch();
 const ctx = await openPage(browser, { name: 'desktop', width: 1280, height: 720 }, `?q=1&seed=93&model=blender&look=${look}`);
 const { page } = ctx;
-await startRun(ctx);
+// 第 4 個參數：角色（kappa）；用真實點擊在開局畫面選
+const yokai = process.argv[4] || '';
+if (yokai) {
+  await waitState(page, 'MENU');
+  await press(ctx, '#btn-start');
+  await page.waitForFunction(() => window.__game.screens.includes('setup'), null, { timeout: 10000 });
+  await press(ctx, `.yokai-card[data-yokai="${yokai}"]`);
+  await press(ctx, '#btn-setup-go');
+  await waitState(page, 'COMBAT');
+} else await startRun(ctx);
 await page.waitForFunction(() => window.__game.blenderReady, null, { timeout: 30000 });
 await page.evaluate(() => { const g = window.__game; g.god = true; g.clearEnemies(); g.driveWorld(1, 0.4); for (let i = 0; i < 8; i++) g.advance(0.1); g.driveWorld(null); for (let i = 0; i < 20; i++) g.advance(0.1); });
 // 藏掉所有介面，只留畫布與標籤

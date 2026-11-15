@@ -107,7 +107,7 @@ export class RunView {
     if (import.meta.env.MODE !== 'single-main' && (new URLSearchParams(location.search).get('model') ?? (import.meta.env.MODE === 'single' ? 'blender' : '')) === 'blender') {
       void import('../units/blenderModels').then(async (mod) => {
         const torii = await mod.loadBlenderTorii();
-        const monk = run.yokai.id === 'chochin-kozo' ? await mod.loadBlenderMonk() : null;
+        const monk = run.yokai.id === 'chochin-kozo' ? await mod.loadBlenderMonk() : run.yokai.id === 'kappa' ? await mod.loadBlenderKappa() : null;
         if (this.disposed) {
           torii.dispose();
           monk?.dispose();
