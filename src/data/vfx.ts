@@ -26,6 +26,8 @@ export interface ElementLook {
   /** 往上收尖的程度（火 0.75 尖；水 0.35 肩膀圓、頂端圓，不然像冰晶） */
   taper: number;
   drop: boolean;
+  /** 用浪的造型（圓弧浪身＋往前捲的浪唇＋浪唇下的空洞＋扇貝邊），不用火舌的收尖造型 */
+  wave: boolean;
   glow: { max: number; transient: number; color: string; ground: number; halo: number; offAtQuality: number };
   smoke: { dark: string; light: string; up: number; life: number; grow: number };
   glint: { size: number; life: number };
@@ -49,6 +51,7 @@ export const FIRE_FX = {
   noise: 1.0,
   taper: 0.75,
   drop: false,
+  wave: false,
   /** 投射物（鬼火）：寬、高（公尺）、離地；碎片縮小倍率在 runView */
   bullet: { w: 0.8, h: 1.1, lift: 0.45, sparkRate: 3, halo: 0.9 },
   /** 繞身的火球、衛星燈、開路燈：火舌疊在球上 */
@@ -126,6 +129,7 @@ export const WATER_FX = {
   noise: 0.45,
   taper: 0.35,
   drop: true,
+  wave: true,
   glow: { max: 96, transient: 64, color: '#5cc8ff', ground: 0.24, halo: 0.16, offAtQuality: 4 },
   /** 浪花白沫（浮世繪的捲雲畫法，白與淺藍） */
   smoke: { dark: '#a9d3ec', light: '#f2f9ff', up: 0.7, life: 0.75, grow: 1.1 },
@@ -170,7 +174,7 @@ export const WATER_FX = {
   burst: { tongues: 6, h: 0.7, drops: 12, foam: 1 },
   /** 大招：大海嘯（nova，一圈大浪往外推）、雨乞（bulwark：一圈水牆＋身邊下雨） */
   ult: {
-    nova: { life: 1.0, tongues: 30, h: 3.4, w: 1.4, drops: 60, foam: 12, glints: 8, column: 5.0 },
+    nova: { life: 1.0, tongues: 26, h: 2.4, w: 2.3, drops: 60, foam: 12, glints: 8, column: 5.0 },
     shield: { tongues: 14, r: 1.7, w: 0.75, h: 1.5, rain: 40, rainR: 4.5, rainFrom: 6 },
   },
 } as const;

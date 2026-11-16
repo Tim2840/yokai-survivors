@@ -83,7 +83,7 @@ export class WaterReact {
       const gy = run.map.heightAt(x, z);
       const s = C.col * sc;
       // 沖起的水柱（往上長再垮下來）、水珠四散、白沫、大漣漪
-      fx.flare(x, gy, z, K.colW * s, K.colH * s, K.colLife * (v === 2 ? 1.6 : 1), 0.25);
+      fx.flare(x, gy, z, K.colW * s, K.colH * s, K.colLife * (v === 2 ? 1.6 : 1), 0.25, true);
       fx.emit(x, gy + 0.9 * s, z, C.drops, 1.4, 2.2 * s);
       fx.smoke(x, gy + 0.5 * s, z, C.foam, 0.5 * Math.sqrt(s), 0.5);
       fx.ripple(x, gy + 0.06, z, C.ripple, R.life * 1.4);

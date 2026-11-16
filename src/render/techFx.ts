@@ -388,9 +388,9 @@ export class TechFx {
         const G = WATER_FX.geyser;
         const gy = run.map.heightAt(x, z);
         const g = 0.55 + 0.45 * f;
-        water.flame(x, gy, z, r * 1.9 * g, G.h * g, i * 5.3, (1 - f) * 0.8);
-        water.flame(x + r * 0.6, gy, z + r * 0.3, r * 1.1 * g, G.sideH * g, i * 5.3 + 1, (1 - f) * 0.8);
-        water.flame(x - r * 0.5, gy, z - r * 0.4, r * 1.0 * g, G.sideH * 0.85 * g, i * 5.3 + 2, (1 - f) * 0.8);
+        water.column(x, gy, z, r * 1.9 * g, G.h * g, i * 5.3, (1 - f) * 0.8);
+        water.column(x + r * 0.6, gy, z + r * 0.3, r * 1.1 * g, G.sideH * g, i * 5.3 + 1, (1 - f) * 0.8);
+        water.column(x - r * 0.5, gy, z - r * 0.4, r * 1.0 * g, G.sideH * 0.85 * g, i * 5.3 + 2, (1 - f) * 0.8);
         water.emitRate(x, gy + G.h * 0.7 * g, z, G.dropRate * f, dt, r * 1.4);
         water.smokeRate(x, gy + 0.2, z, G.foamRate * f, dt, 0.5);
         if (water.rand() < 4 * dt) water.ripple(x, gy + 0.06, z, r * 2.6, WATER_FX.ripple.life);

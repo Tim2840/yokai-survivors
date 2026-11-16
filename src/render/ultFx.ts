@@ -103,7 +103,7 @@ export class UltFx {
     }
     // 大火圈：中央竄起一根火柱；護罩只有往外推的火圈（中央不蓋住角色）
     if (big) {
-      fire.flare(x, gy, z, 2.2, N.column, 0.7, 0.2);
+      fire.flare(x, gy, z, 2.2, N.column, 0.7, 0.2, this.water);
       fire.flash(x, gy + 1.5, z, 3.5, 1.1, 0.4, GLOW_HALO);
     }
     fire.emit(x, gy + 1, z, sparks * m, 1.5, 7 * m);

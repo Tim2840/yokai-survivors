@@ -31,6 +31,7 @@ export function flameMaterial(time: { value: number }, look: ElementLook, C: Ban
         uHook: { value: look.hook },
         uFork: { value: look.fork },
         uTaper: { value: look.taper },
+        uWave: { value: look.wave ? 1 : 0 },
         uNoise: { value: look.noise },
         uDrop: { value: look.drop ? 1 : 0 },
       },
@@ -38,7 +39,7 @@ export function flameMaterial(time: { value: number }, look: ElementLook, C: Ban
     vertexShader: /* glsl */ `
       #include <common>
       #include <fog_pars_vertex>
-      attribute vec3 aInfo; // x = seed, y = fade(0..1), z = kind (0 tongue, 1 spark/drop, 2 glint, 3 smoke/foam, 4 bubble)
+      attribute vec3 aInfo; // x = seed, y = fade(0..1), z = kind (0 tongue/wave, 1 spark/drop, 2 glint, 3 smoke/foam, 4 bubble, 5 column: tongue shape even for water)
       varying vec2 vUv;
       varying vec3 vInfo;
       void main() {
@@ -62,7 +63,7 @@ export function flameMaterial(time: { value: number }, look: ElementLook, C: Ban
       #include <fog_pars_fragment>
       uniform float uTime;
       uniform vec3 cOutline, cRed, cOrange, cYellow, cCore, cSmokeDark, cSmokeLight, cGold;
-      uniform float uHook, uDrop, uFork, uNoise, uTaper;
+      uniform float uHook, uDrop, uFork, uNoise, uTaper, uWave;
       varying vec2 vUv;
       varying vec3 vInfo;
       float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -87,7 +88,7 @@ export function flameMaterial(time: { value: number }, look: ElementLook, C: Ban
         float seed = vInfo.x;
         float fade = vInfo.y;
         vec3 c;
-        if (vInfo.z > 3.5) {
+        if (vInfo.z > 3.5 && vInfo.z < 4.5) {
           // bubble: a hollow ring with a bright highlight arc, wobbling slightly
           vec2 q = vUv * 2.0 - 1.0;
           float ang = atan(q.y, q.x);
@@ -100,7 +101,7 @@ export function flameMaterial(time: { value: number }, look: ElementLook, C: Ban
           } else {
             c = mix(cOrange, cOutline, smoothstep(0.86, 0.93, r));
           }
-        } else if (vInfo.z > 2.5) {
+        } else if (vInfo.z > 2.5 && vInfo.z < 3.5) {
           // smoke: a scalloped cloud (ukiyo-e cloud pattern), flat dark violet with a lighter inner lobe; shrinks as it fades
           vec2 q = vUv * 2.0 - 1.0;
           float ang = atan(q.y, q.x);
@@ -110,7 +111,7 @@ export function flameMaterial(time: { value: number }, look: ElementLook, C: Ban
           float inner = edge - 0.2 + 0.05 * cos(ang * 4.0 + seed * 2.0);
           c = mix(cSmokeLight, cSmokeDark, smoothstep(inner - 0.02, inner + 0.02, r + 0.15 * q.y));
           c = mix(c, cOutline * 0.6, smoothstep(edge - 0.1, edge - 0.06, r));
-        } else if (vInfo.z > 1.5) {
+        } else if (vInfo.z > 1.5 && vInfo.z < 2.5) {
           // gold glint (kira): a four-point star with thin rays, rotating slowly
           vec2 q = vUv * 2.0 - 1.0;
           float a = seed + uTime * 2.0;
@@ -120,7 +121,7 @@ export function flameMaterial(time: { value: number }, look: ElementLook, C: Ban
           float star = (q.x * q.y) * 14.0 + max(q.x, q.y) * 0.9;
           if (star > s || max(q.x, q.y) > s) discard;
           c = mix(cCore * 1.2, cGold, smoothstep(0.15, 0.6, star / s));
-        } else if (vInfo.z > 0.5) {
+        } else if (vInfo.z > 0.5 && vInfo.z < 1.5) {
           vec2 q = abs(vUv * 2.0 - 1.0);
           if (uDrop > 0.5) {
             // water drop: round, outlined, light blue with a white glint
@@ -143,14 +144,16 @@ export function flameMaterial(time: { value: number }, look: ElementLook, C: Ban
           float v = vUv.y / breathe;
           // sway; the tip hooks to one side (ukiyo-e flame pattern)
           float sway = sin(t * 1.9 + seed * 6.0);
-          float hook = sign(sway + 0.001) * (0.6 + 0.4 * sin(t * 2.7 + seed)) * uHook;
+          // water column (kind 5): round dome top, almost no hook (a pointed tip read as an ice spike)
+          bool col = uWave > 0.5 && vInfo.z > 4.5;
+          float hook = sign(sway + 0.001) * (0.6 + 0.4 * sin(t * 2.7 + seed)) * (col ? 0.15 : uHook);
           u += v * v * 0.38 * sway + v * 0.1 * sin(t * 4.3 + seed * 3.0);
           u += v * v * v * 0.55 * hook;
           // noise scrolling upward: tongues rise
           float nz = fbm(vec2(u * 2.0 + seed * 9.0, v * 2.2 - t * 2.1));
           float nz2 = vn(vec2(u * 4.5 - seed * 4.0, v * 3.6 - t * 3.3));
           // body: round base, widest low, tapering to the top
-          float w = 0.8 * pow(max(1.0 - v, 0.0), uTaper) * smoothstep(-0.04, 0.22, v);
+          float w = 0.8 * pow(max(1.0 - v, 0.0), col ? 0.16 : uTaper) * smoothstep(-0.04, 0.22, v);
           float shape = w - abs(u);
           // forks: a horizontal wave (pushed by noise) splits the upper half into 2-3 tongues
           float tg = 0.5 + 0.5 * cos((u + (nz - 0.5) * 0.7) * 8.5 + seed * 2.0);
@@ -163,6 +166,22 @@ export function flameMaterial(time: { value: number }, look: ElementLook, C: Ban
           bq.y *= 0.75;
           float blob = (0.13 * (1.0 - ph) * (1.0 - fade)) - length(bq);
           f = max(f, blob * 2.2);
+          if (uWave > 0.5 && vInfo.z < 0.5) {
+            // ocean wave (Hokusai / the wave emoji): a wide body below, and on top a crescent-shaped lip
+            // curling forward with a hollow tube inside; the outer edge of the lip is scalloped foam.
+            // The curl side is fixed per instance (no flipping).
+            float side = sin(seed * 12.9898) > 0.0 ? 1.0 : -1.0;
+            float br = 0.94 + 0.06 * sin(t * 2.2 + seed * 3.0);
+            vec2 p = vec2((vUv.x * 2.0 - 1.0) * side - 0.06 * sin(t * 1.3 + seed), vUv.y / br);
+            float outer = 0.4 - length(p - vec2(0.02, 0.58));
+            float ang = atan(p.y - 0.58, p.x - 0.02);
+            outer -= 0.025 * (0.5 + 0.5 * sin(ang * 13.0 + t * 2.5 + seed * 4.0)) * step(-0.6, ang);
+            float inner = length(p - vec2(0.17, 0.53)) - 0.2;
+            float lip = min(outer, inner);
+            float body = (1.0 - length((p - vec2(-0.08, 0.12)) / vec2(0.62, 0.42))) * 0.38;
+            f = max(body, lip) * 2.3 - fade * 0.55;
+            if (inner < 0.0) f = min(f, inner * 3.0);   // the hollow of the tube
+          }
           if (f < 0.0) discard;
           c = band(f, fade);
           // woodblock carving lines: a thin dark-red stroke along the red/orange edge in the upper body

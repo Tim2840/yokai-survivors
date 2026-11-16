@@ -332,6 +332,12 @@ export class ElementFx {
     this.flash(x, y, z, r, intensity * 2.2, life, GLOW_RING);
   }
 
+  /** 這一幀的一根柱子（水柱、火柱）：水的外觀下也用往上收的造型，不用浪的造型 */
+  column(x: number, y: number, z: number, w: number, h: number, seed: number, fade = 0): void {
+    if (this.n >= this.L.maxFlames || w <= 0 || h <= 0) return;
+    this.put(this.n++, x, y, z, w, h, seed, fade, 5);
+  }
+
   /** 這一幀的一顆水泡（水牢）：直徑 size，fade 越大越薄 */
   bubble(x: number, y: number, z: number, size: number, seed: number, fade = 0): void {
     if (this.n >= this.L.maxFlames || size <= 0) return;
@@ -339,8 +345,8 @@ export class ElementFx {
   }
 
   /** 原地竄一下的短暫火焰（打中、燒傷的一跳、打倒時那一團）：grow = 一生中長大的倍率 */
-  flare(x: number, y: number, z: number, w: number, h: number, life: number, grow: number): void {
-    this.part(0, x, y, z, 0, 0, 0, w, h, life, 0, 0, grow);
+  flare(x: number, y: number, z: number, w: number, h: number, life: number, grow: number, column = false): void {
+    this.part(column ? 5 : 0, x, y, z, 0, 0, 0, w, h, life, 0, 0, grow);
   }
 
   end(dt: number, t: number): void {
@@ -361,7 +367,7 @@ export class ElementFx {
       this.pz[i] += this.vz[i] * dt;
       const g = Math.max(0.05, 1 + this.grow[i] * f);
       // 火團與短暫火焰：fade 用 f 的平方（前半段正旺、最後才縮成紅色的小火）
-      const fade = this.kind[i] === 0 ? f * f : f;
+      const fade = this.kind[i] === 0 || this.kind[i] === 5 ? f * f : f;
       this.put(k++, this.px[i], this.py[i], this.pz[i], this.pw[i] * g, this.ph[i] * g, this.seed[i], fade, this.kind[i]);
     }
     this.mesh.count = k;

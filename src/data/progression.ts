@@ -1,7 +1,7 @@
 /** 魂火與升級（docs/02 第 3.1 節，起始提案）。 */
 export const PROGRESSION = {
   /** 第 L 級升到 L+1 所需魂火 = round(needScale × (L + needOffset)²)（D30：平方曲線，參考 Brotato 的 (L+3)²；後期升級變慢、每一級更有份量） */
-  needScale: 0.35,
+  needScale: 0.4, // 2026-11-16：0.35 → 0.4（使用者「成長都太容易」；sim 見 docs/02 變更紀錄）
   needOffset: 3,
   /** 魂火顆的數值 = 威脅點數 × 這個 */
   orbPerPoint: 0.66, // D50：敵人變多、變脆，每隻給的魂火也少一點（數量 ×4.5 × 0.66 ≈ 原本 ×6 × 0.5，升級速度不變）

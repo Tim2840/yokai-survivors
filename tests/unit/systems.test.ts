@@ -239,10 +239,10 @@ describe('稀有度里程碑（D30，參考 Brotato）', () => {
 });
 
 describe('升級曲線與功德', () => {
-  it('第 L 級需要 round(0.35 × (L + 3)²) 魂火（D30 平方曲線）', () => {
-    expect(xpNeed(0)).toBe(3);
-    expect(xpNeed(10)).toBe(59);
-    expect(xpNeed(20)).toBe(185);
+  it('第 L 級需要 round(0.4 × (L + 3)²) 魂火（D30 平方曲線；2026-11-16 0.35 → 0.4）', () => {
+    expect(xpNeed(0)).toBe(4);
+    expect(xpNeed(10)).toBe(68);
+    expect(xpNeed(20)).toBe(212);
     for (let L = 1; L < 60; L++) expect(xpNeed(L)).toBeGreaterThan(xpNeed(L - 1));
   });
   it('功德（D22 版，docs/02 第 8.1 節）：每關 120 ＋ 擊殺 ÷ 10 ＋ 每隻頭目 100 ＋ 首次通關 200', () => {
