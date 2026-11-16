@@ -255,6 +255,38 @@ export function installDevApi(ctx: DevContext): void {
       });
       return { n, tris };
     },
+    /** draw call 分項（效能分析用）：每個看得到、會畫的物件逐一關掉再畫一次，少了幾次就是它的成本；依「父層名稱／種類／材質」分組加總 */
+    drawBreakdown: () => {
+      const r = ctx.renderer;
+      const info = r.pipeline.renderer.info;
+      r.render();
+      const base = info.render.calls;
+      const items: import('three').Object3D[] = [];
+      r.scene.traverseVisible((o) => {
+        const m = o as import('three').Mesh;
+        if (!(m.isMesh || (o as import('three').Points).isPoints || (o as import('three').Line).isLine || (o as import('three').Sprite).isSprite)) return;
+        if ((m as import('three').InstancedMesh).isInstancedMesh && (m as import('three').InstancedMesh).count === 0) return;
+        items.push(o);
+      });
+      const out: Record<string, number> = {};
+      for (const o of items) {
+        o.visible = false;
+        r.render();
+        const d = base - info.render.calls;
+        o.visible = true;
+        if (d <= 0) continue;
+        const m = o as import('three').Mesh;
+        const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as import('three').Material | undefined;
+        // 往上找到場景下第二層的祖先，用「第一層#索引/第二層#索引（名稱）」分組
+        const chain: import('three').Object3D[] = [];
+        for (let p: import('three').Object3D | null = o; p && p !== r.scene; p = p.parent) chain.unshift(p);
+        const lv = (k: number) => (chain[k] ? `${chain[k].name || chain[k].type}#${chain[k].parent?.children.indexOf(chain[k]) ?? -1}` : '-');
+        const key = `${lv(0)}/${lv(1)}/${lv(2)}|${mat?.type ?? ''}${(m as import('three').InstancedMesh).isInstancedMesh ? '|inst' : ''}${m.castShadow ? '|S' : ''}`;
+        out[key] = (out[key] ?? 0) + d;
+      }
+      r.render();
+      return { base, parts: Object.entries(out).sort((a, b) => b[1] - a[1]) };
+    },
     /** 看得到、會畫的物件清單（draw call 分析用）：名稱或父層名稱、種類、實例數、是否投影 */
     drawList: () => {
       const out: string[] = [];
