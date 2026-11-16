@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { flameMaterial, flameQuad, glowMaterial, glowQuad } from '../art/flame';
-import { FIRE_FX } from '../data/vfx';
+import { FIRE_FX, type ElementLook } from '../data/vfx';
+import { palette } from '../art/palette';
+import type { BandColors } from '../art/flame';
 import { feel } from '../core/feel';
 import { setHugeBounds } from './instancedLayer';
 
@@ -9,6 +11,8 @@ export const FIRE_KIND = { flame: 0, spark: 1, glint: 2, smoke: 3 } as const;
 /** 光的種類：0 = 平鋪在地上、1 = 面向鏡頭的光暈 */
 export const GLOW_GROUND = 0;
 export const GLOW_HALO = 1;
+/** 漣漪：地上擴散的細圈（水） */
+export const GLOW_RING = 2;
 
 /**
  * 火的特效池（docs/30）：每幀 begin() → 各處呼叫 flame()、glow()、emit()… → end(dt) 上傳。
@@ -16,7 +20,7 @@ export const GLOW_HALO = 1;
  * - 火光（加法混合、很淡）另一個實例化網格（一次繪製）：每幀的光＋短暫的光。
  * 全部預先配置，熱路徑不 new。粒子的隨機只影響畫面，用自己的小亂數產生器（固定種子，不碰遊戲的 Rng）。
  */
-export class FireFx {
+export class ElementFx {
   readonly mesh: THREE.InstancedMesh;
   readonly glowMesh: THREE.InstancedMesh;
   private readonly info: THREE.InstancedBufferAttribute;
@@ -68,15 +72,16 @@ export class FireFx {
   /** 自己的時鐘（不能用每 2π 歸零的那個：雜訊會每 6 秒跳一下） */
   private readonly time = { value: 0 };
 
-  constructor() {
-    const F = FIRE_FX;
+  /** look：火（FIRE_FX＋palette.flame）或水（WATER_FX＋palette.wave） */
+  constructor(private readonly L: ElementLook = FIRE_FX, colors: BandColors = palette.flame) {
+    const F = L;
     this.P = F.maxParticles;
     this.cap = F.maxFlames + this.P;
     this.geo = flameQuad();
     this.info = new THREE.InstancedBufferAttribute(new Float32Array(this.cap * 3), 3);
     this.info.setUsage(THREE.DynamicDrawUsage);
     this.geo.setAttribute('aInfo', this.info);
-    this.mat = flameMaterial(this.time);
+    this.mat = flameMaterial(this.time, L, colors);
     this.mesh = new THREE.InstancedMesh(this.geo, this.mat, this.cap);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.count = 0;
@@ -161,25 +166,25 @@ export class FireFx {
 
   /** 一條火舌：底在 (x, y, z)，寬 w、高 h（公尺）；seed 讓每條搖得不一樣；fade 0 = 正旺、1 = 快熄 */
   flame(x: number, y: number, z: number, w: number, h: number, seed: number, fade = 0): void {
-    if (this.n >= FIRE_FX.maxFlames || w <= 0 || h <= 0) return;
+    if (this.n >= this.L.maxFlames || w <= 0 || h <= 0) return;
     this.put(this.n++, x, y, z, w, h, seed, fade, 0);
   }
 
   /** 這一幀的一團光：kind = GLOW_GROUND（地上）或 GLOW_HALO（光暈）；r 半徑（公尺）、強度（相對 palette 的基準） */
   glow(x: number, y: number, z: number, r: number, intensity: number, kind: number): void {
-    if (this.gn >= FIRE_FX.glow.max || r <= 0 || intensity <= 0) return;
-    this.putGlow(this.gn++, x, y, z, r, intensity * (kind === GLOW_GROUND ? FIRE_FX.glow.ground : FIRE_FX.glow.halo), kind);
+    if (this.gn >= this.L.glow.max || r <= 0 || intensity <= 0) return;
+    this.putGlow(this.gn++, x, y, z, r, intensity * (kind === GLOW_HALO ? this.L.glow.halo : this.L.glow.ground), kind);
   }
 
   /** 短暫的光（打中、爆開）：從 0.6 倍半徑長到 r，亮度很快退掉 */
   flash(x: number, y: number, z: number, r: number, intensity: number, life: number, kind: number): void {
     const k = this.tnext;
-    this.tnext = (this.tnext + 1) % FIRE_FX.glow.transient;
+    this.tnext = (this.tnext + 1) % this.L.glow.transient;
     this.tx[k] = x;
     this.ty[k] = y;
     this.tz[k] = z;
     this.tr[k] = r;
-    this.ti[k] = intensity * (kind === GLOW_GROUND ? FIRE_FX.glow.ground : FIRE_FX.glow.halo);
+    this.ti[k] = intensity * (kind === GLOW_HALO ? this.L.glow.halo : this.L.glow.ground);
     this.tage[k] = 0;
     this.tlife[k] = life;
     this.tkind[k] = kind;
@@ -259,8 +264,8 @@ export class FireFx {
   }
 
   /** 噴 n 顆火星（減少特效時按 feel.pops 打折）；spread = 水平初速上限；speed 另外加一個往外的速度 */
-  emit(x: number, y: number, z: number, n: number, spread: number = FIRE_FX.spark.spread, outward = 0): void {
-    const S = FIRE_FX.spark;
+  emit(x: number, y: number, z: number, n: number, spread: number = this.L.spark.spread, outward = 0): void {
+    const S = this.L.spark;
     const count = this.scaled(n);
     for (let c = 0; c < count; c++) {
       const a = this.rand() * Math.PI * 2;
@@ -281,7 +286,7 @@ export class FireFx {
 
   /** 冒煙：浮世繪的捲雲，往上飄、變大、縮掉 */
   smoke(x: number, y: number, z: number, n: number, size: number, spread = 0.4): void {
-    const M = FIRE_FX.smoke;
+    const M = this.L.smoke;
     const count = this.scaled(n);
     for (let c = 0; c < count; c++) {
       const a = this.rand() * Math.PI * 2;
@@ -301,13 +306,13 @@ export class FireFx {
   }
 
   /** 金色閃光（精英、頭目、暴擊）：在周圍 spread 公尺內閃一下 */
-  glints(x: number, y: number, z: number, n: number, spread: number, size: number = FIRE_FX.glint.size): void {
+  glints(x: number, y: number, z: number, n: number, spread: number, size: number = this.L.glint.size): void {
     const count = this.scaled(n);
     for (let c = 0; c < count; c++) {
       const a = this.rand() * Math.PI * 2;
       const r = spread * Math.sqrt(this.rand());
       const s = size * (0.7 + 0.6 * this.rand());
-      this.part(2, x + Math.cos(a) * r, y + this.rand() * spread * 0.8, z + Math.sin(a) * r, 0, 0.6, 0, s, s, FIRE_FX.glint.life * (0.7 + 0.6 * this.rand()), 0, 2, -0.3);
+      this.part(2, x + Math.cos(a) * r, y + this.rand() * spread * 0.8, z + Math.sin(a) * r, 0, 0.6, 0, s, s, this.L.glint.life * (0.7 + 0.6 * this.rand()), 0, 2, -0.3);
     }
   }
 
@@ -322,14 +327,25 @@ export class FireFx {
     }
   }
 
+  /** 漣漪（水）：地上一圈往外擴散的細圈 */
+  ripple(x: number, y: number, z: number, r: number, life: number, intensity = 1): void {
+    this.flash(x, y, z, r, intensity * 2.2, life, GLOW_RING);
+  }
+
+  /** 這一幀的一顆水泡（水牢）：直徑 size，fade 越大越薄 */
+  bubble(x: number, y: number, z: number, size: number, seed: number, fade = 0): void {
+    if (this.n >= this.L.maxFlames || size <= 0) return;
+    this.put(this.n++, x, y, z, size, size, seed, fade, 4);
+  }
+
   /** 原地竄一下的短暫火焰（打中、燒傷的一跳、打倒時那一團）：grow = 一生中長大的倍率 */
   flare(x: number, y: number, z: number, w: number, h: number, life: number, grow: number): void {
     this.part(0, x, y, z, 0, 0, 0, w, h, life, 0, 0, grow);
   }
 
   end(dt: number, t: number): void {
-    this.time.value = (t * FIRE_FX.speed) % 1000;
-    const S = FIRE_FX.spark;
+    this.time.value = (t * this.L.speed) % 1000;
+    const S = this.L.spark;
     let k = this.n;
     for (let i = 0; i < this.P; i++) {
       if (this.age[i] >= this.life[i]) continue;
@@ -353,11 +369,13 @@ export class FireFx {
     this.info.needsUpdate = true;
     // 光：每幀的＋短暫的
     let g = this.gn;
-    for (let i = 0; i < FIRE_FX.glow.transient; i++) {
+    for (let i = 0; i < this.L.glow.transient; i++) {
       if (this.tage[i] >= this.tlife[i]) continue;
       this.tage[i] += dt;
       const f = Math.min(1, this.tage[i] / this.tlife[i]);
-      this.putGlow(g++, this.tx[i], this.ty[i], this.tz[i], this.tr[i] * (0.6 + 0.4 * f), this.ti[i] * (1 - f) * (1 - f), this.tkind[i]);
+      // 漣漪從很小擴散到 r、亮度線性退；其他的光從 0.6 倍長到 r、很快退
+      const ring = this.tkind[i] === GLOW_RING;
+      this.putGlow(g++, this.tx[i], this.ty[i], this.tz[i], this.tr[i] * (ring ? 0.15 + 0.85 * Math.sqrt(f) : 0.6 + 0.4 * f), this.ti[i] * (ring ? 1 - f : (1 - f) * (1 - f)), this.tkind[i]);
     }
     this.glowMesh.count = g;
     this.glowMesh.instanceMatrix.needsUpdate = true;

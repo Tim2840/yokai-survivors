@@ -7,7 +7,8 @@ import { launch, openPage, startRun, waitState, press } from '../regress/lib.mjs
 
 const tag = process.argv[2] || 'now';
 const yokai = process.argv[3] || 'chochin-kozo';
-// 每格：[標籤, { tech, evolve（進化後才有的效果：鬼火雨、燈油）, ult（大招 id）, kill（敵人打得死：看打倒的效果）, elite, minFx（等到畫面上至少這麼多特效：火柱這種隔一陣子才出手的）}]
+// 每格：[標籤, { tech, evolve（進化後才有的效果：鬼火雨、燈油）, ult（大招 id）, kill（敵人打得死：看打倒的效果）, elite, minFx（等到畫面上至少這麼多特效）,
+//   until（等那一招真的在場上：'sumo'／'pillars'／'seeds'／'wakes'／'domains'；命中的水花很多，只看特效數會提早截到別的東西）, drive（玩家往前走：水痕要移動才有）, far（人類放遠一點：水泡才不會一放下就被碰破）}]
 const SETS = {
   'chochin-kozo': [
     ['主武器・鬼火（命中）', {}],
@@ -26,6 +27,22 @@ const SETS = {
     ['大招・大火圈', { ult: 'infernoLantern' }],
     ['大招・狐火之舞', { ult: 'ghostfireDance' }],
     ['大招・火牆護罩', { ult: 'bulwarkLantern' }],
+  ],
+  kappa: [
+    ['主武器・水盤（命中）', {}],
+    ['激流盤', { tech: 'torrent' }],
+    ['回潮', { tech: 'backwash' }],
+    ['渦流', { tech: 'vortex' }],
+    ['渦盤', { tech: 'whirl' }],
+    ['相撲', { tech: 'sumo', until: 'sumo' }],
+    ['滑水', { tech: 'wake', until: 'wakes', drive: true }],
+    ['水域', { tech: 'domain', until: 'domains' }],
+    ['水牢', { tech: 'prison', until: 'seeds', kill: true }],
+    ['間歇泉', { tech: 'geyser', until: 'pillars' }],
+    ['打倒・一般', { kill: true }],
+    ['打倒・精英', { kill: true, elite: true }],
+    ['大招・雨乞', { ult: 'rainPrayer' }],
+    ['大招・大波', { ult: 'tidalWave' }],
   ],
 };
 const only = process.argv[4] ? process.argv[4].split(',').map(Number) : null;
@@ -57,7 +74,8 @@ for (let k = 0; k < cells.length; k++) {
       if (opt.evolve && !g.evolveTech(opt.tech)) throw new Error('evolve failed: ' + opt.tech);
     }
     // 前方一排人類：平常打不死（讓技法有東西打）；看打倒的格子用一下就倒的
-    for (let j = 0; j < 7; j++) g.spawnAt('villager', -3 + j, -4.5 - (j % 2), opt.elite ? 1 : 0, 0, opt.kill ? 1 : 1e9);
+    for (let j = 0; j < 7; j++) g.spawnAt('villager', -3 + j, (opt.far ? -9 : -4.5) - (j % 2), opt.elite ? 1 : 0, 0, opt.kill ? 1 : 1e9);
+    if (opt.drive) g.driveWorld(0.6, 0.3);
     if (opt.ult) {
       g.setUlt(opt.ult, 0);
       g.chargeUlt();
@@ -79,6 +97,15 @@ for (let k = 0; k < cells.length; k++) {
       while (document.querySelector('.overlay[data-screen="levelup"] .card')) document.querySelector('.overlay[data-screen="levelup"] .card').click();
       if (opt.ult) {
         if (s >= 4) break;
+        continue;
+      }
+      if (opt.until) {
+        const st = g.techState();
+        const ok = opt.until === 'sumo' ? st.flashes.includes(4) : st[opt.until] > 0;
+        if (ok && s >= 10) {
+          g.advance(0.05);
+          break;
+        }
         continue;
       }
       if (opt.kill) {

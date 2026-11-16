@@ -33,6 +33,8 @@ export const palette = {
   fire: { ghost: '#ffc46b', soul: '#9fe8ff', torch: '#ff9a3c' },
   /** 浮世繪的火（docs/30）：平塗色帶，由外而內：暗紅描邊 → 朱 → 橙 → 山吹 → 白芯 */
   flame: { outline: '#4a0d16', red: '#d8341f', orange: '#ff7f1e', yellow: '#ffc93c', core: '#fff3cf', gold: '#ffd75a' },
+  /** 浮世繪的浪（docs/30 第 ⑪ 節）：由外而內：靛藍描邊 → 白浪花 → 淺藍 → 藍 → 深藍（浪頭的邊是白的、裡面是深的，北齋的畫法）；水泡與閃光用 gold 的位置放白 */
+  wave: { outline: '#132a5c', red: '#f2f8ff', orange: '#8fd0f0', yellow: '#3f8fd0', core: '#1d5aa6', gold: '#f2fbff' },
   ui: { text: '#f5efe2', textDim: '#b9b2a4', panel: '#1a1d2ecc', accent: '#ffb35c' },
 } as const;
 

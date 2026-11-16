@@ -25,7 +25,7 @@ description: 百鬼陣做或改技法特效（火、水、大招、命中、打�
 
 - 數字放 `src/data/vfx.ts`；顏色放 `src/art/palette.ts`；著色器材質放 `src/art/`；池放 `src/render/`。
 - 一個屬性用**一個實例化網格**畫所有片（火舌、火星、煙、閃光用 `aInfo.z` 分種類），火光另一個加法混合的網格。**熱路徑不 new**；隨機用自己的小亂數產生器（不碰遊戲的 Rng）。
-- 命中與打倒的反應寫成獨立的類別（像 `src/render/fireReact.ts`），每幀有上限、落後太多跳到最新。
+- 命中與打倒的反應寫成獨立的類別（像 `src/render/fireReact.ts`、`waterReact.ts`）；引擎用共用的 `src/render/elementFx.ts`，新屬性只加一份 `ElementLook` 外觀（`src/data/vfx.ts`）與配色（`palette`），每幀有上限、落後太多跳到最新。
 - 減少特效：數量乘 `feel.pops`。
 - 著色器字串裡的註解用英文（原始碼掃描不准字串裡有中文）。
 - 平的光片會被起伏的地形切出硬邊：頂點沿視線往鏡頭拉近，**不要關深度測試**（關了會把光畫在角色身上、角色被洗白）。

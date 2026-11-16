@@ -22,9 +22,10 @@ import { ElementsView } from './elementsView';
 import { PickupsView } from './pickupsView';
 import { UltFx } from './ultFx';
 import { TechFx } from './techFx';
-import { FireFx, GLOW_HALO } from './fireFx';
+import { ElementFx, GLOW_HALO } from './elementFx';
 import { FireReact } from './fireReact';
-import { FIRE_FX, vfxStyleOf } from '../data/vfx';
+import { WaterReact } from './waterReact';
+import { FIRE_FX, WATER_FX, vfxStyleOf } from '../data/vfx';
 import { FeelFx } from './feelFx';
 import type { Renderer } from '../core/renderer';
 
@@ -78,8 +79,9 @@ export class RunView {
   private readonly ultFx: UltFx;
   private readonly techFx: TechFx;
   /** 浮世繪的火（docs/30）：只有火屬性的妖怪才有 */
-  private readonly fireFx: FireFx | null;
-  private readonly fireReact: FireReact | null;
+  private readonly fireFx: ElementFx | null;
+  private readonly fireReact: FireReact | WaterReact | null;
+  private readonly isWater: boolean;
   private lastFxT = 0;
   /** 開發用：這一幀畫了幾個火舌＋火星（特效目錄等到有東西才截圖） */
   /** 畫面上的打倒／升級效果數（手感回歸 f1）：墨點爆圈＋火的打倒效果 */
@@ -259,9 +261,12 @@ export class RunView {
     this.group.add(this.elementsView.group);
     this.pickupsView = new PickupsView(run);
     this.group.add(this.pickupsView.group);
-    this.fireFx = vfxStyleOf(run.yokai.id) === 'fire' ? new FireFx() : null;
+    // 屬性特效（docs/30）：火（提燈小僧）、水（河童）共用同一套引擎，只換外觀
+    const style = vfxStyleOf(run.yokai.id);
+    this.isWater = style === 'water';
+    this.fireFx = style === 'fire' ? new ElementFx() : style === 'water' ? new ElementFx(WATER_FX, palette.wave) : null;
     if (this.fireFx) this.group.add(...this.fireFx.objects);
-    this.fireReact = this.fireFx ? new FireReact(run, this.fireFx) : null;
+    this.fireReact = !this.fireFx ? null : style === 'water' ? new WaterReact(run, this.fireFx) : new FireReact(run, this.fireFx);
     this.ultFx = new UltFx(run, this.fireFx);
     this.group.add(this.ultFx.group);
     this.techFx = new TechFx(run, this.fireFx);
@@ -405,7 +410,13 @@ export class RunView {
       // 碎火、分裂出來的小火畫小一點（看得出是碎片）
       const sc = pr.gen[i] === 0 ? 1 : SHARD_VIEW_SCALE;
       // 河童的水盤：扁扁的圓盤；鬼火：圓球
-      if (this.fireFx) {
+      if (this.fireFx && this.isWater) {
+        // 水盤：圓盤照畫，飛的時候甩出水珠、帶一圈淡淡的水光
+        const B = WATER_FX.bullet;
+        const y = map.heightAt(pr.x[i], pr.z[i]) + 0.8;
+        this.fireFx.emitRate(pr.x[i], y, pr.z[i], B.dropRate * sc, fxDt, 0.8);
+        this.fireFx.glow(pr.x[i], y, pr.z[i], B.halo * sc, 1, GLOW_HALO);
+      } else if (this.fireFx) {
         // 浮世繪的火：鬼火就是一團飄著的火舌，尾巴掉火星
         const B = FIRE_FX.bullet;
         const y = map.heightAt(pr.x[i], pr.z[i]) + B.lift;

@@ -6,8 +6,10 @@ import { ball } from '../art/shapes';
 import type { Run } from '../game/run';
 import { FLASH_KINDS } from '../game/techniques';
 import { setHugeBounds } from './instancedLayer';
-import { FIRE_FX, vfxStyleOf } from '../data/vfx';
-import { GLOW_GROUND, GLOW_HALO, type FireFx } from './fireFx';
+import { FIRE_FX, WATER_FX, vfxStyleOf } from '../data/vfx';
+import { GLOW_GROUND, GLOW_HALO, type ElementFx } from './elementFx';
+
+const TAU = Math.PI * 2;
 
 const MAX_ORBS = 18;
 const MAX_OIL = 24;
@@ -56,13 +58,17 @@ export class TechFx {
   private flash = 0;
   private lastT = 0;
   /** 火（docs/30）：有這個就走浮世繪的火，沒有就是 D85 的水墨 */
-  private readonly fire: FireFx | null;
+  private readonly fire: ElementFx | null;
+  /** 水（docs/30 第 ⑪ 節，河童）：浪頭、水珠、漣漪、水泡 */
+  private readonly water: ElementFx | null;
   private readonly scorch = new THREE.Color(FIRE_FX.zone.scorch);
   /** 爆開的偵測：上一幀每個爆圈剩多少壽命（變多 = 新的一個） */
   private readonly prevFlash: Float32Array;
 
-  constructor(private readonly run: Run, fire: FireFx | null = null) {
-    this.fire = vfxStyleOf(run.yokai.id) === 'fire' ? fire : null;
+  constructor(private readonly run: Run, elementFx: ElementFx | null = null) {
+    const style = vfxStyleOf(run.yokai.id);
+    this.fire = style === 'fire' ? elementFx : null;
+    this.water = style === 'water' ? elementFx : null;
     const fx = fxOf(run.yokai.id);
     this.ink = new THREE.Color(fx.ink);
     this.inkLight = new THREE.Color(fx.inkLight);
@@ -166,6 +172,19 @@ export class TechFx {
       // 火的繞身是「飄著的火」（鬼火），不畫墨團球
       this.orbs.count = 0;
     }
+    const water = this.water;
+    if (water) {
+      // 水：每個繞身的水盤上一個小浪頭＋甩出水珠
+      const O = WATER_FX.orb;
+      const e = this.orbs.instanceMatrix.array as Float32Array;
+      for (let i = 0; i < k; i++) {
+        const sc = e[i * 16];
+        water.flame(e[i * 16 + 12], e[i * 16 + 13] - O.base * sc, e[i * 16 + 14], O.w * sc, O.h * sc, i * 1.37);
+        water.glow(e[i * 16 + 12], e[i * 16 + 13], e[i * 16 + 14], O.halo * sc, 1, GLOW_HALO);
+        water.emitRate(e[i * 16 + 12], e[i * 16 + 13] + 0.2, e[i * 16 + 14], O.dropRate, dt, 0.6);
+      }
+      this.orbs.count = 0;
+    }
     // 環內護身：平常很淡；這一幀有推開人類就亮一下再退
     const o = tc.act.ring?.orbit;
     const inner = o ? R - o.hitRadius : 0;
@@ -255,6 +274,13 @@ export class TechFx {
       this.zones.setMatrixAt(zc, this.m);
       this.zones.setColorAt(zc, this.inkLight);
       const f = Math.max(0, tc.wakeLife[i] / tc.wakeMax[i]);
+      if (water) {
+        // 水痕：每灘一個小浪（快乾時變小）、偶爾起一圈漣漪
+        const W = WATER_FX.wake;
+        const gy = run.map.heightAt(x, z);
+        water.flame(x, gy, z, W.w * (0.5 + 0.5 * f), W.h * (0.4 + 0.6 * f), i * 2.9, 1 - f);
+        if (water.rand() < W.rippleRate * dt) water.ripple(x, gy + 0.06, z, tc.wakeR * 1.6, WATER_FX.ripple.life, 0.8);
+      }
       this.zoneFade.setX(zc, 0.15 + 0.7 * (1 - f));
       zc++;
     }
@@ -267,6 +293,22 @@ export class TechFx {
       this.zones.setMatrixAt(zc, this.m);
       this.zones.setColorAt(zc, tc.inDomain ? this.ink : this.inkLight);
       const f = Math.max(0, tc.domLife[i] / tc.domMax[i]);
+      if (water) {
+        // 水域：邊上一圈浪頭慢慢繞、裡面不時起漣漪、地上淡淡的水光
+        const D = WATER_FX.domain;
+        const gy = run.map.heightAt(x, z);
+        const rr = tc.domR[i];
+        for (let j = 0; j < D.crests; j++) {
+          const a = (j / D.crests) * TAU + t * 0.5 + i;
+          water.flame(x + Math.cos(a) * rr, gy, z + Math.sin(a) * rr, D.w, D.h * (0.6 + 0.4 * f) * (0.85 + 0.15 * Math.sin(t * 3 + j)), i * 4.1 + j, 1 - f);
+        }
+        if (water.rand() < D.rippleRate * dt) {
+          const a = water.rand() * TAU;
+          const d = Math.sqrt(water.rand()) * rr * 0.8;
+          water.ripple(x + Math.cos(a) * d, gy + 0.06, z + Math.sin(a) * d, 1.2 + water.rand(), WATER_FX.ripple.life * 1.3, 0.8);
+        }
+        water.glow(x, gy + 0.05, z, rr * 1.2, 0.5 * f, GLOW_GROUND);
+      }
       this.zoneFade.setX(zc, 0.05 + 0.6 * (1 - f) * (1 - f));
       zc++;
     }
@@ -283,6 +325,14 @@ export class TechFx {
       const s = 1 + 0.5 * (1 - Math.min(1, tc.seedT[i])) + 0.15 * Math.sin(t * 14 + i);
       this.m.makeScale(s, s, s).setPosition(x, run.map.heightAt(x, z) + 0.25, z);
       this.seeds.setMatrixAt(sc++, this.m);
+      if (water) {
+        // 水牢：一顆會晃的水泡，等人碰
+        const B = WATER_FX.bubble;
+        const gy = run.map.heightAt(x, z);
+        const size = B.size * (tc.act.prison?.prison?.radius ?? 1) * run.stats.value.area * (1 + 0.04 * Math.sin(t * 5 + i));
+        water.bubble(x, gy + 0.05 + B.bob * Math.sin(t * 2.4 + i), z, size, i * 1.9);
+        water.glow(x, gy + 0.05, z, size * 0.8, 0.5, GLOW_GROUND);
+      }
       if (fire) {
         // 火種：一小團火，快炸時引信的火星越噴越多
         const gy = run.map.heightAt(x, z);
@@ -292,7 +342,7 @@ export class TechFx {
         fire.emitRate(x, gy + 0.5, z, FIRE_FX.seed.sparkRate * (0.3 + fuse), dt, 0.4);
       }
     }
-    this.seeds.count = fire ? 0 : sc;
+    this.seeds.count = fire || water ? 0 : sc;
     this.seeds.instanceMatrix.needsUpdate = true;
     // 燈油：燒著的人頭上一朵小火
     let oc = 0;
@@ -333,6 +383,19 @@ export class TechFx {
       this.pillars.setColorAt(pc, this.ink);
       this.pillarFade.setX(pc, 0.05 + 0.8 * (1 - f));
       pc++;
+      if (water) {
+        // 間歇泉：沖天的水柱＋兩側副水柱、大量水珠往外落、底部白沫、地上漣漪
+        const G = WATER_FX.geyser;
+        const gy = run.map.heightAt(x, z);
+        const g = 0.55 + 0.45 * f;
+        water.flame(x, gy, z, r * 1.9 * g, G.h * g, i * 5.3, (1 - f) * 0.8);
+        water.flame(x + r * 0.6, gy, z + r * 0.3, r * 1.1 * g, G.sideH * g, i * 5.3 + 1, (1 - f) * 0.8);
+        water.flame(x - r * 0.5, gy, z - r * 0.4, r * 1.0 * g, G.sideH * 0.85 * g, i * 5.3 + 2, (1 - f) * 0.8);
+        water.emitRate(x, gy + G.h * 0.7 * g, z, G.dropRate * f, dt, r * 1.4);
+        water.smokeRate(x, gy + 0.2, z, G.foamRate * f, dt, 0.5);
+        if (water.rand() < 4 * dt) water.ripple(x, gy + 0.06, z, r * 2.6, WATER_FX.ripple.life);
+        water.glow(x, gy + G.h * 0.4 * g, z, r * 2.4, 0.8 * f, GLOW_HALO);
+      }
       if (fire) {
         // 火柱：一條沖天的大火舌＋兩側較矮的副火，往上噴大量火星
         const P = FIRE_FX.pillar;
@@ -347,7 +410,7 @@ export class TechFx {
         if (f < 0.5) fire.smokeRate(x, gy + P.h * 1.05 * g, z, P.smokeRate, dt, 0.6); // 煙從火尖上方冒（放在火裡面會變成火裡的黑塊）
       }
     }
-    this.pillars.count = fire ? 0 : pc;
+    this.pillars.count = fire || water ? 0 : pc;
     this.pillars.instanceMatrix.needsUpdate = true;
     if (this.pillars.instanceColor) this.pillars.instanceColor.needsUpdate = true;
     this.pillarFade.needsUpdate = true;
@@ -390,6 +453,7 @@ export class TechFx {
         }
       }
     }
+    if (water) this.waterFlashes();
     for (let i = 0; i < tc.flashLife.length; i++) this.prevFlash[i] = tc.flashLife[i];
     // 河童的漩渦：兩圈反方向轉的筆刷圓（大的主色、小的墨黑），快消失時乾掉
     for (let i = 0; i < tc.vortX.length; i++) {
@@ -397,6 +461,20 @@ export class TechFx {
       const x = tc.vortX[i];
       const z = tc.vortZ[i];
       const f = Math.max(0, tc.vortLife[i] / tc.vortMax[i]);
+      if (water) {
+        // 渦流：幾個浪頭繞著中心轉、半徑一邊轉一邊縮（往內捲），不時一圈漣漪
+        const V = WATER_FX.vortex;
+        const gy = run.map.heightAt(x, z);
+        const R = tc.vortR[i];
+        for (let j = 0; j < V.crests; j++) {
+          const ph = (t * 0.6 + j / V.crests) % 1;
+          const a = -t * V.spin + (j / V.crests) * TAU + i;
+          const rr = R * (1 - 0.65 * ph);
+          water.flame(x + Math.cos(a) * rr, gy, z + Math.sin(a) * rr, V.w * (1 - 0.4 * ph), V.h * (0.6 + 0.4 * f), i * 3.3 + j, ph * 0.6 + (1 - f) * 0.4);
+        }
+        if (water.rand() < dt / V.rippleEvery) water.ripple(x, gy + 0.06, z, R * 1.1, WATER_FX.ripple.life, 0.9);
+        water.glow(x, gy + 0.05, z, R, 0.6 * f, GLOW_GROUND);
+      }
       for (let ring = 0; ring < 2 && fc < MAX_FLASHES; ring++) {
         const r = tc.vortR[i] * (ring === 0 ? 1.15 : 0.6);
         this.m.makeRotationY((ring === 0 ? -1 : 1.6) * t * 5 + i).scale(this.v.set(r, 1, r)).setPosition(x, run.map.heightAt(x, z) + DECAL_LIFT + 0.04 + ring * 0.01, z);
@@ -410,6 +488,46 @@ export class TechFx {
     this.flashes.instanceMatrix.needsUpdate = true;
     if (this.flashes.instanceColor) this.flashes.instanceColor.needsUpdate = true;
     this.flashFade.needsUpdate = true;
+  }
+
+  /** 水：新出現的爆圈 → 相撲是正前方一排往前倒的大浪；水泡破、間歇泉落下／落地是一圈浪＋水珠＋白沫＋漣漪 */
+  private waterFlashes(): void {
+    const water = this.water as ElementFx;
+    const run = this.run;
+    const tc = run.tech;
+    for (let i = 0; i < tc.flashLife.length; i++) {
+      if (tc.flashLife[i] <= 0 || tc.flashLife[i] <= this.prevFlash[i] + 1e-4) continue;
+      const x = tc.flashX[i];
+      const z = tc.flashZ[i];
+      const R = tc.flashR[i];
+      const gy = run.map.heightAt(x, z);
+      if (tc.flashKind[i] === FLASH_KINDS.sumo) {
+        const S = WATER_FX.sumo;
+        const dx = x - run.px;
+        const dz = z - run.pz;
+        const l = Math.hypot(dx, dz) || 1;
+        const fx = dx / l;
+        const fz = dz / l;
+        for (let j = 0; j < S.crests; j++) {
+          const o = (j / (S.crests - 1) - 0.5) * R * 1.6;
+          const px = x - fz * o;
+          const pz = z + fx * o;
+          water.part(0, px, run.map.heightAt(px, pz), pz, fx * 3, 0, fz * 3, S.w, S.h * (1 - 0.35 * Math.abs(o / R)), 0.42, 0, 3, -0.2);
+        }
+        water.emit(x, gy + 0.8, z, 14, 1, 3);
+        water.ripple(x, gy + 0.06, z, R * 1.8, WATER_FX.ripple.life * 1.2);
+        continue;
+      }
+      if (tc.flashKind[i] === FLASH_KINDS.ward) continue;
+      const B = WATER_FX.burst;
+      for (let j = 0; j < B.tongues; j++) {
+        const a = (j / B.tongues) * TAU + water.rand();
+        water.part(0, x, gy, z, Math.cos(a) * (2 + R), 0, Math.sin(a) * (2 + R), 0.45 + R * 0.12, B.h + R * 0.3, 0.4, 0, 4, -0.2);
+      }
+      water.emit(x, gy + 0.6, z, B.drops, 1, 1.5 + R);
+      water.smoke(x, gy + 0.4, z, B.foam, 0.45 + R * 0.1, R * 0.4);
+      water.ripple(x, gy + 0.06, z, R * 1.7, WATER_FX.ripple.life * 1.2);
+    }
   }
 
   dispose(): void {

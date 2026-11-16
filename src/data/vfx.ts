@@ -6,8 +6,31 @@ export type VfxStyle = 'fire' | 'water' | 'ink';
 
 export const VFX_STYLE: Record<string, VfxStyle> = {
   'chochin-kozo': 'fire',
-  kappa: 'ink',
+  kappa: 'water',
 };
+
+/**
+ * 屬性特效引擎（ElementFx）共用的外觀數字：火、水各一份（FIRE_FX、WATER_FX）。
+ * 形狀：hook = 尖端勾的強度（水的浪頭勾得更彎，北齋浪頭的爪）；drop = 粒子畫成圓水珠（否則是菱形火星）；
+ * spark.lift 負的 = 往下掉（水珠有重力、火星往上飄）。
+ */
+export interface ElementLook {
+  maxFlames: number;
+  maxParticles: number;
+  speed: number;
+  hook: number;
+  /** 上半部分叉的強度（火 1；水小：浪是一整塊） */
+  fork: number;
+  /** 邊緣雜訊的強度（火 1；水小：浪的邊比較圓順） */
+  noise: number;
+  /** 往上收尖的程度（火 0.75 尖；水 0.35 肩膀圓、頂端圓，不然像冰晶） */
+  taper: number;
+  drop: boolean;
+  glow: { max: number; transient: number; color: string; ground: number; halo: number; offAtQuality: number };
+  smoke: { dark: string; light: string; up: number; life: number; grow: number };
+  glint: { size: number; life: number };
+  spark: { size: number; up: number; spread: number; life: number; lift: number; sway: number };
+}
 export const vfxStyleOf = (yokaiId: string): VfxStyle => VFX_STYLE[yokaiId] ?? 'ink';
 
 /**
@@ -21,6 +44,11 @@ export const FIRE_FX = {
   maxFlames: 320,
   /** 火舌搖動的速度 */
   speed: 1.0,
+  hook: 1.0,
+  fork: 1.0,
+  noise: 1.0,
+  taper: 0.75,
+  drop: false,
   /** 投射物（鬼火）：寬、高（公尺）、離地；碎片縮小倍率在 runView */
   bullet: { w: 0.8, h: 1.1, lift: 0.45, sparkRate: 3, halo: 0.9 },
   /** 繞身的火球、衛星燈、開路燈：火舌疊在球上 */
@@ -84,3 +112,68 @@ export const FIRE_FX = {
     shield: { tongues: 14, r: 1.7, w: 0.7, h: 1.5, sparkRate: 10 },
   },
 } as const;
+
+/**
+ * 水（docs/30 第 ⑪ 節，河童）：浪頭＝和火舌同一個造型、勾得更彎、色帶反過來（邊白、裡深）；
+ * 水珠會往下掉（重力）；煙改成浪花的白沫；地上的光改成漣漪（擴散的圈）；水牢是水泡。
+ */
+export const WATER_FX = {
+  maxFlames: 320,
+  maxParticles: 420,
+  speed: 1.15,
+  hook: 1.8,
+  fork: 0.15,
+  noise: 0.45,
+  taper: 0.35,
+  drop: true,
+  glow: { max: 96, transient: 64, color: '#5cc8ff', ground: 0.24, halo: 0.16, offAtQuality: 4 },
+  /** 浪花白沫（浮世繪的捲雲畫法，白與淺藍） */
+  smoke: { dark: '#a9d3ec', light: '#f2f9ff', up: 0.7, life: 0.75, grow: 1.1 },
+  glint: { size: 0.36, life: 0.35 },
+  /** 水珠：往上噴、受重力往下掉 */
+  spark: { size: 0.13, up: 3.4, spread: 2.0, life: 0.85, lift: -11, sway: 0 },
+  /** 漣漪：地上擴散的圈（半徑、壽命） */
+  ripple: { r: 1.3, life: 0.55 },
+  /** 水盤：飛的時候甩出的水珠、光暈 */
+  bullet: { dropRate: 7, halo: 0.75 },
+  /** 打中：一圈往外濺的小浪（王冠）、水珠、漣漪；暴擊更大＋閃光 */
+  hit: {
+    perFrame: 12, y: 0.85,
+    crown: { tongues: 4, w: 0.5, h: 0.42, life: 0.3, speed: 2.4 }, drops: 4, dropSpeed: 2.6,
+    crit: { mult: 1.5, drops: 10, glints: 2 },
+  },
+  /** 打倒：沖起的水柱、四散的水珠、白沫、漣漪；精英、頭目加閃光與一圈往外倒的浪 */
+  kill: {
+    perFrame: 10,
+    normal: { col: 1.3, drops: 10, foam: 1, glints: 0, ring: 0, ripple: 1.8 },
+    elite: { col: 1.9, drops: 18, foam: 3, glints: 3, ring: 8, ripple: 2.8 },
+    boss: { col: 2.8, drops: 36, foam: 6, glints: 7, ring: 14, ripple: 5 },
+    colLife: 0.5,
+    /** 水柱的寬、高（相對 col）；一圈往外倒的浪的寬、高 */
+    colW: 1.0, colH: 1.25, ringW: 0.85, ringH: 0.75,
+  },
+  /** 渦盤（繞身）：每個水盤上一個小浪頭＋甩水珠 */
+  orb: { w: 0.7, h: 0.85, base: 0.45, halo: 0.9, dropRate: 2 },
+  /** 渦流：幾個浪頭繞著中心轉、往內捲；每隔一段時間一圈漣漪 */
+  vortex: { crests: 6, w: 0.55, h: 0.75, spin: 3.2, rippleEvery: 0.35 },
+  /** 滑水的水痕：每灘一個小浪＋偶爾一圈漣漪 */
+  wake: { w: 0.4, h: 0.45, rippleRate: 1.5 },
+  /** 水域：邊上一圈浪頭、裡面不時起漣漪 */
+  domain: { crests: 10, w: 0.55, h: 0.6, rippleRate: 3 },
+  /** 水牢的水泡（直徑相對判定半徑） */
+  bubble: { size: 0.9, bob: 0.12 },
+  /** 間歇泉：主水柱＋兩側副水柱、大量水珠、底部白沫 */
+  geyser: { h: 5.5, sideH: 3.0, dropRate: 30, foamRate: 4 },
+  /** 相撲：正前方一排往前倒的大浪 */
+  sumo: { crests: 7, w: 0.95, h: 1.6 },
+  /** 爆開（水泡破、間歇泉落地）：一圈浪、水珠、白沫、漣漪 */
+  burst: { tongues: 6, h: 0.7, drops: 12, foam: 1 },
+  /** 大招：大海嘯（nova，一圈大浪往外推）、雨乞（bulwark：一圈水牆＋身邊下雨） */
+  ult: {
+    nova: { life: 1.0, tongues: 30, h: 3.4, w: 1.4, drops: 60, foam: 12, glints: 8, column: 5.0 },
+    shield: { tongues: 14, r: 1.7, w: 0.75, h: 1.5, rain: 40, rainR: 4.5, rainFrom: 6 },
+  },
+} as const;
+
+/** 兩份外觀都要符合 ElementLook（型別檢查用） */
+export const ELEMENT_LOOKS: Record<'fire' | 'water', ElementLook> = { fire: FIRE_FX, water: WATER_FX };

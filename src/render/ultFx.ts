@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { fxOf } from '../art/palette';
 import { ultById } from '../data/ultimates';
 import type { Run } from '../game/run';
-import { FIRE_FX } from '../data/vfx';
-import { GLOW_GROUND, GLOW_HALO, type FireFx } from './fireFx';
+import { FIRE_FX, WATER_FX, vfxStyleOf } from '../data/vfx';
+import { GLOW_GROUND, GLOW_HALO, type ElementFx } from './elementFx';
 
 const LIFE = 0.7;
 type FxType = 'nova' | 'frenzy' | 'bulwark' | 'beam';
@@ -39,7 +39,11 @@ export class UltFx {
   private readonly nBig = new Uint8Array(4);
   private nNext = 0;
 
-  constructor(private readonly run: Run, private readonly fire: FireFx | null = null) {
+  /** 水（河童）：同一套大火圈／護罩的畫法換成浪（數字在 WATER_FX.ult） */
+  private readonly water: boolean;
+
+  constructor(private readonly run: Run, private readonly fire: ElementFx | null = null) {
+    this.water = vfxStyleOf(run.yokai.id) === 'water';
     const c = fxOf(run.yokai.id);
     this.colors = { nova: c.main, frenzy: c.mid, bulwark: c.accent, beam: '#c08cff' };
     const ring = new THREE.RingGeometry(0.88, 1, 56).rotateX(-Math.PI / 2);
@@ -80,26 +84,33 @@ export class UltFx {
 
   /** 火的大火圈：發動那一下竄起一根火柱、往外噴火星與煙，接著一圈火舌往外擴散到 r */
   private fireNova(x: number, z: number, r: number, big: boolean): void {
-    const fire = this.fire as FireFx;
+    const fire = this.fire as ElementFx;
     const k = this.nNext++ % 4;
     this.nAt[k] = this.run.clock;
     this.nX[k] = x;
     this.nZ[k] = z;
     this.nR[k] = r;
     this.nBig[k] = big ? 1 : 0;
-    const N = FIRE_FX.ult.nova;
+    const N = this.water ? WATER_FX.ult.nova : FIRE_FX.ult.nova;
     const gy = this.run.map.heightAt(x, z);
     const m = big ? 1 : 0.6;
+    const sparks = 'drops' in N ? N.drops : N.sparks;
+    const smoke = 'foam' in N ? N.foam : N.smoke;
+    if (this.water) {
+      // 浪：地上一圈一圈的漣漪往外推
+      fire.ripple(x, gy + 0.06, z, r * 1.1, N.life * 1.2, 1.4);
+      fire.ripple(x, gy + 0.06, z, r * 0.6, N.life, 1.2);
+    }
     // 大火圈：中央竄起一根火柱；護罩只有往外推的火圈（中央不蓋住角色）
     if (big) {
       fire.flare(x, gy, z, 2.2, N.column, 0.7, 0.2);
       fire.flash(x, gy + 1.5, z, 3.5, 1.1, 0.4, GLOW_HALO);
     }
-    fire.emit(x, gy + 1, z, N.sparks * m, 1.5, 7 * m);
+    fire.emit(x, gy + 1, z, sparks * m, 1.5, 7 * m);
     fire.glints(x, gy + 1, z, N.glints * m, 2.5);
     fire.flash(x, gy + 0.06, z, r * 1.2, 1.6 * m, 0.8, GLOW_GROUND);
     // 煙往外推成一圈（護罩的少一點）
-    const ns = Math.floor(N.smoke * m * m);
+    const ns = Math.floor(smoke * m * m);
     for (let j = 0; j < ns; j++) {
       const a = (j / ns) * Math.PI * 2 + fire.rand();
       fire.part(3, x + Math.cos(a), gy + 0.6, z + Math.sin(a), Math.cos(a) * r * 1.4, 1.2, Math.sin(a) * r * 1.4, 0.7, 0.7, 0.9, 0, 1.6, 1.3);
@@ -158,8 +169,8 @@ export class UltFx {
   /** 火的大招每幀：擴散中的大火圈、狐火之舞（身邊繞著飛的火）、護罩（一圈火牆） */
   private updateFire(dt: number): void {
     const run = this.run;
-    const fire = this.fire as FireFx;
-    const N = FIRE_FX.ult.nova;
+    const fire = this.fire as ElementFx;
+    const N = this.water ? WATER_FX.ult.nova : FIRE_FX.ult.nova;
     for (let k = 0; k < 4; k++) {
       const age = run.clock - this.nAt[k];
       if (age < 0 || age > N.life) continue;
@@ -197,14 +208,29 @@ export class UltFx {
     }
     // 護罩：一圈火牆繞著轉
     if (run.clock < run.shieldUntil) {
-      const S = FIRE_FX.ult.shield;
+      const S = this.water ? WATER_FX.ult.shield : FIRE_FX.ult.shield;
       const gy = run.map.heightAt(run.px, run.pz);
+      if (this.water) {
+        // 雨乞：身邊下雨（水珠從天上直直落下）、地上不時起漣漪
+        const W = WATER_FX.ult.shield;
+        const n = Math.floor(W.rain * dt + fire.rand());
+        for (let j = 0; j < n; j++) {
+          const a = fire.rand() * Math.PI * 2;
+          const d = Math.sqrt(fire.rand()) * W.rainR;
+          fire.part(1, run.px + Math.cos(a) * d, gy + W.rainFrom, run.pz + Math.sin(a) * d, 0, -14, 0, 0.09, 0.3, 0.45, 0, 0, 0);
+        }
+        if (fire.rand() < 6 * dt) {
+          const a = fire.rand() * Math.PI * 2;
+          const d = Math.sqrt(fire.rand()) * W.rainR;
+          fire.ripple(run.px + Math.cos(a) * d, gy + 0.06, run.pz + Math.sin(a) * d, 0.9, 0.5, 0.8);
+        }
+      }
       for (let j = 0; j < S.tongues; j++) {
         const a = (j / S.tongues) * Math.PI * 2 - run.clock * 1.4;
         const v = 0.85 + 0.15 * Math.sin(run.clock * 5 + j * 1.9);
         fire.flame(run.px + Math.cos(a) * S.r, gy, run.pz + Math.sin(a) * S.r, S.w, S.h * v, j * 1.3);
       }
-      fire.emitRate(run.px, gy + 1, run.pz, S.sparkRate, dt, S.r);
+      if ('sparkRate' in S) fire.emitRate(run.px, gy + 1, run.pz, S.sparkRate, dt, S.r);
       fire.glow(run.px, gy + 0.05, run.pz, S.r * 1.7, 1, GLOW_GROUND);
     }
   }

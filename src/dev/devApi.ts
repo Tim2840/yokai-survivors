@@ -202,6 +202,15 @@ export function installDevApi(ctx: DevContext): void {
     /** 特效目錄用：這一幀畫了幾個特效實例（火舌＋火星） */
     /** 開關火的網格（量 draw call） */
     fxVisible: (flames: boolean, glow: boolean) => (ctx.game.view as unknown as { fxVisible?: (a: boolean, b: boolean) => void } | null)?.fxVisible?.(flames, glow),
+    /** 技法場上狀態（特效目錄等「那一招真的出手」再截圖）：爆圈種類、火柱／間歇泉、火種／水泡、水痕、漩渦、水域各幾個 */
+    techState: () => {
+      const t = run()?.tech;
+      if (!t) return null;
+      const n = (a: ArrayLike<number>) => { let k = 0; for (let i = 0; i < a.length; i++) if (a[i] > 0) k++; return k; };
+      const flashes: number[] = [];
+      for (let i = 0; i < t.flashLife.length; i++) if (t.flashLife[i] > 0) flashes.push(t.flashKind[i]);
+      return { flashes, pillars: n(t.pillarLife), seeds: n(t.seedT), wakes: n(t.wakeLife), vortex: n(t.vortLife), domains: n(t.domLife) };
+    },
     /** 火特效分項：每幀的火舌、粒子、光（沒有火的妖怪是 null） */
     get fxStats() {
       return (ctx.game.view as unknown as { fxStats?: unknown } | null)?.fxStats ?? null;

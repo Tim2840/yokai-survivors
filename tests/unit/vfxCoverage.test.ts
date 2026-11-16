@@ -14,7 +14,8 @@ describe('特效目錄涵蓋所有事件', () => {
   for (const [yokai, style] of Object.entries(VFX_STYLE)) {
     if (style === 'ink') continue;
     it(`${yokai}（${style}）`, () => {
-      const start = src.indexOf(`'${yokai}': [`);
+      const m = new RegExp(`\\n\\s*'?${yokai}'?: \\[`).exec(src);
+      const start = m ? m.index : -1;
       expect(start, `目錄沒有 ${yokai} 的格子`).toBeGreaterThanOrEqual(0);
       const block = src.slice(start, src.indexOf('\n  ],', start));
       expect(block).toMatch(/kill: true \}/);

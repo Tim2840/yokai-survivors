@@ -2,7 +2,7 @@ import { FIRE_FX } from '../data/vfx';
 import { FEEL } from '../data/feel';
 import { feel } from '../core/feel';
 import type { Run } from '../game/run';
-import { GLOW_GROUND, GLOW_HALO, type FireFx } from './fireFx';
+import { GLOW_GROUND, GLOW_HALO, type ElementFx } from './elementFx';
 
 /**
  * 火打到人類、燒倒人類的樣子（D91，docs/30）：讀 Run.feed（命中）與 Run.deathLog（打倒），每幀最多處理幾筆，
@@ -19,7 +19,7 @@ export class FireReact {
   private readonly killAt = new Float32Array(16).fill(-99);
   private killNext = 0;
 
-  constructor(private readonly run: Run, private readonly fire: FireFx) {
+  constructor(private readonly run: Run, private readonly fire: ElementFx) {
     this.seenHit = run.feed.head;
     this.seenDeath = run.deathHead;
   }

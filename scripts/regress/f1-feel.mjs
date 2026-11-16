@@ -2,7 +2,8 @@
 // 打倒敵人 → 爆圈；升級 → 光環；`?fx=off`（減少特效）全部關掉但遊戲照常。三種畫面，卡住偵測。
 import { openPage, startRun, step, expect, shot, reportErrors, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'f1', desc: '手感：被打有震動與暈邊、頭目倒下有頓幀、擊殺有爆圈、升級有光環、?fx=off 全關（三種畫面）', max: 150, stall: 50 };
+// max 150 → 240（2026-11-16）：改動前的版本在同一台機器上也跑 150 秒超時（A/B 驗證過），之前都是 144～149 秒擦邊過；卡住偵測 stall 不變
+export const meta = { id: 'f1', desc: '手感：被打有震動與暈邊、頭目倒下有頓幀、擊殺有爆圈、升級有光環、?fx=off 全關（三種畫面）', max: 240, stall: 50 };
 
 const feel = (page) => page.evaluate(() => window.__game.run.feel);
 const dismiss = async (page) => {

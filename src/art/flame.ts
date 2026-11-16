@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { palette } from './palette';
-import { FIRE_FX } from '../data/vfx';
+import type { ElementLook } from '../data/vfx';
 
 /**
  * 浮世繪風的火（docs/30）：一個材質同時畫「火舌」與「火星」（每個實例的 aInfo.z 選種類），一次繪製。
@@ -10,8 +10,10 @@ import { FIRE_FX } from '../data/vfx';
  * - 剪影式透明（discard）：不需要排序、可以寫深度；邊緣靠多重取樣抗鋸齒。
  * 全部程式產生，不用貼圖檔。顏色在 palette.flame。著色器字串裡的註解用英文（原始碼掃描不准字串裡有中文）。
  */
-export function flameMaterial(time: { value: number }): THREE.ShaderMaterial {
-  const C = palette.flame;
+/** 色帶（由外而內 5 階）＋閃光色：palette.flame（火）或 palette.wave（水） */
+export type BandColors = { outline: string; red: string; orange: string; yellow: string; core: string; gold: string };
+
+export function flameMaterial(time: { value: number }, look: ElementLook, C: BandColors = palette.flame): THREE.ShaderMaterial {
   const col = (h: string) => new THREE.Color(h);
   const m = new THREE.ShaderMaterial({
     uniforms: THREE.UniformsUtils.merge([
@@ -23,15 +25,20 @@ export function flameMaterial(time: { value: number }): THREE.ShaderMaterial {
         cOrange: { value: col(C.orange) },
         cYellow: { value: col(C.yellow) },
         cCore: { value: col(C.core) },
-        cSmokeDark: { value: col(FIRE_FX.smoke.dark) },
-        cSmokeLight: { value: col(FIRE_FX.smoke.light) },
-        cGold: { value: col(palette.flame.gold) },
+        cSmokeDark: { value: col(look.smoke.dark) },
+        cSmokeLight: { value: col(look.smoke.light) },
+        cGold: { value: col(C.gold) },
+        uHook: { value: look.hook },
+        uFork: { value: look.fork },
+        uTaper: { value: look.taper },
+        uNoise: { value: look.noise },
+        uDrop: { value: look.drop ? 1 : 0 },
       },
     ]),
     vertexShader: /* glsl */ `
       #include <common>
       #include <fog_pars_vertex>
-      attribute vec3 aInfo; // x = seed, y = fade(0..1), z = kind (0 flame tongue, 1 spark, 2 gold glint, 3 smoke puff)
+      attribute vec3 aInfo; // x = seed, y = fade(0..1), z = kind (0 tongue, 1 spark/drop, 2 glint, 3 smoke/foam, 4 bubble)
       varying vec2 vUv;
       varying vec3 vInfo;
       void main() {
@@ -55,6 +62,7 @@ export function flameMaterial(time: { value: number }): THREE.ShaderMaterial {
       #include <fog_pars_fragment>
       uniform float uTime;
       uniform vec3 cOutline, cRed, cOrange, cYellow, cCore, cSmokeDark, cSmokeLight, cGold;
+      uniform float uHook, uDrop, uFork, uNoise, uTaper;
       varying vec2 vUv;
       varying vec3 vInfo;
       float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -79,7 +87,20 @@ export function flameMaterial(time: { value: number }): THREE.ShaderMaterial {
         float seed = vInfo.x;
         float fade = vInfo.y;
         vec3 c;
-        if (vInfo.z > 2.5) {
+        if (vInfo.z > 3.5) {
+          // bubble: a hollow ring with a bright highlight arc, wobbling slightly
+          vec2 q = vUv * 2.0 - 1.0;
+          float ang = atan(q.y, q.x);
+          float r = length(q) * (1.0 + 0.04 * sin(ang * 3.0 + uTime * 4.0 + seed));
+          if (r > 0.95 || r < 0.72 - fade * 0.2) {
+            // highlight inside the bubble (upper-left)
+            float hl = length(q - vec2(-0.32, 0.36));
+            if (r > 0.95 || hl > 0.16) discard;
+            c = cGold;
+          } else {
+            c = mix(cOrange, cOutline, smoothstep(0.86, 0.93, r));
+          }
+        } else if (vInfo.z > 2.5) {
           // smoke: a scalloped cloud (ukiyo-e cloud pattern), flat dark violet with a lighter inner lobe; shrinks as it fades
           vec2 q = vUv * 2.0 - 1.0;
           float ang = atan(q.y, q.x);
@@ -100,11 +121,20 @@ export function flameMaterial(time: { value: number }): THREE.ShaderMaterial {
           if (star > s || max(q.x, q.y) > s) discard;
           c = mix(cCore * 1.2, cGold, smoothstep(0.15, 0.6, star / s));
         } else if (vInfo.z > 0.5) {
-          // spark: small diamond, darker and redder as it ages
           vec2 q = abs(vUv * 2.0 - 1.0);
-          if (q.x + q.y > 1.0 - fade * 0.3) discard;
-          c = mix(cCore, cRed, fade);
-          c = mix(c, cOutline, step(0.72 - fade * 0.3, q.x + q.y));
+          if (uDrop > 0.5) {
+            // water drop: round, outlined, light blue with a white glint
+            vec2 p = vUv * 2.0 - 1.0;
+            float r = length(p);
+            if (r > 1.0 - fade * 0.3) discard;
+            c = mix(cRed, cOrange, smoothstep(0.1, 0.5, length(p - vec2(-0.3, 0.3))));
+            c = mix(c, cOutline, step(0.7 - fade * 0.3, r));
+          } else {
+            // spark: small diamond, darker and redder as it ages
+            if (q.x + q.y > 1.0 - fade * 0.3) discard;
+            c = mix(cCore, cRed, fade);
+            c = mix(c, cOutline, step(0.72 - fade * 0.3, q.x + q.y));
+          }
         } else {
           float t = uTime + seed * 17.0;
           float u = vUv.x * 2.0 - 1.0;
@@ -113,19 +143,19 @@ export function flameMaterial(time: { value: number }): THREE.ShaderMaterial {
           float v = vUv.y / breathe;
           // sway; the tip hooks to one side (ukiyo-e flame pattern)
           float sway = sin(t * 1.9 + seed * 6.0);
-          float hook = sign(sway + 0.001) * (0.6 + 0.4 * sin(t * 2.7 + seed));
+          float hook = sign(sway + 0.001) * (0.6 + 0.4 * sin(t * 2.7 + seed)) * uHook;
           u += v * v * 0.38 * sway + v * 0.1 * sin(t * 4.3 + seed * 3.0);
           u += v * v * v * 0.55 * hook;
           // noise scrolling upward: tongues rise
           float nz = fbm(vec2(u * 2.0 + seed * 9.0, v * 2.2 - t * 2.1));
           float nz2 = vn(vec2(u * 4.5 - seed * 4.0, v * 3.6 - t * 3.3));
           // body: round base, widest low, tapering to the top
-          float w = 0.8 * pow(max(1.0 - v, 0.0), 0.75) * smoothstep(-0.04, 0.22, v);
+          float w = 0.8 * pow(max(1.0 - v, 0.0), uTaper) * smoothstep(-0.04, 0.22, v);
           float shape = w - abs(u);
           // forks: a horizontal wave (pushed by noise) splits the upper half into 2-3 tongues
           float tg = 0.5 + 0.5 * cos((u + (nz - 0.5) * 0.7) * 8.5 + seed * 2.0);
-          float f = shape * 2.0 + (nz - 0.5) * (0.3 + 0.7 * v) + (nz2 - 0.5) * 0.16 * v
-                  - v * v * 0.75 * tg - fade * 0.55;
+          float f = shape * 2.0 + ((nz - 0.5) * (0.3 + 0.7 * v) + (nz2 - 0.5) * 0.16 * v) * uNoise
+                  - v * v * 0.75 * tg * uFork - fade * 0.55;
           // a blob of flame that pinches off the tip and rises away (licks leaving the fire)
           float ph = fract(t * 0.9 + seed * 0.37);
           vec2 bc = vec2(0.28 * hook * ph - 0.1 * sway, 0.6 + 0.38 * ph);
@@ -167,15 +197,17 @@ export function glowMaterial(color: string): THREE.ShaderMaterial {
       attribute vec2 aGlow;
       varying vec2 vUv;
       varying float vI;
+      varying float vK;
       void main() {
         vUv = uv;
         vI = aGlow.x;
+        vK = aGlow.y;
         vec3 center = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         float r = length(instanceMatrix[0].xyz);
         vec3 p = position * r;
         vec4 mv;
         float pull;
-        if (aGlow.y > 0.5) {
+        if (aGlow.y > 0.5 && aGlow.y < 1.5) {
           mv = viewMatrix * vec4(center, 1.0);
           mv.xy += p.xy;
           pull = 0.3;
@@ -194,10 +226,12 @@ export function glowMaterial(color: string): THREE.ShaderMaterial {
       uniform vec3 cGlow;
       varying vec2 vUv;
       varying float vI;
+      varying float vK;
       void main() {
         float d = length(vUv * 2.0 - 1.0);
         if (d > 1.0) discard;
-        float a = (1.0 - d) * (1.0 - d);
+        // kind 2 = ripple: a thin ring near the edge (flat on the ground); others = soft disc
+        float a = vK > 1.5 ? smoothstep(0.78, 0.9, d) * (1.0 - smoothstep(0.92, 1.0, d)) * 2.5 : (1.0 - d) * (1.0 - d);
         gl_FragColor = vec4(cGlow * a * vI, 1.0);
         #include <colorspace_fragment>
       }
