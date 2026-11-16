@@ -169,6 +169,11 @@ export class Projectiles {
         onHit(e, i);
         this.lastHit[i] = e;
         if (this.pierceLeft[i] <= 0) {
+          // 歸巢（去程）：穿透用完不消失，下一步折返（平衡第一輪：以前只有「飛到盡頭還沒打完」才折返，鬼火打中第一隻就消失，這招幾乎不會觸發）
+          if (this.homing[i] === 1) {
+            this.life[i] = 0;
+            break;
+          }
           this.kill(i);
           break;
         }

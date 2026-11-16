@@ -118,7 +118,7 @@ export const TECHS: readonly TechDef[] = [
     kind: 'onHit',
     likes: ['volley', 'power', 'atkSpeed'],
     excludes: ['ring'],
-    bounce: { range: 6, jumps: 2, damage: 0.7 },
+    bounce: { range: 6, jumps: 3, damage: 0.8 }, // 平衡第一輪（2026-11-16）：跳 2→3、傷害 0.7→0.8
   },
   {
     id: 'homing',
@@ -221,7 +221,7 @@ export const TECHS: readonly TechDef[] = [
     kind: 'onHit',
     likes: ['area', 'power', 'atkSpeed'],
     excludes: [],
-    vortex: { radius: 3.2, seconds: 2.2, tick: 0.4, pull: 5, damage: 0.3, max: 3 },
+    vortex: { radius: 3.2, seconds: 2.2, tick: 0.4, pull: 2.5, damage: 0.45, max: 3 }, // 平衡第一輪：拉力 5→2.5（以前把人拉到河童身邊，後段很痛）、傷害 0.3→0.45
   },
   {
     id: 'whirl',
@@ -280,7 +280,7 @@ export const TECHS: readonly TechDef[] = [
     likes: ['power', 'area', 'atkSpeed'],
     excludes: [],
     // 河童的間歇泉把人沖上天：定身 1 秒，落地再受一次傷害（傷害本身調低一點，總量和原本相近）
-    pillar: { interval: 4, range: 10, radius: 1.8, damage: 1.8, life: 0.5, max: 4, launchSeconds: 1, launchDamage: 0.45 },
+    pillar: { interval: 3, range: 10, radius: 1.8, damage: 2.2, life: 0.5, max: 4, launchSeconds: 1, launchDamage: 0.45 }, // 平衡第一輪：間隔 4→3、傷害 1.8→2.2
   },
 ];
 
@@ -433,7 +433,7 @@ export const EVOS: readonly EvoDef[] = [
   {
     id: 'evoVortex',
     from: ['waterdisc', 'vortex'],
-    set: { vortex: { vortex: { radius: 4.2, seconds: 3, pull: 7, damage: 0.45, max: 4 } } },
+    set: { vortex: { vortex: { radius: 4.2, seconds: 3, pull: 3.5, damage: 0.6, max: 4 } } }, // 平衡第一輪：拉力 7→3.5、傷害 0.45→0.6（基礎值改了，進化要比基礎強）
     weapon: { damage: 0.15, pierce: 0, volley: 0 },
   },
   {
