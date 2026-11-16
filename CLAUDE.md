@@ -34,7 +34,18 @@
 | 美術：日系 RPG 像素風（D72，**D89 起已被乾淨卡通取代**，歷史紀錄）、場景氣氛、角色 Q 版造型、地圖精緻化排程 | `docs/23-art-pass.md` |
 | **新增任何「所有角色共用」或「新角色」的內容前** | `docs/19-generalization.md`（舉一反三檢查表：已發生的錯、可預見的場景、5 個自問） |
 
-## 架構鐵則（細節見 docs/06）
+## 專案 skill（`.claude/skills/`，2026-11-16；評估與理由在 `docs/31-skills.md`）
+
+| 什麼時候 | skill |
+|---|---|
+| 一批改動做完：選回歸、更新紀錄、提交、回報格式 | `ship-batch` |
+| 打包測試頁、不准 fetch 環境下檢查、發佈（主網址只在使用者說「發佈」） | `publish-test-page`（`scripts/packed/prepare.sh`、`check.mjs`） |
+| 改任何 `src/data` 數字、使用者說太難太簡單 | `balance-tuning`（sim 對照、四時段指標、docs/02 紀錄） |
+| 拍畫面、寫一次性驗收或除錯腳本 | `game-screenshots`（`scripts/shots/helpers.mjs`：已處理記憶體爆掉、敵人不生成、短效果拍不到） |
+| 做或改特效 | `vfx-acceptance`（事件盤點、特效目錄逐格看、p1） |
+| 使用者提新想法、要做設計決定 | `design-review-card` |
+
+
 
 - **嚴格狀態機**：`BOOT → MENU → RUN_SETUP → COMBAT → INTERMISSION → (COMBAT …) → RUN_END → META_SHOP → MENU`（D22 之後 INTERMISSION 是「過關畫面」：關與關之間的短畫面，不是波與波之間的整備）。**戰鬥中（COMBAT）允許的打斷只有「升級選卡」與「要素結果卡」**：升級當下模擬暫停、跳出三選一，選完繼續（吸血鬼倖存者式，D15）；要素集滿／收下後暫停顯示拿到了什麼，按繼續才回到戰鬥（D36，共用選卡面板的樣式）；其他任何彈窗都不准。地圖要素的選擇走要素自己的「站進去／按住」流程（賽錢箱的三選一沿用升級選卡的同一個面板）。
 - **資料驅動**：所有妖怪、人類、卡片、地圖要素、地形、地圖、局外升級的數字都放 `src/data/`，程式碼裡不准出現平衡用的數字（魔術數字）。
