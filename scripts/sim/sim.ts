@@ -11,7 +11,7 @@ import { writeFileSync } from 'node:fs';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { resetTuning, tuning } from '../../src/data/tuning';
-import { TECHS, TECH_OFFER } from '../../src/data/techniques';
+import { TECHS, TECH_OFFER, TECH_SWAP_PREFIX, techsFor } from '../../src/data/techniques';
 import { PROGRESSION } from '../../src/data/progression';
 import { WAVES } from '../../src/data/waves';
 import { STAGE } from '../../src/data/stage';
@@ -124,6 +124,8 @@ function choose(run: Run, strategy: string, rnd: () => number): number {
   const pref = TECH_PREF ? TECH_PREF.split(',') : (YOKAI_ID === 'kappa' ? KAPPA_TECHS : TECH_BY_STRATEGY)[strategy] ?? [];
   offer.forEach((o, i) => {
     let v = (sc[o.cardId === run.weaponItemId ? 'ghostfire' : o.cardId] ?? 1) * RARITY_SCORE[o.rarity];
+    // 指定了技法（--give／--giveSets）就不接受「換掉一招」：不然單帶一招的局會混進化身限定的招（2026-11-16 修）
+    if ((GIVE || GIVE_SETS > 0) && o.cardId.startsWith(TECH_SWAP_PREFIX)) v = -1;
     // 技法卡（D49：機率混在升級卡裡）：會玩的人看到想要的技法幾乎都會拿；已有的下一級也很有價值
     if (o.cardId.startsWith('tech:')) {
       const id = o.cardId.slice(5);
@@ -189,7 +191,8 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   if (GIVE) run.devAddTech(...GIVE.split(','));
   if (GIVE_SETS > 0) {
     // 這一局的技法：用種子隨機排列，依序加進去（跳過互斥的）
-    const order = TECHS.map((x) => x.id);
+    // 只用這隻妖怪自己的技法（以前從全部技法抽：提燈小僧的組合裡混進了河童的招，2026-11-16 修）
+    const order = techsFor(run.weaponItemId).map((x) => x.id);
     const r2 = lcg(seed * 104729);
     for (let i = order.length - 1; i > 0; i--) {
       const j = Math.floor(r2() * (i + 1));
