@@ -10,10 +10,15 @@ import { kindIndex } from '../../src/systems/enemies';
 import { EnemyShots, ENEMY_SHOT_CAPACITY } from '../../src/systems/enemyShots';
 import { COMBAT } from '../../src/data/combat';
 import { defaultSave, merge } from '../../src/core/save';
+import { YOKAI } from '../../src/data/yokai';
 
 /** 人類的行為框架（E-1，docs/22）：資料完整、盾、遠程與箭、出場配方、首次出場 */
 const DT = 1 / 60;
-afterEach(() => resetTuning());
+afterEach(() => {
+  resetTuning();
+  YOKAI['chochin-kozo'].weapon.pierce = PIERCE0;
+});
+const PIERCE0 = YOKAI['chochin-kozo'].weapon.pierce;
 function make(seed = 3): Run {
   tuning.stageSeconds = 600;
   const run = new Run({ seed, bus: new EventBus(), yokaiId: 'chochin-kozo' });
@@ -177,6 +182,8 @@ describe('弓手與箭', () => {
   it('離玩家比 keep 近就退、比 keep 遠就靠近、在 keep 附近停下', () => {
     const run = make();
     const en = run.enemies;
+    // 只量走位：鬼火穿透（平衡第一輪 0→1）會穿過近的打到遠的、一直把它擊退
+    YOKAI['chochin-kozo'].weapon.pierce = 0;
     const keep = ENEMIES.yumi.ranged!.keep;
     const near = en.spawn(kindIndex('yumi'), run.px + 3, run.pz, 1, 0, 0);
     // 遠處找一個走得到、沒被擋住的位置

@@ -7,10 +7,19 @@ import { BASE_TECH_ID, EVO, EVOS, TECHS, TECH_FAMILIES, TECH_LEVELS, TECH_OFFER,
 import { ITEM_POOL } from '../../src/data/items';
 import { kindIndex } from '../../src/systems/enemies';
 import { Rng } from '../../src/lib/random';
+import { YOKAI } from '../../src/data/yokai';
 import { zhTW } from '../../src/i18n/zh-TW';
 
 const DT = 1 / 60;
-afterEach(() => resetTuning());
+afterEach(() => {
+  resetTuning();
+  YOKAI['chochin-kozo'].weapon.pierce = PIERCE0;
+});
+const PIERCE0 = YOKAI['chochin-kozo'].weapon.pierce;
+/** 只量技法效果的對照組測試：把鬼火本身的穿透拿掉（afterEach 還原） */
+function noPierce(): void {
+  YOKAI['chochin-kozo'].weapon.pierce = 0;
+}
 
 function make(seed = 3, mapNumber?: number) {
   tuning.stageSeconds = 600;
@@ -225,6 +234,7 @@ describe('技法怎麼拿（D49：機率出現在升級卡裡、8 級、分稀�
 describe('出手方式與命中效果', () => {
   it('狐火分裂：命中後分裂出小火打到旁邊的敵人（對照組不會）', () => {
     tuning.volley = 1; // 一次只射 1 顆（鬼火 +N 會各打不同的敵人，會把對照組搞亂）
+    noPierce(); // 鬼火本身會穿透（平衡第一輪 0→1），對照組會被穿過去打到旁邊；這裡只量分裂
     const run = make(7);
     run.devAddTech('kitsunebi');
     const a = placeEnemy(run, 4, 0);

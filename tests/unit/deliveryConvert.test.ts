@@ -49,11 +49,18 @@ describe('取代發射的技法：穿透、濺射、碎裂自動轉換', () => {
         run.enemies.hp[i] = run.enemies.maxHp[i] = 1e6;
         run.enemies.speed[i] = 0;
       }
+      // 數「飛出的碎片」本身：碎片會穿透，可能在生成的同一步就打完消失，數「每步結束還活著的」會漏（平衡第一輪鬼火穿透 0→1 時踩到）
       let made = 0;
+      const P = run.projectiles;
+      const spawn = P.spawn.bind(P);
+      P.spawn = (...a: Parameters<typeof P.spawn>) => {
+        const i = spawn(...a);
+        if (i >= 0 && a[9] === 1) made++;
+        return i;
+      };
       for (let k = 0; k < 120; k++) {
         if (run.awaitingPick) run.chooseCard(0);
         run.step(DT);
-        for (let p = 0; p < run.projectiles.capacity; p++) if (run.projectiles.alive[p] && run.projectiles.gen[p] === 1) made++;
       }
       return made;
     };

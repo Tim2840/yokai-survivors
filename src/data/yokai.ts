@@ -93,7 +93,7 @@ export const YOKAI: Record<string, YokaiDef> = {
       turnRate: 6,
       lifetime: 1.6,
       hitRadius: 0.5,
-      pierce: 0,
+      pierce: 1, // 平衡第一輪（2026-11-16）：0→1，前兩分鐘被人群圍死的局太多（docs/02）
       splashRadius: 0,
       splashRatio: 0,
       knockback: 5,
