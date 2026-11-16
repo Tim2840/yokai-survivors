@@ -183,6 +183,10 @@ interface Result {
   weaponMaxAt: number;
   weaponLv: number;
   weapon4At: number;
+  /** 玩家到 10、20 級（化身）的時間，與每個四分之一時段結束時的等級（docs/32 成長曲線用） */
+  lv10At: number;
+  lv20At: number;
+  lvQ: number[];
   techLvSum: number;
   techMaxLv: number;
   aliveAvg: number;
@@ -228,6 +232,9 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   let pickups = 0;
   let weaponMaxAt = -1;
   let weapon4At = -1;
+  let lv10At = -1;
+  let lv20At = -1;
+  const lvQ: number[] = [];
   let aliveSum = 0;
   // 關卡四個時段（0～25%、25～50%、50～75%、75～100%）各自的場上敵人平均（使用者 2026-11-15：「後期難度跟前面差不多，主要是敵人數量」）
   const qSum = [0, 0, 0, 0];
@@ -334,6 +341,9 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     if (lastHp >= 0 && run.hp < lastHp && run.time < SECONDS) qHurt[Math.min(3, Math.floor((run.time / SECONDS) * 4))] += lastHp - run.hp;
     lastHp = run.hp;
     if (weapon4At < 0 && run.weaponLevel >= 4) weapon4At = totalTime + run.time;
+    if (lv10At < 0 && run.level >= 10) lv10At = totalTime + run.time;
+    if (lv20At < 0 && run.level >= 20) lv20At = totalTime + run.time;
+    if (totalTime === 0) { const q = Math.min(3, Math.floor((run.time / tuning.stageSeconds) * 4)); lvQ[q] = run.level; }
     if (weaponMaxAt < 0 && run.weaponMaxed) weaponMaxAt = totalTime + run.time;
     sampleT += DT;
     if (sampleT >= 1) {
@@ -375,6 +385,9 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     pickups,
     weaponMaxAt,
     weapon4At,
+    lv10At,
+    lv20At,
+    lvQ,
     weaponLv: run.weaponLevel,
     techLvSum: run.tech.levels.reduce((a, b) => a + b, 0),
     techMaxLv: run.tech.levels.reduce((a, b) => Math.max(a, b), 0),
@@ -536,6 +549,7 @@ function summarize(rs: Result[]): string {
     `大招 ${ULT_ID || '預設'} Lv${ULT_LV}、發動 ${avg(rs.map((r) => r.casts)).toFixed(1)} 次、技法進化 ${avg(rs.map((r) => r.evolved)).toFixed(2)} 次`,
     `技法平均 ${avg(rs.map((r) => (r.variant === '-' ? 0 : r.variant.split('+').length))).toFixed(1)} 個（${[...new Set(rs.map((r) => r.variant))].slice(0, 4).join('/')}…）；變化度：${new Set(rs.map((r) => r.variant.split('+').sort().join('+'))).size}／${rs.length} 種不同組合、${new Set(rs.flatMap((r) => (r.variant === '-' ? [] : r.variant.split('+')))).size} 種技法出現過、進化出現過 ${new Set(rs.flatMap((r) => r.evolvedIds)).size} 種`,
     `補給品 ${avg(rs.map((r) => r.pickups)).toFixed(1)} 個`,
+    `10 級中位第 ${pct(rs.filter((r) => r.lv10At >= 0).map((r) => r.lv10At), 50)?.toFixed(0) ?? '-'} 秒、20 級中位第 ${pct(rs.filter((r) => r.lv20At >= 0).map((r) => r.lv20At), 50)?.toFixed(0) ?? '-'} 秒（到 20 級 ${((rs.filter((r) => r.lv20At >= 0).length / rs.length) * 100).toFixed(0)}%）；四段結束等級 ${[0, 1, 2, 3].map((q) => avg(rs.filter((r) => r.lvQ[q] !== undefined).map((r) => r.lvQ[q])).toFixed(0)).join('／')}`,
     `主武器 4 級中位第 ${pct(rs.filter((r) => r.weapon4At >= 0).map((r) => r.weapon4At), 50)?.toFixed(0) ?? '-'} 秒、滿級 ${((rs.filter((r) => r.weaponMaxAt >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.weaponMaxAt >= 0).map((r) => r.weaponMaxAt), 50)?.toFixed(0) ?? '-'} 秒）、結束時平均 ${avg(rs.map((r) => r.weaponLv)).toFixed(1)} 級`,
     `技法等級合計 ${avg(rs.map((r) => r.techLvSum)).toFixed(1)}、最高技法 Lv${avg(rs.map((r) => r.techMaxLv)).toFixed(1)}（≥5 級 ${share(rs, (r) => r.techMaxLv >= 5)}、≥6 級 ${share(rs, (r) => r.techMaxLv >= 6)}、8 級 ${share(rs, (r) => r.techMaxLv >= 8)}；進化≥1 次 ${share(rs, (r) => r.evolved >= 1)}）`,
     `場上敵人 平均 ${avg(rs.map((r) => r.aliveAvg)).toFixed(0)}、最多 ${avg(rs.map((r) => r.alivePeak)).toFixed(0)}（四個時段 ${[0, 1, 2, 3].map((i) => { const v = rs.map((r) => r.aliveQ[i]).filter((x) => x >= 0); return v.length ? avg(v).toFixed(0) : '-'; }).join('／')}；每分鐘被打掉生命 ${[0, 1, 2, 3].map((i) => { const v = rs.map((r) => r.hurtQ[i]).filter((x) => x >= 0); return v.length ? avg(v).toFixed(0) : '-'; }).join('／')}）`,
