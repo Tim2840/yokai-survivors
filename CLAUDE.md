@@ -1,7 +1,7 @@
 # 百鬼陣 YOKAI SURVIVORS（暫名）：給 AI 協作者的專案說明
 
 - 使用者以繁體中文溝通；文件、註解、介面文字都用繁體中文（台灣用語）。其他語言之後再做，**所有玩家看得到的字一律走 `src/i18n`**，不要寫死在程式裡。
-- 技術：Three.js + TypeScript + Vite。**不使用外部模型檔**，所有模型用程式碼建出來（`src/art`、`src/units`）。
+- 技術：Three.js + TypeScript + Vite。**模型只用兩種來源**：程式碼建的（`src/art`、`src/units`），或**我們自己的 Blender 腳本（`tools/blender/`）產生、過了驗收（docs/29）的 `.glb`**（Q54，使用者 2026-11-16「可以改用」）；不用別人做的模型檔、不下載素材。
 - **這份只放必守規則與索引。細節在 `docs/`。文件與程式碼衝突時以程式碼為準，再回頭更新文件。新 session 先讀 `docs/09-handoff.md`。**
 - 這個專案是從《燈落之境 LUMENFALL》拆出來的。搬過來的東西與沒搬的理由在 `docs/10-migration.md`。
 
@@ -29,7 +29,7 @@
 | 關卡後段的敵人（老練的人類）、換招後失效的升級 | `docs/27-stage-ramp-dead-upgrades.md`（兩張審查卡，Q55、Q56 待回答，未實作） |
 | 技法特效重製（浮世繪、華麗、火與水的樣子）設計審查卡 | `docs/30-vfx-ukiyoe.md`（Q59 照預設；第一批火已做 D90、完整版 D91、水（河童）第 ⑪ 節：`src/art/flame.ts`、`src/render/elementFx.ts`（火與水共用）、`src/render/fireReact.ts`／`waterReact.ts`（命中與打倒）、`src/data/vfx.ts`；**新屬性要照 docs/30 第 ⑩ 節的事件表逐項做完**；**改特效要跑 `scripts/shots/vfx-catalog.mjs` 並逐格看**） |
 | **模型驗收（數字稽核＋轉檯圖；做或改任何模型前必讀）** | `docs/29-model-acceptance.md` |
-| 引入 Blender（模型流程） | `docs/26-blender-pipeline.md`（試作完成 D87，`tools/blender/`、`?model=blender`；Q54 待回答；**還沒改「不使用外部模型檔」的鐵則**） |
+| 引入 Blender（模型流程） | `docs/26-blender-pipeline.md`（D87 試作、**Q54 通過（D92）：主網址與測試頁都用 Blender 模型**，開發版要帶 `?model=blender`；`npm run check:main` 會擋「主網址沒內嵌 .glb」） |
 | 敵人設計、關卡變化、難度怎麼來 | `docs/22-enemy-design.md`（E-1 已完成 D70：足輕、弓手、出場配方；E-2 待開工） |
 | 美術：日系 RPG 像素風（D72，**D89 起已被乾淨卡通取代**，歷史紀錄）、場景氣氛、角色 Q 版造型、地圖精緻化排程 | `docs/23-art-pass.md` |
 | **新增任何「所有角色共用」或「新角色」的內容前** | `docs/19-generalization.md`（舉一反三檢查表：已發生的錯、可預見的場景、5 個自問） |
@@ -55,7 +55,7 @@
 - **固定時間步長**（1/60 秒）模擬 + 可變幀率渲染；暫停時模擬停、渲染照畫。分頁失焦自動暫停。
 - **敵人用 `THREE.InstancedMesh`**；超過 300 隻要用空間雜湊做碰撞；投射物、傷害數字、特效一律物件池；**熱路徑（每幀）不 `new`**。
 - 隨機一律用固定種子的 `Rng`（`src/lib/random.ts`）：地圖生成、卡片抽選、要素抽選都要能用種子重現（回報 bug 時帶種子）。
-- 顏色取自 `src/art/palette.ts`；材質用 `soft()`／`glow()`；風格是**和風、乾淨卡通**（D89，使用者 2026-11-15「換」，**取代 D72 的像素風**；預設畫面 `cel`：不像素化、多重取樣抗鋸齒、高飽和色塊、暖色描線，`src/core/pixelPass.ts`、`src/data/look.ts`，`?look=jrpg` 還看得到像素風）：圓潤 Q 版（大頭、大眼睛）；**玩家角色與敵人正在用 Blender 重做（docs/28、29；測試頁用 `?model=blender` 或 `build:single`，主網址仍是程式建的舊模型，Q54 待回答），舊模型的臉用 `src/units/chibiFace.ts`**；**一般關卡是夜晚，黃昏與白天是特殊情況**（D88，`src/data/ambience.ts`，`?tod=day|dusk` 開發版強制）。不要 `flatShading`、不隨機推頂點、不留銳利的邊。
+- 顏色取自 `src/art/palette.ts`；材質用 `soft()`／`glow()`；風格是**和風、乾淨卡通**（D89，使用者 2026-11-15「換」，**取代 D72 的像素風**；預設畫面 `cel`：不像素化、多重取樣抗鋸齒、高飽和色塊、暖色描線，`src/core/pixelPass.ts`、`src/data/look.ts`，`?look=jrpg` 還看得到像素風）：圓潤 Q 版（大頭、大眼睛）；**玩家角色與敵人用 Blender 模型（docs/28、29；主網址與測試頁都用，D92；載好前先顯示程式建的舊模型，開發版要帶 `?model=blender`），舊模型的臉用 `src/units/chibiFace.ts`**；**一般關卡是夜晚，黃昏與白天是特殊情況**（D88，`src/data/ambience.ts`，`?tod=day|dusk` 開發版強制）。不要 `flatShading`、不隨機推頂點、不留銳利的邊。
 - 3D 鏡頭：**玩家可自由旋轉視角**（D23，取代原本的固定俯角鐵則）；第三人稱繞著玩家轉，俯仰有上下限，跟隨玩家的 3D 位置，**碰到地形時拉近（彈簧臂）不穿進地裡**；移動方向永遠相對鏡頭。參數在 `src/data/camera.ts`。操作：移動、轉視角、跳躍（D24）、號令。
 
 ## 工作方式（從燈落之境帶過來的教訓）

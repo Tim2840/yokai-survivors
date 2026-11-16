@@ -131,8 +131,9 @@ export class RunView {
     renderer.playerLight.color.set(fxOf(run.yokai.id).light);
     renderer.playerLight.intensity = PLAYER_LIGHT_BASE * (this.amb.playerLight ?? 1);
     this.group.add(this.player.root);
-    // Blender 試作（docs/26，Q53）：網址帶 ?model=blender（測試頁 build:single 預設就是；?model=code 看舊的）才換成 Blender 版的提燈小僧，並在出生點旁邊放一座鳥居；主網址的打包不含
-    if (import.meta.env.MODE !== 'single-main' && (new URLSearchParams(location.search).get('model') ?? (import.meta.env.MODE === 'single' ? 'blender' : '')) === 'blender') {
+    // Blender 模型（docs/26；Q54 使用者 2026-11-16「可以改用」）：主網址一律用；測試頁預設用（?model=code 看舊的）；開發版要帶 ?model=blender。
+    // 載好之前先顯示程式建的舊模型，載好就換掉；並在出生點旁邊放一座鳥居
+    if (useBlenderModels()) {
       void import('../units/blenderModels').then(async (mod) => {
         const torii = await mod.loadBlenderTorii();
         const monk = run.yokai.id === 'chochin-kozo' ? await mod.loadBlenderMonk() : run.yokai.id === 'kappa' ? await mod.loadBlenderKappa() : null;
@@ -470,4 +471,11 @@ export class RunView {
     this.orbMesh.dispose();
     this.group.removeFromParent();
   }
+}
+
+/** 這一局要不要換成 Blender 模型（主網址固定用、不吃網址參數；測試頁預設用；開發版預設不用） */
+function useBlenderModels(): boolean {
+  if (import.meta.env.MODE === 'single-main') return true;
+  const q = new URLSearchParams(location.search).get('model');
+  return (q ?? (import.meta.env.MODE === 'single' ? 'blender' : '')) === 'blender';
 }

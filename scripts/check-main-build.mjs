@@ -18,6 +18,11 @@ for (const f of targets) {
     console.error(`✗ ${f} 含有 ${re}`);
     bad++;
   }
+  // Q54（2026-11-16）：主網址要帶 Blender 模型（內嵌的 .glb 資料網址）；少了就是退回程式建的舊模型
+  if (f.endsWith('.html') && !/data:model\/gltf-binary;base64,|data:application\/octet-stream;base64,Z2xURg/.test(text)) {
+    console.error(`✗ ${f} 沒有內嵌 Blender 模型（.glb）`);
+    bad++;
+  }
   // 頂端介面（#app、#ui）還在：避免打包把入口弄丟
   if (f.endsWith('.html') && !/<div id="app"><\/div>/.test(text)) {
     console.error(`✗ ${f} 少了 #app`);
