@@ -15,6 +15,7 @@
 | **拍畫面**（game-screenshots） | 每次回報都要照片；這次踩了 4 個坑（一次給太多經驗讓頁面記憶體爆掉、清卡無窮迴圈、clearEnemies 關掉生成、setCamera 讓時間跑 1 秒） | 做了＋`scripts/shots/helpers.mjs` |
 | **特效驗收**（vfx-acceptance） | 下一批是河童的水；「所有特效要做完整」要靠事件盤點表，目錄的坑也要記 | 做了 |
 | **設計審查卡**（design-review-card） | 使用者要我主動把關；docs/20 有格式但要記得用 | 做了 |
+| **子代理／子 session 分工**（sub-sessions，2026-11-16 加） | 使用者授權我自己判斷要不要開，並要求留意等級與 effort、省 token；沒有規則的話容易「什麼都開」或「開太大」 | 做了（等級對照表、任務單格式、收回來要抽驗） |
 | 模型驗收 | 已有 `npm run model:build`（不過就不匯出）＋`model:turnaround`＋docs/29，工具本身就會擋 | 不做（重複） |
 | 回歸測試挑選 | 併進 ship-batch 的表 | 不另外做 |
 | 台詞與用詞 | 燈落之境有，這個專案目前台詞很少；`voice` 類測試還沒搬 | 之後有劇情再做 |
