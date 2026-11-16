@@ -12,6 +12,7 @@ import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { resetTuning, tuning } from '../../src/data/tuning';
 import { TECHS, TECH_OFFER, TECH_SWAP_PREFIX, techsFor } from '../../src/data/techniques';
+import { YOKAI } from '../../src/data/yokai';
 import { PROGRESSION } from '../../src/data/progression';
 import { WAVES } from '../../src/data/waves';
 import { STAGE } from '../../src/data/stage';
@@ -83,6 +84,17 @@ function applyTune(): void {
     } else if (k.startsWith('chapter.')) (STAGE.chapter as unknown as Record<string, number>)[k.slice(8)] = Number(v);
     else if (k.startsWith('summon.')) (STAGE.summon as unknown as Record<string, number>)[k.slice(7)] = Number(v);
     else if (k.startsWith('drops.')) (STAGE.drops as unknown as Record<string, number>)[k.slice(6)] = Number(v);
+    else if (k.startsWith('def.')) {
+      // def.vortex.vortex.damage=0.4：改單一技法的數字（平衡第一輪，2026-11-16）
+      const [, id, mech, field] = k.split('.');
+      const d = TECHS.find((x) => x.id === id) as unknown as Record<string, Record<string, number>> | undefined;
+      if (!d || !d[mech]) throw new Error('沒有這個技法欄位：' + k);
+      d[mech][field] = Number(v);
+    } else if (k.startsWith('yk.')) {
+      // yk.kappa.damage=6.5：改妖怪主武器的數字
+      const [, id, field] = k.split('.');
+      (YOKAI[id].weapon as unknown as Record<string, number>)[field] = Number(v);
+    }
     else if (k.startsWith('late.')) (STAGE.late as unknown as Record<string, number>)[k.slice(5)] = Number(v);
     else if (k.startsWith('recycle.')) (STAGE.recycle as unknown as Record<string, number>)[k.slice(8)] = Number(v);
     else if (k.startsWith('w.')) (WAVES as unknown as Record<string, number>)[k.slice(2)] = Number(v);
