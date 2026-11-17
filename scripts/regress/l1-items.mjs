@@ -31,9 +31,11 @@ export async function run(browser) {
             // 使用者 2026-11-06：升級卡上只顯示「會影響的現有招式」（詳細在暫停頁）：這裡沒拿任何技法，所以最多只會寫鬼火，不會列出沒拿到的技法
             expect(!/狐火分裂|彈跳|歸巢|鬼火雨|燈籠環|護身火|衛星燈|開路燈|業火|火種|鬼火柱|燈油|適合的技法/.test(c.link), `法具卡列出了還沒拿到的技法：${JSON.stringify(c)}`);
             if (c.link) expect(/^會影響：鬼火$/.test(c.link), `法具卡的招式連結文字不對：${JSON.stringify(c)}`);
-            // D93：主武器自動升級，選卡裡不該再出現主武器卡（舊版會出現）
-            if (c.id === 'ghostfire' || c.weapon) sawWeapon = true;
-            expect(!(c.id === 'ghostfire' || c.weapon), `選卡出現主武器卡（D93 起主武器自動升級）：${JSON.stringify(c)}`);
+            // D98：鬼火是技法、靠選卡升級：卡上標「技法」、進化前最高 5 級，不再寫「主武器」
+            if (c.id === 'ghostfire' || c.weapon) {
+              sawWeapon = true;
+              expect(/技法/.test(c.tag) && !/主武器/.test(c.tag) && /最高 5|新/.test(c.lv), `鬼火卡的標示不對：${JSON.stringify(c)}`);
+            }
           }
           if (k === 0) files.push(await shot(ctx, 'l1-pick'));
           const before = await page.evaluate(() => window.__game.run.ult.counts);

@@ -78,7 +78,10 @@ export async function run(browser) {
             await page.locator('.overlay[data-screen="levelup"] .card').nth(Math.max(0, i)).click();
           } else await page.evaluate(() => window.__game.addXp(20));
         }
-        while ((await page.evaluate(() => window.__game.screens)).includes('levelup')) {
+        // 待選可能一張接一張（D98 起鬼火卡也在選卡裡）：多推幾步確認真的沒有了
+        for (let g = 0; g < 20; g++) {
+          await page.evaluate(() => { window.__game.advance(0.05); window.__game.render(); });
+          if (!(await page.evaluate(() => window.__game.screens)).includes('levelup')) break;
           const cs = await cards(page);
           await page.locator('.overlay[data-screen="levelup"] .card').nth(Math.max(0, cs.findIndex((c) => !c.id.startsWith('tech')))).click();
         }
