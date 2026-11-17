@@ -64,7 +64,9 @@ describe('連續計時關卡（D22）', () => {
     expect(d.rate(0)).toBeLessThan(d.rate(d.duration / 2));
     expect(d.rate(d.duration / 2)).toBeLessThan(d.rate(d.duration));
     // 倍率 ×countScale 時開場 13/20、尾聲 108/20（再乘倍率） 點／秒（docs/02 第 8.1 節）；尾聲再乘後段加壓（Q60）
-    expect(d.rate(0)).toBeCloseTo((13 / 20) * tuning.countScale, 5);
+    // 開場緩衝（2026-11-17）：開場再乘 STAGE.opening.startMult；過了 until 就是 1
+    expect(d.rate(0)).toBeCloseTo((13 / 20) * tuning.countScale * STAGE.opening.startMult, 5);
+    expect(d.openingFactor(STAGE.opening.until * d.duration)).toBe(1);
     expect(d.rate(d.duration)).toBeCloseTo((108 / 20) * tuning.countScale * STAGE.late.mult, 5);
     // 後段加壓從 late.from 才開始：那一刻之前和沒有加壓一樣
     const t0 = STAGE.late.from * d.duration;
