@@ -2,13 +2,13 @@
  * 技法特效的風格與數字（docs/30，Q59 照預設：浮世繪取代水墨、先火＋水，再大招）。
  * 每隻妖怪一種「屬性的樣子」：fire = 燃燒的火舌＋火星＋燒焦痕；water = 浪、漣漪、水花（第二批）；ink = D85 的水墨（還沒換的）。
  */
-export type VfxStyle = 'fire' | 'water' | 'ink';
+export type VfxStyle = 'fire' | 'water' | 'oni' | 'ink';
 
 export const VFX_STYLE: Record<string, VfxStyle> = {
   'chochin-kozo': 'fire',
   kappa: 'water',
-  // 赤鬼：第一版沿用火的樣子（紅、金）；鬼氣／雷的專屬樣子照 docs/30 第 ⑩ 節事件表另做（docs/35 ⑥）
-  'aka-oni': 'fire',
+  // 赤鬼（docs/35 ⑥、docs/30 第 ⑫ 節）：鬼氣（深紅＋紫的妖氣）與雷（金色電光）
+  'aka-oni': 'oni',
 };
 
 /** 揮擊的樣子（SwingView，赤鬼的金棒）：停留秒數、透明度、離地高度（震波另一組，比較久、比較亮） */
@@ -186,3 +186,36 @@ export const WATER_FX = {
 
 /** 兩份外觀都要符合 ElementLook（型別檢查用） */
 export const ELEMENT_LOOKS: Record<'fire' | 'water', ElementLook> = { fire: FIRE_FX, water: WATER_FX };
+
+/**
+ * 鬼氣與雷（赤鬼，docs/30 第 ⑫ 節）：和火同一套引擎，換外觀與色帶（palette.oniFx：深紅 → 紫 → 金 → 白芯）。
+ * 「火舌」變成往上竄、分叉更多、邊緣更碎的妖氣；粒子（火星）是往四面炸開的金色電光碎片。
+ * 命中：一道短電光＋金色碎片＋紫光；打倒：地上一圈震波＋竄起的鬼氣＋電光碎片；鬼雷：一道從天而降的折線雷。
+ */
+export const ONI_FX = {
+  ...FIRE_FX,
+  speed: 1.6,
+  fork: 1.5,
+  noise: 1.5,
+  taper: 0.82,
+  glow: { ...FIRE_FX.glow, color: '#b46aff' },
+  smoke: { dark: '#4a3a5e', light: '#8f7fa8', up: 1.3, life: 0.8, grow: 1.5 },
+  spark: { size: 0.12, up: 1.2, spread: 2.6, life: 0.45, lift: 0.2, sway: 0.3 },
+  glint: { size: 0.5, life: 0.3 },
+  /** 命中：電光（細長的短焰）、金色碎片數、光、暴擊再加閃光 */
+  zap: {
+    perFrame: 12, y: 0.95,
+    bolt: { w: 0.26, h: 1.3, life: 0.14 }, sparks: 6, sparkSpeed: 4.2, halo: { r: 1.2, life: 0.16 },
+    crit: { mult: 1.5, sparks: 10, glints: 2 },
+    dot: { w: 0.3, h: 0.7, life: 0.2, sparks: 2 },
+  },
+  /** 打倒：鬼氣竄起（大小）、震波圈（半徑倍率）、碎片、煙、閃光；一般／精英／頭目 */
+  burst: {
+    perFrame: 10, puffLife: 0.38, ringLife: 0.45,
+    normal: { puff: 1.1, ring: 1.6, sparks: 10, smoke: 1, glints: 0, glow: 1.6 },
+    elite: { puff: 1.5, ring: 2.6, sparks: 18, smoke: 2, glints: 3, glow: 2.4 },
+    boss: { puff: 2.4, ring: 4.5, sparks: 34, smoke: 5, glints: 7, glow: 4.5 },
+  },
+  /** 鬼雷：雷從多高落下、折幾段、每段寬、地上的光、碎片 */
+  thunder: { from: 9, segments: 6, jag: 0.7, w: 0.5, life: 0.25, sparks: 16, glints: 4, ground: 3.2 },
+};

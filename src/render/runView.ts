@@ -29,7 +29,8 @@ import { TechFx } from './techFx';
 import { ElementFx, GLOW_HALO } from './elementFx';
 import { FireReact } from './fireReact';
 import { WaterReact } from './waterReact';
-import { FIRE_FX, WATER_FX, vfxStyleOf } from '../data/vfx';
+import { OniReact } from './oniReact';
+import { FIRE_FX, ONI_FX, WATER_FX, vfxStyleOf } from '../data/vfx';
 import { FeelFx } from './feelFx';
 import type { Renderer } from '../core/renderer';
 
@@ -90,7 +91,7 @@ export class RunView {
   private readonly techFx: TechFx;
   /** 浮世繪的火（docs/30）：只有火屬性的妖怪才有 */
   private readonly fireFx: ElementFx | null;
-  private readonly fireReact: FireReact | WaterReact | null;
+  private readonly fireReact: FireReact | WaterReact | OniReact | null;
   private readonly isWater: boolean;
   private lastFxT = 0;
   /** 開發用：這一幀畫了幾個火舌＋火星（特效目錄等到有東西才截圖） */
@@ -283,12 +284,13 @@ export class RunView {
     this.group.add(this.elementsView.group);
     this.pickupsView = new PickupsView(run);
     this.group.add(this.pickupsView.group);
-    // 屬性特效（docs/30）：火（提燈小僧）、水（河童）共用同一套引擎，只換外觀
+    // 屬性特效（docs/30）：火（提燈小僧）、水（河童）、鬼氣／雷（赤鬼）共用同一套引擎，只換外觀
     const style = vfxStyleOf(run.yokai.id);
     this.isWater = style === 'water';
-    this.fireFx = style === 'fire' ? new ElementFx() : style === 'water' ? new ElementFx(WATER_FX, palette.wave) : null;
+    this.fireFx =
+      style === 'fire' ? new ElementFx() : style === 'water' ? new ElementFx(WATER_FX, palette.wave) : style === 'oni' ? new ElementFx(ONI_FX, palette.oniFx) : null;
     if (this.fireFx) this.group.add(...this.fireFx.objects);
-    this.fireReact = !this.fireFx ? null : style === 'water' ? new WaterReact(run, this.fireFx) : new FireReact(run, this.fireFx);
+    this.fireReact = !this.fireFx ? null : style === 'water' ? new WaterReact(run, this.fireFx) : style === 'oni' ? new OniReact(run, this.fireFx) : new FireReact(run, this.fireFx);
     this.ultFx = new UltFx(run, this.fireFx);
     this.group.add(this.ultFx.group);
     this.techFx = new TechFx(run, this.fireFx);

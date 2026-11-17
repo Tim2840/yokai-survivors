@@ -6,7 +6,7 @@ import { ball } from '../art/shapes';
 import type { Run } from '../game/run';
 import { FLASH_KINDS } from '../game/techniques';
 import { setHugeBounds } from './instancedLayer';
-import { FIRE_FX, WATER_FX, vfxStyleOf } from '../data/vfx';
+import { FIRE_FX, ONI_FX, WATER_FX, vfxStyleOf } from '../data/vfx';
 import { GLOW_GROUND, GLOW_HALO, type ElementFx } from './elementFx';
 
 const TAU = Math.PI * 2;
@@ -61,13 +61,16 @@ export class TechFx {
   private readonly fire: ElementFx | null;
   /** 水（docs/30 第 ⑪ 節，河童）：浪頭、水珠、漣漪、水泡 */
   private readonly water: ElementFx | null;
+  /** 鬼氣／雷（docs/30 第 ⑫ 節，赤鬼）：走火的引擎與分支，只有落雷（鬼雷）換成閃電 */
+  private readonly oni: boolean;
   private readonly scorch = new THREE.Color(FIRE_FX.zone.scorch);
   /** 爆開的偵測：上一幀每個爆圈剩多少壽命（變多 = 新的一個） */
   private readonly prevFlash: Float32Array;
 
   constructor(private readonly run: Run, elementFx: ElementFx | null = null) {
     const style = vfxStyleOf(run.yokai.id);
-    this.fire = style === 'fire' ? elementFx : null;
+    this.fire = style === 'fire' || style === 'oni' ? elementFx : null;
+    this.oni = style === 'oni';
     this.water = style === 'water' ? elementFx : null;
     const fx = fxOf(run.yokai.id);
     this.ink = new THREE.Color(fx.ink);
@@ -396,7 +399,31 @@ export class TechFx {
         if (water.rand() < 4 * dt) water.ripple(x, gy + 0.06, z, r * 2.6, WATER_FX.ripple.life);
         water.glow(x, gy + G.h * 0.4 * g, z, r * 2.4, 0.8 * f, GLOW_HALO);
       }
-      if (fire) {
+      if (fire && this.oni) {
+        // 鬼雷：從高處劈下一道折線的閃電（一節節細長的光，位置每一小段時間換一次＝閃爍），落地炸出碎片與地上一圈光
+        const T = ONI_FX.thunder;
+        const gy = run.map.heightAt(x, z);
+        if (f > 0.55) {
+          const flick = Math.floor(run.clock / 0.06);
+          const seg = T.from / T.segments;
+          let ox = 0;
+          let oz = 0;
+          for (let s = 0; s < T.segments; s++) {
+            const h0 = T.from - (s + 1) * seg;
+            const nx = s === T.segments - 1 ? 0 : Math.sin(i * 12.9 + s * 7.3 + flick * 3.1) * T.jag;
+            const nz = s === T.segments - 1 ? 0 : Math.cos(i * 4.1 + s * 5.7 + flick * 2.3) * T.jag;
+            fire.flame(x + (ox + nx) / 2, gy + h0, z + (oz + nz) / 2, T.w * (0.7 + 0.3 * f), seg * 1.25, i * 3.1 + s, 0.1);
+            ox = nx;
+            oz = nz;
+          }
+          fire.glow(x, gy + T.from * 0.5, z, r * 2.4, f, GLOW_HALO);
+        }
+        if (f > 0.9) {
+          fire.emitRate(x, gy + 0.3, z, T.sparks * 20, dt, r);
+          if (fire.rand() < 10 * dt) fire.glints(x, gy + 0.6, z, 1, r);
+        }
+        fire.glow(x, gy + 0.05, z, T.ground * (0.6 + 0.4 * f), f, GLOW_GROUND);
+      } else if (fire) {
         // 火柱：一條沖天的大火舌＋兩側較矮的副火，往上噴大量火星
         const P = FIRE_FX.pillar;
         const gy = run.map.heightAt(x, z);
