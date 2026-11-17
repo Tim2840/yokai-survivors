@@ -247,6 +247,7 @@ export const zhTW = {
   'enemy.ashigaru.name': '足輕',
   'enemy.yumi.name': '弓手',
   'enemy.taimasou.name': '退魔僧',
+  'enemy.kawagari.name': '獵河武士',
   'enemy.veteran.intro': '藍紫色的是老練的人類：更硬、更痛，但打倒給更多魂火。',
   'enemy.ashigaru.intro': '足輕舉盾推進：正面傷害減半，繞到側面或背後打。',
   'enemy.yumi.intro': '弓手在遠處瞄準：看到紅線就移開，跳起來也能躲箭。',

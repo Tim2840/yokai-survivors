@@ -5,7 +5,7 @@
  */
 export const FEEL = {
   /** 螢幕震動：trauma 0～1，位移 ∝ trauma²（小震幾乎看不到、大震才明顯）；每秒衰減；最大位移（公尺）、頻率（Hz） */
-  shake: { max: 1, decay: 2.4, amplitude: 0.32, frequency: 34, hurt: 0.32, elite: 0.3, boss: 0.9, ult: 0.6, evolve: 0.5, element: 0.18, levelUp: 0.12 },
+  shake: { max: 1, decay: 2.4, amplitude: 0.32, frequency: 34, hurt: 0.32, elite: 0.3, boss: 0.9, bossSkill: 0.35, ult: 0.6, evolve: 0.5, element: 0.18, levelUp: 0.12 },
   /** 頓幀：事件發生時模擬停這麼多秒（畫面照畫，只是動作凝結一下）；同時多個取最長、不疊加 */
   hitStop: { elite: 0.05, boss: 0.14, ult: 0.07, evolve: 0.09 },
   /** 受傷暈邊：強度 = 基礎 + 傷害佔最大生命的比例 × 倍率（夾在 max）；每秒淡出 */

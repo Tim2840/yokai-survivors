@@ -40,6 +40,9 @@ export interface GameEvents {
   /** 在道祖神換了技法 */
   techChanged: { from: string; to: string };
   summonBoss: { stage: number; mult: number };
+  /** 頭目技能（D95）：warn = 開始預告、strike = 出手；phase2 = 半血變招 */
+  bossSkill: { id: string; step: 'warn' | 'strike' };
+  bossPhase2: { id: string };
   /** 玩家受傷（低頻事件；每擊殺等高頻事件不走匯流排，見 docs/06） */
   playerHurt: { damage: number; hp: number };
   /** 地圖要素落下／被用掉／消失（低頻） */

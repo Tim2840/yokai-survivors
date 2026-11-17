@@ -39,7 +39,8 @@ export class StageDirector {
   private kindVillager = kindIndex('villager');
   /** 這一關的出場配方（已換成種類索引）；每步依經過的時間挑一種 */
   private recipe: { kind: number; from: number; weight: number; cap: number }[] = [];
-  private kindBoss = kindIndex('taimasou');
+  /** 這一關的頭目種類（D95：每關各自的頭目；start 時由 Run 給） */
+  kindBoss = kindIndex('taimasou');
   /** 待生成的精英數（因同畫面上限或找不到位置而延後） */
   private pendingElites = 0;
   private bossPending = false;
@@ -61,7 +62,8 @@ export class StageDirector {
   summitMult = 1;
 
   /** stage = 第幾關（0 起）；hpMult = 難度帶來的敵人生命倍率（含關卡）；bossMult = 大頭目倍率 */
-  start(stage: number, bossMult = 1, opts: { autoBoss?: boolean; hpMult?: number } = {}): void {
+  start(stage: number, bossMult = 1, opts: { autoBoss?: boolean; hpMult?: number; bossKind?: number } = {}): void {
+    if (opts.bossKind !== undefined) this.kindBoss = opts.bossKind;
     this.recipe = recipeFor(stage).map((r: RecipeEntry) => ({ kind: kindIndex(r.id), from: r.from, weight: r.weight, cap: r.cap ?? Infinity }));
     this.stageMult = opts.hpMult ?? 1;
     this.bossMult = bossMult;
@@ -121,6 +123,12 @@ export class StageDirector {
   /** 現在打倒的一般人類經驗倍率（後段加壓時打折，總經驗不跟著翻倍） */
   xpScale(t = this.time): number {
     return 1 / Math.pow(this.lateFactor(t), STAGE.late.xpDamp);
+  }
+
+  /** 頭目的「喚眾」（D95）：在玩家身邊圍一圈 count 隻（沿用包圍圈） */
+  queueRing(count: number): void {
+    this.ringLeft += count;
+    this.ringTotal = this.ringLeft;
   }
 
   /** 包圍圈還沒生完的隻數（一步生不完就留到下一步） */

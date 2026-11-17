@@ -381,6 +381,14 @@ export class Game {
       this.renderer.rig.shake.add(FEEL.shake.boss);
       this.hitStop.add(FEEL.hitStop.boss);
     });
+    // 頭目技能（D95）：出手那一下小震、半血變招大震
+    b.on('bossSkill', ({ step }) => {
+      if (step === 'strike') this.renderer.rig.shake.add(FEEL.shake.bossSkill);
+    });
+    b.on('bossPhase2', () => {
+      this.renderer.rig.shake.add(FEEL.shake.boss);
+      this.hitStop.add(FEEL.hitStop.boss);
+    });
     b.on('playerHurt', ({ damage }) => {
       this.playLog?.hurt(this.run?.clock ?? 0);
       this.audio.sfx('hurt');

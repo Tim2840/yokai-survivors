@@ -1,5 +1,5 @@
 import type * as THREE from 'three';
-import { buildVillagerGeometry, buildAshigaruGeometry, buildYumiGeometry, buildTaimasouGeometry } from './humans';
+import { buildVillagerGeometry, buildAshigaruGeometry, buildYumiGeometry, buildTaimasouGeometry, buildKawagariGeometry } from './humans';
 
 /** 每種人類的戰鬥用造型（單一幾何＋頂點色）。新增人類一定要在這裡加一行（單元測試全掃 ENEMY_IDS）。頭目（退魔僧）有自己的造型（放大 2.4 倍） */
 export const ENEMY_MODELS: Record<string, () => THREE.BufferGeometry> = {
@@ -7,4 +7,5 @@ export const ENEMY_MODELS: Record<string, () => THREE.BufferGeometry> = {
   ashigaru: buildAshigaruGeometry,
   yumi: buildYumiGeometry,
   taimasou: buildTaimasouGeometry,
+  kawagari: buildKawagariGeometry,
 };

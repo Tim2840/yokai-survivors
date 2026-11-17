@@ -12,6 +12,7 @@ import { ENEMY_MODELS } from '../units/enemyModels';
 import { CHIBI } from '../units/humans';
 import { ENEMY_IDS } from '../data/enemies';
 import { EnemyShotsView } from './enemyShotsView';
+import { BossTelegraphView } from './bossTelegraphView';
 import { markOverlay, pruneShadowCasters } from './overlay';
 import { buildWorldView, type WorldView } from '../world/worldView';
 import { buildAmbienceView, type AmbienceView } from '../world/ambienceView';
@@ -68,6 +69,7 @@ export class RunView {
   private diskShot = false;
   private readonly enemyMeshes: THREE.InstancedMesh[];
   readonly shotsView: EnemyShotsView;
+  readonly bossTele: BossTelegraphView;
   readonly ambience: AmbienceView;
   /** 這一關的場景主題（時段） */
   readonly amb: AmbienceDef;
@@ -212,6 +214,8 @@ export class RunView {
     });
     this.shotsView = new EnemyShotsView(run);
     this.group.add(this.shotsView.group);
+    this.bossTele = new BossTelegraphView(run);
+    this.group.add(this.bossTele.group);
 
     // 腳下陰影（沒有開陰影貼圖，用扁圓片代替；也讓敵人貼地看得清楚）
     const sg = new THREE.CircleGeometry(0.42, 14).rotateX(-Math.PI / 2);
@@ -419,10 +423,12 @@ export class RunView {
       writeMatrix(em, n, x, y, z, e.yaw[i], sc, sc, sc);
       writeMatrix(sm, total++, x, y + DECAL_LIFT, z, 0, sc, 1, sc);
       ph[n] = e.phase[i];
-      const f = e.flash[i] > 0 ? 1 + (e.flash[i] / COMBAT.hitFlash) * 2.2 : 1;
+      const f = (e.flash[i] > 0 ? 1 + (e.flash[i] / COMBAT.hitFlash) * 2.2 : 1) * (e.variant[i] === 2 && run.boss.flash > 0 ? 2.2 : 1);
       // 精英偏紅、頭目更紅（一般人類的顏色不變）；弓手瞄準時偏紅閃爍（預告）
       const v = e.variant[i];
-      const aim = e.wind[i] > 0 ? 0.6 + 0.4 * Math.sin(t * 28) : 0;
+      // 頭目預告招式時也閃紅（D95）；半血變招那一下整隻亮起來
+      const bossWarn = v === 2 && i === run.boss.index && run.boss.state === 'windup';
+      const aim = e.wind[i] > 0 || bossWarn ? 0.6 + 0.4 * Math.sin(t * 28) : 0;
       // 老練（Q55）：偏藍紫（和精英的紅、頭目的深紅分得開）
       const vt = e.vet[i] === 1;
       col[n * 3] = f * (vt ? 0.8 : v === 0 ? 1 : 1.5) * (1 + aim * 0.8);
@@ -439,6 +445,7 @@ export class RunView {
     this.enemyShadow.count = total;
     this.enemyShadow.instanceMatrix.needsUpdate = true;
     this.shotsView.update();
+    this.bossTele.update(t);
     this.ambience.update(t, this.renderer.camera.position, run.px, run.pz);
 
     // 鬼火
@@ -505,6 +512,7 @@ export class RunView {
     for (const d of this.disposables) d.dispose();
     for (const m of this.enemyMeshes) m.dispose();
     this.shotsView.dispose();
+    this.bossTele.dispose();
     this.ambience.dispose();
     this.enemyShadow.dispose();
     this.bulletMesh.dispose();

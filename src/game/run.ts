@@ -10,6 +10,8 @@ import { ENEMY_INTRO_SECONDS } from '../data/enemies';
 import { WEAPON_AUTO, itemPoolFor, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById, scaleWeaponStep } from '../data/items';
 import { EVO_CARD_PREFIX, TECH_CARD_PREFIX, TECH_KEEP, TECH_OFFER, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard } from '../data/techniques';
 import { Techniques } from './techniques';
+import { BossSkills } from './bossSkills';
+import { bossForStage } from '../data/bosses';
 import { RARITIES, RARITY_MULT } from '../data/rarity';
 import { STAGE, stagesForMap, bossHpMult, isBigBossStage } from '../data/stage';
 import { FEEL } from '../data/feel';
@@ -109,7 +111,7 @@ export class Run {
   freezeUntil = 0;
   lastPickup: { kind: PickupKind; at: number; v: number } | null = null;
   lastThunder: { at: number; x: number; z: number; r: number } | null = null;
-  private readonly bus: EventBus;
+  readonly bus: EventBus;
   private readonly opts: RunOptions;
   private readonly maxEnemies: number;
 
@@ -171,6 +173,12 @@ export class Run {
   cooldownMult = 1;
   /** 技法（D48）：這一局拿到的技法與它們的狀態（docs/15 第 8.5 節） */
   readonly tech: Techniques;
+  /** 頭目技能（D95） */
+  readonly boss: BossSkills;
+  /** 頭目招式給玩家的減速（比例、剩幾秒）與定身（剩幾秒） */
+  slowBy = 0;
+  slowT = 0;
+  rootT = 0;
   /** 現在的技法面板：swap = 道祖神換一個（D49 起技法卡混在升級選卡裡，只有道祖神會開專用的技法面板） */
   techMode: 'new' | 'swap' = 'new';
   /** 開發與測試：下一次升級選卡一定換進一張技法卡（不看機率與等級） */
@@ -284,6 +292,7 @@ export class Run {
     this.ultModsNow = ultMods(this.ults.length ? this.ultLevels.get(this.ults[0]) ?? 0 : 0);
     this.projectiles = new Projectiles(300);
     this.tech = new Techniques(this, this.maxEnemies);
+    this.boss = new BossSkills(this);
     this.tech.max = TECH_MAX + Math.max(0, Math.min(TECH_SLOTS.extraPrices.length, opts.techSlots ?? 0));
     this.orbs = new Orbs(PROGRESSION.maxOrbs);
     this.stats = new Stats(this.yokai.base);
@@ -454,7 +463,11 @@ export class Run {
     this.director.start(this.stageIndex, bossHpMult(this.mapNumber, this.stageIndex), {
       autoBoss: isBigBossStage(this.mapNumber, this.stageIndex),
       hpMult: 1 + this.difficulty * DIFFICULTY.hp,
+      bossKind: kindIndex(bossForStage(this.stageIndex).enemy),
     });
+    this.boss.reset();
+    this.slowT = 0;
+    this.rootT = 0;
     this.summonPlaced = false;
     this.summitChests = 0;
     this.stageGemGiven = false;
@@ -604,6 +617,9 @@ export class Run {
     this.director.hpCurse = 1 + this.curse.enemyHp;
     this.enemies.speedMult = this.frozenEnemies ? 0 : 1 + this.curse.enemySpeed;
     this.director.update(dt, this.px, this.pz, this.night, this.bossDefeated);
+    this.boss.update(dt);
+    if (this.slowT > 0) this.slowT -= dt;
+    if (this.rootT > 0) this.rootT -= dt;
     this.updateXpBudget(dt);
     // 老練的人類第一次出現：提示一次（整局一次，不是每關）
     if (this.director.veteranSeen && !this.veteranNoted) {
@@ -661,7 +677,7 @@ export class Run {
       this.jumpBuf = MOVE.jumpBuffer;
       this.jumpReq = false;
     }
-    if (this.jumpBuf > 0 && (this.grounded || this.coyote > 0)) {
+    if (this.jumpBuf > 0 && this.rootT <= 0 && (this.grounded || this.coyote > 0)) {
       this.vy = MOVE.jumpSpeed;
       this.jumps++;
       this.grounded = false;
@@ -678,6 +694,8 @@ export class Run {
     }
     const mag = Math.min(1, len);
     let spd = this.stats.value.speed * mag;
+    if (this.slowT > 0) spd *= 1 - this.slowBy;
+    if (this.rootT > 0) spd = 0;
     if (this.grounded && len > 1e-3) {
       spd *= m.speedAt(this.px, this.pz) * m.slopeMult(this.px, this.pz, this.px + mx, this.pz + mz);
     }
@@ -765,6 +783,21 @@ export class Run {
    * 玩家受到一次傷害（已排除無敵與閃避）：護身火擋下就回傳 true 且不扣血；否則依難度、詛咒、護甲換算後扣血。
    * rawDamage 是敵人身上的原始傷害（接觸傷害或箭的傷害）。
    */
+  /** 頭目招式打中玩家（D95）：無敵、上帝模式、凍結、閃避都會擋掉；回傳有沒有真的打中 */
+  bossStrike(rawDamage: number): boolean {
+    if (this.invul > 0 || this.god || this.frozenEnemies || this.dead) return false;
+    if (this.rngCombat.next() < this.stats.value.dodge) return false;
+    return this.hurtPlayer(rawDamage);
+  }
+  /** 減速（取比較重的那一個）、定身 */
+  slowPlayer(by: number, seconds: number): void {
+    this.slowBy = this.slowT > 0 ? Math.max(this.slowBy, by) : by;
+    this.slowT = Math.max(this.slowT, seconds);
+  }
+  rootPlayer(seconds: number): void {
+    this.rootT = Math.max(this.rootT, seconds);
+  }
+
   private hurtPlayer(rawDamage: number): boolean {
     if (this.tech.tryWard()) {
       this.invul = COMBAT.invulnerable;

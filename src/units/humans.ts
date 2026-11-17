@@ -131,3 +131,20 @@ export function buildTaimasouGeometry(): THREE.BufferGeometry {
   parts.push(paint(new THREE.TorusGeometry(0.05, 0.015, 4, 8).rotateY(Math.PI / 2).translate(0.36, 1.22, 0.1), C.gold, 1.4));
   return merge(parts);
 }
+
+/** 獵河武士（第 2 關頭目，D95，放大 2.4 倍）：青綠上衣、深紫袴、頭頂髮髻、白鉢卷、腰間長刀、肩上捲成一圈的網 */
+export function buildKawagariGeometry(): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  base(parts, { robe: palette.human.hunter, belt: palette.human.hakama, bodyScale: [1.1, 1.1, 1.05] });
+  hairBack(parts, C.hair);
+  // 髮髻：頭頂往後的一小段
+  parts.push(paint(new THREE.CylinderGeometry(0.05, 0.05, 0.2, 5).rotateX(Math.PI / 2).translate(0, CHIBI.headY + 0.3, -0.06), C.hair, 1.1));
+  // 鉢卷
+  parts.push(paint(new THREE.TorusGeometry(CHIBI.headR * 0.99, 0.04, 3, 8).rotateX(Math.PI / 2 - 0.1).translate(0, CHIBI.headY + 0.08, 0), C.collar, 1.25));
+  // 長刀：左腰斜插（鞘深色、刀柄白）
+  parts.push(paint(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 5).rotateZ(1.2).translate(-0.12, 0.34, -0.05), palette.human.robe, 1.1));
+  parts.push(paint(new THREE.CylinderGeometry(0.032, 0.032, 0.22, 5).rotateZ(1.2).translate(0.32, 0.5, -0.05), palette.human.steel, 1.2));
+  // 網：右肩上捲成一圈
+  parts.push(paint(new THREE.TorusGeometry(0.2, 0.06, 4, 10).rotateY(Math.PI / 2).translate(0.3, 0.62, -0.08), palette.human.net, 1.15));
+  return merge(parts);
+}

@@ -11,6 +11,7 @@ import type { StatId } from '../data/stats';
 import type { ElementSlot } from '../systems/elements';
 import { ULT } from '../data/ultimates';
 import { STAGE } from '../data/stage';
+import { ENEMIES, ENEMY_IDS } from '../data/enemies';
 import { PICKUPS } from '../data/pickups';
 import { BARRIER, DOSOJIN, TRIAL, JIZO, OFFERING, trialNeeds, SUMMIT, OFFERING_TECH } from '../data/elements';
 
@@ -51,7 +52,7 @@ export function buildHud(parent: HTMLElement): Hud {
       <div class="hud-wave"><b id="wave-text"></b><span id="wave-timer"></span><i id="wave-diff" class="hidden"></i><em id="wave-note"></em></div>
       <div class="hud-btns"><button class="hud-abilities" id="btn-abilities" type="button">${t('hud.abilities')}</button><button class="hud-pause" id="btn-pause" type="button" aria-label="${t('pause.button')}">II</button></div>
     </div>
-    <div class="hud-boss hidden" id="boss-bar"><span>${t('hud.boss')}</span><div class="bar"><i id="boss-fill"></i></div></div>
+    <div class="hud-boss hidden" id="boss-bar"><span id="boss-name">${t('hud.boss')}</span><div class="bar"><i id="boss-fill"></i></div></div>
     <div class="hud-element hidden" id="element-box"><b id="element-title"></b><span id="element-desc"></span><div class="bar"><i id="element-fill"></i></div><em id="element-act"></em></div>
     <div class="hud-trial hidden" id="trial-box"></div>
     <div class="hud-synergy hidden" id="synergy-box"></div>
@@ -97,6 +98,7 @@ export function buildHud(parent: HTMLElement): Hud {
   const waveDiff = q('wave-diff');
   const bossBar = q('boss-bar');
   const bossFill = q('boss-fill');
+  const bossName = q('boss-name');
   const portalBox = q('portal-box');
   const portalArrow = q('portal-arrow');
   const portalText = q('portal-text');
@@ -216,7 +218,10 @@ export function buildHud(parent: HTMLElement): Hud {
       if (bossAlive !== lastBoss) {
         lastBoss = bossAlive;
         bossBar.classList.toggle('hidden', !bossAlive);
+        // 頭目名字（D95：每關各自的頭目）
+        if (bossAlive) bossName.textContent = t(ENEMIES[ENEMY_IDS[run.enemies.kind[bi]]].name as I18nKey);
       }
+      if (bossAlive) bossBar.classList.toggle('phase2', run.boss.phase2);
       if (bossAlive) bossFill.style.width = `${Math.max(0, run.enemies.hp[bi] / run.enemies.maxHp[bi]) * 100}%`;
       // 傳送門箭頭：相對鏡頭的方向與距離
       // 傳送門優先；還沒開的召喚祭壇也用同一個箭頭（D34）
