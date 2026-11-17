@@ -20,7 +20,7 @@ export const WAVES = {
   /** 敵人強度（第 n 波、夜深度 d） */
   hpPerWave: 0.3,
   hpPerNight: 0.15,
-  damagePerWave: 0.08,
+  damagePerWave: 0.16, // D93 夜行 B：0.08 → 0.16（第 20 波接觸傷害 ×2.5 → ×4；後段被碰到才會痛）
   speedPerNight: 0.03,
   /** 同畫面敵人上限（桌機／手機）；超過的點數留到下一批 */
   maxEnemiesDesktop: 400,

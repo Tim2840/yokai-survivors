@@ -85,7 +85,7 @@ export const YOKAI: Record<string, YokaiDef> = {
     base: { maxHp: 110, speed: 4.0, regen: 0.8 },
     weapon: {
       id: 'ghostfire',
-      damage: 12,
+      damage: 10, // D93 夜行：12 → 10（主武器自動升級＋前段升級加快之後，提燈小僧三種機器人都 95～100% 過關；穿透 1 保留，前期才不會被圍死）
       interval: 0.7,
       range: 9,
       volley: 1,

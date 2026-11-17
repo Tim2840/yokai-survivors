@@ -3,7 +3,7 @@
 // 用開發介面 giveTech／techLevel 直接把技法練到 5 級（真的練要很久），其餘全是真實操作。
 import { openPage, startRun, press, step, expect, shot, reportErrors, walkOnto, hudTopOk, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'v2', desc: '技法進化：兩招 5 級→提示→合魂祠出現、箭頭→走過去按住→進化面板→點進化卡→HUD 進化成功→能力面板列出進化、少佔一格；技法卡帶詞條、不再有適合加成（三種畫面）', max: 240, stall: 60 };
+export const meta = { id: 'v2', desc: '技法進化：技法 4 級＋魂玉→提示→合魂祠出現、箭頭→走過去按住→進化面板→點進化卡→HUD 進化成功→能力面板列出進化、少佔一格；技法卡帶詞條、不再有適合加成（三種畫面）', max: 240, stall: 60 };
 
 const inViewOf = (vp) => (c) => c.r.x >= 0 && c.r.y >= 0 && c.r.x + c.r.w <= vp.width + 1 && c.r.y + c.r.h <= vp.height + 1;
 
@@ -89,7 +89,7 @@ export async function run(browser) {
         await page.evaluate(() => window.__game.render());
         expect(await open(), `按住合魂祠沒有開進化面板`);
         const cs = await cardsInfo();
-        expect(cs.length === 1 && cs[0].id === 'evo:evoRing' && /進化/.test(cs[0].t) && /燈籠環 Lv5/.test(cs[0].t) && /鬼火 Lv5/.test(cs[0].t), `進化卡不對：${JSON.stringify(cs)}`);
+        expect(cs.length === 1 && cs[0].id === 'evo:evoRing' && /進化/.test(cs[0].t) && /燈籠環 Lv4 ＋ 魂玉/.test(cs[0].t) && !/鬼火 Lv/.test(cs[0].t), `進化卡不對（D93：材料是「技法 4 級＋魂玉」）：${JSON.stringify(cs)}`);
         for (const c of cs) expect(inView(c), `進化卡超出畫面（${vp.name}）：${JSON.stringify(c.r)}`);
         files.push(await shot(ctx, 'v2-pick'));
         const used0 = await page.evaluate(() => window.__game.run.techs.length);
@@ -111,7 +111,7 @@ export async function run(browser) {
         await press(ctx, '#btn-abilities');
         await page.waitForFunction(() => window.__game.screens.includes('pause'));
         const evo = await page.evaluate(() => [...document.querySelectorAll('#sum-evo li')].map((li) => ({ id: li.dataset.evo, done: li.classList.contains('fused'), t: li.innerText.replace(/\s+/g, ' ') })));
-        expect(evo.some((e) => e.id === 'evoRing' && e.done && /燈籠環 Lv5\/5/.test(e.t)), `能力面板沒列出已進化：${JSON.stringify(evo)}`);
+        expect(evo.some((e) => e.id === 'evoRing' && e.done && /燈籠環 Lv4\/4/.test(e.t)), `能力面板沒列出已進化：${JSON.stringify(evo)}`);
         const form = await page.evaluate(() => {
           const el = document.querySelector('#sum-evo li[data-evo="evoRing"] .evo-form');
           return el ? { lv: el.dataset.formLevel, items: [...el.querySelectorAll('i')].map((i) => ({ ok: i.classList.contains('ok'), t: i.innerText })) } : null;

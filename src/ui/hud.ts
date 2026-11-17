@@ -202,7 +202,7 @@ export function buildHud(parent: HTMLElement): Hud {
       const intro = run.enemyIntro && run.clock < run.enemyIntro.until ? run.enemyIntro.key : '';
       const fnote = run.formNote && run.clock < run.formNote.until ? t('hud.formNote', { name: t(`form.${run.yokai.id}.${run.formNote.form}` as I18nKey) }) : '';
       const wnote = run.weaponNote && run.clock < run.weaponNote.until ? t('hud.weaponNote', { weapon: t(`tech.${run.weaponItemId}` as I18nKey), lv: run.weaponNote.level }) : '';
-      const gnote = run.gemNote && run.clock < run.gemNote.until ? t('hud.gemNote', { n: run.soulGems }) : '';
+      const gnote = run.gemNote && run.clock < run.gemNote.until ? t('hud.gemNote') : '';
       const hnote = run.highNote && run.clock < run.highNote.until ? t('hud.highGround') : '';
       const noteText = run.director.swarm ? t('hud.swarm') : fnote ? fnote : gnote ? gnote : wnote ? wnote : hnote ? hnote : intro ? t(intro as I18nKey) : run.portal.active ? t('hud.bossDown') : altar ? t('hud.summonNote') : shrine ? t('hud.fuseNote') : dosojin ? t('hud.dosojinNote') : summit && run.time < 15 ? t('hud.summitNote') : '';
       if (noteText !== lastNote) {

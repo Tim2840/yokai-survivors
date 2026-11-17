@@ -379,7 +379,7 @@ export function installDevApi(ctx: DevContext): void {
     eliteKill: () => {
       const r = run();
       if (!r) return false;
-      const i = r.enemies.spawn(0, r.px + 2, r.pz, r.director.virtualWave(), 0, 0, 1);
+      const i = r.enemies.spawn(0, r.px + 9, r.pz, r.director.virtualWave(), 0, 0, 1); // 離遠一點：掉的補給品不會馬上被撿到、蓋掉 HUD 提示
       if (i < 0) return false;
       r.weaponHit(i, 1e9, 0, 0, 0, false);
       return true;

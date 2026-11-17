@@ -40,8 +40,9 @@ describe('老練的人類', () => {
     expect(en.speed[b]).toBe(en.speed[a]);
   });
 
-  it('跑一關：兩分鐘前沒有老練的，之後出現，並且第一次出現會有提示', () => {
+  it('跑一關：STAGE.veteran.from 之前沒有老練的，之後出現，並且第一次出現會有提示', () => {
     const run = make();
+    const start = STAGE.veteran.from * run.director.duration; // D93：0.2 → 0.15（1:30）
     let before = 0;
     let after = 0;
     for (let k = 0; k < 60 * 240; k++) {
@@ -49,12 +50,12 @@ describe('老練的人類', () => {
       run.step(DT);
       let n = 0;
       for (let i = 0; i < run.enemies.high; i++) if (run.enemies.alive[i] && run.enemies.vet[i]) n++;
-      if (run.clock < 119) before = Math.max(before, n);
+      if (run.clock < start - 1) before = Math.max(before, n);
       else after = Math.max(after, n);
       run.god = true;
     }
-    expect(before, '兩分鐘前就出現老練的').toBe(0);
-    expect(after, '兩分鐘後沒有老練的').toBeGreaterThan(0);
+    expect(before, '還沒到時間就出現老練的').toBe(0);
+    expect(after, '時間到了沒有老練的').toBeGreaterThan(0);
     expect(run.enemyIntro?.key === 'enemy.veteran.intro' || run.director.veteranSeen).toBe(true);
   });
 });
