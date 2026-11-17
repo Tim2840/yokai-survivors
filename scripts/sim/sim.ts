@@ -11,7 +11,7 @@ import { writeFileSync } from 'node:fs';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { resetTuning, tuning } from '../../src/data/tuning';
-import { TECHS, TECH_OFFER, TECH_SWAP_PREFIX, techsFor } from '../../src/data/techniques';
+import { EVO, SOUL_GEM, TECHS, TECH_OFFER, TECH_SWAP_PREFIX, techsFor } from '../../src/data/techniques';
 import { YOKAI } from '../../src/data/yokai';
 import { PROGRESSION, XP_BUDGET, cumXp as cumXpDbg } from '../../src/data/progression';
 import { WAVES } from '../../src/data/waves';
@@ -107,6 +107,8 @@ function applyTune(): void {
     else if (k.startsWith('w.')) (WAVES as unknown as Record<string, number>)[k.slice(2)] = Number(v);
     else if (k.startsWith('tech.')) (TECH_OFFER as unknown as Record<string, number>)[k.slice(5)] = Number(v);
     else if (k.startsWith('shards.')) (SHARDS as unknown as Record<string, number>)[k.slice(7)] = Number(v);
+    else if (k.startsWith('evo.')) (EVO as unknown as Record<string, number>)[k.slice(4)] = Number(v);
+    else if (k.startsWith('gem.')) (SOUL_GEM as unknown as Record<string, number>)[k.slice(4)] = Number(v);
     else if (k.startsWith('xp.')) (PROGRESSION as unknown as Record<string, number>)[k.slice(3)] = Number(v);
     else if (/^budget\.t\d$/.test(k)) (XP_BUDGET.targets as unknown as number[][])[Number(k.slice(8))][1] = Number(v); // budget.t1=9：第 1 關第 i 個目標點的等級
     else if (k.startsWith('budget.')) (XP_BUDGET as unknown as Record<string, number | boolean>)[k.slice(7)] = k === 'budget.on' ? v === '1' : Number(v);
@@ -198,6 +200,8 @@ interface Result {
   weapon4At: number;
   /** 玩家到 10、20 級（化身）的時間，與每個四分之一時段結束時的等級（docs/32 成長曲線用） */
   lv10At: number;
+  /** 第一次進化的時間（秒，-1 = 沒進化） */
+  evoAt: number;
   lv20At: number;
   lvQ: number[];
   techLvSum: number;
@@ -258,6 +262,7 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   let weaponMaxAt = -1;
   let weapon4At = -1;
   let lv10At = -1;
+  let evoAt = -1;
   let lv20At = -1;
   const lvQ: number[] = [];
   let aliveSum = 0;
@@ -387,6 +392,7 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     lastHp = run.hp;
     if (weapon4At < 0 && run.weaponLevel >= 4) weapon4At = totalTime + run.time;
     if (lv10At < 0 && run.level >= 10) lv10At = totalTime + run.time;
+    if (evoAt < 0 && run.tech.evolved.length > 0) evoAt = totalTime + run.time;
     if (lv20At < 0 && run.level >= 20) lv20At = totalTime + run.time;
     if (totalTime === 0) { const q = Math.min(3, Math.floor((run.time / tuning.stageSeconds) * 4)); lvQ[q] = run.level; }
     if (process.env.XPDBG && totalTime === 0 && Math.abs((run.time % 30) - 0) < 0.06 && run.time > 1) console.error(`t${run.time.toFixed(0)} lv${run.level} tgt${run.targetLevel.toFixed(1)} ppt${run.xpPerPoint.toFixed(2)} spawned${(run as unknown as { enemies: { spawnedPoints: number } }).enemies.spawnedPoints.toFixed(0)} kills${run.kills} have${(cumXpDbg(run.level)+run.xp).toFixed(1)} want${cumXpDbg(run.targetLevel).toFixed(1)} ground${(()=>{const o=(run as unknown as {orbs:{high:number;alive:Uint8Array;value:Float32Array}}).orbs;let g=0;for(let i=0;i<o.high;i++)if(o.alive[i])g+=o.value[i];return g.toFixed(1);})()} hp${run.hp.toFixed(0)}`);
@@ -435,6 +441,7 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     weaponMaxAt,
     weapon4At,
     lv10At,
+    evoAt,
     lv20At,
     lvQ,
     weaponLv: run.weaponLevel,
@@ -601,7 +608,7 @@ function summarize(rs: Result[]): string {
     `補給品 ${avg(rs.map((r) => r.pickups)).toFixed(1)} 個`,
     `10 級中位第 ${pct(rs.filter((r) => r.lv10At >= 0).map((r) => r.lv10At), 50)?.toFixed(0) ?? '-'} 秒、20 級中位第 ${pct(rs.filter((r) => r.lv20At >= 0).map((r) => r.lv20At), 50)?.toFixed(0) ?? '-'} 秒（到 20 級 ${((rs.filter((r) => r.lv20At >= 0).length / rs.length) * 100).toFixed(0)}%）；四段結束等級 ${[0, 1, 2, 3].map((q) => avg(rs.filter((r) => r.lvQ[q] !== undefined).map((r) => r.lvQ[q])).toFixed(0)).join('／')}`,
     `主武器 4 級中位第 ${pct(rs.filter((r) => r.weapon4At >= 0).map((r) => r.weapon4At), 50)?.toFixed(0) ?? '-'} 秒、滿級 ${((rs.filter((r) => r.weaponMaxAt >= 0).length / rs.length) * 100).toFixed(0)}%（中位第 ${pct(rs.filter((r) => r.weaponMaxAt >= 0).map((r) => r.weaponMaxAt), 50)?.toFixed(0) ?? '-'} 秒）、結束時平均 ${avg(rs.map((r) => r.weaponLv)).toFixed(1)} 級`,
-    `技法等級合計 ${avg(rs.map((r) => r.techLvSum)).toFixed(1)}、最高技法 Lv${avg(rs.map((r) => r.techMaxLv)).toFixed(1)}（≥5 級 ${share(rs, (r) => r.techMaxLv >= 5)}、≥6 級 ${share(rs, (r) => r.techMaxLv >= 6)}、8 級 ${share(rs, (r) => r.techMaxLv >= 8)}；進化≥1 次 ${share(rs, (r) => r.evolved >= 1)}）`,
+    `技法等級合計 ${avg(rs.map((r) => r.techLvSum)).toFixed(1)}、最高技法 Lv${avg(rs.map((r) => r.techMaxLv)).toFixed(1)}（≥5 級 ${share(rs, (r) => r.techMaxLv >= 5)}、≥6 級 ${share(rs, (r) => r.techMaxLv >= 6)}、8 級 ${share(rs, (r) => r.techMaxLv >= 8)}；進化≥1 次 ${share(rs, (r) => r.evolved >= 1)}、第一次進化中位第 ${pct(rs.filter((r) => r.evoAt >= 0).map((r) => r.evoAt), 50)?.toFixed(0) ?? '-'} 秒）`,
     `場上敵人 平均 ${avg(rs.map((r) => r.aliveAvg)).toFixed(0)}、最多 ${avg(rs.map((r) => r.alivePeak)).toFixed(0)}（四個時段 ${[0, 1, 2, 3].map((i) => { const v = rs.map((r) => r.aliveQ[i]).filter((x) => x >= 0); return v.length ? avg(v).toFixed(0) : '-'; }).join('／')}；每分鐘被打掉生命 ${[0, 1, 2, 3].map((i) => { const v = rs.map((r) => r.hurtQ[i]).filter((x) => x >= 0); return v.length ? avg(v).toFixed(0) : '-'; }).join('／')}）`,
     `死在召喚後 ${rs.filter((r) => r.diedAfterSummon >= 0).length} 局（中位 ${pct(rs.filter((r) => r.diedAfterSummon >= 0).map((r) => r.diedAfterSummon), 50)?.toFixed(0) ?? '-'} 秒）`,
     `召喚頭目 ${((rs.filter((r) => r.summonedAt >= 0).length / rs.length) * 100).toFixed(0)}%（平均第 ${avg(rs.filter((r) => r.summonedAt >= 0).map((r) => r.summonedAt)).toFixed(0)} 秒）`,
