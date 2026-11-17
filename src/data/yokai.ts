@@ -126,7 +126,7 @@ YOKAI.kappa = {
     projectileSpeed: 11,
     turnRate: 2,
     lifetime: 0.65,
-    hitRadius: 0.6,
+    hitRadius: 0.8, // 2026-11-17：0.6→0.8（子彈不再追蹤，水盤直線飛；sim 開局倒下 2～3/20 → 0/20）
     pierce: 30,
     splashRadius: 0,
     splashRatio: 0,

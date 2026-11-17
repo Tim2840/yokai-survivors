@@ -118,7 +118,7 @@ export const TECHS: readonly TechDef[] = [
     kind: 'onHit',
     likes: ['volley', 'power', 'atkSpeed'],
     excludes: ['ring'],
-    bounce: { range: 6, jumps: 3, damage: 0.8 }, // 平衡第一輪（2026-11-16）：跳 2→3、傷害 0.7→0.8
+    bounce: { range: 6, jumps: 3, damage: 0.6 }, // 平衡第一輪（2026-11-16）：跳 2→3、傷害 0.7→0.8；2026-11-17 子彈不追蹤、只有彈跳會追 → 每跳 0.8→0.6（靠詞條與進化變強）
   },
   {
     id: 'homing',
@@ -200,7 +200,7 @@ export const TECHS: readonly TechDef[] = [
     kind: 'onHit',
     likes: ['volley', 'power', 'atkSpeed'],
     excludes: ['whirl'],
-    bounce: { range: 6, jumps: 2, damage: 0.7 },
+    bounce: { range: 6, jumps: 2, damage: 0.55 }, // 2026-11-17：0.7→0.55（只有彈跳會追，跳的那下先弱、靠詞條與進化變強）
   },
   {
     id: 'backwash',

@@ -129,8 +129,8 @@ export class Projectiles {
           continue;
         }
         steer = true;
-      } else {
-        // 追蹤：目標死了就重找最近的
+      } else if (this.gen[i] === COMBAT.trackGen) {
+        // 只有彈跳會追（使用者 2026-11-17）：目標死了就重找最近的；其他子彈出手時瞄好、直線飛
         let t = this.target[i];
         if (t < 0 || !enemies.alive[t]) {
           t = enemies.nearest(this.x[i], this.z[i], w.range * rangeMult);
