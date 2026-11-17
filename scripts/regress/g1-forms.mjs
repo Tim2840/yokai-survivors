@@ -92,8 +92,16 @@ export async function run(browser) {
         expect(/化身/.test(note) && /提燈法師/.test(note), `畫面沒有化身的提示：「${note}」`);
         await hudTopOk(ctx, '（化身提示）');
         files.push(await shot(ctx, 'g1-form'));
+        // 截圖時畫面往前跑，撿到的魂火可能又升一級（D98 起鬼火卡也在選卡裡，待選比較多）：按「能力」前先選掉
+        for (let g = 0; g < 20 && (await page.evaluate(() => window.__game.screens)).includes('levelup'); g++) {
+          const cs = await cards(page);
+          await page.locator('.overlay[data-screen="levelup"] .card').nth(Math.max(0, cs.findIndex((c) => !c.id.startsWith('tech')))).click();
+          await page.evaluate(() => { window.__game.render(); });
+        }
         await press(ctx, '#btn-abilities');
-        await page.waitForFunction(() => window.__game.screens.includes('pause'));
+        await page.waitForFunction(() => window.__game.screens.includes('pause'), null, { timeout: 8000 }).catch(async () => {
+          throw new Error(`按了「能力」沒有開暫停頁：${JSON.stringify(await page.evaluate(() => ({ screens: window.__game.screens, state: window.__game.state })))}`);
+        });
         const f = await page.evaluate(() => { const li = document.querySelector('#sum-form li'); return { form: li.dataset.form, t: li.innerText.replace(/\s+/g, ' ') }; });
         expect(f.form === '1' && /提燈法師/.test(f.t) && /20 級時化身/.test(f.t) && /第 2 次化身後可學：鬼火柱/.test(f.t) && !/可學：(狐火分裂|燈籠環)/.test(f.t), `能力面板的化身那一格不對：${JSON.stringify(f)}`);
         files.push(await shot(ctx, 'g1-pause'));
