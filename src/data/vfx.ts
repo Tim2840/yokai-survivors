@@ -199,7 +199,7 @@ export const ONI_FX = {
   noise: 1.5,
   taper: 0.82,
   glow: { ...FIRE_FX.glow, color: '#b46aff' },
-  smoke: { dark: '#4a3a5e', light: '#8f7fa8', up: 1.3, life: 0.8, grow: 1.5 },
+  smoke: { dark: '#8a6fb4', light: '#d8c8f0', up: 1.3, life: 0.8, grow: 1.5 },
   spark: { size: 0.12, up: 1.2, spread: 2.6, life: 0.45, lift: 0.2, sway: 0.3 },
   glint: { size: 0.5, life: 0.3 },
   /** 命中：電光（細長的短焰）、金色碎片數、光、暴擊再加閃光 */

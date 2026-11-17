@@ -452,7 +452,7 @@ export class TechFx {
       // 一筆畫出的圈（円相），每個轉不同角度；柱子落地用墨黑、護身用淡色、其他用主色
       this.m.makeRotationY(i * 2.1).scale(this.v.set(r * 1.3, 1, r * 1.3)).setPosition(x, run.map.heightAt(x, z) + DECAL_LIFT + 0.03, z);
       this.flashes.setMatrixAt(fc, this.m);
-      this.flashes.setColorAt(fc, tc.flashKind[i] === FLASH_KINDS.ward ? this.inkLight : tc.flashKind[i] === FLASH_KINDS.pillar || tc.flashKind[i] === FLASH_KINDS.sumo ? this.black : this.ink);
+      this.flashes.setColorAt(fc, tc.flashKind[i] === FLASH_KINDS.ward ? this.inkLight : tc.flashKind[i] === FLASH_KINDS.pillar || tc.flashKind[i] === FLASH_KINDS.sumo ? (this.oni ? this.inkLight : this.black) : this.ink);
       this.flashFade.setX(fc, 0.04 + 0.85 * (1 - f));
       fc++;
       if (fire && tc.flashKind[i] !== FLASH_KINDS.ward) {
