@@ -45,6 +45,8 @@ export interface WeaponLevel {
   cooldownPct?: number;
   pierce?: number;
   splash?: number;
+  /** 揮擊半徑 +公尺（赤鬼的金棒） */
+  reach?: number;
 }
 
 /** 鬼火（提燈小僧）8 級表：Lv1 是起始。顆數、傷害、冷卻、穿透、濺射輪流加，滿級 ≈ 傷害 ×2.9、+2 顆（Lv6 的 +1 顆改成傷害 +3：鬼火分打不同目標後每顆都很值錢） */
@@ -69,12 +71,24 @@ export const WATERDISC_LEVELS: readonly WeaponLevel[] = [
   { damage: 5, volley: 1 },
 ];
 
+/** 金棒（赤鬼）8 級表（docs/35）：揮擊沒有發射數、穿透、濺射，改加傷害、半徑、冷卻 */
+export const KANABO_LEVELS: readonly WeaponLevel[] = [
+  { damage: 5 },
+  { reach: 0.4 },
+  { cooldownPct: 10 },
+  { damage: 6 },
+  { damage: 5 },
+  { cooldownPct: 10, reach: 0.4 },
+  { damage: 8 },
+];
+
 /** 每隻妖怪的主武器升級表（id = 道具 id） */
-export const WEAPON_LEVELS: Record<string, readonly WeaponLevel[]> = { ghostfire: GHOSTFIRE_LEVELS, waterdisc: WATERDISC_LEVELS };
+export const WEAPON_LEVELS: Record<string, readonly WeaponLevel[]> = { ghostfire: GHOSTFIRE_LEVELS, waterdisc: WATERDISC_LEVELS, kanabo: KANABO_LEVELS };
 
 export const ITEMS: readonly ItemDef[] = [
   { id: 'ghostfire', kind: 'weapon', maxLevel: GHOSTFIRE_LEVELS.length + 1, rarityScales: true, levelGate: 4 },
   { id: 'waterdisc', kind: 'weapon', maxLevel: WATERDISC_LEVELS.length + 1, rarityScales: true, levelGate: 4 },
+  { id: 'kanabo', kind: 'weapon', maxLevel: KANABO_LEVELS.length + 1, rarityScales: true, levelGate: 4 },
   // 屬性道具（5 級）
   { id: 'power', kind: 'stat', stat: 'power', perLevel: 10, maxLevel: 5, rarityScales: true },
   { id: 'atkSpeed', kind: 'stat', stat: 'atkSpeed', perLevel: 8, maxLevel: 5, rarityScales: true },
@@ -181,7 +195,7 @@ export function itemDown(d: ItemDef, rarity: Rarity): number {
 /** 主武器某一級的步驟 × 稀有度倍率（D53：每一級升級卡都有稀有度，加成的多寡） */
 export function scaleWeaponStep(st: WeaponLevel, rarity: Rarity): WeaponLevel {
   const m = ITEM_RARITY_MULT[rarity];
-  return { damage: (st.damage ?? 0) * m, volley: (st.volley ?? 0) * m, cooldownPct: (st.cooldownPct ?? 0) * m, pierce: (st.pierce ?? 0) * m, splash: (st.splash ?? 0) * m };
+  return { damage: (st.damage ?? 0) * m, volley: (st.volley ?? 0) * m, cooldownPct: (st.cooldownPct ?? 0) * m, pierce: (st.pierce ?? 0) * m, splash: (st.splash ?? 0) * m, reach: (st.reach ?? 0) * m };
 }
 
 /** 這一級的實際數值（已乘稀有度） */

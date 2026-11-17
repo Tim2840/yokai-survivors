@@ -142,6 +142,36 @@ YOKAI.kappa = {
   radius: 0.5,
 };
 
+YOKAI['aka-oni'] = {
+  id: 'aka-oni',
+  // 近戰坦克（docs/35 ①）：血多、有護甲、走得慢；被動「怒氣」越挨打越兇（取代光圈）
+  base: { maxHp: 130, speed: 3.8, regen: 0.8, armor: 3 },
+  weapon: {
+    id: 'kanabo',
+    kind: 'sweep',
+    damage: 20,
+    interval: 1.2,
+    range: 3,
+    arc: 2.1, // 120°
+    reach: 3,
+    shockEvery: 3,
+    shockRadius: 1.4,
+    shockDamage: 1.5,
+    volley: 1,
+    projectileSpeed: 0,
+    turnRate: 0,
+    lifetime: 0,
+    hitRadius: 0,
+    pierce: 0,
+    splashRadius: 0,
+    splashRatio: 0,
+    knockback: 6,
+  },
+  aura: { radius: 0, slow: 0 },
+  passive: { kind: 'rage', perHit: 1, max: 10, power: 0.03, decay: 5 },
+  radius: 0.55,
+};
+
 export const STARTER_YOKAI = ['chochin-kozo', 'kappa', 'aka-oni'] as const;
 /** M1 已可玩的領頭妖怪（其餘在選單顯示「製作中」） */
-export const PLAYABLE_YOKAI: readonly string[] = ['chochin-kozo', 'kappa'];
+export const PLAYABLE_YOKAI: readonly string[] = ['chochin-kozo', 'kappa', 'aka-oni'];

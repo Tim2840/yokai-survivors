@@ -109,7 +109,7 @@ function techDetailsOf(run: Run): TechDetail[] {
 }
 
 /** 主武器累計加成的文字由介面層注入（避免這裡依賴 i18n） */
-let weaponText: (s: { damage: number; volley: number; cooldownPct: number; pierce: number; splash: number }) => string = () => '';
+let weaponText: (s: { damage: number; volley: number; cooldownPct: number; pierce: number; splash: number; reach: number }) => string = () => '';
 export function setWeaponTextFormatter(f: typeof weaponText): void {
   weaponText = f;
 }
@@ -141,13 +141,14 @@ export function summarizeBuild(run: Run): BuildSummary {
   // 每一級加的東西 × 當時那張卡的稀有度（D53）
   const weaponPicks = run.picked.filter((o) => o.cardId === run.weaponItemId);
   const steps = table.slice(0, wl - 1).map((st, k) => scaleWeaponStep(st, weaponPicks[k]?.rarity ?? 'common'));
-  const wsum = { damage: 0, volley: 0, cooldownPct: 0, pierce: 0, splash: 0 };
+  const wsum = { damage: 0, volley: 0, cooldownPct: 0, pierce: 0, splash: 0, reach: 0 };
   let cd = 1;
   for (const st of steps) {
     wsum.damage += st.damage ?? 0;
     wsum.volley += st.volley ?? 0;
     wsum.pierce += st.pierce ?? 0;
     wsum.splash += st.splash ?? 0;
+    wsum.reach += st.reach ?? 0;
     if (st.cooldownPct) cd *= 1 - st.cooldownPct / 100;
   }
   wsum.cooldownPct = Math.round((1 - cd) * 100);

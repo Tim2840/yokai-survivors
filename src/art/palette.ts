@@ -28,6 +28,7 @@ export const palette = {
   /** 技法與大招特效的色組（每隻妖怪一組：main = 主色、mid = 亮色、accent = 點綴）；通用特效不寫死火的顏色（D65） */
   fx: {
     'chochin-kozo': { main: '#ff9a3c', mid: '#ffc46b', accent: '#9fe8ff', aura: '#ffd27a', light: '#ffb35c', ink: '#d8432a', inkLight: '#f08a4a' },
+    'aka-oni': { main: '#ff5a3a', mid: '#ffb347', accent: '#ffe27a', aura: '#ff7a5a', light: '#ff8a5a', ink: '#a01e2a', inkLight: '#e0503a' },
     kappa: { main: '#3fb6de', mid: '#8fdcf0', accent: '#d6f5ff', aura: '#8fdcf0', light: '#8fd4ea', ink: '#1f6f9c', inkLight: '#58b4d6' },
   } as Record<string, { main: string; mid: string; accent: string; aura: string; light: string; ink: string; inkLight: string }>,
   /** 水墨特效（D85）：墨黑、紙白；每隻妖怪的主色在 fx.<妖怪>.ink（提燈小僧 朱、河童 藍青） */

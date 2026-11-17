@@ -177,6 +177,7 @@ export function weaponLevelText(step: WeaponLevel): string {
   if (step.cooldownPct) parts.push(t('item.w.cooldown', { v: num(step.cooldownPct) }));
   if (step.pierce) parts.push(t('item.w.pierce', { v: num(step.pierce) }));
   if (step.splash) parts.push(t('item.w.splash', { v: num(step.splash) }));
+  if (step.reach) parts.push(t('item.w.reach', { v: num(step.reach) }));
   return parts.join('、');
 }
 

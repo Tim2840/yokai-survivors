@@ -21,9 +21,9 @@ export const ULT = {
 
 export type UltEffect =
   /** 以玩家為中心的範圍爆發：半徑（公尺，乘範圍屬性）、傷害 = 領頭武器傷害 × 攻擊力 × damageMult、擊退 */
-  | { type: 'nova'; radius: number; damageMult: number; knockback: number }
-  /** 暫時強化：秒數、攻擊力／攻速的百分比加成、額外鬼火數量 */
-  | { type: 'frenzy'; seconds: number; power: number; atkSpeed: number; volley: number }
+  | { type: 'nova'; radius: number; damageMult: number; knockback: number; /** 被打到的人定住幾秒（頭目不會；赤鬼的金棒大震） */ stun?: number }
+  /** 暫時強化：秒數、攻擊力／攻速的百分比加成、額外發射數（揮擊的妖怪寫 0）、受到的傷害減少比例（赤鬼的鬼神化，docs/19 場景 13） */
+  | { type: 'frenzy'; seconds: number; power: number; atkSpeed: number; volley: number; guard?: number }
   /** 護罩：無敵秒數、回復最大生命比例，並把周圍敵人震開（有傷害） */
   | { type: 'bulwark'; seconds: number; healFrac: number; radius: number; damageMult: number; knockback: number }
   /** 貫穿光束：朝最近的敵人（沒有就朝面向）射出，長度、寬度（公尺）、傷害倍率 */
@@ -47,6 +47,9 @@ export const ULTS: readonly UltDef[] = [
   // 河童（D63，草案）：防守／治療的雨乞（護罩類）、範圍攻擊的大波（沿用範圍爆發；docs/17 的「大渦潮把敵人拉進中心」之後再做）
   { id: 'rainPrayer', yokai: 'kappa', price: 0, effect: { type: 'bulwark', seconds: 4, healFrac: 0.5, radius: 7, damageMult: 3, knockback: 10 } },
   { id: 'tidalWave', yokai: 'kappa', price: 300, effect: { type: 'nova', radius: 11, damageMult: 10, knockback: 12 } },
+  // 赤鬼（docs/35 ④）：鬼神化（攻擊、攻速、減傷；揮擊沒有發射數）、金棒大震（大震波＋定住）
+  { id: 'oniGod', yokai: 'aka-oni', price: 0, effect: { type: 'frenzy', seconds: 8, power: 0.4, atkSpeed: 0.4, volley: 0, guard: 0.4 } },
+  { id: 'kanaboQuake', yokai: 'aka-oni', price: 300, effect: { type: 'nova', radius: 10, damageMult: 10, knockback: 6, stun: 1.5 } },
   // 還沒有人用的效果類型：先留著資料與測試，河童（防守／治療）、赤鬼（單體）做的時候直接用
   { id: 'bulwarkLantern', yokai: '-', price: 0, effect: { type: 'bulwark', seconds: 4, healFrac: 0.4, radius: 7, damageMult: 3, knockback: 10 } },
   { id: 'thunderSpear', yokai: '-', price: 0, effect: { type: 'beam', length: 22, width: 2.4, damageMult: 25 } },

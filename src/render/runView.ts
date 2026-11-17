@@ -8,11 +8,13 @@ import type { Run } from '../game/run';
 import { COMBAT } from '../data/combat';
 import { buildLanternMonk, type Character } from '../units/lanternMonk';
 import { buildKappa } from '../units/kappa';
+import { buildAkaOni } from '../units/akaOni';
 import { ENEMY_MODELS } from '../units/enemyModels';
 import { CHIBI } from '../units/humans';
 import { ENEMY_IDS } from '../data/enemies';
 import { EnemyShotsView } from './enemyShotsView';
 import { BossTelegraphView } from './bossTelegraphView';
+import { SwingView } from './swingView';
 import { markOverlay, pruneShadowCasters } from './overlay';
 import { buildWorldView, type WorldView } from '../world/worldView';
 import { buildAmbienceView, type AmbienceView } from '../world/ambienceView';
@@ -70,6 +72,8 @@ export class RunView {
   private readonly enemyMeshes: THREE.InstancedMesh[];
   readonly shotsView: EnemyShotsView;
   readonly bossTele: BossTelegraphView;
+  /** 揮擊武器（赤鬼）才有 */
+  readonly swingView: SwingView | null;
   readonly ambience: AmbienceView;
   /** 這一關的場景主題（時段） */
   readonly amb: AmbienceDef;
@@ -132,7 +136,7 @@ export class RunView {
     this.ambience = buildAmbienceView(map, run.seed, amb, matchMedia('(hover: none) and (pointer: coarse)').matches);
     this.group.add(this.ambience.group);
 
-    this.player = run.yokai.id === 'kappa' ? buildKappa() : buildLanternMonk();
+    this.player = run.yokai.id === 'kappa' ? buildKappa() : run.yokai.id === 'aka-oni' ? buildAkaOni() : buildLanternMonk();
     // 玩家身上的光：跟著妖怪的色組（顏色是 uniform，換色不會重編著色器；光源數量不變）
     renderer.playerLight.color.set(fxOf(run.yokai.id).light);
     renderer.playerLight.intensity = PLAYER_LIGHT_BASE * (this.amb.playerLight ?? 1);
@@ -216,6 +220,8 @@ export class RunView {
     this.group.add(this.shotsView.group);
     this.bossTele = new BossTelegraphView(run);
     this.group.add(this.bossTele.group);
+    this.swingView = run.yokai.weapon.kind === 'sweep' ? new SwingView(run) : null;
+    if (this.swingView) this.group.add(this.swingView.group);
 
     // 腳下陰影（沒有開陰影貼圖，用扁圓片代替；也讓敵人貼地看得清楚）
     const sg = new THREE.CircleGeometry(0.42, 14).rotateX(-Math.PI / 2);
@@ -358,6 +364,7 @@ export class RunView {
     this.playerShadow.position.set(run.px, ground + DECAL_LIFT, run.pz);
     this.playerShadow.scale.setScalar(Math.max(0.4, 1.25 - (run.py - ground) * 0.3));
     const ar = run.yokai.aura.radius * run.stats.value.area;
+    this.aura.visible = ar > 0;
     const ring = (this.aura.geometry.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
     for (let k = 0; k <= AURA_SEGMENTS; k++) {
       const a = (k / AURA_SEGMENTS) * TWO_PI;
@@ -450,6 +457,7 @@ export class RunView {
     this.enemyShadow.instanceMatrix.needsUpdate = true;
     this.shotsView.update();
     this.bossTele.update(t);
+    this.swingView?.update();
     this.ambience.update(t, this.renderer.camera.position, run.px, run.pz);
 
     // 鬼火
@@ -517,6 +525,7 @@ export class RunView {
     for (const m of this.enemyMeshes) m.dispose();
     this.shotsView.dispose();
     this.bossTele.dispose();
+    this.swingView?.dispose();
     this.ambience.dispose();
     this.enemyShadow.dispose();
     this.bulletMesh.dispose();

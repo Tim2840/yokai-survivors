@@ -259,6 +259,8 @@ export class Techniques {
     if (d.domain) out.domain = { ...d.domain, radius: d.domain.radius * A, seconds: d.domain.seconds * D };
     if (d.prison) out.prison = { ...d.prison, radius: d.prison.radius * A, hold: d.prison.hold * D };
     if (d.rift) out.rift = { ...d.rift, length: d.rift.length * A, width: d.rift.width * A };
+    if (d.spin) out.spin = { ...d.spin, reach: d.spin.reach * A };
+    if (d.heavy) out.heavy = { ...d.heavy, radius: d.heavy.radius * A };
     return out;
   }
   /** 效果倍率（畫面、測試用） */
@@ -566,10 +568,10 @@ export class Techniques {
   }
   /** 揮擊半徑倍率（旋風棒的範圍詞條）、震波半徑倍率（重擊的範圍詞條） */
   get swingReachMult(): number {
-    return this.act.spin ? 1 + this.afxOf('spin').area : 1;
+    return this.act.spin?.spin?.reach ?? 1;
   }
   get shockRadiusMult(): number {
-    return this.act.heavy ? 1 + this.afxOf('heavy').area : 1;
+    return this.act.heavy?.heavy?.radius ?? 1;
   }
   /** 震波傷害再乘多少（重擊） */
   get shockDamageMult(): number {

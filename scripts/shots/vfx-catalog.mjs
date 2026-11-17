@@ -44,6 +44,23 @@ const SETS = {
     ['大招・雨乞', { ult: 'rainPrayer' }],
     ['大招・大波', { ult: 'tidalWave' }],
   ],
+  // 赤鬼（docs/35）：揮擊、震波、九種技法、兩招大招
+  'aka-oni': [
+    ['主武器・金棒（揮擊）', {}],
+    ['連擊', { tech: 'combo' }],
+    ['鬼門', { tech: 'onimon' }],
+    ['鬼雷', { tech: 'kaminari', until: 'pillars' }],
+    ['旋風棒', { tech: 'spin' }],
+    ['重擊', { tech: 'heavy' }],
+    ['咆哮', { tech: 'roar', until: 'sumo' }],
+    ['地裂', { tech: 'rift', until: 'sumo' }],
+    ['餘震', { tech: 'aftershock', until: 'seeds', kill: true }],
+    ['鬼氣護體', { tech: 'oniward' }],
+    ['打倒・一般', { kill: true }],
+    ['打倒・精英', { kill: true, elite: true }],
+    ['大招・鬼神化', { ult: 'oniGod' }],
+    ['大招・金棒大震', { ult: 'kanaboQuake' }],
+  ],
 };
 const only = process.argv[4] ? process.argv[4].split(',').map(Number) : null;
 const cells = SETS[yokai];

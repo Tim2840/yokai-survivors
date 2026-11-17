@@ -58,6 +58,11 @@ const KAPPA_TECHS: Record<string, string[]> = {
   dps: ['vortex', 'torrent', 'geyser', 'sumo', 'whirl', 'wake', 'prison', 'backwash', 'domain'],
   survive: ['whirl', 'domain', 'sumo', 'geyser', 'wake', 'prison', 'vortex', 'torrent', 'backwash'],
 };
+/** 赤鬼（docs/35）：輸出型偏好揮擊加強、生存型偏好護體與拉人 */
+const ONI_TECHS: Record<string, string[]> = {
+  dps: ['heavy', 'combo', 'spin', 'rift', 'aftershock', 'kaminari', 'onimon', 'roar', 'oniward'],
+  survive: ['oniward', 'spin', 'roar', 'onimon', 'heavy', 'combo', 'aftershock', 'rift', 'kaminari'],
+};
 const TECH_BY_STRATEGY: Record<string, string[]> = {
   dps: ['kitsunebi', 'bounce', 'pillar', 'seed', 'hellfire', 'lamp', 'homing', 'ring', 'ward'],
   survive: ['ring', 'ward', 'lamp', 'hellfire', 'pillar', 'seed', 'kitsunebi', 'bounce', 'homing'],
@@ -137,7 +142,7 @@ function choose(run: Run, strategy: string, rnd: () => number): number {
   const sc = SCORES[strategy];
   let best = 0;
   let bestV = -1;
-  const pref = TECH_PREF ? TECH_PREF.split(',') : (YOKAI_ID === 'kappa' ? KAPPA_TECHS : TECH_BY_STRATEGY)[strategy] ?? [];
+  const pref = TECH_PREF ? TECH_PREF.split(',') : (YOKAI_ID === 'kappa' ? KAPPA_TECHS : YOKAI_ID === 'aka-oni' ? ONI_TECHS : TECH_BY_STRATEGY)[strategy] ?? [];
   offer.forEach((o, i) => {
     let v = (sc[o.cardId === run.weaponItemId ? 'ghostfire' : o.cardId] ?? 1) * RARITY_SCORE[o.rarity];
     // 指定了技法（--give／--giveSets）就不接受「換掉一招」：不然單帶一招的局會混進化身限定的招（2026-11-16 修）

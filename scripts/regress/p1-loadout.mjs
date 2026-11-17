@@ -3,4 +3,5 @@
 export const TECH_LOADOUT = {
   'chochin-kozo': ['hellfire', 'pillar', 'seed', 'ring'],
   kappa: ['vortex', 'geyser', 'domain', 'wake'],
+  'aka-oni': ['onimon', 'kaminari', 'aftershock', 'rift'],
 };

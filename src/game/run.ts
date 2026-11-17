@@ -257,6 +257,8 @@ export class Run {
   /** 狂亂（暫時強化）與護罩結束的時間（clock）、狂亂額外鬼火 */
   /** 狐火之舞（frenzy）到幾秒（畫面讀） */
   frenzyUntil = 0;
+  /** 鬼神化（赤鬼）：強化期間受到的傷害減少比例 */
+  frenzyGuard = 0;
   private frenzyVolley = 0;
   shieldUntil = 0;
   private frenzyTotal = 1;
@@ -599,6 +601,7 @@ export class Run {
       this.stats.clearMod('ult:frenzy');
       this.frenzyUntil = 0;
       this.frenzyVolley = 0;
+      this.frenzyGuard = 0;
     }
     this.movePlayer(dt);
     const s = this.stats.value;
@@ -833,7 +836,7 @@ export class Run {
       this.invul = COMBAT.invulnerable;
       return true;
     }
-    const dmg = rawDamage * (1 + this.curse.enemyDamage) * (1 + this.difficulty * DIFFICULTY.damage) * armorMult(this.stats.value.armor);
+    const dmg = rawDamage * (1 + this.curse.enemyDamage) * (1 + this.difficulty * DIFFICULTY.damage) * armorMult(this.stats.value.armor) * (1 - this.frenzyGuard);
     this.hp -= dmg;
     this.invul = COMBAT.invulnerable;
     // 怒氣（赤鬼）：被打一次 +perHit 層，重新計時
@@ -1556,6 +1559,7 @@ export class Run {
     this.volleyBonus += step.volley ?? 0;
     this.pierceBonus += step.pierce ?? 0;
     this.splashBonus += step.splash ?? 0;
+    this.reachBonus += step.reach ?? 0;
     if (step.cooldownPct) this.cooldownMult *= 1 - step.cooldownPct / 100;
   }
 
@@ -1645,6 +1649,7 @@ export class Run {
       this.frenzyTotal = e.seconds * this.ultModsNow.radius;
       this.frenzyLabel = `ult.${id}`;
       this.frenzyVolley = e.volley;
+      this.frenzyGuard = e.guard ?? 0;
       return;
     }
     if (e.type === 'bulwark') {
@@ -1687,6 +1692,7 @@ export class Run {
       this.feed.push(en.x[o], en.z[o], dmg, false);
       const knock = en.variant[o] === 2 ? 0 : e.knockback;
       if (en.hurt(o, dmg, rx / d, rz / d, knock)) this.onKill(o);
+      else if (e.type === 'nova' && e.stun) en.applyHold(o, e.stun * this.ultModsNow.radius);
     }
   }
 

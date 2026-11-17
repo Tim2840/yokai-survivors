@@ -96,12 +96,12 @@ export interface TechDef {
   /** 水牢（佈置）：被打倒的人留下水泡（存在 life 秒）；有人碰到（radius 公尺內）就把範圍內的人困住 hold 秒並造成傷害（主武器傷害 × damage）；最多 max 顆 */
   prison?: { life: number; radius: number; hold: number; damage: number; max: number };
   // ── 赤鬼（揮擊）的機制（docs/35 ③）──
-  /** 旋風棒（近身）：一般揮擊也變 360°，傷害 × damage */
-  spin?: { damage: number };
+  /** 旋風棒（近身）：一般揮擊也變 360°，傷害 × damage、揮擊半徑 × reach（範圍詞條加在這裡） */
+  spin?: { damage: number; reach: number };
   /** 連擊（連鎖）：每次揮擊後多揮 extra 下（隔 SWING.comboDelay 秒），那一下傷害 × damage */
   combo?: { extra: number; damage: number };
   /** 重擊（近身）：每 every 下就一次震波（金棒原本 3 下），震波傷害再 × damage */
-  heavy?: { every: number; damage: number };
+  heavy?: { every: number; damage: number; /** 震波半徑倍率（範圍詞條加在這裡） */ radius: number };
   /** 地裂（佈置）：震波時沿揮擊方向裂開一條（長 length、寬 width 公尺），裂縫上的人受傷（震波傷害 × damage） */
   rift?: { length: number; width: number; damage: number };
 }
@@ -290,6 +290,99 @@ export const TECHS: readonly TechDef[] = [
     excludes: [],
     // 河童的間歇泉把人沖上天：定身 1 秒，落地再受一次傷害（傷害本身調低一點，總量和原本相近）
     pillar: { interval: 3, range: 10, radius: 1.8, damage: 2.2, life: 0.5, max: 4, launchSeconds: 1, launchDamage: 0.45 }, // 平衡第一輪：間隔 4→3、傷害 1.8→2.2
+  },
+  // ── 赤鬼（docs/35 ③）：揮擊用的 4 個新機制（連擊、旋風棒、重擊、地裂）＋沿用的 5 個（鬼門＝漩渦、鬼雷＝火柱、咆哮＝推掌 360°、餘震＝火種、鬼氣護體＝護身火）──
+  {
+    id: 'combo',
+    weapon: 'kanabo',
+    family: 'chain',
+    kind: 'passive',
+    likes: ['power', 'atkSpeed', 'combo'],
+    excludes: [],
+    combo: { extra: 1, damage: 0.6 },
+  },
+  {
+    id: 'onimon',
+    mech: 'vortex',
+    form: 1,
+    weapon: 'kanabo',
+    family: 'chain',
+    kind: 'onHit',
+    likes: ['area', 'power', 'reach'],
+    excludes: [],
+    // 近戰最需要的：把人拉過來（拉力比河童的渦流強）
+    vortex: { radius: 3.8, seconds: 2, tick: 0.4, pull: 3.2, damage: 0.35, max: 3 },
+  },
+  {
+    id: 'kaminari',
+    mech: 'pillar',
+    form: 2,
+    weapon: 'kanabo',
+    family: 'chain',
+    kind: 'extra',
+    likes: ['power', 'area', 'atkSpeed'],
+    excludes: [],
+    // 遠處補強：每隔幾秒在人最多的地方落雷
+    pillar: { interval: 3.2, range: 11, radius: 1.9, damage: 2.6, life: 0.4, max: 4 },
+  },
+  {
+    id: 'spin',
+    weapon: 'kanabo',
+    family: 'near',
+    kind: 'passive',
+    likes: ['area', 'reach', 'power'],
+    excludes: [],
+    spin: { damage: 0.8, reach: 1 },
+  },
+  {
+    id: 'heavy',
+    weapon: 'kanabo',
+    family: 'near',
+    kind: 'passive',
+    likes: ['power', 'reach', 'atkSpeed'],
+    excludes: [],
+    heavy: { every: 2, damage: 1.3, radius: 1 },
+  },
+  {
+    id: 'roar',
+    mech: 'sumo',
+    form: 1,
+    weapon: 'kanabo',
+    family: 'near',
+    kind: 'extra',
+    likes: ['hp', 'armor', 'area'],
+    excludes: [],
+    // 怒吼：一圈全部震開（推掌那套機制，張角 360°、沒有身後波及）
+    sumo: { interval: 4, reach: 4, arc: 6.3, damage: 1.2, knockback: 16, chainRadius: 0, chainDamage: 0 },
+  },
+  {
+    id: 'rift',
+    weapon: 'kanabo',
+    family: 'field',
+    kind: 'passive',
+    likes: ['area', 'power', 'reach'],
+    excludes: [],
+    rift: { length: 7, width: 1.6, damage: 1 },
+  },
+  {
+    id: 'aftershock',
+    mech: 'seed',
+    weapon: 'kanabo',
+    family: 'field',
+    kind: 'onHit',
+    likes: ['power', 'area', 'combo'],
+    excludes: [],
+    seed: { delay: 0.8, radius: 2.6, damage: 1.2, max: 8 },
+  },
+  {
+    id: 'oniward',
+    mech: 'ward',
+    weapon: 'kanabo',
+    family: 'field',
+    kind: 'passive',
+    likes: ['hp', 'armor', 'regen'],
+    excludes: [],
+    ward: { chargeSeconds: 6, burstRadius: 3, burstDamage: 2.2 },
   },
 ];
 
@@ -490,6 +583,16 @@ export const EVOS: readonly EvoDef[] = [
     set: { geyser: { pillar: { interval: 2.5, range: 12, radius: 2.2, damage: 2.6, life: 0.5, max: 6, launchSeconds: 1.3, launchDamage: 0.45 } } },
     weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
+  // ── 赤鬼（docs/35）：每個技法＋金棒一個進化 ──
+  { id: 'evoCombo', from: ['kanabo', 'combo'], set: { combo: { combo: { extra: 2, damage: 0.75 } } }, weapon: { damage: 0.1, pierce: 0, volley: 0 } },
+  { id: 'evoOnimon', from: ['kanabo', 'onimon'], set: { onimon: { vortex: { radius: 4.6, seconds: 2.6, tick: 0.35, pull: 3.8, damage: 0.5, max: 4 } } }, weapon: { damage: 0.1, pierce: 0, volley: 0 } },
+  { id: 'evoKaminari', from: ['kanabo', 'kaminari'], set: { kaminari: { pillar: { interval: 2.4, range: 13, radius: 2.4, damage: 3.4, life: 0.5, max: 4 } } }, weapon: { damage: 0.1, pierce: 0, volley: 0 } },
+  { id: 'evoSpin', from: ['kanabo', 'spin'], set: { spin: { spin: { damage: 1.05, reach: 1.15 } } }, weapon: { damage: 0.1, pierce: 0, volley: 0 } },
+  { id: 'evoHeavy', from: ['kanabo', 'heavy'], set: { heavy: { heavy: { every: 2, damage: 1.9, radius: 1.2 } } }, weapon: { damage: 0.1, pierce: 0, volley: 0 } },
+  { id: 'evoRoar', from: ['kanabo', 'roar'], set: { roar: { sumo: { interval: 3, reach: 5, arc: 6.3, damage: 1.8, knockback: 20, chainRadius: 0, chainDamage: 0 } } }, weapon: { damage: 0.1, pierce: 0, volley: 0 } },
+  { id: 'evoRift', from: ['kanabo', 'rift'], set: { rift: { rift: { length: 10, width: 2.2, damage: 1.5 } } }, weapon: { damage: 0.1, pierce: 0, volley: 0 } },
+  { id: 'evoAftershock', from: ['kanabo', 'aftershock'], set: { aftershock: { seed: { delay: 0.6, radius: 3.4, damage: 1.8, max: 12 } } }, weapon: { damage: 0.1, pierce: 0, volley: 0 } },
+  { id: 'evoOniward', from: ['kanabo', 'oniward'], set: { oniward: { ward: { chargeSeconds: 4, burstRadius: 3.8, burstDamage: 3.2 } } }, weapon: { damage: 0.1, pierce: 0, volley: 0 } },
 ];
 
 export const evoById = (id: string): EvoDef => {

@@ -7,7 +7,12 @@ export type VfxStyle = 'fire' | 'water' | 'ink';
 export const VFX_STYLE: Record<string, VfxStyle> = {
   'chochin-kozo': 'fire',
   kappa: 'water',
+  // 赤鬼：第一版沿用火的樣子（紅、金）；鬼氣／雷的專屬樣子照 docs/30 第 ⑩ 節事件表另做（docs/35 ⑥）
+  'aka-oni': 'fire',
 };
+
+/** 揮擊的樣子（SwingView，赤鬼的金棒）：停留秒數、透明度、離地高度（震波另一組，比較久、比較亮） */
+export const SWING_VIEW = { life: 0.18, opacity: 0.7, shockLife: 0.32, shockOpacity: 0.85, lift: 0.12 } as const;
 
 /**
  * 屬性特效引擎（ElementFx）共用的外觀數字：火、水各一份（FIRE_FX、WATER_FX）。
