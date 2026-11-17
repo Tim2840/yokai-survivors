@@ -7,7 +7,7 @@ import { TECH_MAX, TECH_SLOTS, mechOf, techById, EVO, SOUL_GEM } from '../data/t
 import { CARD_CHOICES, PROGRESSION, RARITIES_UNLOCKED_M1, XP_BUDGET, cumXp, targetLevel, xpNeed } from '../data/progression';
 import { DOSOJIN, FUSE, SUMMIT, BARRIER_TECH, OFFERING_TECH } from '../data/elements';
 import { ENEMY_INTRO_SECONDS } from '../data/enemies';
-import { WEAPON_AUTO, itemPoolFor, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById, scaleWeaponStep } from '../data/items';
+import { SWING, WEAPON_AUTO, itemPoolFor, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById, scaleWeaponStep } from '../data/items';
 import { EVO_CARD_PREFIX, TECH_CARD_PREFIX, TECH_KEEP, TECH_OFFER, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard } from '../data/techniques';
 import { Techniques } from './techniques';
 import { BossSkills } from './bossSkills';
@@ -168,6 +168,12 @@ export class Run {
   /** 碎火（D43）：平均每次命中多飛出幾片 */
   shardBonus = 0;
   pierceBonus = 0;
+  /** 揮擊專用（赤鬼）：連打＝每次揮擊平均多揮幾下（小數 = 機率）、長柄＝揮擊半徑加幾公尺 */
+  comboBonus = 0;
+  reachBonus = 0;
+  /** 排隊中的追加揮擊（連打、連擊）：還剩幾下、下一下倒數 */
+  private comboLeft = 0;
+  private comboT = 0;
   /** 主武器升級帶來的：基礎傷害加值、冷卻倍率（< 1 = 變快） */
   weaponDamageBonus = 0;
   cooldownMult = 1;
@@ -175,6 +181,23 @@ export class Run {
   readonly tech: Techniques;
   /** 頭目技能（D95） */
   readonly boss: BossSkills;
+  /** 角色資源（docs/35）：怒氣層數、離掉一層還剩幾秒 */
+  rage = 0;
+  private rageT = 0;
+  /** HUD 的角色資源條（沒有被動資源的妖怪 = null） */
+  get resource(): { kind: 'rage'; value: number; max: number } | null {
+    const p = this.yokai.passive;
+    return p ? { kind: p.kind, value: this.rage, max: p.max } : null;
+  }
+  private setRage(n: number): void {
+    const p = this.yokai.passive;
+    if (!p) return;
+    const v = Math.max(0, Math.min(p.max, n));
+    if (v === this.rage) return;
+    this.rage = v;
+    if (v > 0) this.stats.setMod('passive:rage', { pct: { power: v * p.power } });
+    else this.stats.clearMod('passive:rage');
+  }
   /** 頭目招式給玩家的減速（比例、剩幾秒）與定身（剩幾秒） */
   slowBy = 0;
   slowT = 0;
@@ -620,6 +643,13 @@ export class Run {
     this.boss.update(dt);
     if (this.slowT > 0) this.slowT -= dt;
     if (this.rootT > 0) this.rootT -= dt;
+    if (this.rage > 0 && this.yokai.passive) {
+      this.rageT -= dt;
+      if (this.rageT <= 0) {
+        this.setRage(this.rage - 1);
+        this.rageT = this.yokai.passive.decay;
+      }
+    }
     this.updateXpBudget(dt);
     // 老練的人類第一次出現：提示一次（整局一次，不是每關）
     if (this.director.veteranSeen && !this.veteranNoted) {
@@ -806,6 +836,12 @@ export class Run {
     const dmg = rawDamage * (1 + this.curse.enemyDamage) * (1 + this.difficulty * DIFFICULTY.damage) * armorMult(this.stats.value.armor);
     this.hp -= dmg;
     this.invul = COMBAT.invulnerable;
+    // 怒氣（赤鬼）：被打一次 +perHit 層，重新計時
+    const pv = this.yokai.passive;
+    if (pv?.kind === 'rage') {
+      this.setRage(this.rage + pv.perHit);
+      this.rageT = pv.decay;
+    }
     this.bus.emit('playerHurt', { damage: dmg, hp: this.hp });
     return true;
   }
@@ -877,7 +913,7 @@ export class Run {
   /** 揮擊次數（sweep 武器：每 shockEvery 下一次震波） */
   private swings = 0;
   /** 最近一次揮擊（畫面與測試用）：時間（clock）、朝向、是不是震波 */
-  lastSwing: { at: number; dx: number; dz: number; shock: boolean } | null = null;
+  lastSwing: { at: number; dx: number; dz: number; shock: boolean; full: boolean } | null = null;
   /** 測試用：到目前揮了幾下 */
   get swingCountForTest(): number {
     return this.swings;
@@ -889,26 +925,65 @@ export class Run {
   private sweepWeapon(dt: number): void {
     const w = this.tech.weapon;
     const s = this.stats.value;
+    // 連打／連擊：上一下之後排隊的追加揮擊（不算進「幾下一次震波」）
+    if (this.comboLeft > 0) {
+      this.comboT -= dt;
+      if (this.comboT <= 0) {
+        this.comboLeft--;
+        this.comboT = SWING.comboDelay;
+        this.swing(false, SWING.comboDamage * this.tech.comboDamageMult);
+      }
+    }
     this.fireCd -= dt;
     if (this.fireCd > 0) return;
-    const reach = (w.reach ?? 3) * s.area;
-    if (this.enemies.nearestK(this.px, this.pz, reach, 1, this.aim) <= 0) {
+    if (this.enemies.nearestK(this.px, this.pz, this.swingReach, 1, this.aim) <= 0) {
       this.fireCd = 0;
       return;
     }
     this.fireCd += (w.interval * this.cooldownMult * this.tech.intervalMult) / s.atkSpeed;
-    const t0 = this.aim[0];
-    const fx = this.enemies.x[t0] - this.px;
-    const fz = this.enemies.z[t0] - this.pz;
-    const fl = Math.hypot(fx, fz) || 1;
     this.swings++;
-    const shock = (w.shockEvery ?? 0) > 0 && this.swings % (w.shockEvery ?? 1) === 0;
-    const R = reach * (shock ? (w.shockRadius ?? 1) : 1);
-    const half = (shock ? Math.PI : (w.arc ?? Math.PI / 2) / 2);
+    const every = this.tech.shockEvery(w.shockEvery ?? 0);
+    const shock = every > 0 && this.swings % every === 0;
+    this.swing(shock, 1);
+    // 追加揮擊：連打（道具，小數 = 機率）＋連擊（技法，固定多一下）
+    const c = this.comboBonus + this.tech.comboExtra;
+    const n = Math.floor(c) + (this.rngCombat.next() < c - Math.floor(c) ? 1 : 0);
+    if (n > 0) {
+      this.comboLeft = n;
+      this.comboT = SWING.comboDelay;
+    }
+  }
+
+  /** 揮擊半徑（公尺）：金棒的 reach ＋ 長柄，× 範圍 */
+  get swingReach(): number {
+    return ((this.tech.weapon.reach ?? 3) + this.reachBonus) * this.stats.value.area * this.tech.swingReachMult;
+  }
+
+  /**
+   * 揮一下：朝最近的敵人（沒有就朝上一下的方向），扇形內的每一隻吃傷害與擊退；shock = 震波（360°、半徑與傷害加大）；mult = 傷害倍率（追加揮擊）。
+   * 旋風棒（技法）把一般揮擊也變成 360°。命中也會觸發技法的命中效果。
+   */
+  private swing(shock: boolean, mult: number): void {
+    const w = this.tech.weapon;
+    const s = this.stats.value;
+    const reach = this.swingReach;
+    let fx = this.lastSwing ? this.lastSwing.dx : Math.sin(this.facing);
+    let fz = this.lastSwing ? this.lastSwing.dz : Math.cos(this.facing);
+    if (this.enemies.nearestK(this.px, this.pz, reach * 1.5, 1, this.aim) > 0) {
+      const t0 = this.aim[0];
+      fx = this.enemies.x[t0] - this.px;
+      fz = this.enemies.z[t0] - this.pz;
+    }
+    const fl = Math.hypot(fx, fz) || 1;
+    fx /= fl;
+    fz /= fl;
+    const R = reach * (shock ? (w.shockRadius ?? 1) * this.tech.shockRadiusMult : 1);
+    const full = shock || this.tech.spinSwing;
+    const half = full ? Math.PI : (w.arc ?? Math.PI / 2) / 2;
     const cosHalf = Math.cos(half);
     const crit = this.rngCombat.next() < s.crit;
-    const dmg = this.shotDamage(crit) * this.tech.shotMult * (shock ? (w.shockDamage ?? 1) : 1);
-    this.lastSwing = { at: this.clock, dx: fx / fl, dz: fz / fl, shock };
+    const dmg = this.shotDamage(crit) * this.tech.shotMult * mult * (shock ? (w.shockDamage ?? 1) * this.tech.shockDamageMult : 1) * (this.tech.spinSwing && !shock ? this.tech.spinDamage : 1);
+    this.lastSwing = { at: this.clock, dx: fx, dz: fz, shock, full };
     const n = this.enemies.within(this.px, this.pz, R, this.splashNear);
     for (let k = 0; k < n; k++) {
       const e = this.splashNear[k];
@@ -916,12 +991,13 @@ export class Run {
       const dx = this.enemies.x[e] - this.px;
       const dz = this.enemies.z[e] - this.pz;
       const d = Math.hypot(dx, dz) || 1;
-      if ((dx * fx + dz * fz) / (d * fl) < cosHalf) continue;
+      if (!full && (dx * fx + dz * fz) / d < cosHalf) continue;
       const hx = this.enemies.x[e];
       const hz = this.enemies.z[e];
       this.weaponHit(e, dmg, dx / d, dz / d, w.knockback * (shock ? 1.5 : 1), crit);
       if (this.enemies.alive[e]) this.tech.hitFx(e, hx, hz, dmg, true, crit);
     }
+    if (shock) this.tech.onShock(this.px, this.pz, fx, fz, dmg);
   }
 
   /** 每顆鬼火的穿透次數：小數 = 機率多穿一隻 */
@@ -1521,6 +1597,8 @@ export class Run {
       const v = itemValue(d, o.rarity);
       if (d.mod === 'volley') this.volleyBonus += v;
       else if (d.mod === 'pierce') this.pierceBonus += v;
+      else if (d.mod === 'combo') this.comboBonus += v;
+      else if (d.mod === 'reach') this.reachBonus += v;
       else this.shardBonus += v;
     } else if (d.stat) {
       this.applyStat(d.stat, itemValue(d, o.rarity));

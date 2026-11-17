@@ -41,7 +41,7 @@ export type TechFamily = (typeof TECH_FAMILIES)[number];
 
 /** delivery：取代原本的發射；extra：照常發射，另外多一種出手方式；onHit：打中人類時多發生的事（出手方式打中也會觸發）；passive：自己運作，不吃也不給掛勾（歸巢、護身火） */
 export type TechKind = 'delivery' | 'extra' | 'onHit' | 'passive';
-export type TechMechanic = 'kitsunebi' | 'bounce' | 'homing' | 'rain' | 'ring' | 'ward' | 'satellite' | 'lamp' | 'hellfire' | 'seed' | 'pillar' | 'oil' | 'vortex' | 'wake' | 'sumo' | 'domain' | 'prison';
+export type TechMechanic = 'kitsunebi' | 'bounce' | 'homing' | 'rain' | 'ring' | 'ward' | 'satellite' | 'lamp' | 'hellfire' | 'seed' | 'pillar' | 'oil' | 'vortex' | 'wake' | 'sumo' | 'domain' | 'prison' | 'spin' | 'combo' | 'heavy' | 'rift';
 
 export interface TechDef {
   id: string;
@@ -95,6 +95,15 @@ export interface TechDef {
   domain?: { radius: number; seconds: number; slow: number; selfAtkSpeed: number; selfSpeed: number; selfRegen: number; max: number };
   /** 水牢（佈置）：被打倒的人留下水泡（存在 life 秒）；有人碰到（radius 公尺內）就把範圍內的人困住 hold 秒並造成傷害（主武器傷害 × damage）；最多 max 顆 */
   prison?: { life: number; radius: number; hold: number; damage: number; max: number };
+  // ── 赤鬼（揮擊）的機制（docs/35 ③）──
+  /** 旋風棒（近身）：一般揮擊也變 360°，傷害 × damage */
+  spin?: { damage: number };
+  /** 連擊（連鎖）：每次揮擊後多揮 extra 下（隔 SWING.comboDelay 秒），那一下傷害 × damage */
+  combo?: { extra: number; damage: number };
+  /** 重擊（近身）：每 every 下就一次震波（金棒原本 3 下），震波傷害再 × damage */
+  heavy?: { every: number; damage: number };
+  /** 地裂（佈置）：震波時沿揮擊方向裂開一條（長 length、寬 width 公尺），裂縫上的人受傷（震波傷害 × damage） */
+  rift?: { length: number; width: number; damage: number };
 }
 
 export const TECHS: readonly TechDef[] = [

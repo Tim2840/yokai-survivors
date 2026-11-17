@@ -68,6 +68,11 @@ export const AFFIX_STATS: Record<TechMechanic, readonly TechStat[]> = {
   sumo: ['power', 'area', 'rate', 'crit', 'critDmg'],
   domain: ['power', 'area', 'duration'],
   prison: ['power', 'area', 'duration', 'crit', 'critDmg'],
+  // 赤鬼（docs/35）：只放「真的有效果」的詞條（旋風棒、重擊的範圍＝揮擊／震波半徑；連擊的連鎖＝多揮幾下）
+  spin: ['power', 'area'],
+  combo: ['power', 'chain'],
+  heavy: ['power', 'area'],
+  rift: ['power', 'area', 'crit', 'critDmg'],
 };
 
 export interface Affix {

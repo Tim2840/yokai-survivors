@@ -102,6 +102,12 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 .hud-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: 8px; }
 .hud-left { display: flex; flex-direction: column; align-items: stretch; gap: 5px; min-width: 0; }
 .hud-left > .hud-hp { width: 100%; }
+.hud-res { display: flex; align-items: center; gap: 6px; margin-top: 4px; text-shadow: var(--hud-shadow); }
+.hud-res span { font-size: 12px; font-weight: 700; }
+.hud-res .pips { display: flex; gap: 3px; }
+.hud-res .pips i { width: 9px; height: 9px; border-radius: 3px; background: rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.3); }
+.hud-res .pips i.on { background: linear-gradient(#ff8a5a, #d8322a); border-color: rgba(255,200,170,0.8); }
+.hud-res.full .pips i.on { box-shadow: 0 0 6px #ff5a3a; }
 .hud-hp { display: flex; align-items: center; gap: 8px; min-width: 0; }
 /* 限時效果的倒數標籤（D78）：好的暖色、壞的紅色；底下一條會縮短的線 */
 .hud-buffs { align-self: flex-start; display: flex; flex-wrap: wrap; gap: 4px; max-width: clamp(150px, 34vw, 340px); pointer-events: none; }

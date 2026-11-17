@@ -1,5 +1,5 @@
 import { COMBAT } from '../data/combat';
-import { DELIVERY_CONVERT } from '../data/items';
+import { DELIVERY_CONVERT, SWING } from '../data/items';
 import { EVO, evosFor, mechOf, TECHS, TECH_CHOICES, TECH_LEVELS, TECH_MAX, TECH_OFFER, TECH_RULES, evoById, techById, techsFor, type EvoDef, type TechDef, type TechMechanic } from '../data/techniques';
 import type { WeaponDef } from '../data/yokai';
 import { emptyAffixes, type Affix, type TechStat } from '../data/affixes';
@@ -42,7 +42,7 @@ export class Techniques {
   /** 已進化的配方 id（D53）：兩個材料技法併成一個，效果 × EVO.power、參數換成進化後的值 */
   readonly evolved: string[] = [];
   /** 現在作用中的技法（依機制；沒有 = null） */
-  readonly act: Record<TechMechanic, TechDef | null> = { kitsunebi: null, bounce: null, homing: null, rain: null, ring: null, ward: null, satellite: null, lamp: null, hellfire: null, seed: null, pillar: null, oil: null, vortex: null, wake: null, sumo: null, domain: null, prison: null };
+  readonly act: Record<TechMechanic, TechDef | null> = { kitsunebi: null, bounce: null, homing: null, rain: null, ring: null, ward: null, satellite: null, lamp: null, hellfire: null, seed: null, pillar: null, oil: null, vortex: null, wake: null, sumo: null, domain: null, prison: null, spin: null, combo: null, heavy: null, rift: null };
 
   // ── 繞身（燈籠環、衛星燈）──
   ringAngle = 0;
@@ -258,6 +258,7 @@ export class Techniques {
     if (d.sumo) out.sumo = { ...d.sumo, reach: d.sumo.reach * A, chainRadius: d.sumo.chainRadius * A, interval: d.sumo.interval / R };
     if (d.domain) out.domain = { ...d.domain, radius: d.domain.radius * A, seconds: d.domain.seconds * D };
     if (d.prison) out.prison = { ...d.prison, radius: d.prison.radius * A, hold: d.prison.hold * D };
+    if (d.rift) out.rift = { ...d.rift, length: d.rift.length * A, width: d.rift.width * A };
     return out;
   }
   /** 效果倍率（畫面、測試用） */
@@ -538,6 +539,69 @@ export class Techniques {
   get intervalMult(): number {
     return (this.act.hellfire?.burn?.interval ?? 1);
   }
+  // ── 揮擊（赤鬼，docs/35 ③）──
+  /** 旋風棒：一般揮擊也 360° */
+  get spinSwing(): boolean {
+    return !!this.act.spin;
+  }
+  /** 旋風棒的揮擊傷害倍率（含效果倍率） */
+  get spinDamage(): number {
+    const sp = this.act.spin?.spin;
+    return sp ? sp.damage * this.pw('spin') : 1;
+  }
+  /** 連擊：每次揮擊固定多揮幾下（含連鎖詞條） */
+  get comboExtra(): number {
+    const c = this.act.combo?.combo;
+    return c ? c.extra + this.chainExtra('combo') : 0;
+  }
+  /** 追加揮擊的傷害倍率（相對 SWING.comboDamage；沒有連擊 = 1） */
+  get comboDamageMult(): number {
+    const c = this.act.combo?.combo;
+    return c ? (c.damage / SWING.comboDamage) * this.pw('combo') : 1;
+  }
+  /** 幾下一次震波（重擊改小；base = 金棒原本的） */
+  shockEvery(base: number): number {
+    const h = this.act.heavy?.heavy;
+    return h ? h.every : base;
+  }
+  /** 揮擊半徑倍率（旋風棒的範圍詞條）、震波半徑倍率（重擊的範圍詞條） */
+  get swingReachMult(): number {
+    return this.act.spin ? 1 + this.afxOf('spin').area : 1;
+  }
+  get shockRadiusMult(): number {
+    return this.act.heavy ? 1 + this.afxOf('heavy').area : 1;
+  }
+  /** 震波傷害再乘多少（重擊） */
+  get shockDamageMult(): number {
+    const h = this.act.heavy?.heavy;
+    return h ? h.damage * this.pw('heavy') : 1;
+  }
+  /** 震波發生（Run.swing）：地裂沿揮擊方向裂開一條，裂縫上的人受傷 */
+  onShock(x: number, z: number, fx: number, fz: number, dmg: number): void {
+    const r = this.act.rift?.rift;
+    if (!r) return;
+    const run = this.run;
+    const en = run.enemies;
+    const L = r.length * run.stats.value.area;
+    const halfW = r.width / 2;
+    const base = dmg * r.damage * this.pw('rift');
+    const m = en.within(x + fx * L * 0.5, z + fz * L * 0.5, L * 0.5 + r.width, this.near);
+    for (let j = 0; j < m; j++) {
+      const e = this.near[j];
+      if (!en.alive[e]) continue;
+      const rx = en.x[e] - x;
+      const rz = en.z[e] - z;
+      const along = rx * fx + rz * fz;
+      if (along < 0 || along > L) continue;
+      if (Math.abs(rx * fz - rz * fx) > halfW + en.radius(e)) continue;
+      const k = this.ownCrit('rift');
+      run.weaponHit(e, base * k, fx, fz, 2, this.lastCrit);
+    }
+    // 畫面：沿裂縫排幾個衝擊圈（第一版；docs/35 ⑥ 再做專屬的裂縫）
+    const n = Math.max(2, Math.round(L / 2));
+    for (let i = 1; i <= n; i++) this.addFlash(x + fx * (L * i) / n, z + fz * (L * i) / n, r.width * 0.9, 0.35 + 0.05 * i, FLASH_KINDS.sumo);
+  }
+
   /** 歸巢：射出的主鬼火記號（回頭追） */
   get homingFlag(): number {
     return this.act.homing ? 1 : 0;

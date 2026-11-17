@@ -33,5 +33,9 @@ export const TECH_DETAIL: Record<TechMechanic, readonly TechDetailRow[]> = {
   wake: [['wake', 'damage', 'dmg', 'tickDamage'], ['wake', 'tick', 'sec', 'interval'], ['wake', 'radius', 'mA', 'radius'], ['wake', 'seconds', 'dur', 'duration'], ['wake', 'slow', 'pct', 'slow']],
   sumo: [['sumo', 'damage', 'dmg', 'damage'], ['sumo', 'interval', 'secA', 'interval'], ['sumo', 'reach', 'mA', 'reach'], ['sumo', 'chainDamage', 'pct', 'chainDamage']],
   domain: [['domain', 'radius', 'mA', 'radius'], ['domain', 'seconds', 'dur', 'duration'], ['domain', 'slow', 'pct', 'slow'], ['domain', 'selfAtkSpeed', 'pct', 'selfAtkSpeed'], ['domain', 'selfSpeed', 'pct', 'selfSpeed'], ['domain', 'selfRegen', 'regen', 'selfRegen']],
+  spin: [['spin', 'damage', 'pct', 'swingDamage']],
+  combo: [['combo', 'extra', 'n', 'extraSwings'], ['combo', 'damage', 'dmg', 'damage']],
+  heavy: [['heavy', 'every', 'n', 'shockEvery'], ['heavy', 'damage', 'x', 'shockDamage']],
+  rift: [['rift', 'damage', 'x', 'riftDamage'], ['rift', 'length', 'mA', 'length'], ['rift', 'width', 'm', 'width']],
   prison: [['prison', 'damage', 'dmg', 'damage'], ['prison', 'hold', 'dur', 'hold'], ['prison', 'radius', 'mA', 'radius'], ['prison', 'max', 'n', 'max']],
 };

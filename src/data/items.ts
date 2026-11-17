@@ -16,7 +16,7 @@ export const ITEM_SLOTS = 6;
 export const ITEM_RARITY_MULT: Record<Rarity, number> = { common: 1.0, rare: 1.2, epic: 1.5, legend: 2.0 };
 
 export type ItemKind = 'weapon' | 'stat' | 'mod' | 'fallback';
-export type WeaponMod = 'volley' | 'shards' | 'pierce';
+export type WeaponMod = 'volley' | 'shards' | 'pierce' | 'combo' | 'reach';
 
 export interface ItemDef {
   id: string;
@@ -94,6 +94,11 @@ export const ITEMS: readonly ItemDef[] = [
   // 碎火（道具 id 沿用 splash；D43 取代原本的範圍濺射）：每級平均多飛出 perLevel 片（小數 = 機率多一片），吃稀有度
   { id: 'splash', kind: 'mod', mod: 'shards', perLevel: 0.6, maxLevel: 5, rarityScales: true },
   { id: 'pierce', kind: 'mod', mod: 'pierce', perLevel: 1, maxLevel: 3, rarityScales: true },
+  // 揮擊專用（赤鬼，docs/19 場景 7、docs/35 ②）：多重、碎裂、穿透對揮擊沒有效果，補兩張同等級的
+  // 連打：每次揮擊平均多揮 perLevel 下（小數 = 機率；多揮的那一下傷害 × SWING.comboDamage）
+  { id: 'combo', kind: 'mod', mod: 'combo', perLevel: 0.25, maxLevel: 4, rarityScales: true },
+  // 長柄：揮擊半徑 +perLevel 公尺
+  { id: 'reach', kind: 'mod', mod: 'reach', perLevel: 0.35, maxLevel: 5, rarityScales: true },
   // 備用獎勵（全部滿級、欄位也滿了才會出現；不佔欄位、沒有等級上限）
   { id: 'heal', kind: 'fallback', perLevel: 30, maxLevel: Infinity, rarityScales: true },
   { id: 'meritBag', kind: 'fallback', perLevel: 5, maxLevel: Infinity, rarityScales: true },
@@ -108,7 +113,12 @@ export const ITEM_WEAPON_KINDS: Readonly<Record<string, readonly WeaponKind[]>> 
   volley: ['projectile', 'boomerang'],
   splash: ['projectile', 'boomerang'],
   pierce: ['projectile'],
+  combo: ['sweep'],
+  reach: ['sweep'],
 };
+
+/** 揮擊（赤鬼）的共用數字：連打／連擊多揮的那一下隔幾秒、傷害倍率 */
+export const SWING = { comboDelay: 0.22, comboDamage: 0.7 } as const;
 
 /** 這隻妖怪的選卡池：把池裡的主武器 'ghostfire' 換成它自己的主武器（D61），並拿掉對它的武器沒有效果的法具（D65） */
 /**
@@ -134,7 +144,7 @@ export const itemPoolFor = (weaponId: string): readonly string[] => {
   const kind: WeaponKind = Object.values(YOKAI).find((y) => y.weapon.id === weaponId)?.weapon.kind ?? 'projectile';
   return ITEM_POOL.filter((id) => (ITEM_WEAPON_KINDS[id] ?? [kind]).includes(kind) && !(WEAPON_AUTO.on && id === 'ghostfire')).map((id) => (id === 'ghostfire' ? weaponId : id));
 };
-export const ITEM_POOL: readonly string[] = ['ghostfire', 'power', 'atkSpeed', 'area', 'hp', 'speed', 'armor', 'regen', 'dodge', 'volley', 'splash', 'pierce'];
+export const ITEM_POOL: readonly string[] = ['ghostfire', 'power', 'atkSpeed', 'area', 'hp', 'speed', 'armor', 'regen', 'dodge', 'volley', 'splash', 'pierce', 'combo', 'reach'];
 /** 取捨道具（D38）：只有狐面商會給，已經拿到的下一級也只在狐面商 */
 export const TRADE_ITEMS: readonly string[] = ['cursedBlade', 'wildLantern', 'diamondBody'];
 export const FALLBACK_ITEMS: readonly string[] = ['heal', 'meritBag'];

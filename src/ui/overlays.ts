@@ -597,6 +597,13 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
       // 只列對這隻妖怪的武器有意義的欄位（回力水盤本來就來回穿透、揮擊沒有投射物：D65）
       const wk = YOKAI[sum.yokai].weapon.kind ?? 'projectile';
       const has = (id: string) => (ITEM_WEAPON_KINDS[id] ?? [wk]).includes(wk);
+      // 揮擊（赤鬼，docs/19 場景 8）：半徑、角度、幾下一次震波、連打
+      if (wk === 'sweep') {
+        rows.push(`<div data-stat="reach"><dt>${t('sum.reach')}</dt><dd>${t('sum.meters', { v: fix(sum.weapon.reach, 1) })}</dd></div>`);
+        rows.push(`<div data-stat="arc"><dt>${t('sum.arc')}</dt><dd>${t('sum.deg', { v: fix(sum.weapon.arcDeg, 0) })}</dd></div>`);
+        if (sum.weapon.shockEvery > 0) rows.push(`<div data-stat="shockEvery"><dt>${t('sum.shockEvery')}</dt><dd>${t('sum.everyN', { n: sum.weapon.shockEvery })}</dd></div>`);
+        rows.push(`<div data-stat="combo"><dt>${t('sum.combo')}</dt><dd>${fix(sum.weapon.combo, 2)}</dd></div>`);
+      }
       if (has('volley')) rows.push(`<div data-stat="volley"><dt>${t('sum.volley')}</dt><dd>${fix(sum.weapon.volley)}</dd></div>`);
       if (has('splash')) rows.push(`<div data-stat="splash"><dt>${t('sum.splash')}</dt><dd>${t('sum.meters', { v: fix(sum.weapon.splash, 1) })}</dd></div>`);
       if (has('splash')) rows.push(`<div data-stat="shards"><dt>${t('sum.shards')}</dt><dd>${t('sum.shardsVal', { v: fix(sum.weapon.shards, 1), d: fix(sum.weapon.shardDamage * 100, 0) })}</dd></div>`);

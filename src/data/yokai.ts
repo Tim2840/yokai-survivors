@@ -82,8 +82,13 @@ export interface YokaiDef {
   /** 基礎屬性的覆寫（沒寫的用 STAT_BASE） */
   base: Partial<Record<StatId, number>>;
   weapon: WeaponDef;
-  /** 被動「燈火」：光圈半徑與光圈內人類減速比例 */
+  /** 被動「燈火」：光圈半徑與光圈內人類減速比例（沒有光圈的妖怪寫 radius 0） */
   aura: { radius: number; slow: number };
+  /**
+   * 角色自己的被動資源（docs/19 場景 9、10；HUD 的角色資源條依這個顯示，沒有就不顯示）。
+   * rage（赤鬼的怒氣）：每被打一次 +perHit 層（最多 max 層），每層攻擊力 +power；decay 秒沒被打掉 1 層。
+   */
+  passive?: { kind: 'rage'; perHit: number; max: number; power: number; decay: number };
   /** 模型尺寸（公尺） */
   radius: number;
 }

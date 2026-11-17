@@ -40,7 +40,7 @@ export interface BuildSummary {
   /** 屬性：id、目前值（內部單位）、基礎值 */
   stats: { id: StatId; value: number; base: number }[];
   /** 武器：鬼火數量、濺射半徑（公尺）、穿透 */
-  weapon: { /** 一發的傷害（不含暴擊）、出手間隔（秒，含攻速與冷卻） */ damage: number; interval: number; volley: number; splash: number; pierce: number; shards: number; shardDamage: number; /** 取代發射的技法在場（穿透、濺射、碎裂已轉換成繞身的效果，Q56） */ converted: boolean };
+  weapon: { /** 一發的傷害（不含暴擊）、出手間隔（秒，含攻速與冷卻） */ damage: number; interval: number; /** 揮擊（赤鬼）：半徑（公尺）、扇形角度（度）、幾下一次震波、連打（平均多揮幾下） */ reach: number; arcDeg: number; shockEvery: number; combo: number; volley: number; splash: number; pierce: number; shards: number; shardDamage: number; /** 取代發射的技法在場（穿透、濺射、碎裂已轉換成繞身的效果，Q56） */ converted: boolean };
   /** 詛咒：讓敵人變強，> 0 才列 */
   curses: { id: CurseId; v: number }[];
   /** 難度 %（關卡、地圖；0.5 = +50%） */
@@ -178,6 +178,10 @@ export function summarizeBuild(run: Run): BuildSummary {
     weapon: {
       damage: run.shotDamage(false),
       interval: (w.interval * run.cooldownMult * run.tech.intervalMult) / s.atkSpeed,
+      reach: run.swingReach,
+      arcDeg: run.tech.spinSwing ? 360 : ((w.arc ?? Math.PI / 2) * 180) / Math.PI,
+      shockEvery: run.tech.shockEvery(w.shockEvery ?? 0),
+      combo: run.comboBonus + run.tech.comboExtra,
       volley: (tuning.volley > 0 ? tuning.volley : w.volley) + run.volleyBonus,
       splash: ((tuning.splash > 0 ? tuning.splash : w.splashRadius) + run.splashBonus),
       pierce: w.pierce + run.pierceBonus,

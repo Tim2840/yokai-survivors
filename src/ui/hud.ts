@@ -47,6 +47,7 @@ export function buildHud(parent: HTMLElement): Hud {
           <div class="bar"><i id="hp-fill"></i></div>
           <span id="hp-text"></span>
         </div>
+        <div class="hud-res hidden" id="res-box"><span id="res-label"></span><div class="pips" id="res-pips"></div></div>
         <div class="hud-buffs" id="buff-box" aria-label="${t('hud.buffs')}"></div>
       </div>
       <div class="hud-wave"><b id="wave-text"></b><span id="wave-timer"></span><i id="wave-diff" class="hidden"></i><em id="wave-note"></em></div>
@@ -99,6 +100,11 @@ export function buildHud(parent: HTMLElement): Hud {
   const bossBar = q('boss-bar');
   const bossFill = q('boss-fill');
   const bossName = q('boss-name');
+  const resBox = q('res-box');
+  const resLabel = q('res-label');
+  const resPips = q('res-pips');
+  let resKind = '';
+  let resShown = -1;
   const portalBox = q('portal-box');
   const portalArrow = q('portal-arrow');
   const portalText = q('portal-text');
@@ -212,6 +218,24 @@ export function buildHud(parent: HTMLElement): Hud {
         lastNote = noteText;
         note.textContent = noteText;
         note.classList.toggle('alarm', run.director.swarm);
+      }
+      // 角色資源條（docs/35：赤鬼的怒氣；沒有被動資源的妖怪不顯示）
+      const res = run.resource;
+      const rk = res ? res.kind : '';
+      if (rk !== resKind) {
+        resKind = rk;
+        resBox.classList.toggle('hidden', !res);
+        if (res) {
+          resLabel.textContent = t(`hud.res.${res.kind}` as I18nKey);
+          resPips.innerHTML = '<i></i>'.repeat(res.max);
+        }
+        resShown = -1;
+      }
+      if (res && res.value !== resShown) {
+        resShown = res.value;
+        const pips = resPips.children;
+        for (let k = 0; k < pips.length; k++) pips[k].classList.toggle('on', k < res.value);
+        resBox.classList.toggle('full', res.value >= res.max);
       }
       // 頭目血條
       const bi = run.director.bossIndex;
