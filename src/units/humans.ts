@@ -150,7 +150,8 @@ export function buildKawagariGeometry(): THREE.BufferGeometry {
 }
 
 /**
- * 老練的人類的裝備（D97，Q70：「更高階的敵人……長得也要不一樣」）：背後一支紫色的旗（指物，旗上白色家紋）＋兩邊肩膀深色的袖甲（金邊）。
+ * 老練的人類的裝備（D97，Q70：「更高階的敵人……長得也要不一樣」）：背後一支紫色的旗（指物，旗上白色家紋）。
+ * 第一版還有兩邊肩膀的袖甲：遊玩鏡頭幾乎看不到、卻佔了 2/3 的三角形（每隻 376，村人才 568），p1 滿場三角形超過預算，拿掉。
  * 所有種類的人類共用一份，疊在本體上畫（一個實例化圖層）——不另外做每種人類的老練造型（圖層數會翻倍）。
  * 俯視鏡頭最看得出來的是「高出頭頂的旗」，所以旗做得大、顏色和三種人類的衣服都不撞。
  */
@@ -167,13 +168,6 @@ export function buildVeteranGearGeometry(): THREE.BufferGeometry {
   parts.push(paint(new THREE.BoxGeometry(fw, fh, 0.03).translate(0.06 + fw / 2, top - fh / 2 - 0.04, back), H.vetBanner, 1.15));
   parts.push(paint(new THREE.CylinderGeometry(0.02, 0.02, fw + 0.06, 4).rotateZ(Math.PI / 2).translate(0.06 + fw / 2, top - 0.03, back), H.wood, 1.05));
   // 家紋：旗兩面各一個白圓
-  for (const side of [-1, 1]) parts.push(paint(new THREE.CylinderGeometry(0.09, 0.09, 0.01, 10).rotateX(Math.PI / 2).translate(0.06 + fw / 2, top - fh / 2 - 0.04, back + side * 0.022), H.vetCrest, 1.2));
-  // 袖甲：兩邊肩膀各一片往下垂的弧形甲（扁的半球）＋金邊
-  for (const sx of [-1, 1]) {
-    const x = sx * CHIBI.bodyR * 0.95;
-    const y = CHIBI.bodyY + CHIBI.bodyR * 0.55;
-    parts.push(paint(ball(0.13, 8, 5).scale(0.9, 0.55, 1.05).rotateZ(sx * 0.5).translate(x, y, 0), H.vetArmor, 1.1));
-    parts.push(paint(new THREE.TorusGeometry(0.12, 0.018, 3, 10).rotateX(Math.PI / 2).scale(0.9, 1, 1.05).rotateZ(sx * 0.5).translate(x + sx * 0.02, y - 0.03, 0), H.vetTrim, 1.25));
-  }
+  for (const side of [-1, 1]) parts.push(paint(new THREE.CylinderGeometry(0.09, 0.09, 0.01, 8, 1, true).rotateX(Math.PI / 2).translate(0.06 + fw / 2, top - fh / 2 - 0.04, back + side * 0.022), H.vetCrest, 1.2));
   return merge(parts);
 }

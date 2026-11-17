@@ -219,7 +219,7 @@ export class RunView {
       return mesh;
     };
     this.enemyMeshes = ENEMY_IDS.map((id) => makeLayer(ENEMY_MODELS[id]()));
-    // 老練的人類的裝備（D97）：背旗＋袖甲，疊在本體上（同一套頂點動畫，所有種類共用一個圖層）
+    // 老練的人類的裝備（D97）：背旗，疊在本體上（同一套頂點動畫，所有種類共用一個圖層）
     this.vetGear = makeLayer(buildVeteranGearGeometry());
     this.shotsView = new EnemyShotsView(run);
     this.group.add(this.shotsView.group);

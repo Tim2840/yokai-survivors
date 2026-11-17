@@ -1,7 +1,8 @@
 import { markOverlay } from './overlay';
 import * as THREE from 'three';
 import { palette } from '../art/palette';
-import { glow, soft } from '../art/materials';
+import { glow, soft, softVertexColors } from '../art/materials';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ball, roundedCylinder, teardrop } from '../art/shapes';
 import { RARITIES, type Rarity } from '../data/rarity';
 import { ELEMENT_RULES, FOX, TRIAL } from '../data/elements';
@@ -319,6 +320,8 @@ export class ElementsView {
       zone.visible = false;
       this.disposables.push(ringMat, fillMat, beamMat, zg, zoneMat);
       for (const o of [ring, fill, beam, zone, ...foxRings, ...foxFills]) markOverlay(o); // 光圈、光柱、結界圈：不像素化
+      // 每個要素靜止、不發光的零件合併成一個網格（頂點色）：一個要素原本 4～7 次繪製（加陰影再一倍），合併後 1 次（2026-11-17 p1：狐面商在畫面裡就多 9 次）
+      for (const k of [jizo, altar, offering, omikuji, chest, summon, fuse, dosojin, trial, summit, fox]) this.bakeStatic(k);
       root.add(jizo, altar, offering, omikuji, chest, summon, fuse, dosojin, trial, summit, fox, ...foxRings, ...foxFills, ring, fill, beam);
       root.visible = false;
       this.group.add(root, zone);
@@ -447,6 +450,50 @@ export class ElementsView {
       }
       if (s.kind === 'altar') v.flame.scale.set(1, 0.85 + Math.sin(t * 7 + i) * 0.15, 1);
     }
+  }
+
+  /** 合併用的頂點色材質（所有要素共用一個） */
+  private bakedMat: THREE.Material | null = null;
+
+  /**
+   * 把群組裡「直接的子網格、不發光（emissive 黑）、不透明」的零件合併成一個網格，顏色寫進頂點色。
+   * 會動的零件（魂火、火焰、繞圈的珠子）都是發光材質，不會被合併；群組本身的位移、縮放、旋轉照舊。
+   */
+  private bakeStatic(group: THREE.Group): void {
+    const parts: THREE.BufferGeometry[] = [];
+    const drop: THREE.Mesh[] = [];
+    let cast = false;
+    for (const c of group.children) {
+      const m = c as THREE.Mesh;
+      if (!m.isMesh) continue;
+      const mat = m.material as THREE.MeshStandardMaterial;
+      if (Array.isArray(mat) || mat.transparent || (mat.emissive && mat.emissive.getHex() !== 0) || !mat.color) continue;
+      m.updateMatrix();
+      let g = m.geometry.clone().applyMatrix4(m.matrix);
+      if (g.index) g = g.toNonIndexed();
+      for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal') g.deleteAttribute(name);
+      const n = g.attributes.position.count;
+      const col = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) mat.color.toArray(col, i * 3);
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      parts.push(g);
+      drop.push(m);
+      cast ||= m.castShadow;
+    }
+    if (parts.length < 2) return;
+    const merged = mergeGeometries(parts, false);
+    for (const p of parts) p.dispose();
+    if (!merged) return;
+    if (!this.bakedMat) {
+      this.bakedMat = softVertexColors({ roughness: 0.78 });
+      this.disposables.push(this.bakedMat);
+    }
+    for (const m of drop) group.remove(m);
+    const mesh = new THREE.Mesh(merged, this.bakedMat);
+    mesh.castShadow = cast;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+    this.disposables.push(merged);
   }
 
   dispose(): void {

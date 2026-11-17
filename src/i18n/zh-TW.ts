@@ -303,7 +303,7 @@ export const zhTW = {
   'result.summit': '這一關頭目生命 ×{m}，打倒後多掉 {n} 個寶箱',
   'element.trial': '百鬼試煉碑',
   'element.trial.desc': '按住開始，{s} 秒內在圈裡打倒越多越好。',
-  'element.trial.zone': '試煉中圈內 攻擊力、攻擊速度 +{pct}%，升級必出技法卡',
+  'element.trial.zone': '試煉時站在圈內：攻擊力、攻擊速度 +{pct}%，升級必出技法卡',
   'element.trial.hint': '打倒 {a}／{b}／{c} 隻：{r1}／{r2}／{r3}寶箱',
   'hud.trial': '試煉 {k}／{n}・剩 {s} 秒',
   'result.trial.win': '打倒 {k} 隻，達到第 {n} 段：{r}寶箱',
