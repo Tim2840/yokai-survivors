@@ -13,7 +13,9 @@ export async function run(browser) {
       await step(`${vp.name} 開局`, () => startRun(ctx), 40);
       await page.evaluate(() => (window.__game.god = true));
       const levelUp = async () => {
-        for (let g = 0; g < 60 && !(await page.evaluate(() => window.__game.screens)).includes('levelup'); g++) await page.evaluate(() => window.__game.addXp(10));
+        for (let g = 0; g < 60 && !(await page.evaluate(() => window.__game.screens.includes('levelup') || window.__game.run.awaitingPick)); g++) await page.evaluate(() => window.__game.addXp(10));
+        // 化身那一級（D94）選卡面板晚 FORM_BURST.showSeconds 秒才開：等它，不要當成沒升級
+        await page.waitForFunction(() => window.__game.screens.includes('levelup'), null, { timeout: 6000 }).catch(() => {});
         expect((await page.evaluate(() => window.__game.screens)).includes('levelup'), `加魂火後沒有升級（${vp.name}）`);
       };
       // 技法卡（D49：機率混在升級卡裡）不是法具，這裡不看
@@ -40,7 +42,11 @@ export async function run(browser) {
           await page.waitForFunction(() => true);
           const after = await page.evaluate(() => window.__game.run.ult.counts);
           if (!['heal', 'meritBag'].includes(pick.id)) expect((after[pick.id] ?? 0) === (before[pick.id] ?? 0) + 1, `選了 ${pick.id} 等級沒有加一：${before[pick.id]} → ${after[pick.id]}`);
-          while ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await page.locator('.overlay[data-screen="levelup"] .card').first().click();
+          // 剩下的待選（一次升好幾級）：點掉，優先點法具卡（這個測試假設沒有拿任何技法；化身那一級等待期間可能累積好幾次）
+          while ((await page.evaluate(() => window.__game.screens)).includes('levelup')) {
+            const plain = page.locator('.overlay[data-screen="levelup"] .card:not([data-card^="tech:"])');
+            await ((await plain.count()) > 0 ? plain.first() : page.locator('.overlay[data-screen="levelup"] .card').first()).click();
+          }
         }
         void sawWeapon;
       }, 120);

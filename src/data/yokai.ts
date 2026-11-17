@@ -63,10 +63,11 @@ export const FORMS: readonly FormDef[] = [
 /**
  * 化身的那一刻（D94）：補滿血、腳下衝擊波（半徑內的人類受傷並被震開；頭目只受傷不被推）。
  * 傷害 = 主武器一發的傷害 × damageMult。畫面：頓幀、光柱、衝擊波圈（docs/33）。
+ * showSeconds：化身那一次升級，選卡面板晚這麼多秒（真實時間）才開——不然面板一開就把變身整個蓋住（手機截圖抓到的）；這段時間模擬照樣停著（Run 在等選卡）。
  */
 /** 化身後身上常駐的屬性光：每秒幾顆火星／水珠（第一階、第二階） */
 export const FORM_AURA_RATE: readonly [number, number] = [5, 12];
-export const FORM_BURST = { fullHeal: true, radius: 7, damageMult: 6, knockback: 12, hitStop: 0.35, shake: 0.8 } as const;
+export const FORM_BURST = { showSeconds: 1.6, fullHeal: true, radius: 7, damageMult: 6, knockback: 12, hitStop: 0.35, shake: 0.8 } as const;
 /** 化身提示在畫面上停留幾秒 */
 export const FORM_NOTE_SECONDS = 6;
 /** 玩家等級 → 第幾階化身（0 = 還沒） */

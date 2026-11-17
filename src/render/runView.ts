@@ -56,6 +56,9 @@ const SHADOW_MIN_RADIUS = { world: 0.55, player: 0.25 } as const;
 export class RunView {
   private readonly world: WorldView;
   private player: Character;
+  /** 化身造型（D94）：[一般, 化身一, 化身二]；載好之後依 run.form 換 */
+  private playerForms: Character[] | null = null;
+  private shownForm = 0;
   /** Blender 試作（docs/26）：載進來的鳥居，結束時要丟掉 */
   private trialProps: { dispose(): void }[] = [];
   private disposed = false;
@@ -153,6 +156,13 @@ export class RunView {
           this.player.dispose();
           this.player = monk;
           this.group.add(monk.root);
+          // 化身造型先載好（化身那一刻直接換，不等載入）
+          const forms = await mod.loadBlenderForms(run.yokai.id);
+          if (this.disposed) {
+            for (const f of forms) f.dispose();
+            return;
+          }
+          if (forms.length) this.playerForms = [monk, ...forms];
         }
         // 敵人（村人先）：換掉實例化網格的幾何；aPhase（每隻的走路相位）搬到新幾何上，材質不換 → 著色器不會多編一份
         for (const [id, e] of Object.entries(mod.BLENDER_ENEMIES)) {
@@ -324,6 +334,17 @@ export class RunView {
     const ground = map.heightAt(run.px, run.pz);
     this.player.root.position.set(run.px, run.py, run.pz);
     this.player.root.rotation.y = run.facing;
+    // 化身造型（D94）：換成這一階的模型（位置、朝向、大小接著用）
+    if (this.playerForms && run.form !== this.shownForm) {
+      const next = this.playerForms[Math.min(run.form, this.playerForms.length - 1)];
+      if (next !== this.player) {
+        next.root.scale.copy(this.player.root.scale);
+        this.group.remove(this.player.root);
+        this.player = next;
+        this.group.add(next.root);
+      }
+      this.shownForm = run.form;
+    }
     // 化身（D84）：模型慢慢長大到這一階的大小
     const fs = this.player.root.scale.x + (run.formScale - this.player.root.scale.x) * Math.min(1, dt * 3);
     this.player.root.scale.setScalar(fs);
@@ -478,7 +499,8 @@ export class RunView {
     this.techFx.dispose();
     this.fireFx?.dispose();
     this.feelFx.dispose();
-    this.player.dispose();
+    if (this.playerForms) for (const c of this.playerForms) c.dispose();
+    else this.player.dispose();
     this.world.dispose();
     for (const d of this.disposables) d.dispose();
     for (const m of this.enemyMeshes) m.dispose();

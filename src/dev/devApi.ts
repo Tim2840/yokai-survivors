@@ -1,3 +1,5 @@
+import { xpNeed } from '../data/progression';
+import { FORMS } from '../data/yokai';
 import { CAMERA } from '../data/camera';
 import { kindIndex } from '../systems/enemies';
 import { ENEMY_IDS } from '../data/enemies';
@@ -77,6 +79,7 @@ export function installDevApi(ctx: DevContext): void {
         maxHp: r.maxHp,
         level: r.level,
         xp: r.xp,
+        xpNeeded: r.xpNeeded,
         kills: r.kills,
         enemies: r.enemies.aliveCount,
         elites: countVariant(r, 1),
@@ -383,6 +386,17 @@ export function installDevApi(ctx: DevContext): void {
       if (i < 0) return false;
       r.weaponHit(i, 1e9, 0, 0, 0, false);
       return true;
+    },
+    /** 直接升到第 n 階化身（D94：轉檯圖、截圖用）：一級一級升、選卡都選第一張 */
+    toForm: (n: number) => {
+      const r = run();
+      if (!r) return false;
+      const want = FORMS[Math.max(0, Math.min(FORMS.length, n) - 1)]?.level ?? 0;
+      for (let g = 0; g < 400 && r.level < want; g++) {
+        r.addXp(xpNeed(r.level) - r.xp + 0.01);
+        for (let k = 0; k < 10 && r.awaitingPick; k++) r.chooseCard(0);
+      }
+      return r.form;
     },
     /** 直接給魂玉（D93） */
     giveGem: (n = 1) => run()?.addGem(n),

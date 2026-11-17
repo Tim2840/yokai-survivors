@@ -6,6 +6,10 @@ import type { Character } from './lanternMonk';
 import monkUrl from '../assets/models/chochin-kozo.glb?inline';
 import toriiUrl from '../assets/models/torii.glb?inline';
 import kappaUrl from '../assets/models/kappa.glb?inline';
+import monkF1Url from '../assets/models/chochin-kozo-f1.glb?inline';
+import monkF2Url from '../assets/models/chochin-kozo-f2.glb?inline';
+import kappaF1Url from '../assets/models/kappa-f1.glb?inline';
+import kappaF2Url from '../assets/models/kappa-f2.glb?inline';
 import villagerUrl from '../assets/models/villager.glb?inline';
 import ashigaruUrl from '../assets/models/ashigaru.glb?inline';
 import yumiUrl from '../assets/models/yumi.glb?inline';
@@ -55,6 +59,13 @@ function dress(root: THREE.Object3D, mats: THREE.Material[], glowColor: string =
 export const loadBlenderMonk = (): Promise<Character> => loadRigged(monkUrl);
 /** 河童（Blender 版）：頭頂的水與手上的水盤是發光的網格（顏色取河童的特效色，只發一點光） */
 export const loadBlenderKappa = (): Promise<Character> => loadRigged(kappaUrl, palette.fx.kappa.light, 0.6);
+
+/** 化身的造型（D94、docs/33）：[化身一, 化身二]；沒有的妖怪回傳空陣列（只放大，不換造型） */
+export async function loadBlenderForms(yokaiId: string): Promise<Character[]> {
+  if (yokaiId === 'chochin-kozo') return Promise.all([loadRigged(monkF1Url), loadRigged(monkF2Url)]);
+  if (yokaiId === 'kappa') return Promise.all([loadRigged(kappaF1Url, palette.fx.kappa.light, 0.6), loadRigged(kappaF2Url, palette.fx.kappa.light, 0.6)]);
+  return [];
+}
 
 /** 帶骨架的角色：骨架動畫「walk」「idle」，依移動速度切換並調整播放速度 */
 async function loadRigged(url: string, glowColor?: string, glowPower?: number): Promise<Character> {

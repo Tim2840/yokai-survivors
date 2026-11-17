@@ -32,6 +32,12 @@ if (yokai) {
   await waitState(page, 'COMBAT');
 } else await startRun(ctx);
 await page.waitForFunction(() => window.__game.blenderReady, null, { timeout: 30000 });
+// 第 5 個參數：化身第幾階（D94）；先升上去，等化身造型換好
+const form = Number(process.argv[5] || 0);
+if (form > 0) {
+  await page.evaluate((n) => { window.__game.toForm(n); window.__game.render(); }, form);
+  for (let i = 0; i < 6; i++) await page.evaluate(() => { window.__game.advance(0.5); window.__game.render(); });
+}
 await page.evaluate(() => { const g = window.__game; g.god = true; g.clearEnemies(); g.driveWorld(1, 0.4); for (let i = 0; i < 8; i++) g.advance(0.1); g.driveWorld(null); for (let i = 0; i < 20; i++) g.advance(0.1); });
 // 藏掉所有介面，只留畫布與標籤
 await page.addStyleTag({ content: 'body *:not(canvas):not(#ta-label){visibility:hidden !important} canvas{visibility:visible !important} #ta-label{position:fixed;left:50%;top:8px;transform:translateX(-50%);z-index:99999;font:700 22px sans-serif;color:#fff;background:rgba(0,0,0,.65);padding:4px 12px;border-radius:8px;visibility:visible !important}' });

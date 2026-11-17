@@ -71,6 +71,9 @@ export class Game {
   private readonly inter;
   private readonly end;
   private readonly pause;
+  /** 化身演出（D94）：這個時間（performance.now 毫秒）之前選卡面板先不開；deferredPick = 有一個等著開的選卡 */
+  private formShowUntil = 0;
+  private deferredPick = false;
   /** 試玩紀錄（只有測試頁建立；docs/32） */
   private playLog: PlayLog | null = null;
   private lastEnd: { result: 'death' | 'victory' | 'abandon'; stage: number; kills: number; level: number; merit: number } | null = null;
@@ -351,15 +354,13 @@ export class Game {
     b.on('levelUp', () => {
       const run = this.run;
       if (!run || !run.offer) return;
-      this.loop.hold('levelup');
       this.playLog?.level(run.level, run.clock);
-      if (this.resultCard.visible) return; // 結果卡關掉後才開選卡
-      this.picker.render(run.offer, run.picksLeft, run.offerKind, this.pickerCtx(run));
-      this.picker.show();
-      this.playLog?.pickOpened(performance.now() / 1000);
-      this.audio.sfx('levelUp');
-      this.view?.feelFx.levelBurst();
-      this.renderer.rig.shake.add(FEEL.shake.levelUp);
+      // 化身演出中（D94）：先讓變身演完再開選卡（Run 在等選卡，模擬本來就停著；畫面照畫）
+      if (performance.now() < this.formShowUntil) {
+        this.deferredPick = true;
+        return;
+      }
+      this.openLevelUp();
     });
     b.on('stageStart', () => {
       this.audio.sfx('waveStart');
@@ -391,6 +392,7 @@ export class Game {
       this.hitStop.add(FEEL.hitStop.ult);
     });
     b.on('formChange', ({ form }) => {
+      this.formShowUntil = performance.now() + FORM_BURST.showSeconds * 1000;
       this.renderer.rig.shake.add(FORM_BURST.shake);
       this.hitStop.add(FORM_BURST.hitStop);
       this.view?.formBurst(form);
@@ -438,6 +440,20 @@ export class Game {
       t('log.early', { s: PLAY_LOG.earlySeconds, n: s.earlyHurts }),
       t('log.moves', { j: run.jumps, e: s.evolves }),
     ];
+  }
+
+  /** 開升級選卡（升級當下，或化身演出結束後） */
+  private openLevelUp(): void {
+    const run = this.run;
+    if (!run || !run.offer) return;
+    this.loop.hold('levelup');
+    if (this.resultCard.visible) return; // 結果卡關掉後才開選卡
+    this.picker.render(run.offer, run.picksLeft, run.offerKind, this.pickerCtx(run));
+    this.picker.show();
+    this.playLog?.pickOpened(performance.now() / 1000);
+    this.audio.sfx('levelUp');
+    this.view?.feelFx.levelBurst();
+    this.renderer.rig.shake.add(FEEL.shake.levelUp);
   }
 
   /** 選卡面板要用的玩家狀態 */
@@ -514,6 +530,10 @@ export class Game {
         this.input.consumeLook(this.lookOut);
         this.renderer.rig.rotate(this.lookOut[0] + this.input.rotateKey * CAMERA.keySpeed * dt, this.lookOut[1]);
       } else this.input.consumeLook(this.lookOut);
+      if (this.deferredPick && now >= this.formShowUntil) {
+        this.deferredPick = false;
+        this.openLevelUp();
+      }
       this.view.update(dt, this.time);
       this.hud.update(run, this.renderer.rig.yaw);
       // 音效（節流在 audio 內）

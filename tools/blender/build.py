@@ -34,6 +34,8 @@ STONE = '#9a9488'
 ROPE = '#e6d6a8'
 HAIR = '#5a3b33'
 HEM = '#f3f0ff'
+GOLD = '#f2c14e'
+FLAME = '#ff9a3c'
 INK = '#3a2438'
 
 
@@ -117,15 +119,17 @@ def hair_shell(b, name, line=None, color=None, seg=(56, 36), grow=1.045):
 
 
 # 稽核用：哪些零件是頭、頭髮、眼睛、嘴（名稱是 Builder 零件名，不含 .001 這種流水號）
-CHOCHIN_SPEC = {'head': ['head'], 'hair': ['hair'], 'eyes': ['eye'], 'mouth': ['mouth']}
+CHOCHIN_SPEC = {'head': ['head'], 'hair': ['hair'], 'eyes': ['eye'], 'mouth': ['mouth'], 'loose_ok': ['halo', 'haloflame', 'minilamp', 'minicap']}
 
 
-def build_chochin():
+def build_chochin(form=0):
+    """form 0 = 一般；1 = 化身一「燈籠僧」（金邊、斗笠垂穗、燈籠變大＋火冠）；2 = 化身二「百燈法師」（再加火焰光背、身邊兩盞小燈籠）。D94、docs/33。"""
     lib.reset()
     b = Builder()
+    trim = GOLD if form else HEM
     # ── 身體（D88 第二版）：短胖的僧衣，下襬一條淺色滾邊、細腰帶＋背後的蝴蝶結、清楚的白色交領 ──
     b.lathe('robe', [(0.28, 0.2), (0.325, 0.24), (0.315, 0.32), (0.27, 0.44), (0.205, 0.57), (0.115, 0.64)], (0, 0, 0), ROBE, 'body', seg=28)
-    b.torus('hem', 0.322, 0.024, (0, 0, 0.212), HEM, 'body', seg=28, tube=6)
+    b.torus('hem', 0.322, 0.024, (0, 0, 0.212), trim, 'body', seg=28, tube=6)
     b.torus('hem2', 0.318, 0.012, (0, 0, 0.262), ROBE_SHADE, 'body', seg=28, tube=5)
     b.torus('sash', 0.286, 0.032, (0, 0, 0.4), SASH, 'body', seg=28, tube=8, scale=(1, 1, 1.15))
     for sx in (-1, 1):
@@ -141,7 +145,7 @@ def build_chochin():
         sh = Vector((sx * 0.22, 0, 0.55))
         hand = Vector((sx * 0.43, -0.03, 0.36)) if sx < 0 else Vector((0.485, -0.073, 0.6))
         rod(b, 'sleeve', sh, sh + (hand - sh) * 0.86, 0.075, 0.12, ROBE, bone, seg=14)
-        b.torus('cuff', 0.105, 0.016, tuple(sh + (hand - sh) * 0.86), HEM, bone, rot=tuple(Vector((0, 0, 1)).rotation_difference((hand - sh).normalized()).to_euler()), seg=14, tube=6)
+        b.torus('cuff', 0.105, 0.016, tuple(sh + (hand - sh) * 0.86), trim, bone, rot=tuple(Vector((0, 0, 1)).rotation_difference((hand - sh).normalized()).to_euler()), seg=14, tube=6)
         b.sphere('hand', 0.085, tuple(hand), SKIN, bone, seg=12, rings=8)
     # ── 頭（第四版，使用者：「五官正確的位置」「瀏海跟後面頭髮分離」）──
     # 五官：眼睛在臉的上半部偏下（髮際線到下巴的 45% 處）、眼距約一個眼寬、嘴在 75% 處；位置用 head_y 算在表面上、依法線傾斜。
@@ -170,6 +174,12 @@ def build_chochin():
         b.torus('hatline', r, 0.007, (0, -z * math.sin(TILT), HZ + z), STRAW_DARK, 'head', seg=28, tube=4, rot=(TILT, 0, 0))
     b.torus('hatband', 0.17, 0.028, (0, -0.22 * math.sin(TILT), HZ + 0.22), RED, 'head', seg=20, tube=6, rot=(TILT, 0, 0))
     b.sphere('hatknob', 0.04, (0, -0.33 * math.sin(TILT), HZ + 0.325), RED, 'head', seg=10, rings=6)
+    if form:
+        # 化身：斗笠兩側垂下紅穗（從帽緣往下）
+        for sx in (-1, 1):
+            top = Vector((sx * 0.5, 0, HZ + 0.01))
+            rod(b, 'hattassel', top, top + Vector((sx * 0.03, 0, -0.26)), 0.016, 0.01, RED, 'head', seg=6)
+            b.sphere('hattasselball', 0.035, tuple(top + Vector((sx * 0.03, 0, -0.27))), GOLD, 'head', seg=10, rings=6)
     # ── 腳：白襪＋木屐（兩齒） ──
     for sx, bone in ((-1, 'legL'), (1, 'legR')):
         b.sphere('tabi', 0.11, (sx * 0.14, -0.1, 0.14), WHITE, bone, scale=(1, 1.45, 0.85), seg=12, rings=8)
@@ -185,18 +195,35 @@ def build_chochin():
         p = base + (tip - base) * k
         b.torus('node', 0.026, 0.007, tuple(p), '#6f7d40', 'armR', rot=tuple(Vector((0, 0, 1)).rotation_difference((tip - base).normalized()).to_euler()), seg=10, tube=4)
     lam = Vector((0.66, -0.1, 0.68))
+    ls = 1.1 if form else 1.0  # 化身：燈籠大一號（1.25 時右側看過去整張臉被擋住，轉檯圖第 3 格）
     rod(b, 'string', tip, lam + Vector((0, 0, 0.2)), 0.008, 0.008, DARK, 'lantern', seg=5)
     # 燈籠的骨架、上下蓋、流蘇（燈籠紙本體是另一個會發光的網格）
     for z in (-0.14, -0.07, 0.0, 0.07, 0.14):
-        rr = 0.17 * math.sqrt(max(0.05, 1 - (z / 0.215) ** 2))
-        b.torus('rib', rr * 1.02, 0.009, tuple(lam + Vector((0, 0, z))), RED, 'lantern', seg=18, tube=4)
-    b.cone('captop', 0.11, 0.09, 0.05, tuple(lam + Vector((0, 0, 0.215))), DARK, 'lantern', seg=14)
-    b.cone('capbot', 0.09, 0.11, 0.05, tuple(lam + Vector((0, 0, -0.215))), DARK, 'lantern', seg=14)
-    rod(b, 'tassel', lam + Vector((0, 0, -0.22)), lam + Vector((0, 0, -0.36)), 0.02, 0.006, RED, 'lantern', seg=6)
+        rr = 0.17 * ls * math.sqrt(max(0.05, 1 - (z / 0.215) ** 2))
+        b.torus('rib', rr * 1.02, 0.009, tuple(lam + Vector((0, 0, z * ls))), GOLD if form else RED, 'lantern', seg=18, tube=4)
+    b.cone('captop', 0.11 * ls, 0.09 * ls, 0.05, tuple(lam + Vector((0, 0, 0.215 * ls))), DARK, 'lantern', seg=14)
+    b.cone('capbot', 0.09 * ls, 0.11 * ls, 0.05, tuple(lam + Vector((0, 0, -0.215 * ls))), DARK, 'lantern', seg=14)
+    rod(b, 'tassel', lam + Vector((0, 0, -0.22 * ls)), lam + Vector((0, 0, -0.36 * ls)), 0.02, 0.006, RED, 'lantern', seg=6)
     # 數字稽核（docs/29）：頭髮連續、五官位置、懸空零件；不過就不匯出
     g = Builder()
-    g.sphere('paper', 0.17, tuple(lam), LAMP, 'lantern', scale=(1, 1, 1.25), seg=18, rings=12)
-    audit.run(b.parts + g.parts, CHOCHIN_SPEC, '提燈小僧')
+    g.sphere('paper', 0.17 * ls, tuple(lam), LAMP, 'lantern', scale=(1, 1, 1.25), seg=18, rings=12)
+    if form:
+        # 火冠：燈籠頂上三片火舌（發光）
+        for k, a in enumerate((-0.5, 0, 0.5)):
+            p = lam + Vector((math.sin(a) * 0.07, 0, 0.215 * ls + 0.06))
+            # 圓頭的火舌（拉長的球，不用尖錐：風格規則不留銳利的邊；轉檯圖第 3 格看起來像鑽頭）
+            g.sphere('flamecrown', 0.05 if k != 1 else 0.06, tuple(p + Vector((0, 0, 0.06))), FLAME, 'lantern', scale=(0.75, 0.75, 1.9), rot=(0, a * 0.6, 0), seg=12, rings=8)
+    if form >= 2:
+        # 火焰光背：背後一圈立著的火環（發光，不接觸身體）＋身邊兩盞浮著的小燈籠
+        g.torus('halo', 0.46, 0.035, (0, 0.34, 0.95), FLAME, 'body', rot=(math.pi / 2, 0, 0), seg=32, tube=8)
+        for k in range(10):
+            a = k / 10 * math.pi * 2
+            g.sphere('haloflame', 0.045, (math.cos(a) * 0.51, 0.34, 0.95 + math.sin(a) * 0.51), FLAME, 'body', scale=(0.7, 0.7, 1.7), rot=(0, -a + math.pi / 2, 0), seg=10, rings=6)
+        for sx in (-1, 1):
+            c = Vector((sx * 0.72, 0.18, 0.5))  # 腰的兩側（1.15 時塞在帽緣底下；0.82 時側面看擋在臉頰前面，轉檯圖第 3、5 格）
+            g.sphere('minilamp', 0.085, tuple(c), LAMP, 'body', scale=(1, 1, 1.25), seg=12, rings=8)
+            b.cone('minicap', 0.05, 0.04, 0.025, tuple(c + Vector((0, 0, 0.11))), DARK, 'body', seg=10)
+    audit.run(b.parts + g.parts, CHOCHIN_SPEC, '提燈小僧' + ('' if not form else f'（化身{form}）'))
     body = b.join('Monk')
     glow = g.join('GlowLantern')
 
@@ -230,7 +257,7 @@ def build_chochin():
         'armL': {1: {'rot': (0, 0, 0)}, 25: {'rot': (0.05, 0, 0)}, 49: {'rot': (0, 0, 0)}},
         'lantern': {1: {'rot': (0.08, 0, 0.1)}, 25: {'rot': (-0.08, 0, -0.1)}, 49: {'rot': (0.08, 0, 0.1)}},
     })
-    lib.export_glb(OUT + '/chochin-kozo.glb', [body, glow, arm], animations=True)
+    lib.export_glb(OUT + '/chochin-kozo' + ('' if not form else f'-f{form}') + '.glb', [body, glow, arm], animations=True)
     return sum(len(o.data.polygons) for o in (body, glow))
 
 
@@ -244,7 +271,10 @@ K_HAIR = '#1f6b4a'
 K_BEAK = '#ffc23d'
 K_DISH = '#f4f8f2'
 K_WATER = '#7fd6e8'
-KAPPA_SPEC = {'head': ['head'], 'hair': ['hair', 'dish'], 'eyes': ['eye'], 'mouth': ['beak'], 'loose_ok': ['disc']}
+K_CRYSTAL = '#aef0ff'
+K_CAPE = '#4fb8d6'
+K_LOTUS = '#ff9ec4'
+KAPPA_SPEC = {'head': ['head'], 'hair': ['hair', 'dish'], 'eyes': ['eye'], 'mouth': ['beak'], 'loose_ok': ['disc', 'ring']}
 
 
 def kappa_hairline(x, y):
@@ -254,7 +284,8 @@ def kappa_hairline(x, y):
     return 0.96 + (1.07 - 0.96) * f + wave
 
 
-def build_kappa():
+def build_kappa(form=0):
+    """form 1 = 化身一（龜殼水晶稜、盤子發光、雙層水盤）；2 = 化身二「河伯」（再加蓮花冠、身邊水環）。D94、docs/33。"""
     lib.reset()
     b = Builder()
     # 身體：圓滾滾、淺色肚子、背後龜殼（一圈淺色殼緣＋三片甲紋）
@@ -265,6 +296,14 @@ def build_kappa():
     for (px, pz) in ((0, 0.52), (-0.13, 0.36), (0.13, 0.36)):
         b.sphere('scute', 0.085, (px, 0.365, pz), K_SHELL_L, 'body', scale=(1, 0.35, 1), seg=10, rings=6)
     b.sphere('neck', 0.13, (0, 0, 0.64), K_SKIN, 'body', seg=12, rings=8)
+    if form:
+        # 化身：龜殼長出水晶稜（沿著殼的上緣一排）
+        for k, a in enumerate((-0.9, -0.45, 0.0, 0.45, 0.9)):
+            x, z = math.sin(a) * 0.2, 0.44 + math.cos(a) * 0.17
+            # 放在龜殼表面上（殼是橢球：中心 (0, 0.13, 0.44)、半軸 0.318／0.255／0.318）；稽核抓到外側兩顆浮在空中
+            ys = 0.13 + 0.255 * math.sqrt(max(0.0, 1 - (x / 0.318) ** 2 - ((z - 0.44) / 0.318) ** 2))
+            b.cone('crystal', 0.045, 0.0, 0.13 if k != 2 else 0.17, (x, ys + 0.03, z), K_CRYSTAL, 'body', seg=6, rot=(-math.pi / 2 + 0.3, 0, -a * 0.9))
+    # （化身二原本有「身後水流披風」：轉檯圖背面看是一顆藍色大球蓋住整個龜殼，拿掉；化身二靠蓮花冠與水環區分）
     # 手：左手垂著、右手往外舉（水盤浮在手上方）
     for sx, bone in ((-1, 'armL'), (1, 'armR')):
         sh = Vector((sx * 0.27, 0, 0.52))
@@ -293,11 +332,22 @@ def build_kappa():
     # 頭頂的盤子（白色淺盤）：邊緣壓在頭髮上，裡面的水是另一個會發光的網格
     DZ = HC_Z + HR * HS[2] * 0.9
     b.lathe('dish', [(0.0, -0.05), (0.2, -0.05), (0.235, 0.0), (0.24, 0.035), (0.2, 0.045), (0.17, 0.02), (0.0, 0.01)], (0, 0, DZ), K_DISH, 'head', seg=28)
+    if form >= 2:
+        # 蓮花冠：盤子外圈一圈粉色花瓣
+        for k in range(8):
+            a = k / 8 * math.pi * 2
+            b.sphere('lotus', 0.07, (math.cos(a) * 0.25, math.sin(a) * 0.25, DZ + 0.06), K_LOTUS, 'head', scale=(0.55, 0.3, 1.0), rot=(0.35 * math.sin(a), -0.35 * math.cos(a), a), seg=10, rings=6)
     g = Builder()
-    g.sphere('water', 0.17, (0, 0, DZ + 0.03), K_WATER, 'head', scale=(1, 1, 0.16), seg=18, rings=8)
+    g.sphere('water', 0.17 * (1.15 if form else 1), (0, 0, DZ + 0.03), K_WATER, 'head', scale=(1, 1, 0.16), seg=18, rings=8)
     # 水盤：浮在右手上方（腰的高度，不擋臉）、一直轉的發光圓盤（故意不接觸身體）
     g.sphere('disc', 0.17, (0.52, -0.14, 0.62), K_WATER, 'disc', scale=(1, 1, 0.2), seg=22, rings=10)
-    audit.run(b.parts + g.parts, KAPPA_SPEC, '河童')
+    if form:
+        # 雙層水盤：外圈一個發光的環
+        g.torus('disc', 0.23, 0.02, (0.52, -0.14, 0.62), K_WATER, 'disc', seg=24, tube=6)
+    if form >= 2:
+        # 身邊一圈水環（腰的高度，不接觸身體）
+        g.torus('ring', 0.62, 0.03, (0, 0, 0.42), K_WATER, 'body', seg=40, tube=8)
+    audit.run(b.parts + g.parts, KAPPA_SPEC, '河童' + ('' if not form else f'（化身{form}）'))
     body = b.join('Kappa')
     glow = g.join('GlowWater')
     arm = lib.make_armature('KappaRig', {
@@ -329,7 +379,7 @@ def build_kappa():
         'armL': {1: {'rot': (0, 0, 0)}, 25: {'rot': (0.05, 0, 0)}, 49: {'rot': (0, 0, 0)}},
         'disc': {1: {'rot': (0, 0, 0), 'loc': (0, 0, 0)}, 13: {'rot': (0, T / 4, 0), 'loc': (0, 0.025, 0)}, 25: {'rot': (0, T / 2, 0), 'loc': (0, 0, 0)}, 37: {'rot': (0, T * 3 / 4, 0), 'loc': (0, 0.025, 0)}, 49: {'rot': (0, T, 0), 'loc': (0, 0, 0)}},
     })
-    lib.export_glb(OUT + '/kappa.glb', [body, glow, arm], animations=True)
+    lib.export_glb(OUT + '/kappa' + ('' if not form else f'-f{form}') + '.glb', [body, glow, arm], animations=True)
     return sum(len(o.data.polygons) for o in (body, glow))
 
 
@@ -520,7 +570,8 @@ def build_torii():
 if __name__ == '__main__':
     n1 = build_chochin()
     n3 = build_kappa()
+    nf = [build_chochin(1), build_chochin(2), build_kappa(1), build_kappa(2)]
     n4 = build_villager()
     n5 = [build_ashigaru(), build_yumi(), build_taimasou()]
     n2 = build_torii()
-    print('faces: chochin', n1, 'kappa', n3, 'torii', n2, 'villager tris', n4, 'ashigaru/yumi/taimasou tris', n5)
+    print('faces: forms', nf, 'chochin', n1, 'kappa', n3, 'torii', n2, 'villager tris', n4, 'ashigaru/yumi/taimasou tris', n5)
