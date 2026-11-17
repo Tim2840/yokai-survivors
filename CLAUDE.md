@@ -25,7 +25,7 @@
 | 使用者提出新想法／要做設計決定時（我是使用者的設計夥伴） | `docs/20-design-gate.md`（設計審查卡格式、商業等級體檢、創新機會；**我主動研究與把關，使用者只拍板**） |
 | 小地圖 | `docs/21-minimap.md`（已做第一版 D66） |
 | 每隻妖怪的技法特色、化身限定技法、技法變化度體檢 | `docs/25-character-techs.md`（已實作 D83～D86：化身、化身限定技法、技法格子、河童自己的 5 招）；養成第二版（詞條、整場加成）`docs/24-buildcraft-v2.md` |
-| **夜晚為預設時段、時段加成、角色整體重新設計規格（D88）** | `docs/28-night-theme-and-character-redesign.md`（Q58 待回答） |
+| **夜晚為預設時段、時段加成、角色整體重新設計規格（D88）** | `docs/28-night-theme-and-character-redesign.md`（時段加成 D96 照預設，排在赤鬼特效之後） |
 | **數值、關卡、要素第二版「夜行」（外部審閱後的重塑提案）** | `docs/32-rebalance-v2.md`（D93 照預設，**實作中**，進度在該文件第 ⑧ 節） |
 | **化身要像進化（變身演出、每階新造型、數值）** | `docs/33-form-glowup.md`（D94，已實作 v74：`FORMS`／`FORM_BURST`、`build_chochin(form)`／`build_kappa(form)`、`RunView.playerForms`） |
 | **頭目各自的技能（有預告的招式、半血變招）** | `docs/34-boss-skills.md`（D95，已實作 v78：`src/data/bosses.ts`、`src/game/bossSkills.ts`、`src/render/bossTelegraphView.ts`；回歸 j1） |
