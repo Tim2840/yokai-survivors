@@ -1,3 +1,4 @@
+import { FORM_BURST } from '../data/yokai';
 import { bus, type EventBus } from '../core/bus';
 import type { AudioEngine } from '../core/audio';
 import type { FixedLoop } from '../core/loop';
@@ -388,6 +389,12 @@ export class Game {
     b.on('ultimate', () => {
       this.renderer.rig.shake.add(FEEL.shake.ult);
       this.hitStop.add(FEEL.hitStop.ult);
+    });
+    b.on('formChange', ({ form }) => {
+      this.renderer.rig.shake.add(FORM_BURST.shake);
+      this.hitStop.add(FORM_BURST.hitStop);
+      this.view?.formBurst(form);
+      this.audio.sfx('levelUp');
     });
     b.on('evolve', () => {
       this.playLog?.evolve();

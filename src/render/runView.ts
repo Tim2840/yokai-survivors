@@ -1,3 +1,4 @@
+import { FORM_AURA_RATE, FORM_BURST } from '../data/yokai';
 import { lit } from '../art/materials';
 import * as THREE from 'three';
 import { fxOf, palette } from '../art/palette';
@@ -300,6 +301,21 @@ export class RunView {
     renderer.snapCamera(run.px, run.py, run.pz, run.map);
   }
 
+  /** 化身的那一刻（D94）：屬性光柱、四散的火星／水珠、閃光、衝擊波圈 */
+  formBurst(form: number): void {
+    const run = this.run;
+    const y = run.py;
+    const s = form >= 2 ? 1.4 : 1;
+    this.feelFx.formBurst(FORM_BURST.radius * run.stats.value.area);
+    const fx = this.fireFx;
+    if (!fx) return;
+    fx.flare(run.px, y, run.pz, 1.6 * s, 4.5 * s, 1.1, 0.3, true);
+    fx.emit(run.px, y + 1.2, run.pz, 40 * s, 2.5, 5 * s);
+    fx.glints(run.px, y + 1.4, run.pz, 14 * s, 1.6);
+    fx.flash(run.px, y + 1, run.pz, 4 * s, 1.6, 0.6, GLOW_HALO);
+    fx.ripple(run.px, run.map.heightAt(run.px, run.pz) + 0.06, run.pz, FORM_BURST.radius * 0.8, 0.9);
+  }
+
   /** 每個畫面幀呼叫一次（不是每個模擬步）。dt = 這一幀的真實秒數，t = 累計時間 */
   update(dt: number, t: number): void {
     const run = this.run;
@@ -355,6 +371,8 @@ export class RunView {
     if (this.fireFx) this.fireFx.glowMesh.visible = this.glowOn && this.renderer.pipeline.level < FIRE_FX.glow.offAtQuality;
     this.ultFx.update(fxDt);
     this.fireReact?.update(fxDt);
+    // 化身後身上常駐的屬性光（D94）：火星或水珠繞著身體往上飄，第二階更多
+    if (this.fireFx && run.form > 0) this.fireFx.emitRate(run.px, run.py + 0.9 * run.formScale, run.pz, FORM_AURA_RATE[run.form - 1], fxDt, 0.6);
     this.techFx.update(t);
     this.feelFx.update(dt);
     this.timeUniform.value = t % TWO_PI;

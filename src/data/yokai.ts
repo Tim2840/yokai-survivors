@@ -56,9 +56,17 @@ export interface FormDef {
 }
 /** 所有妖怪共用的化身時間點與加成（起始提案；每隻的名字在 i18n `form.<妖怪>.<階>`） */
 export const FORMS: readonly FormDef[] = [
-  { level: 10, scale: 1.12, pct: { maxHp: 0.15, power: 0.06 } },
-  { level: 20, scale: 1.26, pct: { maxHp: 0.3, power: 0.12 } },
+  // D94（使用者 2026-11-17「化身要像進化一樣變華麗變帥…數值也要變好」＝Q65 照預設）：舊值 生命 +15%／攻擊 +6%、生命 +30%／攻擊 +12%
+  { level: 10, scale: 1.15, pct: { maxHp: 0.25, power: 0.15, area: 0.1, speed: 0.05 } },
+  { level: 20, scale: 1.3, pct: { maxHp: 0.5, power: 0.3, area: 0.2, speed: 0.1, atkSpeed: 0.15 } },
 ];
+/**
+ * 化身的那一刻（D94）：補滿血、腳下衝擊波（半徑內的人類受傷並被震開；頭目只受傷不被推）。
+ * 傷害 = 主武器一發的傷害 × damageMult。畫面：頓幀、光柱、衝擊波圈（docs/33）。
+ */
+/** 化身後身上常駐的屬性光：每秒幾顆火星／水珠（第一階、第二階） */
+export const FORM_AURA_RATE: readonly [number, number] = [5, 12];
+export const FORM_BURST = { fullHeal: true, radius: 7, damageMult: 6, knockback: 12, hitStop: 0.35, shake: 0.8 } as const;
 /** 化身提示在畫面上停留幾秒 */
 export const FORM_NOTE_SECONDS = 6;
 /** 玩家等級 → 第幾階化身（0 = 還沒） */

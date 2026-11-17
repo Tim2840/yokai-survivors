@@ -1,7 +1,7 @@
 import { bus as defaultBus, type EventBus } from '../core/bus';
 import { COMBAT } from '../data/combat';
 import { MOVE } from '../data/movement';
-import { FORMS, FORM_NOTE_SECONDS, PLAYABLE_YOKAI, YOKAI, formAt, type YokaiDef } from '../data/yokai';
+import { FORMS, FORM_NOTE_SECONDS, PLAYABLE_YOKAI, YOKAI, formAt, type YokaiDef, FORM_BURST } from '../data/yokai';
 import { rollAffixes } from '../data/affixes';
 import { TECH_MAX, TECH_SLOTS, mechOf, techById, EVO, SOUL_GEM } from '../data/techniques';
 import { CARD_CHOICES, PROGRESSION, RARITIES_UNLOCKED_M1, XP_BUDGET, cumXp, targetLevel, xpNeed } from '../data/progression';
@@ -1212,11 +1212,30 @@ export class Run {
     const hp0 = this.maxHp;
     this.formApplied = f;
     this.stats.setMod('form', { pct: { ...FORMS[f - 1].pct } });
-    // 最大生命變多：多出來的那一段直接補上
-    this.hp = Math.min(this.maxHp, this.hp + Math.max(0, this.maxHp - hp0));
+    // 最大生命變多：多出來的那一段直接補上；D94：化身當下補滿
+    this.hp = FORM_BURST.fullHeal ? this.maxHp : Math.min(this.maxHp, this.hp + Math.max(0, this.maxHp - hp0));
+    this.formBurst();
     this.formNote = { form: f, until: this.clock + FORM_NOTE_SECONDS };
     this.bus.emit('formChange', { form: f, yokai: this.yokai.id });
   }
+  /** 化身衝擊波（D94）：腳下半徑內的人類受傷並被震開（頭目不被推） */
+  private formBurst(): void {
+    const en = this.enemies;
+    if (this.ultNear.length < en.capacity) this.ultNear = new Int32Array(en.capacity);
+    const B = FORM_BURST;
+    const dmg = this.shotDamage(false) * B.damageMult;
+    const k = en.within(this.px, this.pz, B.radius * this.stats.value.area, this.ultNear);
+    for (let i = 0; i < k; i++) {
+      const o = this.ultNear[i];
+      if (!en.alive[o]) continue;
+      const rx = en.x[o] - this.px;
+      const rz = en.z[o] - this.pz;
+      const d = Math.hypot(rx, rz) || 1;
+      this.feed.push(en.x[o], en.z[o], dmg, false);
+      if (en.hurt(o, dmg, rx / d, rz / d, en.variant[o] === 2 ? 0 : B.knockback)) this.onKill(o);
+    }
+  }
+
   /** 現在這一階的模型放大倍率 */
   get formScale(): number {
     return this.form > 0 ? FORMS[this.form - 1].scale : 1;

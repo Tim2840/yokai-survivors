@@ -75,6 +75,13 @@ export class FeelFx {
     this.kind[i] = kind;
   }
 
+  /** 化身衝擊波（D94）：從玩家腳下擴散的大圈（radius 公尺），用頭目等級的爆圈樣式 */
+  formBurst(radius: number): void {
+    if (feel.pops <= 0) return;
+    this.spawn(this.run.px, this.run.pz, 2, radius, FEEL.levelRing.life * 1.4);
+    this.spawn(this.run.px, this.run.pz, 3, radius * 0.6, FEEL.levelRing.life);
+  }
+
   /** 升級光環：從玩家腳下擴散（不管減少特效的設定也會畫，只是比較淡的由 feel.pops 決定是否畫；0 = 不畫） */
   levelBurst(): void {
     if (feel.pops <= 0) return;
