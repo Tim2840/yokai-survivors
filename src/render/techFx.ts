@@ -412,7 +412,7 @@ export class TechFx {
             const h0 = T.from - (s + 1) * seg;
             const nx = s === T.segments - 1 ? 0 : Math.sin(i * 12.9 + s * 7.3 + flick * 3.1) * T.jag;
             const nz = s === T.segments - 1 ? 0 : Math.cos(i * 4.1 + s * 5.7 + flick * 2.3) * T.jag;
-            fire.flame(x + (ox + nx) / 2, gy + h0, z + (oz + nz) / 2, T.w * (0.7 + 0.3 * f), seg * 1.25, i * 3.1 + s, 0.1);
+            fire.flame(x + (ox + nx) / 2, gy + h0, z + (oz + nz) / 2, T.w * (0.7 + 0.3 * f), seg * T.overlap, i * 3.1 + s, 0.1);
             ox = nx;
             oz = nz;
           }

@@ -217,5 +217,5 @@ export const ONI_FX = {
     boss: { puff: 2.4, ring: 4.5, sparks: 34, smoke: 5, glints: 7, glow: 4.5 },
   },
   /** 鬼雷：雷從多高落下、折幾段、每段寬、地上的光、碎片 */
-  thunder: { from: 9, segments: 6, jag: 0.7, w: 0.5, life: 0.25, sparks: 16, glints: 4, ground: 3.2 },
+  thunder: { from: 9, segments: 10, jag: 0.5, w: 0.42, overlap: 2.2, life: 0.25, sparks: 16, glints: 4, ground: 3.2 },
 };

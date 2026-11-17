@@ -68,7 +68,8 @@ const browser = await launch();
 const files = [];
 for (let k = 0; k < cells.length; k++) {
   if (only && !only.includes(k + 1)) continue;
-  const [label, opt] = cells[k];
+  const [label, opt0] = cells[k];
+  const opt = { ...opt0, melee: yokai === 'aka-oni' };
   const ctx = await openPage(browser, { name: 'desktop', width: 960, height: 640 }, '?q=1&seed=93&model=blender');
   const { page } = ctx;
   if (yokai !== 'chochin-kozo') {
@@ -91,7 +92,10 @@ for (let k = 0; k < cells.length; k++) {
       if (opt.evolve && !g.evolveTech(opt.tech)) throw new Error('evolve failed: ' + opt.tech);
     }
     // 前方一排人類：平常打不死（讓技法有東西打）；看打倒的格子用一下就倒的
-    for (let j = 0; j < 7; j++) g.spawnAt('villager', -3 + j, (opt.far ? -9 : -4.5) - (j % 2), opt.elite ? 1 : 0, 0, opt.kill ? 1 : 1e9);
+    // 近戰（赤鬼：揮擊半徑 3 公尺）一排要放在揮得到的地方，不然只拍到沒出手的空檔
+    const melee = opt.melee;
+    const z0 = opt.far ? -9 : melee ? -2 : -4.5;
+    for (let j = 0; j < 7; j++) g.spawnAt('villager', (-3 + j) * (melee ? 0.6 : 1), z0 - (j % 2) * (melee ? 0.5 : 1), opt.elite ? 1 : 0, 0, opt.kill ? 1 : 1e9);
     if (opt.drive) g.driveWorld(0.6, 0.3);
     if (opt.ult) {
       g.setUlt(opt.ult, 0);
