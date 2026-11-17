@@ -95,6 +95,7 @@ function applyTune(): void {
       const [, id, field] = k.split('.');
       (YOKAI[id].weapon as unknown as Record<string, number>)[field] = Number(v);
     }
+    else if (k.startsWith('open.')) (STAGE.opening as unknown as Record<string, number>)[k.slice(5)] = Number(v);
     else if (k.startsWith('vet.')) (STAGE.veteran as unknown as Record<string, number>)[k.slice(4)] = Number(v);
     else if (k.startsWith('late.')) (STAGE.late as unknown as Record<string, number>)[k.slice(5)] = Number(v);
     else if (k.startsWith('recycle.')) (STAGE.recycle as unknown as Record<string, number>)[k.slice(8)] = Number(v);
@@ -199,6 +200,9 @@ interface Result {
   /** 死在召喚之後幾秒（沒死或沒召喚 = -1） */
   diedAfterSummon: number;
 }
+
+/** 開局倒下的門檻（秒；docs/02 變更紀錄 2026-11-17） */
+const EARLY_DEATH_SECONDS = 120;
 
 function play(seed: number, strategy: string, useElements: boolean): Result {
   resetTuning();
@@ -544,6 +548,8 @@ function summarize(rs: Result[]): string {
   const clear = rs.filter((r) => r.stagesCleared >= Math.min(STAGES, 99)).length / rs.length;
   return [
     `存活 P10/P50/P90 ${pct(surv, 10).toFixed(0)}/${pct(surv, 50).toFixed(0)}/${pct(surv, 90).toFixed(0)} 秒`,
+    // 使用者 2026-11-17「一開始敵人太多很容易死」：開局倒下的局要單獨列出來，不能藏在 P10 裡（> 0 就要說明）
+    `**開局 120 秒內倒下 ${rs.filter((r) => r.survived < EARLY_DEATH_SECONDS).length}/${rs.length} 局**`,
     `過關 ${(clear * 100).toFixed(0)}%`,
     `見頭目 ${((rs.filter((r) => r.bossSeen).length / rs.length) * 100).toFixed(0)}%`,
     `打倒頭目 ${((rs.filter((r) => r.bossKilled).length / rs.length) * 100).toFixed(0)}%`,

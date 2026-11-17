@@ -95,6 +95,13 @@ export class StageDirector {
   /** 這一關搬回生成圈的敵人數（sim、測試用） */
   recycled = 0;
 
+  /** 開場緩衝倍率：t = 0 時 startMult，線性升到 until 時 1 */
+  openingFactor(t = this.time): number {
+    const O = STAGE.opening;
+    const u = Math.min(1, t / this.duration);
+    return u >= O.until ? 1 : O.startMult + (1 - O.startMult) * (u / O.until);
+  }
+
   /** 後段加壓倍率（Q60）：late.from 之前 1，之後平滑升到 late.mult */
   lateFactor(t = this.time): number {
     const u = Math.min(1, t / this.duration);
@@ -136,6 +143,7 @@ export class StageDirector {
     let r = ((threat(n) / STAGE.rateBaseSeconds) * tuning.countScale);
     if (this.surgeUntil > t) r *= this.surgeMult;
     if (this.swarm) r *= STAGE.swarm.rateMult;
+    r *= this.openingFactor(t); // 開場緩衝（2026-11-17）
     r *= this.lateFactor(t); // 後段加壓（Q60）
     r *= this.extraMult;
     return r;
