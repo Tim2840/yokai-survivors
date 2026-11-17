@@ -171,6 +171,8 @@ interface Result {
   stagesCleared: number;
   bossSeen: boolean;
   bossKilled: boolean;
+  bossFight: number;
+  bossHurt: number;
   kills: number;
   level: number;
   elementsUsed: number;
@@ -231,6 +233,10 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   let totalTime = 0;
   let cleared = 0;
   let bossSeen = false;
+  /** 頭目戰（2026-11-17 頭目審查）：出現到倒下幾秒、頭目在場時被打掉幾成生命 */
+  let bossFrom = -1;
+  let bossFight = -1;
+  let bossHurt = 0;
   const cards: Record<string, number> = {};
   const maxStage = Math.min(STAGES, run.stageCount);
   let guard = 0;
@@ -344,7 +350,12 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
       casts++;
     }
     if (run.director.bossIndex >= 0) bossSeen = true;
+    const bossUp = run.director.bossIndex >= 0 && run.enemies.alive[run.director.bossIndex] === 1;
+    if (bossUp && bossFrom < 0) bossFrom = run.time;
+    const hpBefore = run.hp;
     run.step(DT);
+    if (bossUp && run.hp < hpBefore) bossHurt += (hpBefore - run.hp) / run.maxHp;
+    if (bossFrom >= 0 && bossFight < 0 && run.bossesDefeated > 0) bossFight = run.time - bossFrom;
     if (lastHp >= 0 && run.hp < lastHp && run.time < SECONDS) qHurt[Math.min(3, Math.floor((run.time / SECONDS) * 4))] += lastHp - run.hp;
     lastHp = run.hp;
     if (weapon4At < 0 && run.weaponLevel >= 4) weapon4At = totalTime + run.time;
@@ -381,6 +392,8 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     stagesCleared: cleared,
     bossSeen: bossSeen || run.bossesDefeated > 0,
     bossKilled: run.bossesDefeated > 0,
+    bossFight,
+    bossHurt,
     kills: run.kills,
     level: run.level,
     elementsUsed: used,
@@ -552,7 +565,7 @@ function summarize(rs: Result[]): string {
     `**開局 120 秒內倒下 ${rs.filter((r) => r.survived < EARLY_DEATH_SECONDS).length}/${rs.length} 局**`,
     `過關 ${(clear * 100).toFixed(0)}%`,
     `見頭目 ${((rs.filter((r) => r.bossSeen).length / rs.length) * 100).toFixed(0)}%`,
-    `打倒頭目 ${((rs.filter((r) => r.bossKilled).length / rs.length) * 100).toFixed(0)}%`,
+    `打倒頭目 ${((rs.filter((r) => r.bossKilled).length / rs.length) * 100).toFixed(0)}%（頭目戰中位 ${pct(rs.filter((r) => r.bossFight >= 0).map((r) => r.bossFight), 50)?.toFixed(0) ?? '-'} 秒、頭目在場時被打掉生命 平均 ${(avg(rs.filter((r) => r.bossFight >= 0).map((r) => r.bossHurt)) * 100).toFixed(0)}%）`,
     `擊殺 ${avg(rs.map((r) => r.kills)).toFixed(0)}`,
     `等級 ${avg(rs.map((r) => r.level)).toFixed(1)}`,
     `用掉要素 ${avg(rs.map((r) => r.elementsUsed)).toFixed(1)}`,
