@@ -28,7 +28,7 @@
 | **夜晚為預設時段、時段加成、角色整體重新設計規格（D88）** | `docs/28-night-theme-and-character-redesign.md`（Q58 待回答） |
 | **數值、關卡、要素第二版「夜行」（外部審閱後的重塑提案）** | `docs/32-rebalance-v2.md`（D93 照預設，**實作中**，進度在該文件第 ⑧ 節） |
 | **化身要像進化（變身演出、每階新造型、數值）** | `docs/33-form-glowup.md`（D94，已實作 v74：`FORMS`／`FORM_BURST`、`build_chochin(form)`／`build_kappa(form)`、`RunView.playerForms`） |
-| **頭目各自的技能（有預告的招式、半血變招）** | `docs/34-boss-skills.md`（審查卡，Q67～Q69 待回答，未實作） |
+| **頭目各自的技能（有預告的招式、半血變招）** | `docs/34-boss-skills.md`（D95 照預設，未實作） |
 | 關卡後段的敵人（老練的人類）、換招後失效的升級 | `docs/27-stage-ramp-dead-upgrades.md`（兩張審查卡，Q55、Q56 待回答，未實作） |
 | 技法特效重製（浮世繪、華麗、火與水的樣子）設計審查卡 | `docs/30-vfx-ukiyoe.md`（Q59 照預設；第一批火已做 D90、完整版 D91、水（河童）第 ⑪ 節：`src/art/flame.ts`、`src/render/elementFx.ts`（火與水共用）、`src/render/fireReact.ts`／`waterReact.ts`（命中與打倒）、`src/data/vfx.ts`；**新屬性要照 docs/30 第 ⑩ 節的事件表逐項做完**；**改特效要跑 `scripts/shots/vfx-catalog.mjs` 並逐格看**） |
 | **模型驗收（數字稽核＋轉檯圖；做或改任何模型前必讀）** | `docs/29-model-acceptance.md` |
