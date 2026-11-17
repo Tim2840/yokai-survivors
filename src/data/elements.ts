@@ -146,7 +146,8 @@ export const TRIAL = {
   near: { frac: 0.6, min: 9.5, max: 12 },
   zoneBuff: { common: 0.2, rare: 0.32, epic: 0.48, legend: 0.72 } as Record<Rarity, number>,
   techRarityUp: 1,
-  baseNeeds: [60, 110, 170] as readonly [number, number, number],
+  // D97：近距離湧出＋圈內加成後，站著不動 30 秒的打倒數中位多 10～40%（探針），門檻 60／110／170 → 72／132／204（約 +20%），寶箱難度維持
+  baseNeeds: [72, 132, 204] as readonly [number, number, number],
   needMult: { common: 1, rare: 1.25, epic: 1.6, legend: 2 } as Record<Rarity, number>,
   growth: 3,
   /** 稀有度 → 三階寶箱 */
