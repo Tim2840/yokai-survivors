@@ -34,7 +34,6 @@ export interface MarkerStyle {
 /** 每種地圖要素的符號（新增要素一定要補，單元測試全掃） */
 export const ELEMENT_MARKERS: Record<ElementKind, MarkerStyle> = {
   jizo: { shape: 'circle', group: 'boon' },
-  barrier: { shape: 'square', group: 'boon' },
   altar: { shape: 'diamond', group: 'risk' },
   offering: { shape: 'circle', group: 'trade' },
   omikuji: { shape: 'star', group: 'luck' },

@@ -11,10 +11,6 @@ import type { ElementResult, ResultLine } from './elementResult';
 import { ALTAR_BOONS, ALTAR_BOON_PCT, ALTAR_CURSE, ALTAR_CURSE_IDS, ALTAR_EFFECT_COUNT, ALTAR_MAX_EFFECTS, type CurseId } from '../data/altar';
 import {
   ALTAR_HOLD_SECONDS,
-  BARRIER,
-  BARRIER_LIFETIME,
-  BARRIER_RADIUS,
-  BARRIER_SPAWN_MULT,
   ELEMENT_KINDS,
   ELEMENT_RARITY_BY_WAVE,
   ELEMENT_RULES,
@@ -126,7 +122,9 @@ export interface AltarEffect {
 }
 
 const USED_FADE = 0.7;
-/** 各要素按住幾秒（結界石不用按住） */
+/** 試煉圈內加成的屬性鍵（D97） */
+const TRIAL_MOD = 'trial:zone';
+/** 各要素按住幾秒 */
 const HOLD: Partial<Record<ElementKind, number>> = { summit: SUMMIT.holdSeconds, trial: TRIAL.holdSeconds, jizo: JIZO_HOLD_SECONDS, altar: ALTAR_HOLD_SECONDS, offering: OFFERING_HOLD_SECONDS, omikuji: OMIKUJI_HOLD_SECONDS, chest: CHEST_HOLD_SECONDS, summon: STAGE.summon.holdSeconds, fuse: FUSE.holdSeconds, dosojin: DOSOJIN.holdSeconds };
 
 function blankSlot(): ElementSlot {
@@ -154,10 +152,10 @@ export class Elements {
   readonly slots: ElementSlot[] = Array.from({ length: ELEMENT_RULES.maxActive }, blankSlot);
   /** 玩家腳邊正在互動／最近的那個（HUD 提示用）；沒有 = null */
   focus: ElementSlot | null = null;
-  /** 玩家在結界圈內時，敵人湧出速率的倍率（給 StageDirector） */
+  /** 試煉進行中，敵人湧出速率的倍率（給 StageDirector） */
   spawnMult = 1;
-  /** 玩家現在站在結界石圈內（D93：圈內升級必出技法卡、稀有度高一階） */
-  inBarrier = false;
+  /** 玩家現在站在進行中的試煉圈內（D97，原結界石 D93：圈內升級必出技法卡、稀有度高一階） */
+  inTrialZone = false;
   /** 百鬼試煉碑（E1）：進行中的試煉（一次只有一場）。kills 只算倒在圈內的 */
   readonly trial = { active: false, slot: -1, x: 0, z: 0, left: 0, kills: 0, tier: -1, needs: [0, 0, 0] as number[], rewards: ['common', 'rare', 'epic'] as Rarity[] };
   private nextDrop = 0;
@@ -190,12 +188,14 @@ export class Elements {
     this.drops = 0;
     this.nextDrop = ELEMENT_RULES.everyFrac * duration;
     this.clearAllMods();
+    this.trialZoneOn = false;
     for (let i = 0; i < ELEMENT_RULES.initial; i++) this.drop(px, 0, pz, virtualWave, luck, 0);
   }
 
-  /** 這一關結束：限時與結界的效果收掉，祭壇的永久效果留著 */
+  /** 這一關結束：限時與試煉圈的效果收掉，祭壇的永久效果留著 */
   endStage(): void {
     this.clearAllMods();
+    this.trialZoneOn = false;
     for (const s of this.slots) s.active = false;
     this.spawnMult = 1;
     this.trial.active = false;
@@ -208,11 +208,11 @@ export class Elements {
       else this.host.stats.clearMod(t.key);
     }
     this.timed.length = 0;
-    for (const s of this.slots) this.host.stats.clearMod(`barrier:${this.slots.indexOf(s)}`);
+    this.host.stats.clearMod(TRIAL_MOD);
   }
 
   /**
-   * 畫面上要倒數的限時效果（D78：「如若有時間限制，加成要顯示給使用者看」）：神籤的限時結果、站在裡面的結界石。
+   * 畫面上要倒數的限時效果（D78：「如若有時間限制，加成要顯示給使用者看」）：神籤的限時結果（試煉圈的加成有自己的 HUD 倒數）。
    * fn(說明的 i18n key, 剩幾秒, 總秒數, 是不是壞事)。同一個神籤的多條詛咒只報一次。
    */
   visitTimed(fn: (label: string, left: number, total: number, bad: boolean) => void): void {
@@ -223,7 +223,6 @@ export class Elements {
       last = id;
       fn(t.label, Math.max(0, t.until - this.clock), t.total, !!t.curse);
     }
-    for (const s of this.slots) if (s.active && s.kind === 'barrier' && s.inside && s.usedAge < 0) fn('element.barrier', Math.max(0, s.life), BARRIER_LIFETIME, false);
   }
 
   get activeCount(): number {
@@ -261,7 +260,7 @@ export class Elements {
     let focusSlot: ElementSlot | null = null;
     let focusD = Infinity;
     let mult = 1;
-    let barrierNow = false;
+    let zoneNow = false;
     for (let i = 0; i < this.slots.length; i++) {
       const s = this.slots[i];
       if (!s.active) continue;
@@ -278,7 +277,13 @@ export class Elements {
       if (s.kind === 'trial' && this.trial.active && this.trial.slot === i) {
         // 試煉進行中：計時、不會被收掉；時間到結算
         this.updateTrial(i, dt);
-        if (this.trial.active) mult = Math.max(mult, TRIAL.spawnMult);
+        if (this.trial.active) {
+          mult = Math.max(mult, TRIAL.spawnMult);
+          // 圈內加成（D97，原結界石）：站在圈內 攻擊力、攻擊速度 +，升級必出技法卡
+          const inside = Math.hypot(px - s.x, pz - s.z) <= TRIAL.radius && Math.abs(py - s.y) <= ELEMENT_RULES.useHeight;
+          this.setTrialZone(inside, s.rarity);
+          zoneNow = inside;
+        } else this.setTrialZone(false, s.rarity);
         continue;
       }
       s.life -= dt;
@@ -290,26 +295,6 @@ export class Elements {
       const dz = pz - s.z;
       const dist = Math.hypot(dx, dz);
       const vertical = Math.abs(py - s.y) <= ELEMENT_RULES.useHeight;
-      if (s.kind === 'barrier') {
-        const inside = dist <= BARRIER_RADIUS && vertical;
-        if (inside !== s.inside) {
-          s.inside = inside;
-          const key = `barrier:${i}`;
-          if (inside) {
-            const v = BARRIER[s.rarity].bonus;
-            this.host.stats.setMod(key, { pct: { power: v, atkSpeed: v } });
-          } else this.host.stats.clearMod(key);
-        }
-        if (inside) {
-          mult = BARRIER_SPAWN_MULT;
-          barrierNow = true;
-        }
-        if (dist < focusD && dist <= BARRIER_RADIUS + 2) {
-          focusD = dist;
-          focusSlot = s;
-        }
-        continue;
-      }
       if (s.kind === 'fox') {
         this.updateFox(i, dt, px, py, pz);
         if (!s.active || s.usedAge >= 0) continue;
@@ -337,7 +322,7 @@ export class Elements {
     }
     this.focus = focusSlot;
     this.spawnMult = mult;
-    this.inBarrier = barrierNow;
+    this.inTrialZone = zoneNow;
   }
 
   /** 狐面商：玩家站在哪個圈、累積進度；滿了就收下那一個提案 */
@@ -410,7 +395,7 @@ export class Elements {
 
   private free(i: number): void {
     const s = this.slots[i];
-    if (s.kind === 'barrier') this.host.stats.clearMod(`barrier:${i}`);
+    if (s.kind === 'trial' && this.trial.slot === i) this.setTrialZone(false, s.rarity);
     s.active = false;
     s.inside = false;
   }
@@ -474,6 +459,17 @@ export class Elements {
     s.progress = 1;
     this.host.emitUsed(s.kind, s.rarity);
     if (lines.length > 0) this.host.showResult({ kind: s.kind, rarity: s.rarity, lines });
+  }
+
+  /** 試煉圈內的加成（D97）：進出圈時才改屬性 */
+  private trialZoneOn = false;
+  private setTrialZone(on: boolean, rarity: Rarity): void {
+    if (on === this.trialZoneOn) return;
+    this.trialZoneOn = on;
+    if (on) {
+      const v = TRIAL.zoneBuff[rarity];
+      this.host.stats.setMod(TRIAL_MOD, { pct: { power: v, atkSpeed: v } });
+    } else this.host.stats.clearMod(TRIAL_MOD);
   }
 
   /** 百鬼試煉碑：開始一場試煉 */
@@ -651,7 +647,7 @@ export class Elements {
     s.z = z;
     s.y = this.map.heightAt(x, z);
     s.age = 0;
-    s.life = (kind === 'barrier' ? BARRIER_LIFETIME : ELEMENT_RULES.lifetime) + announce;
+    s.life = ELEMENT_RULES.lifetime + announce;
     s.announce = announce;
     s.progress = 0;
     s.inside = false;

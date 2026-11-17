@@ -8,7 +8,7 @@ export class Stats {
   private readonly base: Record<StatId, number>;
   private readonly flat: Record<StatId, number>;
   private readonly pct: Record<StatId, number>;
-  /** 具名的加成來源（地圖要素：祭壇、結界石、石地藏護甲…）：可以整組換掉或移除，不會有浮點累積誤差 */
+  /** 具名的加成來源（地圖要素：祭壇、試煉圈、石地藏護甲…）：可以整組換掉或移除，不會有浮點累積誤差 */
   private readonly mods = new Map<string, { flat?: Partial<Record<StatId, number>>; pct?: Partial<Record<StatId, number>> }>();
   /** 最終值（唯讀使用） */
   readonly value: Record<StatId, number>;

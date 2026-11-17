@@ -107,18 +107,42 @@ describe('頭目技能（D95）', () => {
     expect(Math.abs(k.run.px - x0)).toBeLessThan(1e-6);
   });
 
+  it('追趕（D97）：玩家跑遠了頭目加速到比玩家快、追得上；靠近後恢復原本的速度（拿掉追趕會紅）', () => {
+    const { run, b } = withBoss(0, 30);
+    run.boss.devHoldSkills = true;
+    const base = run.boss.baseSpeed;
+    run.setMove(0, 0);
+    run.step(DT);
+    expect(run.enemies.speed[b]).toBeGreaterThan(run.stats.value.speed);
+    expect(run.boss.chase).toBeGreaterThan(1.5);
+    // 玩家一直往反方向跑 10 秒：距離要縮短（追得上）
+    const d0 = Math.hypot(run.enemies.x[b] - run.px, run.enemies.z[b] - run.pz);
+    for (let i = 0; i < 600; i++) {
+      run.hp = run.maxHp;
+      run.setMove(-1, 0);
+      run.step(DT);
+    }
+    const d1 = Math.hypot(run.enemies.x[b] - run.px, run.enemies.z[b] - run.pz);
+    expect(d1).toBeLessThan(d0);
+    // 靠近之後恢復原本的速度
+    run.enemies.relocate(b, run.px + 6, run.pz);
+    run.setMove(0, 0);
+    run.step(DT);
+    expect(run.enemies.speed[b]).toBeCloseTo(base, 5);
+  });
+
   it('半血變招：生命降到一半 → 第二階段（發事件、變快），之後會用半血限定的招（喚眾在身邊圍一圈）', () => {
     const { run, bus, b } = withBoss(0, 7);
     const log: string[] = [];
     bus.on('bossPhase2', () => log.push('p2'));
-    const sp0 = run.enemies.speed[b];
+    const sp0 = run.boss.baseSpeed;
     run.enemies.hp[b] = run.enemies.maxHp[b] * 0.49;
     run.director.active = true; // 喚眾要靠導演生出來
     const ring0 = run.director.ringsSpawned;
     play(run, 40, true);
     expect(log).toEqual(['p2']);
     expect(run.boss.phase2).toBe(true);
-    expect(run.enemies.speed[b]).toBeGreaterThan(sp0);
+    expect(run.boss.baseSpeed).toBeGreaterThan(sp0); // 比原本的移速快（追趕的加速另外算，D97）
     expect(run.boss.used.summon ?? 0).toBeGreaterThan(0);
     expect(run.director.ringsSpawned).toBeGreaterThan(ring0);
   });

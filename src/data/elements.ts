@@ -1,7 +1,7 @@
 import type { Rarity } from './rarity';
 
-/** 地圖要素（docs/02 第 6 節）。M2 先做石地藏、結界石、詛咒祭壇；其餘隨後加入。 */
-export const ELEMENT_KINDS = ['jizo', 'barrier', 'altar', 'offering', 'omikuji', 'chest', 'summon', 'fox', 'fuse', 'dosojin', 'trial', 'summit'] as const;
+/** 地圖要素（docs/02 第 6 節）。結界石 D97 併進百鬼試煉碑（圈內加成、圈內升級必出技法卡）。 */
+export const ELEMENT_KINDS = ['jizo', 'altar', 'offering', 'omikuji', 'chest', 'summon', 'fox', 'fuse', 'dosojin', 'trial', 'summit'] as const;
 export type ElementKind = (typeof ELEMENT_KINDS)[number];
 
 /** 出現規則（docs/02 第 6.3 節，改成連續關卡：用「關卡經過比例」取代「整備」） */
@@ -30,7 +30,7 @@ export const ELEMENT_RULES = {
 } as const;
 
 /** 要素種類權重（地圖可覆寫） */
-export const ELEMENT_WEIGHTS: Record<ElementKind, number> = { jizo: 1, barrier: 1, altar: 1, offering: 1, omikuji: 1, chest: 0.6, summon: 0, fox: 0.8, fuse: 0, dosojin: 0, trial: 0.8, summit: 0 };
+export const ELEMENT_WEIGHTS: Record<ElementKind, number> = { jizo: 1, altar: 1, offering: 1, omikuji: 1, chest: 0.6, summon: 0, fox: 0.8, fuse: 0, dosojin: 0, trial: 1, summit: 0 }; // D97：結界石併進試煉碑，試煉碑 0.8 → 1
 /** 同種同時最多幾個（沒寫的用 ELEMENT_RULES.perKind） */
 export const ELEMENT_PER_KIND: Partial<Record<ElementKind, number>> = { chest: 1, omikuji: 1, summon: 1, fox: 1, fuse: 1, dosojin: 1, trial: 1, summit: 1 };
 
@@ -55,18 +55,6 @@ export const JIZO: Record<Rarity, { healFrac: number; armor: number }> = {
 };
 export const JIZO_HOLD_SECONDS = 1.0;
 
-/** 結界石（⑥）：圈內的攻擊力與攻擊速度加成、半徑、存在秒數（3 個虛擬波）、圈內敵人湧出倍率 */
-export const BARRIER: Record<Rarity, { bonus: number }> = {
-  common: { bonus: 0.2 },
-  rare: { bonus: 0.32 },
-  epic: { bonus: 0.48 },
-  legend: { bonus: 0.72 },
-};
-export const BARRIER_RADIUS = 4;
-export const BARRIER_LIFETIME = 90;
-export const BARRIER_SPAWN_MULT = 1.25;
-/** D93 夜行 D：站在結界石圈內升級，那次必出技法卡，稀有度高 techRarityUp 階（最高到極） */
-export const BARRIER_TECH = { on: true, techRarityUp: 1 } as const;
 /** D93 夜行 D：賽錢箱改成「選一個已有的技法升一級」（三張都是已有技法的下一級，稀有度照賽錢箱）；沒有可以升的技法時退回一般卡 */
 export const OFFERING_TECH = { on: true } as const;
 
@@ -150,6 +138,14 @@ export const TRIAL = {
   seconds: 30,
   radius: 9,
   spawnMult: 1.6,
+  /**
+   * D97（Q70，使用者：「結界打怪挑戰應該要讓更多怪物近距離涌過來」「這兩個項目合併，感覺結界那個元素是多餘的」）：
+   * near = 試煉中這個比例的湧出改生在碑周圍 min～max 公尺（圈外一點點，馬上湧進來）；
+   * zoneBuff = 站在圈內 攻擊力、攻擊速度加成（原結界石的數字）；techRarityUp = 圈內升級必出技法卡、稀有度高幾階（原結界石，D93）。
+   */
+  near: { frac: 0.6, min: 9.5, max: 12 },
+  zoneBuff: { common: 0.2, rare: 0.32, epic: 0.48, legend: 0.72 } as Record<Rarity, number>,
+  techRarityUp: 1,
   baseNeeds: [60, 110, 170] as readonly [number, number, number],
   needMult: { common: 1, rare: 1.25, epic: 1.6, legend: 2 } as Record<Rarity, number>,
   growth: 3,

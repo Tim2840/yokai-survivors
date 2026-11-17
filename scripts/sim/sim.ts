@@ -540,7 +540,6 @@ function nearestElement(run: Run, strategy: string): { x: number; z: number } | 
   for (const s of run.elements.slots) {
     if (!s.active || s.usedAge >= 0 || s.announce > 0 || s.blocked) continue;
     if (s.kind === 'summon') continue; // 召喚祭壇由 --summonAt 控制什麼時候去
-    if (s.kind === 'barrier') continue; // 結界石要站在圈內戰鬥，機器人不會這樣玩；單獨看
     let tx = s.x;
     let tz = s.z;
     if (s.kind === 'fox') {

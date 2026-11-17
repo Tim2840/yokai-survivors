@@ -1,4 +1,4 @@
-import { BOSSES, BOSS_TELEGRAPH, type BossDef, type BossSkillDef } from '../data/bosses';
+import { BOSSES, BOSS_CHASE, BOSS_TELEGRAPH, type BossDef, type BossSkillDef } from '../data/bosses';
 import { COMBAT } from '../data/combat';
 import { ENEMY_IDS } from '../data/enemies';
 import type { Run } from './run';
@@ -83,17 +83,23 @@ export class BossSkills {
     if (!this.phase2 && en.hp[bi] <= en.maxHp[bi] * def.phase2.at) {
       this.phase2 = true;
       this.flash = def.phase2.flash;
-      en.speed[bi] *= def.phase2.speedMult;
+      this.baseSpeed *= def.phase2.speedMult;
       run.bus.emit('bossPhase2', { id: ENEMY_IDS[en.kind[bi]] });
     }
     for (let k = 0; k < def.skills.length; k++) if (this.cd[k] > 0) this.cd[k] -= dt;
     const dx = run.px - en.x[bi];
     const dz = run.pz - en.z[bi];
     const dist = Math.hypot(dx, dz);
+    // 追趕（D97）：離太遠就加速，最快比玩家快一點；出招中（hold）速度不影響
+    const C = BOSS_CHASE;
+    const k = this.state === 'idle' ? Math.min(1, Math.max(0, (dist - C.from) / (C.full - C.from))) : 0;
+    const target = Math.max(this.baseSpeed, run.stats.value.speed * C.playerRatio);
+    en.speed[bi] = this.baseSpeed + (target - this.baseSpeed) * k;
+    this.chase = en.speed[bi] / Math.max(1e-6, this.baseSpeed);
     switch (this.state) {
       case 'idle': {
         this.gapT -= dt;
-        if (this.gapT > 0) return;
+        if (this.gapT > 0 || this.devHoldSkills) return;
         const k = this.pick(dist);
         if (k < 0) return;
         this.skill = def.skills[k];
@@ -162,7 +168,15 @@ export class BossSkills {
     this.cd.fill(0);
     this.rot = 0;
     this.gapT = this.def.firstDelay;
+    this.baseSpeed = this.run.enemies.speed[bi];
   }
+
+  /** 頭目原本的移速（含半血變招）；追趕時 en.speed 會暫時比這個快（D97） */
+  baseSpeed = 0;
+  /** 測試用：不出招，只追人（量追趕） */
+  devHoldSkills = false;
+  /** 現在的追趕倍率（1 = 沒在追趕；測試、sim 看） */
+  chase = 1;
 
   /** 輪流挑一招：冷卻好了、玩家在範圍內、（半血限定的）已經半血 */
   private pick(dist: number): number {

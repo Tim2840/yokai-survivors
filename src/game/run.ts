@@ -5,7 +5,7 @@ import { FORMS, FORM_NOTE_SECONDS, PLAYABLE_YOKAI, YOKAI, formAt, type YokaiDef,
 import { rollAffixes } from '../data/affixes';
 import { TECH_MAX, TECH_SLOTS, mechOf, techById, EVO, SOUL_GEM } from '../data/techniques';
 import { CARD_CHOICES, PROGRESSION, RARITIES_UNLOCKED_M1, XP_BUDGET, cumXp, targetLevel, xpNeed } from '../data/progression';
-import { DOSOJIN, FUSE, SUMMIT, BARRIER_TECH, OFFERING_TECH } from '../data/elements';
+import { DOSOJIN, FUSE, SUMMIT, TRIAL, OFFERING_TECH } from '../data/elements';
 import { ENEMY_INTRO_SECONDS } from '../data/enemies';
 import { SWING, WEAPON_AUTO, itemPoolFor, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById, scaleWeaponStep } from '../data/items';
 import { EVO_CARD_PREFIX, TECH_CARD_PREFIX, TECH_KEEP, TECH_OFFER, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard } from '../data/techniques';
@@ -641,6 +641,13 @@ export class Run {
     }
     this.director.extraMult = this.elements.spawnMult * (1 + this.curse.spawnRate) * (1 + this.difficulty * DIFFICULTY.spawn);
     this.director.hpCurse = 1 + this.curse.enemyHp;
+    // 試煉碑進行中：一部分湧出改生在碑周圍（D97）
+    const tr = this.elements.trial;
+    if (tr.active) {
+      this.nearSpot.x = tr.x;
+      this.nearSpot.z = tr.z;
+      this.director.near = this.nearSpot;
+    } else this.director.near = null;
     this.enemies.speedMult = this.frozenEnemies ? 0 : 1 + this.curse.enemySpeed;
     this.director.update(dt, this.px, this.pz, this.night, this.bossDefeated);
     this.boss.update(dt);
@@ -682,6 +689,8 @@ export class Run {
   /** 新人類第一次出場的簡短提示（i18n 鍵與結束時間；由 Game 在存檔裡沒有紀錄時設定，HUD 顯示在波數旁） */
   enemyIntro: { key: string; until: number } | null = null;
   private veteranNoted = false;
+  /** 試煉碑近距離湧出的位置（D97；預先配置，每步只改座標） */
+  private readonly nearSpot = { x: 0, z: 0, frac: TRIAL.near.frac, min: TRIAL.near.min, max: TRIAL.near.max };
 
   private portalReached(): boolean {
     const p = this.portal;
@@ -1356,10 +1365,10 @@ export class Run {
   private makeOffer(): void {
     this.dealer.playerLevel = this.level;
     this.offer = this.dealer.deal(this.level, this.stats.value.luck, this.cardCounts);
-    // 結界石（D93）：圈內升級必出技法卡、稀有度高一階
-    const barrier = BARRIER_TECH.on && this.elements.inBarrier && this.level >= TECH_OFFER.minLevel;
-    if (barrier) this.forceTechCard = true;
-    this.mixTechCard(this.offer, barrier ? BARRIER_TECH.techRarityUp : 0);
+    // 試煉圈內（D97，原結界石 D93）：升級必出技法卡、稀有度高一階
+    const zone = this.elements.inTrialZone && this.level >= TECH_OFFER.minLevel; // D97：試煉圈內升級必出技法卡（原結界石）
+    if (zone) this.forceTechCard = true;
+    this.mixTechCard(this.offer, zone ? TRIAL.techRarityUp : 0);
   }
 
   /**

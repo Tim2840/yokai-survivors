@@ -4,7 +4,7 @@ import { palette } from '../art/palette';
 import { glow, soft } from '../art/materials';
 import { ball, roundedCylinder, teardrop } from '../art/shapes';
 import { RARITIES, type Rarity } from '../data/rarity';
-import { BARRIER_RADIUS, ELEMENT_RULES, FOX, TRIAL } from '../data/elements';
+import { ELEMENT_RULES, FOX, TRIAL } from '../data/elements';
 import type { ElementSlot, Elements } from '../systems/elements';
 import type { TerrainMap } from '../world/terrainMap';
 
@@ -16,7 +16,6 @@ const BEAM_H = 26;
 interface SlotView {
   root: THREE.Group;
   jizo: THREE.Group;
-  barrier: THREE.Group;
   altar: THREE.Group;
   offering: THREE.Group;
   omikuji: THREE.Group;
@@ -49,7 +48,7 @@ interface SlotView {
   zr: number;
 }
 
-/** 地圖要素的外觀（石地藏、結界石、詛咒祭壇）：只讀 Elements.slots，每幀不配置 */
+/** 地圖要素的外觀（石地藏、詛咒祭壇、試煉碑…）：只讀 Elements.slots，每幀不配置 */
 export class ElementsView {
   readonly group = new THREE.Group();
   private readonly views: SlotView[] = [];
@@ -150,12 +149,6 @@ export class ElementsView {
       const jbib = new THREE.Mesh(gBib, red);
       jbib.position.y = 1.0;
       jizo.add(jb, jbody, jhead, jbib);
-      // 結界石：立石＋注連繩
-      const barrier = new THREE.Group();
-      const bp = new THREE.Mesh(gPillar, stoneDark);
-      const br = new THREE.Mesh(gRope, rope);
-      br.position.y = 1.35;
-      barrier.add(bp, br);
       // 祭壇：兩層黑石＋紫色火焰
       const altar = new THREE.Group();
       const ab = new THREE.Mesh(gAltarBase, stoneDark);
@@ -326,10 +319,10 @@ export class ElementsView {
       zone.visible = false;
       this.disposables.push(ringMat, fillMat, beamMat, zg, zoneMat);
       for (const o of [ring, fill, beam, zone, ...foxRings, ...foxFills]) markOverlay(o); // 光圈、光柱、結界圈：不像素化
-      root.add(jizo, barrier, altar, offering, omikuji, chest, summon, fuse, dosojin, trial, summit, fox, ...foxRings, ...foxFills, ring, fill, beam);
+      root.add(jizo, altar, offering, omikuji, chest, summon, fuse, dosojin, trial, summit, fox, ...foxRings, ...foxFills, ring, fill, beam);
       root.visible = false;
       this.group.add(root, zone);
-      this.views.push({ root, jizo, barrier, altar, offering, omikuji, chest, summon, orb, fuse, fuseOrbs, dosojin, dosojinLight, trial, trialOrb, summit, summitOrb, fox, foxRings, foxFills, beam, beamMat, ring, ringMat, fill, fillMat, zone, zoneMat, flame, zx: NaN, zz: NaN, zr: NaN });
+      this.views.push({ root, jizo, altar, offering, omikuji, chest, summon, orb, fuse, fuseOrbs, dosojin, dosojinLight, trial, trialOrb, summit, summitOrb, fox, foxRings, foxFills, beam, beamMat, ring, ringMat, fill, fillMat, zone, zoneMat, flame, zx: NaN, zz: NaN, zr: NaN });
     }
   }
 
@@ -367,7 +360,6 @@ export class ElementsView {
       const c = this.rarityColor[s.rarity];
       v.root.position.set(s.x, s.y, s.z);
       v.jizo.visible = s.kind === 'jizo';
-      v.barrier.visible = s.kind === 'barrier';
       v.altar.visible = s.kind === 'altar';
       v.offering.visible = s.kind === 'offering';
       v.omikuji.visible = s.kind === 'omikuji';
@@ -388,7 +380,6 @@ export class ElementsView {
       const fade = used ? Math.max(0, 1 - s.usedAge / 0.7) : 1;
       const g = Math.max(0.001, grow * fade);
       v.jizo.scale.setScalar(g);
-      v.barrier.scale.setScalar(g);
       v.altar.scale.setScalar(g);
       v.offering.scale.setScalar(g);
       v.omikuji.scale.setScalar(g);
@@ -429,19 +420,13 @@ export class ElementsView {
         v.fox.rotation.y = Math.atan2(mx, mz);
       }
       v.beamMat.opacity = (ann ? 0.26 : (s.kind === 'summit' ? 0.2 : 0.08) + 0.03 * Math.sin(t * 2 + i)) * fade; // 山頂神社的光柱亮一點，遠遠看得到
-      // 結界石的環是範圍；狐面商用自己的兩個圈；其他是互動圈
-      const isBarrier = s.kind === 'barrier';
-      const ownRing = !isBarrier && s.kind !== 'fox' && !ann && !(s.kind === 'trial' && this.elements.trial.active);
+      // 狐面商用自己的兩個圈；進行中的試煉用範圍圈；其他是互動圈
+      const ownRing = s.kind !== 'fox' && !ann && !(s.kind === 'trial' && this.elements.trial.active);
       v.ring.visible = ownRing;
       v.fill.visible = ownRing;
       v.fill.scale.setScalar(Math.max(0.001, s.progress * g));
       const trialOn = s.kind === 'trial' && this.elements.trial.active && this.elements.trial.slot === i;
-      v.zone.visible = (isBarrier || trialOn) && !ann;
-      if (isBarrier) {
-        if (v.zx !== s.x || v.zz !== s.z || v.zr !== BARRIER_RADIUS) this.buildZone(v, s, BARRIER_RADIUS);
-        v.zoneMat.color.copy(c);
-        v.zoneMat.opacity = (s.inside ? 0.6 : 0.34) * fade;
-      }
+      v.zone.visible = trialOn && !ann;
       if (trialOn) {
         // 試煉的範圍圈：朱紅色，快沒時間時閃一下
         if (v.zx !== s.x || v.zz !== s.z || v.zr !== TRIAL.radius) this.buildZone(v, s, TRIAL.radius);

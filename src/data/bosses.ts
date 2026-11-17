@@ -49,6 +49,13 @@ export interface BossDef {
   phase2: { at: number; speedMult: number; cooldownMult: number; flash: number };
 }
 
+/**
+ * 頭目追趕（D97，Q70，使用者：「如果玩家遠離關卡頭目，頭目也要更快速度追來，不然太容易」）：
+ * 離玩家超過 from 公尺開始加速，到 full 公尺時移速 = 玩家目前移速 × playerRatio（比玩家快，跑不掉）；from 以內照原本的速度。
+ * 只在沒出招（追人）時作用；預告、衝撞、停頓都不加速。
+ */
+export const BOSS_CHASE = { from: 14, full: 26, playerRatio: 1.15 } as const;
+
 export const BOSSES: Record<string, BossDef> = {
   /** 退魔僧（第 1 關）：衝撞＋封魔陣；半血後喚眾 */
   taimasou: {

@@ -203,6 +203,7 @@ describe('連續計時關卡（D22）', () => {
     run.devTeleport(run.portal.x - 3, run.portal.z);
     let guard = 0;
     while (run.phase === 'combat' && guard++ < 600) {
+      while (run.offer && run.phase === 'combat') run.chooseCard(0); // 打倒頭目的魂火可能剛好升級（D97 前半段升級變快）
       run.setMove(run.portal.x - run.px, run.portal.z - run.pz);
       run.step(DT);
     }

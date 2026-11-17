@@ -1,9 +1,9 @@
-// e1：地圖要素（M2-1）。真的走進去、按住不動：石地藏（護甲）、詛咒祭壇（一升一降）、結界石（圈內加成、走出去消失）。
+// e1：地圖要素（M2-1）。真的走進去、按住不動：石地藏（護甲）、詛咒祭壇（一升一降）、百鬼試煉碑（D97：試煉中圈內加成，原結界石）。
 // D36：集滿後跳結果卡（模擬停住、列出拿到什麼、防誤觸、真的點「繼續」或按 Enter；同時升級時先結果卡再選卡）。
 // 要素用開發介面放到玩家身邊（隨機落下的位置不固定），其餘（走路、HUD 提示、效果）全用真實輸入與畫面。三種畫面各一次，卡住偵測。
 import { openPage, startRun, step, expect, shot, reportErrors, snapshotOf, walkOnto, hudTopOk, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'e1', desc: '地圖要素：走近→提示→按住→結果卡（停住、列出拿到什麼、防誤觸、點繼續）→效果（石地藏、詛咒祭壇、結界石、賽錢箱、寶箱、神籤、百鬼試煉碑、狐面商走進紅圈收下）三種畫面', max: 600, stall: 60 };
+export const meta = { id: 'e1', desc: '地圖要素：走近→提示→按住→結果卡（停住、列出拿到什麼、防誤觸、點繼續）→效果（石地藏、詛咒祭壇、賽錢箱、寶箱、神籤、百鬼試煉碑（含圈內加成）、狐面商走進紅圈收下）三種畫面', max: 600, stall: 60 };
 
 const SIDES = [[0, 3, 'KeyW', 0, -1], [0, -3, 'KeyS', 0, 1], [-3, 0, 'KeyD', 1, 0], [3, 0, 'KeyA', -1, 0]];
 
@@ -144,18 +144,6 @@ export async function run(browser) {
         await leave(spot);
       });
 
-      await step(`${vp.name} 結界石：站進圈內攻擊力 +32%、走出去恢復`, async () => {
-        const s0 = await stats();
-        const spot = await approach('barrier', 'rare');
-        await page.evaluate(() => window.__game.advance(0.3));
-        const s1 = await stats();
-        // 能力值 =（基礎 + 加算）×（1 + 百分比總和）：結界的 +32% 是加進百分比總和，所以攻擊力（基礎 1）多 0.32；前面的祭壇可能已經給過攻擊力，不能假設 s0 = 1
-        expect(Math.abs(s1.power - s0.power - 0.32) < 1e-6, `結界圈內攻擊力不對：${s0.power} → ${s1.power}（應該多 0.32）`);
-        await leave(spot);
-        const s2 = await stats();
-        expect(Math.abs(s2.power - s0.power) < 1e-6, `走出圈外攻擊力沒恢復：${s2.power}`);
-      });
-
       await step(`${vp.name} 賽錢箱：按住 → 扣生命 → 三選一面板（標題不同）→ 真的點卡 → 繼續`, async () => {
         const hp0 = (await page.evaluate(() => window.__game.run)).hp;
         const spot = await approach('offering', 'rare');
@@ -245,8 +233,14 @@ export async function run(browser) {
         const m = /打倒 (\d+)／(\d+)／(\d+) 隻/.exec(desc);
         expect(/按住開始/.test(desc) && m && +m[1] < +m[2] && +m[2] < +m[3] && +m[1] >= 75, `提示沒寫出門檻（良階碑第 1 段至少 75 隻）：${desc}`);
         const need0 = +m[1];
+        // D97：結界石併進試煉碑——提示寫出圈內加成（良 +32%），試煉開始後站在圈內攻擊力真的多 0.32
+        expect(/攻擊力、攻擊速度 \+32%/.test(desc), `提示沒寫出圈內加成 +32%：${desc}`);
+        const s0 = await stats();
         for (let i = 0; i < 12 && !(await page.evaluate(() => window.__game.run.trial.active)); i++) await page.evaluate(() => window.__game.advance(0.25));
         expect(await page.evaluate(() => window.__game.run.trial.active), `按住之後試煉沒有開始（${vp.name}）`);
+        await page.evaluate(() => window.__game.advance(0.1));
+        const s1 = await stats();
+        expect(Math.abs(s1.power - s0.power - 0.32) < 1e-6, `試煉圈內攻擊力不對：${s0.power} → ${s1.power}（應該多 0.32）`);
         await page.evaluate(() => { window.__game.advance(0.3); window.__game.render(); });
         expect(await page.locator('#trial-box').isVisible(), `試煉中沒有 HUD 倒數（${vp.name}）`);
         const box0 = await page.locator('#trial-box').innerText();

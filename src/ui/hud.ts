@@ -13,7 +13,7 @@ import { ULT } from '../data/ultimates';
 import { STAGE } from '../data/stage';
 import { ENEMIES, ENEMY_IDS } from '../data/enemies';
 import { PICKUPS } from '../data/pickups';
-import { BARRIER, DOSOJIN, TRIAL, JIZO, OFFERING, trialNeeds, SUMMIT, OFFERING_TECH } from '../data/elements';
+import { DOSOJIN, TRIAL, JIZO, OFFERING, trialNeeds, SUMMIT, OFFERING_TECH } from '../data/elements';
 
 
 /**
@@ -341,9 +341,9 @@ export function buildHud(parent: HTMLElement): Hud {
           elBox.dataset.rarity = f.rarity;
           elTitle.textContent = `${t(`rarity.${f.rarity}`)}・${t(`element.${f.kind}`)}`;
           elDesc.textContent = f.kind === 'summon' ? t('element.summon.desc', { mult: mult.toFixed(1) }) : f.kind === 'fox' ? describeFox(f, run.cardCounts) : f.kind === 'fuse' ? t(f.blocked ? 'element.fuse.none' : 'element.fuse.desc') : f.kind === 'dosojin' ? t('element.dosojin.desc') : f.kind === 'summit' ? t(f.blocked ? 'element.summit.none' : 'element.summit.desc', { m: SUMMIT.bossMult, n: SUMMIT.extraChests }) : f.kind === 'trial' ? trialHint(f.rarity, run.time / run.director.duration) : describeElement(f, run.tech.offerUp(DESC_RNG, 1).length > 0);
-          elAct.textContent = f.kind === 'barrier' ? t('element.stand') : f.kind === 'fox' ? t('element.fox.act') : t('element.hold');
+          elAct.textContent = f.kind === 'fox' ? t('element.fox.act') : t('element.hold');
         }
-        elFill.style.width = `${f.kind === 'barrier' ? (f.inside ? 100 : 0) : Math.round(f.progress * 100)}%`;
+        elFill.style.width = `${Math.round(f.progress * 100)}%`;
       }
       const xp = `${Math.round((run.xp / run.xpNeeded) * 1000)}`;
       if (xp !== lastXp) {
@@ -381,7 +381,12 @@ function summonMultNow(run: Run): number {
 function trialHint(rarity: ElementSlot['rarity'], progress: number): string {
   const n = trialNeeds(rarity, progress);
   const r = TRIAL.rewards[rarity].map((x) => t(`rarity.${x}` as I18nKey));
-  return t('element.trial.desc', { s: TRIAL.seconds }) + t('element.trial.hint', { a: n[0], b: n[1], c: n[2], r1: r[0], r2: r[1], r3: r[2] });
+  return (
+    t('element.trial.desc', { s: TRIAL.seconds }) +
+    t('element.trial.hint', { a: n[0], b: n[1], c: n[2], r1: r[0], r2: r[1], r3: r[2] }) +
+    '\n' +
+    t('element.trial.zone', { pct: Math.round(TRIAL.zoneBuff[rarity] * 100) })
+  );
 }
 
 /** 賽錢箱說明用：只看「有沒有可以升級的技法」，不影響模擬的亂數 */
@@ -399,7 +404,6 @@ function describeElement(f: ElementSlot, canUpTech = true): string {
   }
   if (f.kind === 'chest') return t('element.chest.desc', { rarity: t(`rarity.${f.rarity}`) });
   if (f.kind === 'omikuji') return t('element.omikuji.desc');
-  if (f.kind === 'barrier') return t('element.barrier.desc', { pct: Math.round(BARRIER[f.rarity].bonus * 100) });
   // 詛咒祭壇：把抽到的每個效果列出來，詛咒（敵人變強）與好處（自己變強）用 +％ 寫在一起
   const parts: string[] = [];
   for (let k = 0; k < f.effectCount; k++) {

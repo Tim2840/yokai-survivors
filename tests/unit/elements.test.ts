@@ -6,7 +6,7 @@ import { itemById, TRADE_ITEMS } from '../../src/data/items';
 import { tuning } from '../../src/data/tuning';
 import { RARITIES, type Rarity } from '../../src/data/rarity';
 import { ALTAR_BOON_PCT, ALTAR_CURSE, ALTAR_EFFECT_COUNT, ALTAR_BOONS, ALTAR_CURSE_IDS } from '../../src/data/altar';
-import { FOX, ELEMENT_KINDS, ELEMENT_PER_KIND, OFFERING, OFFERING_HOLD_SECONDS, OMIKUJI_EFFECT, OMIKUJI_RESULTS, OMIKUJI_WEIGHTS, CHEST_HOLD_SECONDS, OMIKUJI_HOLD_SECONDS, ELEMENT_RULES, JIZO, JIZO_HOLD_SECONDS, ALTAR_HOLD_SECONDS, BARRIER, BARRIER_SPAWN_MULT, BARRIER_RADIUS } from '../../src/data/elements';
+import { FOX, ELEMENT_KINDS, ELEMENT_PER_KIND, OFFERING, OFFERING_HOLD_SECONDS, OMIKUJI_EFFECT, OMIKUJI_RESULTS, OMIKUJI_WEIGHTS, CHEST_HOLD_SECONDS, OMIKUJI_HOLD_SECONDS, ELEMENT_RULES, JIZO, JIZO_HOLD_SECONDS, ALTAR_HOLD_SECONDS } from '../../src/data/elements';
 import { STAT_LIMITS, STAT_IDS } from '../../src/data/stats';
 import { Elements, elementRarityWeights } from '../../src/systems/elements';
 import { TerrainMap } from '../../src/world/terrainMap';
@@ -257,32 +257,9 @@ describe('詛咒祭壇（D27：隨機抽數個不同效果，含詛咒）', () =
   });
 });
 
-describe('結界石', () => {
-  it('圈內攻擊力與攻擊速度加成、湧出 ×1.25；走出去就沒有；過關清掉', () => {
-    for (const r of RARITIES) {
-      const { run } = make(5);
-      const b = run.elements.devForce('barrier', r, run.px, run.pz)!;
-      const p0 = run.stats.value.power;
-      const a0 = run.stats.value.atkSpeed;
-      stand(run, b.x, b.z, 0.2);
-      expect(run.stats.value.power, r).toBeCloseTo(p0 * (1 + BARRIER[r].bonus));
-      expect(run.stats.value.atkSpeed, r).toBeCloseTo(a0 * (1 + BARRIER[r].bonus));
-      expect(run.elements.spawnMult).toBe(BARRIER_SPAWN_MULT);
-      stand(run, b.x + BARRIER_RADIUS + 3, b.z, 0.2);
-      expect(run.stats.value.power, r).toBeCloseTo(p0);
-      expect(run.elements.spawnMult).toBe(1);
-    }
-  });
-
-  it('站在圈內時過關 → 加成不會留到下一關（拿掉 endStage 會紅）', () => {
-    const { run } = make(6);
-    const b = run.elements.devForce('barrier', 'legend', run.px, run.pz)!;
-    const p0 = run.stats.value.power;
-    stand(run, b.x, b.z, 0.2);
-    expect(run.stats.value.power).toBeGreaterThan(p0);
-    run.devClearStage();
-    expect(run.phase, '應該已經過關').not.toBe('combat');
-    expect(run.stats.value.power).toBeCloseTo(p0);
+describe('結界石已併進試煉碑（D97）', () => {
+  it('地圖上不會再落下結界石（拿掉這個種類）', () => {
+    expect((ELEMENT_KINDS as readonly string[]).includes('barrier')).toBe(false);
   });
 });
 
@@ -379,7 +356,7 @@ describe('賽錢箱、神籤、寶箱（M2-2）', () => {
     }
   });
 
-  it('D78 倒數標籤：限時效果（凶類、大招、雪女的吐息、站在結界裡）都列進 collectBuffs、剩餘秒數會變少；整場效果（好籤、石地藏）不列', () => {
+  it('D78 倒數標籤：限時效果（凶類、大招、雪女的吐息）都列進 collectBuffs、剩餘秒數會變少；整場效果（好籤、石地藏）不列', () => {
     const { run } = make(26);
     expect(run.collectBuffs()).toBe(0);
     run.elements.applyOmikuji('daikichi');
@@ -396,9 +373,6 @@ describe('賽錢箱、神籤、寶箱（M2-2）', () => {
     stand(run, j.x, j.z, JIZO_HOLD_SECONDS + 0.2);
     const labels = () => (run.collectBuffs(), run.buffs.slice(0, run.buffCount).map((b) => b.label));
     expect(labels().some((l) => l.startsWith('jizo') || l === 'element.jizo'), '石地藏是整場的').toBe(false);
-    const b = run.elements.devForce('barrier', 'rare', run.px + 2, run.pz)!;
-    stand(run, b.x, b.z, 1);
-    expect(labels()).toContain('element.barrier');
     advance(run, 60);
     expect(labels(), '凶到期就消失').not.toContain('omikuji.kyo');
   });

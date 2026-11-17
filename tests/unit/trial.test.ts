@@ -5,6 +5,7 @@ import { tuning, resetTuning } from '../../src/data/tuning';
 import { ELEMENT_KINDS, TRIAL, trialNeeds } from '../../src/data/elements';
 import { RARITIES, type Rarity } from '../../src/data/rarity';
 import { kindIndex } from '../../src/systems/enemies';
+import { TECH_OFFER, isTechCard } from '../../src/data/techniques';
 import { t } from '../../src/i18n';
 import type { I18nKey } from '../../src/i18n/zh-TW';
 
@@ -42,6 +43,87 @@ function finishTrial(run: Run) {
 }
 
 describe('百鬼試煉碑（E1）', () => {
+  it('圈內加成（D97，原結界石）：試煉中站在圈內 攻擊力、攻擊速度 +zoneBuff；走出圈外就沒有；試煉結束清掉', () => {
+    for (const r of RARITIES) {
+      const run = make(31);
+      const p0 = run.stats.value.power;
+      const a0 = run.stats.value.atkSpeed;
+      const s = startTrial(run, r);
+      run.step(DT);
+      expect(run.stats.value.power, r).toBeCloseTo(p0 * (1 + TRIAL.zoneBuff[r]));
+      expect(run.stats.value.atkSpeed, r).toBeCloseTo(a0 * (1 + TRIAL.zoneBuff[r]));
+      expect(run.elements.inTrialZone).toBe(true);
+      run.devTeleport(s.x + TRIAL.radius + 3, s.z);
+      run.step(DT);
+      expect(run.stats.value.power, `${r} 走出圈外`).toBeCloseTo(p0);
+      expect(run.elements.inTrialZone).toBe(false);
+      run.devTeleport(s.x, s.z);
+      finishTrial(run);
+      expect(run.stats.value.power, `${r} 試煉結束`).toBeCloseTo(p0);
+    }
+  });
+
+  it('圈內升級必出技法卡（D97，原結界石 D93）；圈外不一定（20 次裡至少一次沒有）', () => {
+    const count = (inside: boolean) => {
+      let withTech = 0;
+      for (let k = 0; k < 20; k++) {
+        const run = make(100 + k);
+        while (run.level < TECH_OFFER.minLevel) {
+          run.addXp(run.xpNeeded);
+          while (run.offer) run.chooseCard(0);
+        }
+        const s = startTrial(run);
+        if (!inside) run.devTeleport(s.x + TRIAL.radius + 3, s.z);
+        run.step(DT);
+        while (run.offer) run.chooseCard(0);
+        run.addXp(run.xpNeeded);
+        if (run.offer?.some((o) => isTechCard(o.cardId))) withTech++;
+      }
+      return withTech;
+    };
+    expect(count(true)).toBe(20);
+    expect(count(false)).toBeLessThan(20);
+  });
+
+  it('站在圈內時過關 → 加成不會留到下一關（拿掉 endStage 會紅）', () => {
+    const run = make(32);
+    const p0 = run.stats.value.power;
+    startTrial(run, 'legend');
+    run.step(DT);
+    expect(run.stats.value.power).toBeGreaterThan(p0);
+    run.devClearStage();
+    expect(run.phase, '應該已經過關').not.toBe('combat');
+    expect(run.stats.value.power).toBeCloseTo(p0);
+  });
+
+  it('近距離湧出（D97）：試煉中大部分人類生在碑周圍 near.min～max 公尺，不是 18～24 公尺外（舊版會紅）', () => {
+    const run = make(33);
+    const s = startTrial(run);
+    run.director.active = true;
+    const en = run.enemies;
+    for (let i = 0; i < en.high; i++) if (en.alive[i]) en.kill(i);
+    // 每一步記下「剛生出來」那一隻的位置（人類會走過來，不能看最後的位置——第一版這樣量，拿掉近距離湧出也會過）
+    const seen = new Uint8Array(4096);
+    let near = 0;
+    let all = 0;
+    for (let k = 0; k < 60 * 12; k++) {
+      if (run.awaitingPick) run.chooseCard(0);
+      run.step(DT);
+      for (let i = 0; i < en.high; i++) {
+        if (!en.alive[i]) {
+          seen[i] = 0;
+          continue;
+        }
+        if (seen[i] || en.variant[i] === 2) continue;
+        seen[i] = 1;
+        all++;
+        if (Math.hypot(en.x[i] - s.x, en.z[i] - s.z) <= TRIAL.near.max + 1) near++;
+      }
+    }
+    expect(all).toBeGreaterThan(8);
+    expect(near / all, `${near}/${all} 隻在碑附近`).toBeGreaterThan(TRIAL.near.frac * 0.6);
+  });
+
   it('資料全掃：四種稀有度×各個進度都有三段遞增的門檻；越稀有、越後面門檻越高；三階寶箱不降、越稀有最高階越好；有名稱與說明', () => {
     expect(ELEMENT_KINDS).toContain('trial');
     let prevTop = -1;
@@ -59,7 +141,7 @@ describe('百鬼試煉碑（E1）', () => {
       prevTop = rank[2];
     }
     for (let k = 1; k < RARITIES.length; k++) expect(trialNeeds(RARITIES[k], 0.3)[0], `${RARITIES[k]} 比 ${RARITIES[k - 1]} 難`).toBeGreaterThan(trialNeeds(RARITIES[k - 1], 0.3)[0]);
-    for (const k of ['element.trial', 'element.trial.desc', 'element.trial.hint', 'hud.trial', 'result.trial.win', 'result.trial.lose'] as const) expect(t(k as I18nKey), k).not.toBe(k);
+    for (const k of ['element.trial', 'element.trial.desc', 'element.trial.hint', 'element.trial.zone', 'hud.trial', 'result.trial.win', 'result.trial.lose'] as const) expect(t(k as I18nKey), k).not.toBe(k);
   });
 
   it('按住啟動：試煉開始、碑留在原地、剩 TRIAL.seconds 秒、敵人湧出變快；時間到才收掉', () => {

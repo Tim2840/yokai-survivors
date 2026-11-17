@@ -122,8 +122,8 @@ describe('要素結果卡（D36）', () => {
     expect(l.mult).toBeCloseTo(run.director.summonMult, 5);
   });
 
-  it('賽錢箱、寶箱不跳結果卡（本來就開三選一面板）；結界石不跳', () => {
-    for (const kind of ['offering', 'chest', 'barrier'] as const) {
+  it('賽錢箱、寶箱不跳結果卡（本來就開三選一面板）', () => {
+    for (const kind of ['offering', 'chest'] as const) {
       const { run } = make(15);
       const s = run.elements.devForce(kind, 'common', run.px, run.pz)!;
       run.devTeleport(s.x, s.z);

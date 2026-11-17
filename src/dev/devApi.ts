@@ -329,7 +329,7 @@ export function installDevApi(ctx: DevContext): void {
     spawn: (id: string, n: number) => run()?.devSpawn(id, n) ?? 0,
     /** 把這一關的時間直接跳到 t 秒（跳到頭目前後用） */
     setTime: (t: number) => run()?.devSetTime(t),
-    /** 在玩家身邊放一個地圖要素（kind: jizo／barrier／altar；rarity: common／rare／epic／legend）；回傳位置，放不下是 null */
+    /** 在玩家身邊放一個地圖要素（kind: jizo／altar／trial…（ELEMENT_KINDS）；rarity: common／rare／epic／legend）；回傳位置，放不下是 null */
     forceElement: (kind: string, rarity: RarityLike) => {
       const r = run();
       if (!r) return null;

@@ -157,13 +157,22 @@ export class StageDirector {
     return r;
   }
 
+  /**
+   * 近距離湧出（D97，試煉碑進行中）：frac 的機率改生在 (x, z) 周圍 min～max 公尺，不是玩家外面 18～24 公尺。
+   * Run 每步設定；沒有 = null。
+   */
+  near: { x: number; z: number; frac: number; min: number; max: number } | null = null;
+
   private findSpot(px: number, pz: number): boolean {
     const m = this.map;
+    const nr = this.near && this.rng.next() < this.near.frac ? this.near : null;
+    const cx = nr ? nr.x : px;
+    const cz = nr ? nr.z : pz;
     for (let t = 0; t < WAVES.spawnTries; t++) {
       const a = this.rng.range(0, Math.PI * 2);
-      const r = this.rng.range(STAGE.spawnRingMin, STAGE.spawnRingMax);
-      const x = px + Math.cos(a) * r;
-      const z = pz + Math.sin(a) * r;
+      const r = nr ? this.rng.range(nr.min, nr.max) : this.rng.range(STAGE.spawnRingMin, STAGE.spawnRingMax);
+      const x = cx + Math.cos(a) * r;
+      const z = cz + Math.sin(a) * r;
       if (x < m.minX + 1 || x > m.maxX - 1 || z < m.minZ + 1 || z > m.maxZ - 1) continue;
       if (m.isBlocked(x, z)) continue;
       if (!this.flow.isolated && !this.flow.reachable(x, z)) continue;
