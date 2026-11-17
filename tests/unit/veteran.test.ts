@@ -59,3 +59,14 @@ describe('老練的人類', () => {
     expect(run.enemyIntro?.key === 'enemy.veteran.intro' || run.director.veteranSeen).toBe(true);
   });
 });
+
+describe('老練的人類的裝備（D97：「長得也要不一樣」）', () => {
+  it('背旗高出頭頂、有頂點色（拿掉裝備會紅）', async () => {
+    const { buildVeteranGearGeometry, CHIBI } = await import('../../src/units/humans');
+    const g = buildVeteranGearGeometry();
+    g.computeBoundingBox();
+    expect(g.getAttribute('color')).toBeTruthy();
+    expect(g.boundingBox!.max.y, '旗要高出頭頂，俯視鏡頭才看得到').toBeGreaterThan(CHIBI.headY + CHIBI.headR + 0.3);
+    expect(g.boundingBox!.min.z, '旗在背後（-z）').toBeLessThan(-0.15);
+  });
+});

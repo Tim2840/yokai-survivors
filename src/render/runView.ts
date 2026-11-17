@@ -10,6 +10,7 @@ import { buildLanternMonk, type Character } from '../units/lanternMonk';
 import { buildKappa } from '../units/kappa';
 import { buildAkaOni } from '../units/akaOni';
 import { ENEMY_MODELS } from '../units/enemyModels';
+import { buildVeteranGearGeometry } from '../units/humans';
 import { CHIBI } from '../units/humans';
 import { ENEMY_IDS } from '../data/enemies';
 import { EnemyShotsView } from './enemyShotsView';
@@ -71,6 +72,7 @@ export class RunView {
   /** 投射物畫成扁盤（河童）還是圓球（鬼火） */
   private diskShot = false;
   private readonly enemyMeshes: THREE.InstancedMesh[];
+  private readonly vetGear: THREE.InstancedMesh;
   readonly shotsView: EnemyShotsView;
   readonly bossTele: BossTelegraphView;
   /** 揮擊武器（赤鬼）才有 */
@@ -187,8 +189,7 @@ export class RunView {
 
     // 敵人：每種人類一個實例化圖層（各自的幾何＋頂點色），頂點著色器做彈跳與傾斜（T2：頂點著色器動畫）
     // 走路：腳（CHIBI.footY 以下的頂點）左右輪流前後擺（D72）。材質的 onBeforeCompile 在每個材質上是同一份程式碼 → 著色器程式共用（p1 程式數不變）
-    this.enemyMeshes = ENEMY_IDS.map((id) => {
-      const eg = ENEMY_MODELS[id]();
+    const makeLayer = (eg: THREE.BufferGeometry): THREE.InstancedMesh => {
       const phase = new THREE.InstancedBufferAttribute(new Float32Array(run.enemies.capacity), 1);
       phase.setUsage(THREE.DynamicDrawUsage);
       eg.setAttribute('aPhase', phase);
@@ -216,7 +217,10 @@ export class RunView {
       this.group.add(mesh);
       this.disposables.push(eg, em);
       return mesh;
-    });
+    };
+    this.enemyMeshes = ENEMY_IDS.map((id) => makeLayer(ENEMY_MODELS[id]()));
+    // 老練的人類的裝備（D97）：背旗＋袖甲，疊在本體上（同一套頂點動畫，所有種類共用一個圖層）
+    this.vetGear = makeLayer(buildVeteranGearGeometry());
     this.shotsView = new EnemyShotsView(run);
     this.group.add(this.shotsView.group);
     this.bossTele = new BossTelegraphView(run);
@@ -417,6 +421,9 @@ export class RunView {
     const counts = this.enemyCounts;
     counts.fill(0);
     let total = 0;
+    let gears = 0;
+    const gm = this.vetGear.instanceMatrix.array as Float32Array;
+    const gph = (this.vetGear.geometry.getAttribute('aPhase') as THREE.InstancedBufferAttribute).array as Float32Array;
     for (let i = 0; i < e.high; i++) {
       if (!e.alive[i]) continue;
       const k = e.kind[i];
@@ -432,19 +439,23 @@ export class RunView {
       writeMatrix(em, n, x, y, z, e.yaw[i], sc, sc, sc);
       writeMatrix(sm, total++, x, y + DECAL_LIFT, z, 0, sc, 1, sc);
       ph[n] = e.phase[i];
+      if (e.vet[i] === 1 && e.variant[i] === 0) {
+        writeMatrix(gm, gears, x, y, z, e.yaw[i], sc, sc, sc);
+        gph[gears++] = e.phase[i];
+      }
       const f = (e.flash[i] > 0 ? 1 + (e.flash[i] / COMBAT.hitFlash) * 2.2 : 1) * (e.variant[i] === 2 && run.boss.flash > 0 ? 2.2 : 1);
       // 精英偏紅、頭目更紅（一般人類的顏色不變）；弓手瞄準時偏紅閃爍（預告）
       const v = e.variant[i];
       // 頭目預告招式時也閃紅（D95）；半血變招那一下整隻亮起來
       const bossWarn = v === 2 && i === run.boss.index && run.boss.state === 'windup';
       const aim = e.wind[i] > 0 || bossWarn ? 0.6 + 0.4 * Math.sin(t * 28) : 0;
-      // 老練（Q55）：偏藍紫（和精英的紅、頭目的深紅分得開）
+      // 老練（Q55）：微微偏藍紫（D97 起主要靠背旗與袖甲認，顏色只淡淡地帶一點，不再整隻染色）
       const vt = e.vet[i] === 1;
       // 頭目（D95）：只微微偏紅、預告時閃得比較淡（以前整隻染成深紅，Blender 模型看不出是誰；預告靠地上的紅色範圍）
       const am = v === 2 ? aim * 0.35 : aim;
-      col[n * 3] = f * (vt ? 0.8 : v === 0 ? 1 : v === 1 ? 1.5 : 1.15) * (1 + am * 0.8);
-      col[n * 3 + 1] = f * (vt ? 0.75 : v === 0 ? 1 : v === 1 ? 0.7 : 0.88) * (1 - am * 0.45);
-      col[n * 3 + 2] = f * (vt ? 1.45 : v === 0 ? 1 : v === 1 ? 0.7 : 0.88) * (1 - am * 0.45);
+      col[n * 3] = f * (vt ? 0.92 : v === 0 ? 1 : v === 1 ? 1.5 : 1.15) * (1 + am * 0.8);
+      col[n * 3 + 1] = f * (vt ? 0.9 : v === 0 ? 1 : v === 1 ? 0.7 : 0.88) * (1 - am * 0.45);
+      col[n * 3 + 2] = f * (vt ? 1.15 : v === 0 ? 1 : v === 1 ? 0.7 : 0.88) * (1 - am * 0.45);
     }
     for (let k = 0; k < this.enemyMeshes.length; k++) {
       const mesh = this.enemyMeshes[k];
@@ -457,6 +468,10 @@ export class RunView {
     }
     this.enemyShadow.count = total;
     this.enemyShadow.instanceMatrix.needsUpdate = true;
+    this.vetGear.count = gears;
+    this.vetGear.visible = gears > 0;
+    this.vetGear.instanceMatrix.needsUpdate = true;
+    (this.vetGear.geometry.getAttribute('aPhase') as THREE.InstancedBufferAttribute).needsUpdate = true;
     this.shotsView.update();
     this.bossTele.update(t);
     this.swingView?.update();
@@ -525,6 +540,7 @@ export class RunView {
     this.world.dispose();
     for (const d of this.disposables) d.dispose();
     for (const m of this.enemyMeshes) m.dispose();
+    this.vetGear.dispose();
     this.shotsView.dispose();
     this.bossTele.dispose();
     this.swingView?.dispose();
