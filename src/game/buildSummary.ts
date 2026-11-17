@@ -9,7 +9,9 @@ import { STAT_IDS } from '../data/stats';
 import { ALTAR_CURSE_IDS, type CurseId } from '../data/altar';
 import { tuning } from '../data/tuning';
 import { ULT, ULT_UPGRADE } from '../data/ultimates';
-import { evosFor, techById } from '../data/techniques';
+import { evoById, evosFor, techById } from '../data/techniques';
+import { TECH_DETAIL, type TechDetailKind } from '../data/techDetail';
+import type { TechStat } from '../data/affixes';
 import { baseLikesOf } from '../data/links';
 
 /** 暫停畫面「能力」面板的資料（純資料，不含文字；文字由介面層用 i18n 組） */
@@ -23,6 +25,8 @@ export interface BuildSummary {
   /** 招式變化 id（還沒選是 null） */
   /** 這一局拿到的技法（D48）與各自的技法等級 */
   techs: { id: string; level: number; evolved: boolean; likes: string[] }[];
+  /** 能力面板的「技法」欄位（2026-11-17）：每個技法的實際數值（詞條、進化、全身能力都算進去） */
+  techDetails: TechDetail[];
   /** 化身（D84）：現在第幾階、下一次化身的等級（沒有了 = 0）、還沒解鎖的化身限定技法 [id, 第幾階] */
   form: { now: number; nextLevel: number; locked: [string, number][] };
   /** 技法格子：用了幾格／共幾格 */
@@ -36,7 +40,7 @@ export interface BuildSummary {
   /** 屬性：id、目前值（內部單位）、基礎值 */
   stats: { id: StatId; value: number; base: number }[];
   /** 武器：鬼火數量、濺射半徑（公尺）、穿透 */
-  weapon: { volley: number; splash: number; pierce: number; shards: number; shardDamage: number; /** 取代發射的技法在場（穿透、濺射、碎裂已轉換成繞身的效果，Q56） */ converted: boolean };
+  weapon: { /** 一發的傷害（不含暴擊）、出手間隔（秒，含攻速與冷卻） */ damage: number; interval: number; volley: number; splash: number; pierce: number; shards: number; shardDamage: number; /** 取代發射的技法在場（穿透、濺射、碎裂已轉換成繞身的效果，Q56） */ converted: boolean };
   /** 詛咒：讓敵人變強，> 0 才列 */
   curses: { id: CurseId; v: number }[];
   /** 難度 %（關卡、地圖；0.5 = +50%） */
@@ -52,6 +56,56 @@ export interface BuildSummary {
   maxHp: number;
   level: number;
   kills: number;
+}
+
+export interface TechDetail {
+  id: string;
+  /** 已經併進的進化 id（沒有 = null） */
+  evo: string | null;
+  level: number;
+  max: number;
+  /** 效果倍率（攻擊力詞條 × 進化） */
+  power: number;
+  /** 觸發方式：onHit = 主武器命中時 */
+  kind: string;
+  rows: { label: string; kind: TechDetailKind; value: number; /** dmg：佔主武器一發的比例 */ ratio?: number }[];
+  /** 暴擊率、暴擊傷害（全身 + 這個技法的詞條） */
+  crit: number;
+  critDmg: number;
+  affixes: Record<TechStat, number>;
+}
+
+/** 技法欄位：照 TECH_DETAIL 把作用中的定義換算成玩家看的數字 */
+function techDetailsOf(run: Run): TechDetail[] {
+  const s = run.stats.value;
+  const hit = run.shotDamage(false);
+  const out: TechDetail[] = [];
+  for (let i = 0; i < run.tech.owned.length; i++) {
+    const id = run.tech.owned[i];
+    const base = techById(id);
+    const mech = base.mech ?? (id as keyof typeof TECH_DETAIL);
+    const def = run.tech.act[mech] ?? base;
+    const power = run.tech.powerOf(id);
+    const afx = run.tech.affixesOf(id);
+    const rows: TechDetail['rows'] = [];
+    for (const [sub, field, kind, label] of TECH_DETAIL[mech] ?? []) {
+      const obj = def[sub] as Record<string, number> | undefined;
+      const raw = obj?.[field];
+      if (raw === undefined) continue;
+      let value = raw;
+      let ratio: number | undefined;
+      if (kind === 'dmg') {
+        ratio = raw * power;
+        value = hit * ratio;
+      } else if (kind === 'secA') value = (raw * run.cooldownMult) / s.atkSpeed;
+      else if (kind === 'mA') value = raw * s.area;
+      else if (kind === 'n' && field === 'count') value = raw + Math.floor(afx.count);
+      rows.push({ label, kind, value, ratio });
+    }
+    const evo = run.tech.evolved.find((e) => evoById(e).from.includes(id)) ?? null;
+    out.push({ id, evo, level: run.tech.levels[i], max: run.tech.capOf(id), power, kind: base.kind, rows, crit: s.crit + afx.crit, critDmg: s.critDmg + afx.critDmg, affixes: afx });
+  }
+  return out;
 }
 
 /** 主武器累計加成的文字由介面層注入（避免這裡依賴 i18n） */
@@ -120,7 +174,10 @@ export function summarizeBuild(run: Run): BuildSummary {
     })),
     slots: ITEM_SLOTS,
     stats: STAT_IDS.filter((id) => id !== 'merit').map((id) => ({ id, value: s[id], base: run.stats.baseOf(id) })),
+    techDetails: techDetailsOf(run),
     weapon: {
+      damage: run.shotDamage(false),
+      interval: (w.interval * run.cooldownMult * run.tech.intervalMult) / s.atkSpeed,
       volley: (tuning.volley > 0 ? tuning.volley : w.volley) + run.volleyBonus,
       splash: ((tuning.splash > 0 ? tuning.splash : w.splashRadius) + run.splashBonus),
       pierce: w.pierce + run.pierceBonus,

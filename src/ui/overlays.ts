@@ -506,6 +506,33 @@ function cardEffectText(c: BuildSummary['cards'][number]): string {
   return c.down ? `${up}${t('card.down', { text: downText(c.down.stat, c.down.total) })}` : up;
 }
 
+/** 能力面板的「技法」欄位（2026-11-17）：每個技法的觸發方式、傷害、間隔、範圍、數量、暴擊與詞條 */
+function techDetailsHtml(sum: BuildSummary): string {
+  const head = `<h3>${t('pause.techTitle', { used: sum.techSlots.used, max: sum.techSlots.max })}</h3>`;
+  if (sum.techDetails.length === 0) return `${head}<p class="sum-diff">${t('pause.techNone')}</p>`;
+  const items = sum.techDetails.map((d) => {
+    const rows = d.rows.map((r) => {
+      const v =
+        r.kind === 'dmg'
+          ? t('tdet.fmt.dmg', { v: fix(r.value, 1), p: fix((r.ratio ?? 0) * 100, 0) })
+          : r.kind === 'pct'
+            ? t('tdet.fmt.pct', { v: fix(r.value * 100, 0) })
+            : r.kind === 'n'
+              ? fix(r.value, 0)
+              : t(`tdet.fmt.${r.kind}` as I18nKey, { v: fix(r.value, r.kind === 'x' ? 2 : 1) });
+      return `<div data-row="${r.label}"><dt>${t(`tdet.${r.label}` as I18nKey)}</dt><dd>${v}</dd></div>`;
+    });
+    rows.push(`<div data-row="crit"><dt>${t('stat.crit')}</dt><dd>${fix(d.crit * 100, 0)}%</dd></div>`);
+    rows.push(`<div data-row="critDmg"><dt>${t('stat.critDmg')}</dt><dd>${t('tdet.fmt.pct', { v: fix(d.critDmg * 100, 0) })}</dd></div>`);
+    const afx = (Object.keys(d.affixes) as (keyof typeof d.affixes)[])
+      .filter((k) => d.affixes[k] > 1e-9)
+      .map((k) => (k === 'count' ? t('card.affixCount', { name: t(AFFIX_LABEL[k] as I18nKey), v: Math.floor(d.affixes[k]) }) : k === 'chain' ? t('tdet.chainAffix', { v: fix(d.affixes[k], 1) }) : t('card.affixItem', { name: t(AFFIX_LABEL[k] as I18nKey), v: Math.round(d.affixes[k] * 100) })))
+      .join('、');
+    return `<li data-tech="${d.id}" class="${d.evo ? 'fused' : ''}"><b>${t('pause.techLv', { name: techName(d.id), lv: d.level, max: d.max })}</b>${d.evo ? `<i class="ok">${t('pause.techEvo', { name: t(`evo.${d.evo}` as I18nKey) })}</i>` : ''}<em>${t(`tech.${d.id}.desc` as I18nKey)}</em><em>${t(`pause.techTrigger.${d.kind}` as I18nKey)}</em><dl class="sum-stats">${rows.join('')}</dl><em>${afx ? t('pause.techAffix', { list: afx }) : t('pause.techNoAffix')}</em></li>`;
+  });
+  return `${head}<ul class="sum-ult sum-tech">${items.join('')}</ul>`;
+}
+
 // ── 暫停（含「已拿到的卡」與「目前的能力」）──
 export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: () => void) {
   const o = overlay(
@@ -513,7 +540,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
     'pause',
     `<div class="panel pause-panel"><h2>${t('pause.title')}</h2><p id="pause-status"></p>
       <div class="sum"><section class="sum-col"><h3>${t('pause.cards')} <span id="sum-slots"></span></h3><ul class="sum-cards" id="sum-cards"></ul><div id="sum-form"></div><div id="sum-evo"></div><div id="sum-ult"></div></section>
-      <section class="sum-col"><h3>${t('pause.abilities')}</h3><dl class="sum-stats" id="sum-stats"></dl><div id="sum-curse"></div></section></div>
+      <section class="sum-col"><h3>${t('pause.abilities')}</h3><dl class="sum-stats" id="sum-stats"></dl><div id="sum-techs"></div><div id="sum-curse"></div></section></div>
       <div class="row">${btn('btn-pause-quit', 'pause.quit', 'secondary')}${btn('btn-pause-resume', 'pause.resume')}</div></div>`,
   );
   o.el.querySelector('#btn-pause-resume')!.addEventListener('click', onResume);
@@ -565,6 +592,8 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
       const stats = q('sum-stats');
       const rows = sum.stats.map((s) => `<div data-stat="${s.id}"><dt>${t(`stat.${s.id}` as I18nKey)}</dt><dd>${statText(s.id, s.value, sum)}</dd></div>`);
       rows.push(`<div class="weapon-head"><dt><b>${t(`card.${YOKAI[sum.yokai].weapon.id}` as I18nKey)}</b></dt><dd></dd></div>`);
+      rows.push(`<div data-stat="weaponDamage"><dt>${t('sum.weaponDamage')}</dt><dd>${fix(sum.weapon.damage, 1)}</dd></div>`);
+      rows.push(`<div data-stat="weaponInterval"><dt>${t('sum.weaponInterval')}</dt><dd>${t('tdet.fmt.secA', { v: fix(sum.weapon.interval, 2) })}</dd></div>`);
       // 只列對這隻妖怪的武器有意義的欄位（回力水盤本來就來回穿透、揮擊沒有投射物：D65）
       const wk = YOKAI[sum.yokai].weapon.kind ?? 'projectile';
       const has = (id: string) => (ITEM_WEAPON_KINDS[id] ?? [wk]).includes(wk);
@@ -576,6 +605,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
       if (sum.weapon.converted) rows.push(`<div data-stat="converted" class="weapon-note"><dt>${t(has('pierce') ? 'sum.converted' : 'sum.convertedNoPierce')}</dt><dd></dd></div>`);
       if (has('splash')) rows.push(`<div data-stat="shardsNote" class="weapon-note"><dt>${t('sum.shardsNote')}</dt><dd></dd></div>`);
       stats.innerHTML = rows.join('');
+      q('sum-techs').innerHTML = techDetailsHtml(sum);
       const curse = q('sum-curse');
       const diff = sum.difficulty > 0 ? `<h3>${t('pause.difficulty', { d: fix(sum.difficulty * 100, 0) })}</h3><p class="sum-diff">${t('pause.difficultyDesc', { hp: fix(sum.difficulty * DIFFICULTY.hp * 100, 0), dmg: fix(sum.difficulty * DIFFICULTY.damage * 100, 0), n: fix(sum.difficulty * DIFFICULTY.spawn * 100, 0) })}</p>` : '';
       curse.innerHTML = diff + (sum.curses.length ? `<h3>${t('pause.curses')}</h3><ul class="sum-syn">${sum.curses.map((c) => `<li>${t(`curse.${c.id}` as I18nKey)} <b>+${fix(c.v * 100, 0)}%</b></li>`).join('')}</ul>` : '');

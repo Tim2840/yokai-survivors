@@ -71,6 +71,28 @@ export async function run(browser) {
         const t1 = await page.evaluate(() => window.__game.run.time);
         expect(t1 > t0 + 0.5, `按繼續後模擬沒有繼續：${t0} → ${t1}`);
       });
+      // 使用者 2026-11-17：能力面板要有技法欄位，寫出攻擊力、攻擊間隔等詳細數字
+      await step(`${vp.name} 技法欄位：沒技法時有提示；拿到彈跳 → 列出傷害、跳數、暴擊`, async () => {
+        await press(ctx, '#btn-abilities');
+        await page.waitForFunction(() => window.__game.screens.includes('pause'));
+        const none = await page.locator('#sum-techs').innerText();
+        expect(/技法/.test(none) && /還沒有技法/.test(none), `沒技法時技法欄位不對：${none}`);
+        await press(ctx, '#btn-pause-resume');
+        await page.waitForFunction(() => !window.__game.screens.includes('pause'));
+        await page.evaluate(() => { const g = window.__game; g.giveTech('bounce'); g.advance(0.1); });
+        await press(ctx, '#btn-abilities');
+        await page.waitForFunction(() => window.__game.screens.includes('pause'));
+        const li = page.locator('#sum-techs li[data-tech="bounce"]');
+        expect((await li.count()) === 1, '技法欄位沒有彈跳');
+        const txt = (await li.innerText()).replace(/\s+/g, ' ');
+        for (const w of ['彈跳 Lv1', '第一跳傷害', '主武器 60%', '最多跳', '暴擊率', '暴擊傷害', '詞條']) expect(txt.includes(w), `彈跳的欄位少了「${w}」：${txt}`);
+        const wtxt = await page.locator('#sum-stats').innerText();
+        expect(/一發傷害/.test(wtxt) && /出手間隔/.test(wtxt), `主武器沒列一發傷害／出手間隔：${wtxt}`);
+        await li.scrollIntoViewIfNeeded();
+        files.push(await shot(ctx, 'a1-techs'));
+        await press(ctx, '#btn-pause-resume');
+        await page.waitForFunction(() => !window.__game.screens.includes('pause'));
+      });
       if (!vp.hasTouch) {
         await step(`${vp.name} C 鍵開關`, async () => {
           await page.keyboard.press('KeyC');
