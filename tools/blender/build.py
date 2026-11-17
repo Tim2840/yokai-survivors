@@ -383,6 +383,144 @@ def build_kappa(form=0):
     return sum(len(o.data.polygons) for o in (body, glow))
 
 
+# ── 赤鬼（docs/35 ⑤）：紅皮膚、兩根圓頭的角、深色捲髮、虎皮腰布、右手扛金棒；化身一角變長＋金手環、化身二身上火紋＋背後雷鼓環 ──
+O_SKIN = '#d9503f'
+O_SKIN_D = '#b8382c'
+O_HAIR = '#3a2620'
+O_HORN = '#f4e6c8'
+O_TIGER = '#f2c14e'
+O_STRIPE = '#3a2a1e'
+O_CLUB = '#5a4a3e'
+O_STUD = '#c9c2b0'
+O_MARK = '#ffcf5a'
+O_DRUM = '#ff8a3a'
+ONI_SPEC = {'head': ['head'], 'hair': ['hair'], 'eyes': ['eye'], 'mouth': ['mouth'], 'loose_ok': ['drum', 'drumring']}
+
+
+def oni_hairline(x, y):
+    """赤鬼的頭髮：一頂蓬蓬的捲髮，前面露出額頭（角從額頭上方長出來）、兩側蓋到耳朵上、後面到後頸；邊緣一撮一撮的波浪"""
+    f = smooth((-y + 0.05) / 0.35)
+    wave = 0.022 * math.cos(11 * math.atan2(x, -y))
+    return 0.93 + (1.08 - 0.93) * f + wave
+
+
+def build_oni(form=0):
+    """form 1 = 化身一「大鬼」（角變長、金手環、金棒加金箍）；2 = 化身二「鬼神」（再加身上發光火紋、背後一圈雷鼓）。"""
+    lib.reset()
+    b = Builder()
+    # 身體：寬一點、胸前淺一點的紅
+    b.sphere('torso', 0.33, (0, 0, 0.42), O_SKIN, 'body', scale=(1.12, 0.96, 1.02), seg=28, rings=18)
+    b.sphere('chest', 0.24, (0, -0.11, 0.48), O_SKIN_D, 'body', scale=(1.0, 0.7, 0.8), seg=20, rings=12)
+    # 虎皮腰布：腰下一圈黃底、三條深色條紋
+    b.sphere('cloth', 0.335, (0, 0, 0.3), O_TIGER, 'body', scale=(1.14, 1.0, 0.52), seg=24, rings=12)
+    for k, a in enumerate((-0.7, 0.0, 0.7, math.pi - 0.5, math.pi + 0.5)):
+        x, y = math.sin(a) * 0.37, -math.cos(a) * 0.33
+        b.sphere('stripe', 0.05, (x, y, 0.3), O_STRIPE, 'body', scale=(0.5, 0.5, 1.5), rot=(0, 0, -a), seg=8, rings=6)
+    b.sphere('neck', 0.14, (0, 0, 0.66), O_SKIN, 'body', seg=12, rings=8)
+    # 手：左手握拳垂著、右手往上扛金棒
+    for sx, bone in ((-1, 'armL'), (1, 'armR')):
+        sh = Vector((sx * 0.3, 0, 0.56))
+        hand = Vector((sx * 0.46, -0.04, 0.36)) if sx < 0 else Vector((0.52, -0.12, 0.54))
+        rod(b, 'arm', sh, hand, 0.085, 0.07, O_SKIN, bone, seg=12)
+        b.sphere('hand', 0.09, tuple(hand), O_SKIN, bone, seg=12, rings=8)
+        if form:
+            # 化身：金手環
+            b.torus('bangle', 0.08, 0.022, tuple(sh + (hand - sh) * 0.7), GOLD, bone, rot=(0.3, 0, 0), seg=16, tube=6)
+    # 金棒：右手握著，斜斜往上扛（前端粗、一圈圈的釘）
+    # 扛在右肩、往後斜（側面看在頭的後面，不會擋到臉：轉檯圖第 3 格抓到的）
+    c0, c1 = Vector((0.52, -0.12, 0.54)), Vector((0.66, 0.42, 1.22))
+    rod(b, 'club', c0, c1, 0.05, 0.1, O_CLUB, 'armR', seg=14)
+    d = (c1 - c0)
+    L = d.length
+    dn = d.normalized()
+    # 釘：沿棒身上半段，三圈各 6 顆，壓在表面上
+    ax = Vector((1, 0, 0)).cross(dn).normalized()
+    ay = dn.cross(ax).normalized()
+    for r in range(3):
+        t = 0.55 + r * 0.15
+        rad = 0.05 + (0.1 - 0.05) * t
+        ctr = c0 + d * t
+        for k in range(6):
+            a = k / 6 * math.pi * 2 + r * 0.5
+            pt = ctr + (ax * math.cos(a) + ay * math.sin(a)) * rad
+            b.sphere('stud', 0.026, tuple(pt), O_STUD, 'armR', seg=8, rings=6)
+    if form:
+        b.torus('clubband', 0.085, 0.02, tuple(c0 + d * 0.45), GOLD, 'armR', rot=(math.acos(max(-1, min(1, dn.z))), 0, -math.atan2(dn.x, dn.y)), seg=16, tube=6)
+    # 腳：短腿＋大腳
+    for sx, bone in ((-1, 'legL'), (1, 'legR')):
+        rod(b, 'leg', (sx * 0.15, 0, 0.22), (sx * 0.15, -0.02, 0.08), 0.095, 0.085, O_SKIN, bone, seg=12)
+        b.sphere('foot', 0.13, (sx * 0.15, -0.08, 0.06), O_SKIN_D, bone, scale=(1.0, 1.4, 0.5), seg=14, rings=8)
+    # 頭：同一套臉的規則；嘴是咧開的小嘴＋兩顆小獠牙
+    b.sphere('head', HR, (0, 0, HC_Z), O_SKIN, 'head', scale=HS, seg=32, rings=20)
+    hair_shell(b, 'hair', oni_hairline, O_HAIR)
+    for sx in (-1, 1):
+        ex, ez = sx * 0.13, 0.9
+        rx, rz = head_tilt(ex, ez)
+        b.sphere('eye', 0.08, (ex, head_y(ex, ez) + 0.004, ez), ('#1a0c0a', '#7a2a1a'), 'head', scale=(0.78, 0.36, 1.2), rot=(rx, 0, rz), seg=20, rings=14)
+        hx, hz = ex - sx * 0.018, ez + 0.048
+        t = head_tilt(hx, hz)
+        b.sphere('hl', 0.03, (hx, head_y(hx, hz) - 0.02, hz), WHITE, 'head', scale=(1.0, 0.3, 1.2), rot=(t[0], 0, t[1]), seg=10, rings=8)
+        bx, bz = sx * 0.255, 0.775
+        t = head_tilt(bx, bz)
+        b.sphere('blush', 0.054, (bx, head_y(bx, bz) + 0.004, bz), ('#ff8a7a', '#ff7060'), 'head', scale=(1.1, 0.3, 0.6), rot=(t[0], 0, t[1]), seg=12, rings=8)
+    mz = 0.74
+    t = head_tilt(0, mz)
+    b.sphere('mouth', 0.06, (0, head_y(0, mz) + 0.006, mz), '#5a1a14', 'head', scale=(1.5, 0.3, 0.55), rot=(t[0], 0, t[1]), seg=14, rings=8)
+    for sx in (-1, 1):
+        fx, fz = sx * 0.045, mz + 0.01
+        t = head_tilt(fx, fz)
+        b.sphere('fang', 0.02, (fx, head_y(fx, fz) - 0.004, fz), WHITE, 'head', scale=(0.8, 0.6, 1.2), rot=(t[0], 0, t[1]), seg=8, rings=6)
+    # 角：從頭髮上方長出來（底部埋進頭裡、圓頭不尖）；化身一更長、稍微往外彎
+    hl = 0.2 if not form else 0.28
+    for sx in (-1, 1):
+        hx, hy = sx * 0.17, -0.08
+        hz = HC_Z + HR * HS[2] * 0.72
+        b.lathe('horn', [(0.0, 0.0), (0.075, 0.0), (0.065, hl * 0.5), (0.04, hl * 0.85), (0.0, hl)], (hx, hy, hz), O_HORN, 'head', seg=16, rot=(0, sx * (0.28 if not form else 0.38), 0))
+    g = Builder()
+    if form >= 2:
+        # 鬼神：腰上一條發光的金色注連繩（胸前三顆發光點在轉檯圖上看起來像斑點，改成繩）
+        g.torus('belt', 0.35, 0.04, (0, 0, 0.36), O_MARK, 'body', scale=(1.1, 0.96, 1), seg=40, tube=8)
+        # 背後一圈雷鼓（不接觸身體，像風神雷神的鼓環）
+        g.torus('drumring', 0.55, 0.025, (0, 0.34, 0.95), O_DRUM, 'body', rot=(math.pi / 2, 0, 0), seg=40, tube=8)
+        for k in range(6):
+            a = k / 6 * math.pi * 2
+            g.sphere('drum', 0.09, (math.cos(a) * 0.55, 0.34, 0.95 + math.sin(a) * 0.55), O_DRUM, 'body', scale=(1, 0.6, 1), seg=12, rings=8)
+    audit.run(b.parts + g.parts, ONI_SPEC, '赤鬼' + ('' if not form else f'（化身{form}）'))
+    body = b.join('AkaOni')
+    objs = [body]
+    glowobj = None
+    if g.parts:
+        glowobj = g.join('GlowOni')
+        objs.append(glowobj)
+    arm = lib.make_armature('OniRig', {
+        'root': ((0, 0, 0), (0, 0, 0.12), None),
+        'body': ((0, 0, 0.14), (0, 0, 0.62), 'root'),
+        'head': ((0, 0, 0.64), (0, 0, 1.12), 'body'),
+        'armL': ((-0.3, 0, 0.56), (-0.3, 0, 0.76), 'body'),
+        'armR': ((0.3, 0, 0.56), (0.3, 0, 0.76), 'body'),
+        'legL': ((-0.15, 0, 0.24), (-0.15, 0, 0.38), 'root'),
+        'legR': ((0.15, 0, 0.24), (0.15, 0, 0.38), 'root'),
+    })
+    for o in objs:
+        lib.bind(o, arm)
+    s = 0.55
+    lib.make_action(arm, 'walk', 16, {
+        'legL': {1: {'rot': (s, 0, 0)}, 5: {'rot': (0, 0, 0), 'loc': (0, 0.05, 0)}, 9: {'rot': (-s, 0, 0), 'loc': (0, 0, 0)}, 13: {'rot': (0, 0, 0)}, 17: {'rot': (s, 0, 0)}},
+        'legR': {1: {'rot': (-s, 0, 0)}, 5: {'rot': (0, 0, 0)}, 9: {'rot': (s, 0, 0)}, 13: {'rot': (0, 0, 0), 'loc': (0, 0.05, 0)}, 17: {'rot': (-s, 0, 0), 'loc': (0, 0, 0)}},
+        'armL': {1: {'rot': (-0.45, 0, 0)}, 9: {'rot': (0.45, 0, 0)}, 17: {'rot': (-0.45, 0, 0)}},
+        'armR': {1: {'rot': (0.08, 0, 0)}, 9: {'rot': (-0.08, 0, 0)}, 17: {'rot': (0.08, 0, 0)}},
+        'body': {1: {'loc': (0, 0, 0), 'rot': (0.05, 0, 0.06)}, 5: {'loc': (0, 0.05, 0), 'rot': (0.05, 0, 0)}, 9: {'loc': (0, 0, 0), 'rot': (0.05, 0, -0.06)}, 13: {'loc': (0, 0.05, 0), 'rot': (0.05, 0, 0)}, 17: {'loc': (0, 0, 0), 'rot': (0.05, 0, 0.06)}},
+        'head': {1: {'rot': (-0.03, 0, -0.05)}, 9: {'rot': (-0.03, 0, 0.05)}, 17: {'rot': (-0.03, 0, -0.05)}},
+    })
+    lib.make_action(arm, 'idle', 48, {
+        'body': {1: {'loc': (0, 0, 0)}, 25: {'loc': (0, 0.014, 0)}, 49: {'loc': (0, 0, 0)}},
+        'head': {1: {'rot': (0, 0, 0.03)}, 25: {'rot': (0.02, 0, -0.03)}, 49: {'rot': (0, 0, 0.03)}},
+        'armR': {1: {'rot': (0, 0, 0)}, 25: {'rot': (-0.06, 0, 0)}, 49: {'rot': (0, 0, 0)}},
+    })
+    lib.export_glb(OUT + '/aka-oni' + ('' if not form else f'-f{form}') + '.glb', objs + [arm], animations=True)
+    return sum(len(o.data.polygons) for o in objs)
+
+
 # ── 敵人：村人（D88，Blender 版；實例化網格一次畫幾百隻 → 低面數，三角形 ≤ 600）──
 # 遊戲裡敵人只有約 20 像素高：重點是輪廓（頭巾、火把）與主色，臉照同一套規則但面數很少。
 # 約定同 src/units/humans.ts：腳底 z = 0、身高約 1.3、腳的頂點在 0.16 以下（頂點著色器用它做走路）。
@@ -606,7 +744,7 @@ def build_torii():
 if __name__ == '__main__':
     n1 = build_chochin()
     n3 = build_kappa()
-    nf = [build_chochin(1), build_chochin(2), build_kappa(1), build_kappa(2)]
+    nf = [build_chochin(1), build_chochin(2), build_kappa(1), build_kappa(2), build_oni(), build_oni(1), build_oni(2)]
     n4 = build_villager()
     n5 = [build_ashigaru(), build_yumi(), build_taimasou(), build_kawagari()]
     n2 = build_torii()

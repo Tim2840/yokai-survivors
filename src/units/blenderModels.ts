@@ -10,6 +10,9 @@ import monkF1Url from '../assets/models/chochin-kozo-f1.glb?inline';
 import monkF2Url from '../assets/models/chochin-kozo-f2.glb?inline';
 import kappaF1Url from '../assets/models/kappa-f1.glb?inline';
 import kappaF2Url from '../assets/models/kappa-f2.glb?inline';
+import oniUrl from '../assets/models/aka-oni.glb?inline';
+import oniF1Url from '../assets/models/aka-oni-f1.glb?inline';
+import oniF2Url from '../assets/models/aka-oni-f2.glb?inline';
 import villagerUrl from '../assets/models/villager.glb?inline';
 import ashigaruUrl from '../assets/models/ashigaru.glb?inline';
 import yumiUrl from '../assets/models/yumi.glb?inline';
@@ -61,10 +64,14 @@ export const loadBlenderMonk = (): Promise<Character> => loadRigged(monkUrl);
 /** 河童（Blender 版）：頭頂的水與手上的水盤是發光的網格（顏色取河童的特效色，只發一點光） */
 export const loadBlenderKappa = (): Promise<Character> => loadRigged(kappaUrl, palette.fx.kappa.light, 0.6);
 
+/** 赤鬼（Blender 版，docs/35）：化身二身上的火紋與雷鼓是發光的網格（取赤鬼的特效色） */
+export const loadBlenderOni = (): Promise<Character> => loadRigged(oniUrl, palette.fx['aka-oni'].light, 0.7);
+
 /** 化身的造型（D94、docs/33）：[化身一, 化身二]；沒有的妖怪回傳空陣列（只放大，不換造型） */
 export async function loadBlenderForms(yokaiId: string): Promise<Character[]> {
   if (yokaiId === 'chochin-kozo') return Promise.all([loadRigged(monkF1Url), loadRigged(monkF2Url)]);
   if (yokaiId === 'kappa') return Promise.all([loadRigged(kappaF1Url, palette.fx.kappa.light, 0.6), loadRigged(kappaF2Url, palette.fx.kappa.light, 0.6)]);
+  if (yokaiId === 'aka-oni') return Promise.all([loadRigged(oniF1Url, palette.fx['aka-oni'].light, 0.7), loadRigged(oniF2Url, palette.fx['aka-oni'].light, 0.7)]);
   return [];
 }
 

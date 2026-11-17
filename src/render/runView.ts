@@ -146,7 +146,7 @@ export class RunView {
     if (useBlenderModels()) {
       void import('../units/blenderModels').then(async (mod) => {
         const torii = await mod.loadBlenderTorii();
-        const monk = run.yokai.id === 'chochin-kozo' ? await mod.loadBlenderMonk() : run.yokai.id === 'kappa' ? await mod.loadBlenderKappa() : null;
+        const monk = run.yokai.id === 'chochin-kozo' ? await mod.loadBlenderMonk() : run.yokai.id === 'kappa' ? await mod.loadBlenderKappa() : run.yokai.id === 'aka-oni' ? await mod.loadBlenderOni() : null;
         if (this.disposed) {
           torii.dispose();
           monk?.dispose();
