@@ -14,6 +14,7 @@ import villagerUrl from '../assets/models/villager.glb?inline';
 import ashigaruUrl from '../assets/models/ashigaru.glb?inline';
 import yumiUrl from '../assets/models/yumi.glb?inline';
 import taimasouUrl from '../assets/models/taimasou.glb?inline';
+import kawagariUrl from '../assets/models/kawagari.glb?inline';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /**
@@ -175,4 +176,5 @@ export const BLENDER_ENEMIES: Record<string, { url: string; fire?: string }> = {
   ashigaru: { url: ashigaruUrl },
   yumi: { url: yumiUrl },
   taimasou: { url: taimasouUrl },
+  kawagari: { url: kawagariUrl },
 };

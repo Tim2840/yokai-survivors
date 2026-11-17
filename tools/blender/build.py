@@ -526,6 +526,42 @@ def build_taimasou():
     return finish_enemy(b, TAIMASOU_SPEC, '退魔僧', 'Taimasou', 'taimasou.glb')
 
 
+KAWAGARI_SPEC = {'head': ['head'], 'hair': ['hair'], 'eyes': ['eye'], 'max_tris': 1000, 'loose_ok': ['hl']}
+
+
+def build_kawagari():
+    """獵河武士（第 2 關頭目，D95，遊戲裡放大 2.4 倍）：青綠上衣＋深紫袴、頭頂髮髻、白鉢卷（後面兩條飄帶）、
+    左腰一把斜插的長刀（深色鞘、白柄、金鍔）、右肩扛一圈捲起來的網——輪廓靠「髮髻＋長刀＋肩上的網」"""
+    lib.reset()
+    use_head(0.86, 0.31, (1.02, 0.98, 0.96))
+    b = Builder()
+    enemy_base(b, '#2f6f7a', bscale=(1.12, 1.02, 1.1))
+    # 袴：腰以下一圈深紫的寬裙褲（蓋住身體下半，腳露出來）
+    b.cone('hakama', 0.3, 0.25, 0.2, (0, 0, 0.2), '#3a3550', None, seg=10)
+    # 髮髻：頭頂往後一小段（埋進頭髮裡）
+    rod(b, 'topknot', (0, 0.02, HC_Z + HR * 0.92), (0, 0.16, HC_Z + HR * 1.02), 0.045, 0.04, V_HAIR, None, seg=5)
+    # 鉢卷＋後面兩條飄帶
+    b.torus('band', HR * 1.03, 0.036, (0, 0, HC_Z + HR * 0.3), '#f4efe4', None, rot=(-0.12, 0, 0), seg=10, tube=3, scale=(HS[0], HS[1], 1))
+    for sx in (-1, 1):
+        rod(b, 'tail', (sx * 0.04, HR * 1.0, HC_Z + 0.08), (sx * 0.1, HR * 1.2, HC_Z - 0.1), 0.028, 0.02, '#f4efe4', None, seg=4)
+    # 長刀：左腰斜插（鞘從前下往後上），刀柄朝前、金色刀鍔
+    rod(b, 'saya', (-0.28, -0.12, 0.3), (0.26, 0.5, 0.5), 0.034, 0.03, '#2b2b30', None, seg=5)
+    rod(b, 'tsuka', (-0.28, -0.12, 0.3), (-0.42, -0.3, 0.25), 0.035, 0.035, '#f4efe4', None, seg=5)
+    b.torus('tsuba', 0.055, 0.016, (-0.29, -0.13, 0.3), '#e8c25a', None, rot=(math.pi / 2, 0, 0.9), seg=8, tube=3)
+    # 網：右肩扛一圈（壓在肩上，往後斜），上面幾個結
+    net_c, net_rot, net_r = (0.24, 0.05, 0.6), (0.3, 1.2, 0), 0.17
+    b.torus('net', net_r, 0.05, net_c, '#c8b48a', None, rot=net_rot, seg=10, tube=4)
+    # 網上的結：放在網圈的中心線上（套用網圈同一個旋轉，Blender 的 XYZ 歐拉角 = Rz·Ry·Rx）
+    rx, ry, _ = net_rot
+    for k in range(4):
+        a = k * math.pi / 2 + 0.4
+        x, y, z = net_r * math.cos(a), net_r * math.sin(a), 0.0
+        y, z = y * math.cos(rx) - z * math.sin(rx), y * math.sin(rx) + z * math.cos(rx)
+        x, z = x * math.cos(ry) + z * math.sin(ry), -x * math.sin(ry) + z * math.cos(ry)
+        b.sphere('knot', 0.04, (net_c[0] + x, net_c[1] + y, net_c[2] + z), '#a8925e', None, seg=4, rings=3)
+    return finish_enemy(b, KAWAGARI_SPEC, '獵河武士', 'Kawagari', 'kawagari.glb')
+
+
 def build_torii():
     lib.reset()
     b = Builder()
@@ -572,6 +608,6 @@ if __name__ == '__main__':
     n3 = build_kappa()
     nf = [build_chochin(1), build_chochin(2), build_kappa(1), build_kappa(2)]
     n4 = build_villager()
-    n5 = [build_ashigaru(), build_yumi(), build_taimasou()]
+    n5 = [build_ashigaru(), build_yumi(), build_taimasou(), build_kawagari()]
     n2 = build_torii()
     print('faces: forms', nf, 'chochin', n1, 'kappa', n3, 'torii', n2, 'villager tris', n4, 'ashigaru/yumi/taimasou tris', n5)
