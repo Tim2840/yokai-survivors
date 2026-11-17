@@ -65,6 +65,10 @@ export const BARRIER: Record<Rarity, { bonus: number }> = {
 export const BARRIER_RADIUS = 4;
 export const BARRIER_LIFETIME = 90;
 export const BARRIER_SPAWN_MULT = 1.25;
+/** D93 夜行 D：站在結界石圈內升級，那次必出技法卡，稀有度高 techRarityUp 階（最高到極） */
+export const BARRIER_TECH = { on: true, techRarityUp: 1 } as const;
+/** D93 夜行 D：賽錢箱改成「選一個已有的技法升一級」（三張都是已有技法的下一級，稀有度照賽錢箱）；沒有可以升的技法時退回一般卡 */
+export const OFFERING_TECH = { on: true } as const;
 
 /** 詛咒祭壇（①）：按住秒數 */
 export const ALTAR_HOLD_SECONDS = 1.5;

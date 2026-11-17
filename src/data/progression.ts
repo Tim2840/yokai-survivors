@@ -14,6 +14,54 @@ export const PROGRESSION = {
   orbSweepSpeed: 22,
 } as const;
 
+/**
+ * 成長預算制（D93、docs/32 A）：先定「一關各時間點該到幾級」，再反推每顆魂火值多少。
+ * 每步的經驗預算 = 目標曲線上這一步該增加的經驗；每一點威脅點數的經驗 = 預算速率 ÷ 稍早實際湧出的點數速率（見 lagSeconds）。
+ * 敵人數量怎麼調（數量倍率、後段加壓、難度、詛咒、試煉碑）都不改變升級速度；只打倒一部分就只拿一部分。
+ * 落後目標 catchUpBehind 級以上時，經驗 × catchUpMult（只補不扣）。on = false 退回舊算法（點數 × orbPerPoint × 後段折減；sim 對照用）。
+ */
+export const XP_BUDGET = {
+  on: true,
+  /** 第 1 關：[經過比例, 目標等級]，中間線性內插 */
+  targets: [
+    [0, 0],
+    [0.25, 7],
+    [0.5, 13],
+    [0.75, 19],
+    [1, 24],
+  ] as readonly (readonly [number, number])[],
+  /** 第 2 關起：每關再升幾級（整關平均分配） */
+  laterStageLevels: 10,
+  /** 湧出速率用「lagSeconds 秒前、windowSeconds 秒內」的平均：人類生在 18～24 公尺外、走過來要時間，用現在的速率會少給 */
+  lagSeconds: 12,
+  windowSeconds: 20,
+  catchUpBehind: 0.5, // sim（docs/02 2026-11-17）：2／1.25 時第 1 段只到 4 級（目標 7；地上沒撿的魂火多），0.5／2 到 5～6 級
+  catchUpMult: 2,
+};
+
+/** 這一關（stageIndex 0 起）經過比例 u 時的目標等級（可以是小數） */
+export function targetLevel(stageIndex: number, u: number): number {
+  const T = XP_BUDGET.targets;
+  const end = T[T.length - 1][1];
+  const c = Math.min(1, Math.max(0, u));
+  if (stageIndex > 0) return end + XP_BUDGET.laterStageLevels * (stageIndex - 1 + c);
+  for (let i = 1; i < T.length; i++) {
+    if (c <= T[i][0]) {
+      const k = (c - T[i - 1][0]) / (T[i][0] - T[i - 1][0] || 1);
+      return T[i - 1][1] + (T[i][1] - T[i - 1][1]) * k;
+    }
+  }
+  return end;
+}
+
+/** 從 0 級升到（小數）等級 L 總共要多少經驗 */
+export function cumXp(L: number): number {
+  let s = 0;
+  const n = Math.floor(Math.max(0, L));
+  for (let i = 0; i < n; i++) s += xpNeed(i);
+  return s + (L - n) * xpNeed(n);
+}
+
 export const xpNeed = (level: number): number => Math.max(1, Math.round(PROGRESSION.needScale * (level + PROGRESSION.needOffset) ** 2));
 
 /** 升級時能拿到的東西改成「法具」（src/data/items.ts 的 ITEM_POOL）。每次升級給幾張、可用的稀有度 */

@@ -375,14 +375,28 @@ export function installDevApi(ctx: DevContext): void {
     },
     /** 把一個已有的技法換成另一個（測試用：逐個看河童新補的技法在能力面板的樣子） */
     replaceTech: (oldId: string, newId: string) => run()?.tech.replace(oldId, newId) ?? false,
+    /** 在身邊生一隻精英並直接打倒（走正常的打倒流程：魂玉、寶箱、補給品；D93 回歸用） */
+    eliteKill: () => {
+      const r = run();
+      if (!r) return false;
+      const i = r.enemies.spawn(0, r.px + 2, r.pz, r.director.virtualWave(), 0, 0, 1);
+      if (i < 0) return false;
+      r.weaponHit(i, 1e9, 0, 0, 0, false);
+      return true;
+    },
+    /** 直接給魂玉（D93） */
+    giveGem: (n = 1) => run()?.addGem(n),
     /** 直接進化（特效目錄用）：找含這個技法的進化，把材料練到門檻再進化；回傳有沒有成功 */
     evolveTech: (id: string) => {
       const r = run();
       if (!r) return false;
       const e = evosFor(r.weaponItemId).find((v) => v.from.includes(id));
       if (!e) return false;
-      for (const m of e.from) if (r.tech.techLevel(m) < EVO.minLevel) r.devTechLevel(m, EVO.minLevel);
-      return r.tech.evolve(e.id);
+      for (const m of e.from) if (r.tech.techLevel(m) < EVO.capBefore) r.devTechLevel(m, EVO.capBefore);
+      if (EVO.gem && r.soulGems <= 0) r.addGem(1);
+      const ok = r.tech.evolve(e.id);
+      if (ok && EVO.gem) r.soulGems--;
+      return ok;
     },
     /** 直接給技法（不經面板，D48；給 TECH_MAX 以內） */
     giveTech: (...ids: string[]) => {

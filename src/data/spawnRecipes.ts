@@ -12,11 +12,11 @@ export interface RecipeEntry {
 }
 
 export const SPAWN_RECIPES: readonly (readonly RecipeEntry[])[] = [
-  // 第 1 關：村人為主，中段出現足輕，後段出現弓手（每種敵人第一次出場都有字幕）
+  // 第 1 關：村人為主；足輕 15%、弓手 30% 就出現（D93 夜行 B：第 2 段的壓力靠「要繞背、要閃箭」，不靠更硬；原本 30%／60%）
   [
     { id: 'villager', from: 0, weight: 10 },
-    { id: 'ashigaru', from: 0.3, weight: 3, cap: 12 },
-    { id: 'yumi', from: 0.6, weight: 2, cap: 6 },
+    { id: 'ashigaru', from: 0.15, weight: 3, cap: 12 },
+    { id: 'yumi', from: 0.3, weight: 2, cap: 6 },
   ],
   // 第 2 關：足輕更早、弓手更多
   [

@@ -30,6 +30,8 @@ export interface BuildSummary {
   /** 鬼火（主武器）適合的法具（能力面板詳細列出） */
   baseLikes: string[];
   /** 技法進化（D53）：兩個材料都拿到的配方、各自的技法等級（鬼火 = 主武器等級）、是否已進化 */
+  /** 手上的魂玉（D93） */
+  gems: number;
   evolutions: { id: string; from: { id: string; level: number }[]; done: boolean; ready: boolean; formLevel: number }[];
   /** 屬性：id、目前值（內部單位）、基礎值 */
   stats: { id: StatId; value: number; base: number }[];
@@ -108,6 +110,7 @@ export function summarizeBuild(run: Run): BuildSummary {
     baseLikes: baseLikesOf(run.yokai.id),
     form: { now: run.form, nextLevel: FORMS[run.form]?.level ?? 0, locked: run.tech.lockedByForm() },
     techSlots: { used: run.tech.slotsUsed, max: run.tech.max },
+    gems: run.soulGems,
     evolutions: evosFor(run.weaponItemId).filter((e) => e.from.every((m) => run.tech.isBase(m) || run.tech.has(m))).map((e) => ({
       id: e.id,
       from: e.from.map((m) => ({ id: m, level: run.tech.techLevel(m) })),

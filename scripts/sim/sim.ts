@@ -13,7 +13,7 @@ import { Run } from '../../src/game/run';
 import { resetTuning, tuning } from '../../src/data/tuning';
 import { TECHS, TECH_OFFER, TECH_SWAP_PREFIX, techsFor } from '../../src/data/techniques';
 import { YOKAI } from '../../src/data/yokai';
-import { PROGRESSION } from '../../src/data/progression';
+import { PROGRESSION, XP_BUDGET, cumXp as cumXpDbg } from '../../src/data/progression';
 import { WAVES } from '../../src/data/waves';
 import { STAGE } from '../../src/data/stage';
 import { SHARDS } from '../../src/data/items';
@@ -101,6 +101,8 @@ function applyTune(): void {
     else if (k.startsWith('tech.')) (TECH_OFFER as unknown as Record<string, number>)[k.slice(5)] = Number(v);
     else if (k.startsWith('shards.')) (SHARDS as unknown as Record<string, number>)[k.slice(7)] = Number(v);
     else if (k.startsWith('xp.')) (PROGRESSION as unknown as Record<string, number>)[k.slice(3)] = Number(v);
+    else if (/^budget\.t\d$/.test(k)) (XP_BUDGET.targets as unknown as number[][])[Number(k.slice(8))][1] = Number(v); // budget.t1=9：第 1 關第 i 個目標點的等級
+    else if (k.startsWith('budget.')) (XP_BUDGET as unknown as Record<string, number | boolean>)[k.slice(7)] = k === 'budget.on' ? v === '1' : Number(v);
     else if (k === 'rarity.unlock') {
       // rarity.unlock=4：升級卡開放到第幾階（2 = 凡良、3 = 到珍、4 = 到極）
       const u = RARITIES_UNLOCKED_M1 as unknown as string[];
@@ -344,6 +346,7 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     if (lv10At < 0 && run.level >= 10) lv10At = totalTime + run.time;
     if (lv20At < 0 && run.level >= 20) lv20At = totalTime + run.time;
     if (totalTime === 0) { const q = Math.min(3, Math.floor((run.time / tuning.stageSeconds) * 4)); lvQ[q] = run.level; }
+    if (process.env.XPDBG && totalTime === 0 && Math.abs((run.time % 30) - 0) < 0.06 && run.time > 1) console.error(`t${run.time.toFixed(0)} lv${run.level} tgt${run.targetLevel.toFixed(1)} ppt${run.xpPerPoint.toFixed(2)} spawned${(run as unknown as { enemies: { spawnedPoints: number } }).enemies.spawnedPoints.toFixed(0)} kills${run.kills} have${(cumXpDbg(run.level)+run.xp).toFixed(1)} want${cumXpDbg(run.targetLevel).toFixed(1)} ground${(()=>{const o=(run as unknown as {orbs:{high:number;alive:Uint8Array;value:Float32Array}}).orbs;let g=0;for(let i=0;i<o.high;i++)if(o.alive[i])g+=o.value[i];return g.toFixed(1);})()} hp${run.hp.toFixed(0)}`);
     if (weaponMaxAt < 0 && run.weaponMaxed) weaponMaxAt = totalTime + run.time;
     sampleT += DT;
     if (sampleT >= 1) {

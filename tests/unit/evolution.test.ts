@@ -24,6 +24,7 @@ function make(seed = 3, yokaiId?: string) {
   tuning.stageSeconds = 600;
   const run = new Run({ seed, bus: new EventBus(), yokaiId });
   run.god = true;
+  run.soulGems = 9; // D93：進化要魂玉；這些測試量的是進化之後，先給夠（魂玉規則在 soulGem.test.ts）
   return run;
 }
 
@@ -82,9 +83,9 @@ describe('進化形態的升級（D57）：5 級封頂、進化後才能升到 8
     const run = make(31);
     run.devAddTech('ring');
     for (let k = 0; k < 10; k++) run.tech.levelUp('ring');
-    expect(run.tech.levelOf('ring')).toBe(EVO.minLevel);
-    expect(run.tech.capOf('ring')).toBe(EVO.minLevel);
-    run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
+    expect(run.tech.levelOf('ring')).toBe(EVO.capBefore);
+    expect(run.tech.capOf('ring')).toBe(EVO.capBefore);
+    run.devTechLevel(BASE_TECH_ID, EVO.capBefore);
     run.tech.evolve('evoRing');
     expect(run.tech.capOf('ring')).toBe(TECH_LEVELS.max);
     for (let k = 0; k < 10; k++) run.tech.levelUp('ring');
@@ -95,8 +96,8 @@ describe('進化形態的升級（D57）：5 級封頂、進化後才能升到 8
     for (const e of EVOS) {
       const run = make(32, YOKAI_OF[e.from[0]]);
       run.devAddTech(e.from[1]);
-      run.devTechLevel(e.from[0], EVO.minLevel);
-      run.devTechLevel(e.from[1], EVO.minLevel);
+      run.devTechLevel(e.from[0], EVO.capBefore);
+      run.devTechLevel(e.from[1], EVO.capBefore);
       expect(run.tech.evolve(e.id), e.id).toBe(true);
       const snap = () => JSON.stringify(run.tech.act) + run.tech.powerOf(e.from[1]) + run.tech.satCount + run.tech.ringCount;
       const at5 = snap();
@@ -108,10 +109,10 @@ describe('進化形態的升級（D57）：5 級封頂、進化後才能升到 8
     for (const e of EVOS) {
       const run = make(33, YOKAI_OF[e.from[0]]);
       run.devAddTech(e.from[1]);
-      run.devTechLevel(e.from[0], EVO.minLevel);
-      run.devTechLevel(e.from[1], EVO.minLevel);
+      run.devTechLevel(e.from[0], EVO.capBefore);
+      run.devTechLevel(e.from[1], EVO.capBefore);
       expect(run.tech.evolve(e.id), e.id).toBe(true);
-      for (let lv = EVO.minLevel + 1; lv <= TECH_LEVELS.max; lv++) {
+      for (let lv = EVO.capBefore + 1; lv <= TECH_LEVELS.max; lv++) {
         run.devTechLevel(e.from[1], lv);
         const d = run.tech.act[mechOf(techById(e.from[1]))] as unknown as Record<string, Record<string, number>>;
         for (const [b, vals] of Object.entries(d)) {
@@ -168,32 +169,37 @@ describe('每一次升級卡都有稀有度（D53）', () => {
 });
 
 describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
-  it('材料要到 EVO.minLevel（5）級才能進化：差一級不行、到了才出現在 evolvable；鬼火要主武器到 5 級（舊版 8 級會紅）', () => {
-    expect(EVO.minLevel).toBe(5);
+  it('舊規則（EVO.gem = false，sim 對照用）：主武器與技法都 5 級才能進化，差一級不行', () => {
+    expect(EVO.capBefore).toBe(5);
+    EVO.gem = false;
+    try {
     const run = make(21);
     run.devAddTech('kitsunebi');
     expect(run.tech.evolvable).toHaveLength(0);
-    run.devTechLevel('kitsunebi', EVO.minLevel);
-    run.devTechLevel(BASE_TECH_ID, EVO.minLevel - 1);
+    run.devTechLevel('kitsunebi', EVO.capBefore);
+    run.devTechLevel(BASE_TECH_ID, EVO.capBefore - 1);
     expect(run.tech.evolvable.map((e) => e.id), '鬼火差一級').toEqual([]);
-    run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
+    run.devTechLevel(BASE_TECH_ID, EVO.capBefore);
     expect(run.tech.evolvable.map((e) => e.id)).toEqual(['evoSplit']);
     // 技法差一級也不行（鬼火已經 5 級）
     const r2 = make(22);
     r2.devAddTech('ring');
-    r2.devTechLevel(BASE_TECH_ID, EVO.minLevel);
-    r2.devTechLevel('ring', EVO.minLevel - 1);
+    r2.devTechLevel(BASE_TECH_ID, EVO.capBefore);
+    r2.devTechLevel('ring', EVO.capBefore - 1);
     expect(r2.tech.evolvable).toHaveLength(0);
-    r2.devTechLevel('ring', EVO.minLevel);
+    r2.devTechLevel('ring', EVO.capBefore);
     expect(r2.tech.evolvable.map((e) => e.id)).toEqual(['evoRing']);
+    } finally {
+      EVO.gem = true;
+    }
   });
 
   it('進化：技法效果 × EVO.power、參數換成進化後的值、鬼火加成；有鬼火不省格；只能進化一次', () => {
     const run = make(22);
     run.devAddTech('ring', 'ward');
     const used0 = run.tech.slotsUsed;
-    run.devTechLevel('ring', EVO.minLevel);
-    run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
+    run.devTechLevel('ring', EVO.capBefore);
+    run.devTechLevel(BASE_TECH_ID, EVO.capBefore);
     const pr0 = run.tech.powerOf('ring');
     const ps0 = run.tech.powerOf('ward');
     expect(run.tech.evolve('evoRing')).toBe(true);
@@ -210,8 +216,8 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
     const run = make(23);
     expect(TECH_MAX).toBe(3);
     run.devAddTech('ring', 'ward', 'lamp');
-    for (const id of ['ring', 'ward', 'lamp']) run.devTechLevel(id, EVO.minLevel);
-    run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
+    for (const id of ['ring', 'ward', 'lamp']) run.devTechLevel(id, EVO.capBefore);
+    run.devTechLevel(BASE_TECH_ID, EVO.capBefore);
     expect(run.tech.evolvable.map((e) => e.id)).toEqual(['evoRing', 'evoWard', 'evoLamp']);
     for (const id of ['evoRing', 'evoWard', 'evoLamp']) expect(run.tech.evolve(id), id).toBe(true);
     expect(run.tech.evolved).toEqual(['evoRing', 'evoWard', 'evoLamp']);
@@ -225,8 +231,8 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
     const run = make(24);
     run.devAddTech('kitsunebi');
     const d0 = run.shotDamage(false);
-    run.devTechLevel('kitsunebi', EVO.minLevel);
-    run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
+    run.devTechLevel('kitsunebi', EVO.capBefore);
+    run.devTechLevel(BASE_TECH_ID, EVO.capBefore);
     const d1 = run.shotDamage(false);
     run.tech.evolve('evoSplit');
     const w = evoById('evoSplit').weapon!;
@@ -238,8 +244,8 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
   it('道祖神換掉進化過的技法：進化跟著拆掉', () => {
     const run = make(25);
     run.devAddTech('ring', 'lamp');
-    run.devTechLevel('ring', EVO.minLevel);
-    run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
+    run.devTechLevel('ring', EVO.capBefore);
+    run.devTechLevel(BASE_TECH_ID, EVO.capBefore);
     run.tech.evolve('evoRing');
     run.tech.replace('ring', 'ward');
     expect(run.tech.evolved).toEqual([]);
@@ -250,8 +256,8 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
     const run = make(26);
     run.director.active = false;
     run.devAddTech('ring');
-    run.devTechLevel('ring', EVO.minLevel);
-    run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
+    run.devTechLevel('ring', EVO.capBefore);
+    run.devTechLevel(BASE_TECH_ID, EVO.capBefore);
     expect(run.tech.evolvable).toHaveLength(1);
     // 合魂祠
     for (let i = 0; i < 60 * (FUSE.appearDelay + 2) && !run.elements.fuseSlot; i++) {
@@ -275,7 +281,7 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
 
     // 寶箱：再湊一組（佈置系），寶箱第一張是進化卡
     run.devAddTech('hellfire');
-    run.devTechLevel('hellfire', EVO.minLevel);
+    run.devTechLevel('hellfire', EVO.capBefore);
     const s = run.elements.devForce('chest', 'common', run.px, run.pz)!;
     run.devTeleport(s.x, s.z);
     for (let i = 0; i < 60 * (CHEST_HOLD_SECONDS + 1) && !(run.awaitingPick && run.offerKind === 'chest'); i++) {
@@ -292,8 +298,8 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
     const events: string[] = [];
     bus.on('evolveReady', (e) => events.push(e.id));
     run.devAddTech('ring');
-    run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
-    run.devTechLevel('ring', EVO.minLevel);
+    run.devTechLevel(BASE_TECH_ID, EVO.capBefore);
+    run.devTechLevel('ring', EVO.capBefore);
     expect(events).toEqual(['evoRing']);
   });
 });

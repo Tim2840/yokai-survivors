@@ -18,6 +18,10 @@ export interface GameEvents {
   levelUp: { level: number; pending: number };
   /** 妖怪化身了（D84；form = 第幾階） */
   formChange: { form: number; yokai: string };
+  /** 主武器自動升級（D93） */
+  weaponUp: { level: number };
+  /** 拿到魂玉（D93） */
+  soulGem: { have: number };
   /** 選了一張卡 */
   cardChosen: { cardId: string; rarity: string };
   /** 關卡開始（stage 從 1 起） */

@@ -81,8 +81,8 @@ export async function run(browser) {
         await page.evaluate(() => {
           const g = window.__game;
           g.giveTech('whirl');
-          g.techLevel('whirl', 5);
-          g.techLevel('waterdisc', 5);
+          g.techLevel('whirl', 4);
+          g.eliteKill(); // D93：進化要魂玉（每關第一隻精英保證掉）
           g.advance(0.1);
           g.render();
         });

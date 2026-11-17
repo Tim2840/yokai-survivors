@@ -25,6 +25,7 @@ function make(seed = 3, mapNumber?: number) {
   tuning.stageSeconds = 600;
   const run = new Run({ seed, bus: new EventBus(), mapNumber });
   run.god = true;
+  run.soulGems = 9; // D93：進化要魂玉；這些測試量的是進化之後，先給夠（魂玉規則在 soulGem.test.ts）
   return run;
 }
 function placeEnemy(run: Run, dx: number, dz: number, hp = 1e6): number {
@@ -43,8 +44,8 @@ function stepN(run: Run, n: number) {
 /** 讓某個技法進化並練到指定等級（D57：鬼火雨／衛星燈／燈油是進化形態 6 級解鎖的附加效果） */
 function evolveTo(run: Run, id: string, level: number): void {
   run.devAddTech(id);
-  run.devTechLevel(BASE_TECH_ID, EVO.minLevel);
-  run.devTechLevel(id, EVO.minLevel);
+  run.devTechLevel(BASE_TECH_ID, EVO.capBefore);
+  run.devTechLevel(id, EVO.capBefore);
   run.tech.evolve(EVOS.find((e) => e.from[1] === id)!.id);
   run.devTechLevel(id, level);
 }
@@ -149,7 +150,7 @@ describe('技法怎麼拿（D49：機率出現在升級卡裡、8 級、分稀�
     expect(a.tech.levelOf(id)).toBe(2);
     expect(a.tech.powerOf(id), 'D77：升級本身不再加成（變強只靠詞條）').toBeCloseTo(1, 5);
     for (let k = 0; k < 20; k++) a.tech.levelUp(id, 1);
-    expect(a.tech.levelOf(id), '進化前最多 EVO.minLevel 級（D57）').toBe(EVO.minLevel);
+    expect(a.tech.levelOf(id), '進化前最多 EVO.capBefore 級（D57）').toBe(EVO.capBefore);
     // 到上限的那個不會再被抽到
     const rng = new Rng(3);
     for (let k = 0; k < 300; k++) expect(a.tech.pickCard(rng)).not.toBe(id);
@@ -361,10 +362,10 @@ describe('出手方式與命中效果', () => {
   it('衛星燈（燈籠環進化時一起解鎖，D79）：外圈有一盞大燈籠打到經過的人；沒進化（5 級）沒有', () => {
     const r5 = make(15);
     r5.devAddTech('ring');
-    r5.devTechLevel('ring', EVO.minLevel);
+    r5.devTechLevel('ring', EVO.capBefore);
     expect(r5.tech.satCount, '沒進化不該有衛星燈').toBe(0);
     const run = make(15);
-    evolveTo(run, 'ring', EVO.minLevel);
+    evolveTo(run, 'ring', EVO.capBefore);
     const R = run.tech.satRadius;
     expect(R).toBeGreaterThan(4);
     const e = placeEnemy(run, R, 0);
@@ -434,10 +435,10 @@ describe('第二步的三種技法', () => {
     tuning.volley = 1;
     const r5 = make(40);
     r5.devAddTech('kitsunebi');
-    r5.devTechLevel('kitsunebi', EVO.minLevel);
+    r5.devTechLevel('kitsunebi', EVO.capBefore);
     expect(r5.tech.act.rain, '沒進化不該有鬼火雨').toBeNull();
     const run = make(40);
-    evolveTo(run, 'kitsunebi', EVO.minLevel);
+    evolveTo(run, 'kitsunebi', EVO.capBefore);
     expect(run.tech.act.rain?.rain).toBeTruthy();
     const r = techById('kitsunebi').rain!;
     expect(r.range).toBeGreaterThan(r.radius);
@@ -470,11 +471,11 @@ describe('第二步的三種技法', () => {
     tuning.volley = 1;
     const r5 = make(42);
     r5.devAddTech('hellfire');
-    r5.devTechLevel('hellfire', EVO.minLevel);
+    r5.devTechLevel('hellfire', EVO.capBefore);
     expect(r5.tech.act.oil, '沒進化不該有燈油').toBeNull();
     const run = make(42);
     run.director.active = false;
-    evolveTo(run, 'hellfire', EVO.minLevel);
+    evolveTo(run, 'hellfire', EVO.capBefore);
     const o = run.tech.act.oil!.oil!;
     const a = placeEnemy(run, 4, 0);
     const near = placeEnemy(run, 4, o.spreadRange * 0.95);
@@ -557,9 +558,9 @@ describe('技法變強只靠詞條（D77、D79、D81）', () => {
     run.devAddTech('hellfire');
     expect(run.tech.levelUp('hellfire')).toBe(true);
     expect(run.tech.levelOf('hellfire')).toBe(2);
-    for (let k = 2; k < EVO.minLevel; k++) run.tech.levelUp('hellfire');
+    for (let k = 2; k < EVO.capBefore; k++) run.tech.levelUp('hellfire');
     expect(run.tech.levelUp('hellfire')).toBe(false);
-    expect(run.tech.levelOf('hellfire'), '進化前最多 5 級').toBe(EVO.minLevel);
+    expect(run.tech.levelOf('hellfire'), '進化前最多 5 級').toBe(EVO.capBefore);
     const a = make(23);
     a.devAddTech('hellfire');
     const b = make(23);
@@ -578,7 +579,7 @@ describe('技法變強只靠詞條（D77、D79、D81）', () => {
   it('D81：主武器滿級時技法不再加強（全掃 9 種技法：作用中的參數、衛星燈盞數、開路燈、火柱數都不變；舊版會紅）', () => {
     for (const id of techsFor('ghostfire').map((t) => t.id)) {
       const run = make(10);
-      evolveTo(run, id, EVO.minLevel);
+      evolveTo(run, id, EVO.capBefore);
       const snap = () => JSON.stringify(run.tech.act) + run.tech.satCount + run.tech.lampCount + run.tech.pillarCount + run.orbitRadius;
       const before = snap();
       levelWeapon(run, 8);

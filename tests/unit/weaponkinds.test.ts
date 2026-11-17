@@ -49,10 +49,10 @@ const stepN = (run: Run, n: number) => {
 };
 
 describe('選卡池跟著妖怪的主武器走（D61）', () => {
-  it('itemPoolFor：主武器那一格換成這隻妖怪自己的；其他不變；提燈小僧不變', () => {
-    expect(itemPoolFor('ghostfire')[0]).toBe('ghostfire');
+  it('itemPoolFor：主武器自動升級（D93），不在選卡池；其他照武器種類過濾', () => {
+    expect(itemPoolFor('ghostfire')).not.toContain('ghostfire');
     const p = itemPoolFor('w-test-sweep');
-    expect(p[0]).toBe('w-test-sweep');
+    expect(p).not.toContain('w-test-sweep');
     expect(p).not.toContain('ghostfire');
     // 揮擊沒有投射物：多重、碎裂、穿透對它沒有效果，不放進選卡池（D65）
     expect(p).not.toContain('volley');

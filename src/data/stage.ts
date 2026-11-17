@@ -36,6 +36,7 @@ export const STAGE = {
    */
   events: [
     { at: 0.25, kind: 'elite', count: 1 },
+    { at: 0.4, kind: 'ring', count: 24 }, // D93 夜行 B：化身一（約 35%）之後馬上有一群可以掃
     { at: 0.5, kind: 'surge', count: 2, surgeSeconds: 30, surgeMult: 2 },
     { at: 0.6, kind: 'ring', count: 36 },
     { at: 0.75, kind: 'elite', count: 3 },
@@ -62,7 +63,7 @@ export const STAGE = {
    * 那段時間打倒的人類經驗 ÷ 倍率^xpDamp（1 = 總經驗和以前一樣）：第一版只加數量，sim 顯示玩家多拿經驗、等級更高，反而沒變難。
    * 一般人類的血量也照同一條曲線乘到 hp（sim：後段被打掉的血只有開場的 1/3～1/2，敵人一靠近就被秒，光加數量沒有壓力）。
    */
-  late: { from: 0.5, mult: 2.0, xpDamp: 1, hp: 4.0 },
+  late: { from: 0.5, mult: 2.0, xpDamp: 1, hp: 2.0 }, // D93 夜行 B：hp 4 → 2（雜兵全程 1～2 下倒；壓力改由種類、精英、包圍圈給。xpDamp 只在舊經驗算法用）
   /**
    * 同畫面滿了（手機 200 隻）時，還有要湧出的點數 → 把落在玩家 beyond 公尺外的一般敵人搬回生成圈（保留血量），
    * 每步最多 perStep 隻。不然手機在後段一直卡在上限，玩家感覺數量跟中段一樣（Q60）。

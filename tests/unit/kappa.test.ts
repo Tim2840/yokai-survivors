@@ -17,6 +17,7 @@ function make(seed = 3): Run {
   const run = new Run({ seed, bus: new EventBus(), yokaiId: 'kappa' });
   run.god = true;
   run.director.active = false;
+  run.soulGems = 9; // D93：進化要魂玉（規則在 soulGem.test.ts）
   return run;
 }
 const place = (run: Run, dx: number, dz: number, hp = 1e6): number => {
@@ -263,8 +264,8 @@ describe('河童', () => {
   it('進化：水盤＋渦盤各 5 級 → 渦潮陣；之後可以升到 8 級', () => {
     const run = make(9);
     run.devAddTech('whirl');
-    run.devTechLevel('waterdisc', EVO.minLevel);
-    run.devTechLevel('whirl', EVO.minLevel);
+    run.devTechLevel('waterdisc', EVO.capBefore);
+    run.devTechLevel('whirl', EVO.capBefore);
     expect(run.tech.evolvable.map((e) => e.id)).toEqual(['evoWhirl']);
     expect(run.tech.evolve('evoWhirl')).toBe(true);
     expect(run.tech.capOf('whirl')).toBe(8);

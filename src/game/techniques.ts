@@ -281,9 +281,12 @@ export class Techniques {
   techLevel(id: string): number {
     return this.isBase(id) ? this.run.weaponLevel : this.levelOf(id);
   }
-  /** 材料都到 EVO.minLevel 級、還沒進化、而且沒有被別的進化用掉的進化 */
+  /** 可以進化的（D93：有魂玉、技法到 EVO.minLevel 級、還沒進化、沒有被別的進化用掉）；EVO.gem = false 時是舊規則 */
   get evolvable(): EvoDef[] {
-    return evosFor(this.run.weaponItemId).filter((e) => !this.evolved.includes(e.id) && e.from.every((m) => !this.isEvolved(m) && this.techLevel(m) >= EVO.minLevel));
+    if (EVO.gem && this.run.soulGems <= 0) return [];
+    // 魂玉制（D93）：主武器不看等級（自動升級），只看技法
+    const ok = (m: string): boolean => !this.isEvolved(m) && (EVO.gem && this.isBase(m) ? true : this.techLevel(m) >= (EVO.gem ? EVO.minLevel : EVO.capBefore));
+    return evosFor(this.run.weaponItemId).filter((e) => !this.evolved.includes(e.id) && e.from.every(ok));
   }
   /** 進化：兩個技法併成一個 */
   evolve(id: string): boolean {
@@ -422,7 +425,7 @@ export class Techniques {
   }
   /** 這個技法現在最高幾級：進化前 EVO.minLevel（5）級，進化後 TECH_LEVELS.max（8）級（D57） */
   capOf(id: string): number {
-    return this.isEvolved(id) ? TECH_LEVELS.max : EVO.minLevel;
+    return this.isEvolved(id) ? TECH_LEVELS.max : EVO.capBefore;
   }
 
   /** 這個技法現在能不能被抽到（沒拿過、沒和已有的互斥、拿掉 skip 之後） */

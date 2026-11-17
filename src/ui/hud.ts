@@ -1,3 +1,4 @@
+import type { Rng } from '../lib/random';
 import { t } from '../i18n';
 import { buildMinimap } from './minimap';
 import { FEEL, BUFF_HUD } from '../data/feel';
@@ -11,7 +12,7 @@ import type { ElementSlot } from '../systems/elements';
 import { ULT } from '../data/ultimates';
 import { STAGE } from '../data/stage';
 import { PICKUPS } from '../data/pickups';
-import { BARRIER, DOSOJIN, TRIAL, JIZO, OFFERING, trialNeeds, SUMMIT } from '../data/elements';
+import { BARRIER, DOSOJIN, TRIAL, JIZO, OFFERING, trialNeeds, SUMMIT, OFFERING_TECH } from '../data/elements';
 
 
 /**
@@ -200,7 +201,10 @@ export function buildHud(parent: HTMLElement): Hud {
       const dosojin = dslot && dslot.announce <= 0 && dslot.age < DOSOJIN.hintSeconds ? dslot : null;
       const intro = run.enemyIntro && run.clock < run.enemyIntro.until ? run.enemyIntro.key : '';
       const fnote = run.formNote && run.clock < run.formNote.until ? t('hud.formNote', { name: t(`form.${run.yokai.id}.${run.formNote.form}` as I18nKey) }) : '';
-      const noteText = run.director.swarm ? t('hud.swarm') : fnote ? fnote : intro ? t(intro as I18nKey) : run.portal.active ? t('hud.bossDown') : altar ? t('hud.summonNote') : shrine ? t('hud.fuseNote') : dosojin ? t('hud.dosojinNote') : summit && run.time < 15 ? t('hud.summitNote') : '';
+      const wnote = run.weaponNote && run.clock < run.weaponNote.until ? t('hud.weaponNote', { weapon: t(`tech.${run.weaponItemId}` as I18nKey), lv: run.weaponNote.level }) : '';
+      const gnote = run.gemNote && run.clock < run.gemNote.until ? t('hud.gemNote', { n: run.soulGems }) : '';
+      const hnote = run.highNote && run.clock < run.highNote.until ? t('hud.highGround') : '';
+      const noteText = run.director.swarm ? t('hud.swarm') : fnote ? fnote : gnote ? gnote : wnote ? wnote : hnote ? hnote : intro ? t(intro as I18nKey) : run.portal.active ? t('hud.bossDown') : altar ? t('hud.summonNote') : shrine ? t('hud.fuseNote') : dosojin ? t('hud.dosojinNote') : summit && run.time < 15 ? t('hud.summitNote') : '';
       if (noteText !== lastNote) {
         lastNote = noteText;
         note.textContent = noteText;
@@ -304,7 +308,7 @@ export function buildHud(parent: HTMLElement): Hud {
           elBox.classList.remove('hidden');
           elBox.dataset.rarity = f.rarity;
           elTitle.textContent = `${t(`rarity.${f.rarity}`)}・${t(`element.${f.kind}`)}`;
-          elDesc.textContent = f.kind === 'summon' ? t('element.summon.desc', { mult: mult.toFixed(1) }) : f.kind === 'fox' ? describeFox(f, run.cardCounts) : f.kind === 'fuse' ? t(f.blocked ? 'element.fuse.none' : 'element.fuse.desc') : f.kind === 'dosojin' ? t('element.dosojin.desc') : f.kind === 'summit' ? t(f.blocked ? 'element.summit.none' : 'element.summit.desc', { m: SUMMIT.bossMult, n: SUMMIT.extraChests }) : f.kind === 'trial' ? trialHint(f.rarity, run.time / run.director.duration) : describeElement(f);
+          elDesc.textContent = f.kind === 'summon' ? t('element.summon.desc', { mult: mult.toFixed(1) }) : f.kind === 'fox' ? describeFox(f, run.cardCounts) : f.kind === 'fuse' ? t(f.blocked ? 'element.fuse.none' : 'element.fuse.desc') : f.kind === 'dosojin' ? t('element.dosojin.desc') : f.kind === 'summit' ? t(f.blocked ? 'element.summit.none' : 'element.summit.desc', { m: SUMMIT.bossMult, n: SUMMIT.extraChests }) : f.kind === 'trial' ? trialHint(f.rarity, run.time / run.director.duration) : describeElement(f, run.tech.offerUp(DESC_RNG, 1).length > 0);
           elAct.textContent = f.kind === 'barrier' ? t('element.stand') : f.kind === 'fox' ? t('element.fox.act') : t('element.hold');
         }
         elFill.style.width = `${f.kind === 'barrier' ? (f.inside ? 100 : 0) : Math.round(f.progress * 100)}%`;
@@ -348,7 +352,10 @@ function trialHint(rarity: ElementSlot['rarity'], progress: number): string {
   return t('element.trial.desc', { s: TRIAL.seconds }) + t('element.trial.hint', { a: n[0], b: n[1], c: n[2], r1: r[0], r2: r[1], r3: r[2] });
 }
 
-function describeElement(f: ElementSlot): string {
+/** 賽錢箱說明用：只看「有沒有可以升級的技法」，不影響模擬的亂數 */
+const DESC_RNG = { next: () => 0 } as unknown as Rng;
+
+function describeElement(f: ElementSlot, canUpTech = true): string {
   if (f.kind === 'jizo') {
     const j = JIZO[f.rarity];
     return t(f.rarity === 'legend' ? 'element.jizo.descLegend' : 'element.jizo.desc', { heal: Math.round(j.healFrac * 100), armor: j.armor });
@@ -356,7 +363,7 @@ function describeElement(f: ElementSlot): string {
   if (f.kind === 'offering') {
     const o = OFFERING[f.rarity];
     if (f.blocked) return t('element.offering.poor');
-    return t('element.offering.desc', { cost: Math.round(o.costFrac * 100), rarity: t(`rarity.${o.reward}`), more: o.picks > 1 ? t('element.offering.more', { n: o.picks }) : '' });
+    return t(OFFERING_TECH.on && canUpTech ? 'element.offering.desc' : 'element.offering.descCard', { cost: Math.round(o.costFrac * 100), rarity: t(`rarity.${o.reward}`), more: o.picks > 1 ? t('element.offering.more', { n: o.picks }) : '' });
   }
   if (f.kind === 'chest') return t('element.chest.desc', { rarity: t(`rarity.${f.rarity}`) });
   if (f.kind === 'omikuji') return t('element.omikuji.desc');

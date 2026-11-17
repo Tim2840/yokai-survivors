@@ -5,6 +5,11 @@ export const COMBAT = {
   /** 敵方的箭飛行高度：玩家腳離地超過這個高度（跳起來）就從腳下飛過 */
   arrowClear: 0.8,
   invulnerable: 0.3,
+  /**
+   * 高台優勢（docs/03 第 4 節、D93 夜行 D）：玩家站得比目標高 minRise 公尺以上，遠程攻擊的射程 × (1 + range)。
+   * 第一次發生時 HUD 提示 noteSeconds 秒（之後不再提示）。
+   */
+  highGround: { minRise: 1.5, range: 0.15, noteSeconds: 4 },
   /** 擊退速度衰減（每秒保留比例的指數底，越小停得越快） */
   knockbackDecay: 0.0005,
   /** 命中閃白持續（秒） */

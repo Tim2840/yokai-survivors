@@ -3,11 +3,11 @@ import { COMBAT } from '../data/combat';
 import { MOVE } from '../data/movement';
 import { FORMS, FORM_NOTE_SECONDS, PLAYABLE_YOKAI, YOKAI, formAt, type YokaiDef } from '../data/yokai';
 import { rollAffixes } from '../data/affixes';
-import { TECH_MAX, TECH_SLOTS, mechOf, techById } from '../data/techniques';
-import { CARD_CHOICES, PROGRESSION, RARITIES_UNLOCKED_M1, xpNeed } from '../data/progression';
-import { DOSOJIN, FUSE, SUMMIT } from '../data/elements';
+import { TECH_MAX, TECH_SLOTS, mechOf, techById, EVO, SOUL_GEM } from '../data/techniques';
+import { CARD_CHOICES, PROGRESSION, RARITIES_UNLOCKED_M1, XP_BUDGET, cumXp, targetLevel, xpNeed } from '../data/progression';
+import { DOSOJIN, FUSE, SUMMIT, BARRIER_TECH, OFFERING_TECH } from '../data/elements';
 import { ENEMY_INTRO_SECONDS } from '../data/enemies';
-import { itemPoolFor, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById, scaleWeaponStep } from '../data/items';
+import { WEAPON_AUTO, itemPoolFor, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById, scaleWeaponStep } from '../data/items';
 import { EVO_CARD_PREFIX, TECH_CARD_PREFIX, TECH_KEEP, TECH_OFFER, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard } from '../data/techniques';
 import { Techniques } from './techniques';
 import { RARITIES, RARITY_MULT } from '../data/rarity';
@@ -121,6 +121,11 @@ export class Run {
   readonly stageCount: number;
   /** 這一關已經過的秒數 */
   time = 0;
+  /** 成長預算制（docs/32 A）：最近的實際湧出速率（點數／秒）、上一步量到的累計點數、這一步每一點值多少經驗 */
+  /** 每整秒記一次累計湧出點數（這一關；成長預算制用，開局配好、不在熱路徑 new） */
+  private readonly spawnCum = new Float64Array(4096);
+  private spawnBase = 0;
+  xpPerPoint = 0;
   // 玩家（py = 腳底高度）
   px = 0;
   py = 0;
@@ -366,6 +371,7 @@ export class Run {
       },
       openPick: (rarity, picks, kind) => this.openBonusPick(rarity, picks, kind),
       canFuse: () => this.hasEvolvable,
+      grantGem: (n) => this.addGem(n),
       walkable: (x, z) => this.walkableFromPlayer(x, z),
       canSummit: () => !this.director.bossSpawned,
       activateSummit: () => {
@@ -451,10 +457,13 @@ export class Run {
     });
     this.summonPlaced = false;
     this.summitChests = 0;
+    this.stageGemGiven = false;
     this.dosojinAt = this.tech.owned.length > 0 ? this.clock + DOSOJIN.appearDelay : Infinity;
     this.elements.start(this.px, this.pz, this.director.duration, this.director.virtualWave(), this.stats.value.luck);
     this.elements.placeSummit(); // 山頂神社（E2）：每關一座，放在地圖最高的、走得到的平地
     this.fireCd = 0.3;
+    this.spawnBase = this.enemies.spawnedPoints;
+    this.spawnCum.fill(0);
     this.bus.emit('stageStart', { stage: this.stageNumber });
   }
 
@@ -595,6 +604,7 @@ export class Run {
     this.director.hpCurse = 1 + this.curse.enemyHp;
     this.enemies.speedMult = this.frozenEnemies ? 0 : 1 + this.curse.enemySpeed;
     this.director.update(dt, this.px, this.pz, this.night, this.bossDefeated);
+    this.updateXpBudget(dt);
     // 老練的人類第一次出現：提示一次（整局一次，不是每關）
     if (this.director.veteranSeen && !this.veteranNoted) {
       this.veteranNoted = true;
@@ -786,7 +796,18 @@ export class Run {
     // 小數的部分 = 機率多一顆（卡片的數值是小數，這樣每張卡的價值才能細調）
     const volley = Math.min(this.aim.length, Math.floor(volleyExact) + (this.rngCombat.next() < volleyExact - Math.floor(volleyExact) ? 1 : 0));
     // 每顆打不同的敵人（由近到遠）；敵人比鬼火少時，多的那幾顆輪流打同一批、出手時錯開角度（D39 之後修：以前全部瞄最近那隻，疊成一顆）
-    const nTargets = this.enemies.nearestK(this.px, this.pz, w.range * s.area, volley, this.aim);
+    // 高台優勢（D93）：多找一圈；超過原本射程的，只有玩家比它高 minRise 以上才打得到
+    const HG = COMBAT.highGround;
+    const R = w.range * s.area;
+    const found = this.enemies.nearestK(this.px, this.pz, R * (1 + HG.range), volley, this.aim);
+    let nTargets = 0;
+    for (let q = 0; q < found; q++) {
+      const j = this.aim[q];
+      const far = (this.enemies.x[j] - this.px) ** 2 + (this.enemies.z[j] - this.pz) ** 2 > R * R;
+      if (far && this.py - this.map.heightAt(this.enemies.x[j], this.enemies.z[j]) < HG.minRise) continue;
+      if (far) this.noteHighGround();
+      this.aim[nTargets++] = j;
+    }
     if (nTargets <= 0) {
       this.fireCd = 0;
       return;
@@ -809,6 +830,15 @@ export class Run {
       const pi = this.projectiles.spawn(this.px, this.pz, ux * c - uz * sn, ux * sn + uz * c, w, dmg, crit, target, this.rollPierce());
       if (pi >= 0) this.projectiles.homing[pi] = w.kind === 'boomerang' ? 1 : this.tech.homingFlag;
     }
+  }
+
+  /** 高台優勢第一次發生（HUD 提示一次，D93） */
+  highNote: { until: number } | null = null;
+  private highNoted = false;
+  private noteHighGround(): void {
+    if (this.highNoted) return;
+    this.highNoted = true;
+    this.highNote = { until: this.clock + COMBAT.highGround.noteSeconds };
   }
 
   /** 揮擊次數（sweep 武器：每 shockEvery 下一次震波） */
@@ -944,7 +974,7 @@ export class Run {
     if (this.enemies.variant[e] === 1) this.eliteKills++;
     if (!this.ultCooling) this.ultCharge = Math.min(ULT.max, this.ultCharge + (this.enemies.variant[e] === 2 ? ULT.perBoss : this.enemies.variant[e] === 1 ? ULT.perElite : ULT.perKill) * this.ultModsNow.charge);
     // 後段加壓（Q60）：一般人類的經驗打折（數量翻倍、總經驗不翻倍）
-    const value = this.enemies.points(e) * PROGRESSION.orbPerPoint * (this.enemies.variant[e] === 0 ? this.director.xpScale() : 1);
+    const value = XP_BUDGET.on ? this.enemies.points(e) * this.xpPerPoint : this.enemies.points(e) * PROGRESSION.orbPerPoint * (this.enemies.variant[e] === 0 ? this.director.xpScale() : 1);
     const x = this.enemies.x[e];
     const z = this.enemies.z[e];
     const isBoss = this.enemies.variant[e] === 2;
@@ -952,6 +982,11 @@ export class Run {
     if (!this.orbs.spawn(x, z, value)) this.addXp(value);
     this.elements.noteKill(x, z);
     this.enemies.kill(e);
+    if (EVO.gem && isBoss) this.addGem(SOUL_GEM.boss + (this.summitChests > 0 ? SOUL_GEM.summitExtra : 0));
+    else if (EVO.gem && isElite && !this.stageGemGiven) {
+      this.stageGemGiven = true;
+      this.addGem(SOUL_GEM.firstElitePerStage);
+    }
     if (isBoss) {
       // 寶箱與傳送門放在玩家走得到的地方（敵人會擠進玩家去不了的凹地；D34 試算時發現）
       this.reachableNear(x, z);
@@ -1040,6 +1075,17 @@ export class Run {
   private reachMap: TerrainMap | null = null;
   /** 山頂神社啟動後：打倒頭目多掉幾個寶箱（每關重設） */
   summitChests = 0;
+  /** 魂玉（D93）：進化的材料，手上有幾顆；這一關第一隻精英給過了沒；最近一次拿到（HUD 提示） */
+  soulGems = 0;
+  private stageGemGiven = false;
+  gemNote: { until: number } | null = null;
+  addGem(n = 1): void {
+    if (n <= 0) return;
+    this.soulGems += n;
+    this.gemNote = { until: this.clock + SOUL_GEM.noteSeconds };
+    this.bus.emit('soulGem', { have: this.soulGems });
+    this.refreshEvolvable();
+  }
   private reachAt = -Infinity;
   private reachX = 0;
   private reachZ = 0;
@@ -1110,6 +1156,30 @@ export class Run {
   }
 
   // ── 成長 ─────────────────────────────────────────────────────
+  /** 這一關目前的目標等級（成長預算制） */
+  get targetLevel(): number {
+    return targetLevel(this.stageIndex, this.time / this.director.duration);
+  }
+
+  /** 成長預算制：量實際湧出速率，算這一步每一點威脅點數值多少經驗（docs/32 A） */
+  private updateXpBudget(dt: number): void {
+    if (!XP_BUDGET.on || dt <= 0) return;
+    const B = XP_BUDGET;
+    const cum = this.spawnCum;
+    const sec = Math.min(cum.length - 1, Math.floor(this.time));
+    cum[sec] = this.enemies.spawnedPoints - this.spawnBase;
+    // 稍早那段時間的實際湧出速率（太早還量不到時，用關卡導演預定的速率）
+    const hi = Math.floor(this.time - B.lagSeconds);
+    const lo = Math.max(0, hi - B.windowSeconds);
+    const spawnRate = hi - lo >= 3 ? (cum[hi] - cum[lo]) / (hi - lo) : this.director.rate(Math.max(0, this.time - B.lagSeconds));
+    const D = this.director.duration;
+    const u0 = Math.max(0, (this.time - dt) / D);
+    const u1 = this.time / D;
+    const rate = (cumXp(targetLevel(this.stageIndex, u1)) - cumXp(targetLevel(this.stageIndex, u0))) / dt;
+    const behind = this.targetLevel - (this.level + this.xp / xpNeed(this.level)) >= B.catchUpBehind;
+    this.xpPerPoint = (rate / Math.max(0.5, spawnRate)) * (behind ? B.catchUpMult : 1);
+  }
+
   addXp(v: number): void {
     this.xp += v;
     let leveled = 0;
@@ -1119,7 +1189,10 @@ export class Run {
       this.pendingPicks++;
       leveled++;
     }
-    if (leveled > 0) this.checkForm();
+    if (leveled > 0) {
+      this.checkForm();
+      this.autoWeapon();
+    }
     if (leveled > 0 && this.offer === null) {
       this.makeOffer();
       this.bus.emit('levelUp', { level: this.level, pending: this.pendingPicks });
@@ -1152,14 +1225,17 @@ export class Run {
   private makeOffer(): void {
     this.dealer.playerLevel = this.level;
     this.offer = this.dealer.deal(this.level, this.stats.value.luck, this.cardCounts);
-    this.mixTechCard(this.offer);
+    // 結界石（D93）：圈內升級必出技法卡、稀有度高一階
+    const barrier = BARRIER_TECH.on && this.elements.inBarrier && this.level >= TECH_OFFER.minLevel;
+    if (barrier) this.forceTechCard = true;
+    this.mixTechCard(this.offer, barrier ? BARRIER_TECH.techRarityUp : 0);
   }
 
   /**
    * 技法卡（D49）：每次升級有 TECH_OFFER.chance 的機率，把三張裡隨機一張換成技法卡（沒拿過的或已有的下一級）；
    * 玩家 TECH_OFFER.minLevel 級起。稀有度和升級卡同一套抽法。
    */
-  private mixTechCard(offer: CardOffer[]): void {
+  private mixTechCard(offer: CardOffer[], rarityUp = 0): void {
     const roll = this.rngCards.next();
     const forced = this.forceTechCard;
     this.forceTechCard = false;
@@ -1174,7 +1250,8 @@ export class Run {
     const id = this.tech.pickCard(this.rngCards);
     if (!id) return;
     const at = this.lowestCardSlot(offer);
-    const rarity = this.dealer.rollRarity(this.level, this.stats.value.luck);
+    const r0 = this.dealer.rollRarity(this.level, this.stats.value.luck);
+    const rarity = RARITIES[Math.min(RARITIES.length - 1, RARITIES.indexOf(r0) + rarityUp)];
     offer[at] = { cardId: TECH_CARD_PREFIX + id, rarity, affixes: rollAffixes(this.rngCards, rarity, mechOf(techById(id))) };
   }
 
@@ -1227,6 +1304,12 @@ export class Run {
     if (this.offerKind === 'fusion') return this.tech.evolvable.slice(0, CARD_CHOICES).map((e) => ({ cardId: EVO_CARD_PREFIX + e.id, rarity: 'legend' as const }));
     this.dealer.playerLevel = this.level;
     const cards = this.dealer.dealRarity(this.bonusRarity, this.cardCounts);
+    // 賽錢箱（D93）：三張都是「已有技法升一級」（玩家自己選哪一個），稀有度照賽錢箱、帶詞條；不夠三個就補一般卡
+    if (this.offerKind === 'offering' && OFFERING_TECH.on) {
+      const ups = this.tech.offerUp(this.rngCards, CARD_CHOICES);
+      const techCards = ups.map((id) => ({ cardId: TECH_CARD_PREFIX + id, rarity: this.bonusRarity, affixes: rollAffixes(this.rngCards, this.bonusRarity, mechOf(techById(id))) }));
+      return [...techCards, ...cards.slice(0, Math.max(0, CARD_CHOICES - techCards.length))];
+    }
     if (this.offerKind !== 'chest') return cards;
     // 寶箱：可以進化的排在最前面
     const evo = this.tech.evolvable.slice(0, cards.length).map((e) => ({ cardId: EVO_CARD_PREFIX + e.id, rarity: 'legend' as const }));
@@ -1262,6 +1345,7 @@ export class Run {
       // 進化卡（D53）：兩個材料技法併成一個
       const e = evoOfCard(o.cardId);
       if (this.tech.evolve(e.id)) {
+        if (EVO.gem) this.soulGems--;
         this.lastEvolve = { id: e.id, at: this.clock };
         this.bus.emit('evolve', { id: e.id });
       }
@@ -1335,6 +1419,36 @@ export class Run {
     this.hp = Math.min(this.hp, this.maxHp);
   }
 
+  /** 主武器第 lv 級 → lv+1 級加的東西（× 稀有度倍率） */
+  private applyWeaponStep(id: string, lv: number, rarity: import('../data/rarity').Rarity): void {
+    const raw = WEAPON_LEVELS[id]?.[lv - 1];
+    const step = raw ? scaleWeaponStep(raw, rarity) : null;
+    if (!step) return;
+    this.weaponDamageBonus += step.damage ?? 0;
+    this.volleyBonus += step.volley ?? 0;
+    this.pierceBonus += step.pierce ?? 0;
+    this.splashBonus += step.splash ?? 0;
+    if (step.cooldownPct) this.cooldownMult *= 1 - step.cooldownPct / 100;
+  }
+
+  /** 主武器自動升級（D93）：玩家升到表上的等級就升一級；HUD 提示 */
+  weaponNote: { level: number; until: number } | null = null;
+  private autoWeapon(): void {
+    if (!WEAPON_AUTO.on) return;
+    const id = this.weaponItemId;
+    for (const st of WEAPON_AUTO.steps) {
+      const lv = this.weaponLevel;
+      if (this.level < st.level || WEAPON_AUTO.steps.indexOf(st) !== lv - 1) continue;
+      if (lv >= itemById(id).maxLevel) return;
+      this.cardCounts.set(id, lv + 1);
+      // 能力面板的累計照「每一級的稀有度」算：記成一張那個稀有度的主武器卡
+      this.picked.push({ cardId: id, rarity: st.rarity });
+      this.applyWeaponStep(id, lv, st.rarity);
+      this.weaponNote = { level: lv + 1, until: this.clock + WEAPON_AUTO.noteSeconds };
+      this.bus.emit('weaponUp', { level: lv + 1 });
+    }
+  }
+
   /** 套用一張卡（法具升一級；D30） */
   private applyCard(o: CardOffer): void {
     const d = cardById(o.cardId);
@@ -1350,15 +1464,7 @@ export class Run {
     this.ownedCards.add(d.id);
     this.cardCounts.set(d.id, lv + 1);
     if (d.kind === 'weapon') {
-      const raw = WEAPON_LEVELS[d.id]?.[lv - 1];
-      const step = raw ? scaleWeaponStep(raw, o.rarity) : null;
-      if (step) {
-        this.weaponDamageBonus += step.damage ?? 0;
-        this.volleyBonus += step.volley ?? 0;
-        this.pierceBonus += step.pierce ?? 0;
-        this.splashBonus += step.splash ?? 0;
-        if (step.cooldownPct) this.cooldownMult *= 1 - step.cooldownPct / 100;
-      }
+      this.applyWeaponStep(d.id, lv, o.rarity);
     } else if (d.kind === 'mod') {
       const v = itemValue(d, o.rarity);
       if (d.mod === 'volley') this.volleyBonus += v;

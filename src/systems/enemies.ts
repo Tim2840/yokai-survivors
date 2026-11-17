@@ -137,6 +137,9 @@ export class Enemies {
     return KIND_RADIUS[this.kind[i]] * (this.scale[i] > 1.2 && this.variant[i] === 1 ? 1.2 : 1);
   }
 
+  /** 累計生出來的威脅點數（含精英、老練的倍率，不含頭目）：成長預算制量「實際湧出速率」用 */
+  spawnedPoints = 0;
+
   points(i: number): number {
     return this.pointsLeft[i];
   }
@@ -170,6 +173,7 @@ export class Enemies {
     this.vet[i] = isVet ? 1 : 0;
     this.scale[i] = boss ? 2.4 : elite ? STAGE.elite.scale : isVet ? V.scale : 1;
     this.pointsLeft[i] = KIND_POINTS[kind] * (elite ? STAGE.elite.orbMult : isVet ? V.orbMult : 1);
+    if (!boss) this.spawnedPoints += this.pointsLeft[i];
     this.speed[i] = KIND_SPEED[kind] * enemySpeedMult(night);
     this.flash[i] = 0;
     this.hold[i] = 0;

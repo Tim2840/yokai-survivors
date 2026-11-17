@@ -111,9 +111,28 @@ export const ITEM_WEAPON_KINDS: Readonly<Record<string, readonly WeaponKind[]>> 
 };
 
 /** 這隻妖怪的選卡池：把池裡的主武器 'ghostfire' 換成它自己的主武器（D61），並拿掉對它的武器沒有效果的法具（D65） */
+/**
+ * 主武器自動升級（D93、docs/32 C）：主武器不再出現在選卡，玩家升到 level 級時自動升一級（每一級加的東西照 WEAPON_LEVELS，× rarity 的倍率）。
+ * 化身那兩級（10、20）加最多。on = false 退回舊做法（主武器卡；sim 對照用）。
+ */
+export const WEAPON_AUTO = {
+  on: true,
+  steps: [
+    { level: 3, rarity: 'common' },
+    { level: 5, rarity: 'common' },
+    { level: 7, rarity: 'common' },
+    { level: 10, rarity: 'epic' },
+    { level: 13, rarity: 'rare' },
+    { level: 16, rarity: 'rare' },
+    { level: 20, rarity: 'legend' },
+  ] as { level: number; rarity: Rarity }[],
+  /** HUD 提示停留秒數 */
+  noteSeconds: 4,
+};
+
 export const itemPoolFor = (weaponId: string): readonly string[] => {
   const kind: WeaponKind = Object.values(YOKAI).find((y) => y.weapon.id === weaponId)?.weapon.kind ?? 'projectile';
-  return ITEM_POOL.filter((id) => (ITEM_WEAPON_KINDS[id] ?? [kind]).includes(kind)).map((id) => (id === 'ghostfire' ? weaponId : id));
+  return ITEM_POOL.filter((id) => (ITEM_WEAPON_KINDS[id] ?? [kind]).includes(kind) && !(WEAPON_AUTO.on && id === 'ghostfire')).map((id) => (id === 'ghostfire' ? weaponId : id));
 };
 export const ITEM_POOL: readonly string[] = ['ghostfire', 'power', 'atkSpeed', 'area', 'hp', 'speed', 'armor', 'regen', 'dodge', 'volley', 'splash', 'pierce'];
 /** 取捨道具（D38）：只有狐面商會給，已經拿到的下一級也只在狐面商 */

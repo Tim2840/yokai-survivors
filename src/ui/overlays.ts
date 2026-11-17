@@ -220,7 +220,7 @@ const techName = (id: string): string => t(`tech.${id}` as I18nKey);
 function evoCardHtml(cardId: string): string {
   const e = evoOfCard(cardId);
   const [a, b] = e.from;
-  return `<span class="rname">${t('card.evoTag')}</span><b>${t(`evo.${e.id}` as I18nKey)}</b><span class="cdesc">${t(`evo.${e.id}.desc` as I18nKey)}</span><span class="ctech">${t('card.evoFrom', { a: techName(a), la: EVO.minLevel, b: techName(b), lb: EVO.minLevel })}</span>`;
+  return `<span class="rname">${t('card.evoTag')}</span><b>${t(`evo.${e.id}` as I18nKey)}</b><span class="cdesc">${t(`evo.${e.id}.desc` as I18nKey)}</span><span class="ctech">${EVO.gem ? t('card.evoFromGem', { b: techName(b), lb: EVO.minLevel }) : t('card.evoFrom', { a: techName(a), la: EVO.capBefore, b: techName(b), lb: EVO.capBefore })}</span>`;
 }
 
 /** 技法卡的內容（HTML）：標籤、名稱、玩法說明、適合的道具、和已有技法的混搭 */
@@ -288,7 +288,7 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
   const pending = o.el.querySelector<HTMLElement>('#lv-pending')!;
   return Object.assign(o, {
     render(offer: CardOffer[], more: number, kind: 'levelup' | 'offering' | 'chest' | 'tech' | 'fusion' = 'levelup', ult: PickerContext = { yokai: '', counts: new Map() }) {
-      title.textContent = t(kind === 'tech' ? (ult.techMode === 'swap' ? 'levelup.dosojin' : 'levelup.tech') : kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? 'levelup.offering' : kind === 'fusion' ? 'levelup.fusion' : 'levelup.chest');
+      title.textContent = t(kind === 'tech' ? (ult.techMode === 'swap' ? 'levelup.dosojin' : 'levelup.tech') : kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? (offer.some((c) => c.cardId.startsWith('tech:')) ? 'levelup.offering' : 'levelup.offeringCard') : kind === 'fusion' ? 'levelup.fusion' : 'levelup.chest');
       pending.textContent = more > 1 ? t('levelup.pending', { n: more - 1 }) : '';
       cardsEl.innerHTML = '';
       offer.forEach((c, i) => {
@@ -543,8 +543,9 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
             .map(
               (e) =>
                 `<li data-evo="${e.id}" class="${e.done ? 'fused' : ''}"><b>${t(`evo.${e.id}` as I18nKey)}${e.done ? ' ✓' : ''}</b><em>${t(`evo.${e.id}.desc` as I18nKey)}</em><span>${e.from
+                  .filter((m) => !(EVO.gem && m.id === e.from[0].id))
                   .map((m) => `<i class="${m.level >= EVO.minLevel ? 'ok' : ''}">${t('pause.evoPart', { name: techName(m.id), lv: Math.min(m.level, EVO.minLevel), max: EVO.minLevel })}</i>`)
-                  .join('')}${e.ready ? `<i class="ok">${t('pause.evoReady')}</i>` : ''}${e.done ? '' : `<i>${t('pause.evoCap', { max: TECH_LEVELS.max })}</i>`}</span>${
+                  .join('')}${EVO.gem && !e.done ? `<i class="${sum.gems > 0 ? 'ok' : ''}">${t('pause.evoGem', { n: sum.gems })}</i>` : ''}${e.ready ? `<i class="ok">${t('pause.evoReady')}</i>` : ''}${e.done ? '' : `<i>${t('pause.evoCap', { max: TECH_LEVELS.max })}</i>`}</span>${
                   e.done
                     ? `<span class="evo-form" data-form-level="${e.formLevel}"><i class="ok">${t('pause.evoForm', { lv: e.formLevel, max: TECH_LEVELS.max })}</i></span>`
                     : ''

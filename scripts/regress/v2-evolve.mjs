@@ -43,15 +43,22 @@ export async function run(browser) {
         await dismiss();
       }, 60);
 
-      await step(`${vp.name} 鬼火與一個技法都練到 5 級：HUD 提示「材料齊了」、合魂祠出現、箭頭指過去`, async () => {
+      await step(`${vp.name} 技法練到 4 級、打倒精英拿到魂玉（HUD 提示）：HUD 提示「材料齊了」、合魂祠出現、箭頭指過去`, async () => {
         await page.evaluate(() => {
           const g = window.__game;
           g.giveTech('ring');
-          g.techLevel('ring', 5);
-          g.techLevel('ghostfire', 5);
+          g.techLevel('ring', 4);
+          g.advance(0.1);
+        });
+        expect((await page.evaluate(() => window.__game.run.evolvable)).length === 0, '還沒有魂玉就可以進化了');
+        await page.evaluate(() => {
+          const g = window.__game;
+          g.eliteKill();
           g.advance(0.1);
           g.render();
         });
+        const note = await page.evaluate(() => document.querySelector('#wave-note')?.textContent ?? '');
+        expect(/魂玉/.test(note), `打倒精英後沒有魂玉提示：「${note}」`);
         const ev = await page.evaluate(() => window.__game.run.evolvable);
         expect(ev.includes('evoRing'), `沒有可以進化的：${JSON.stringify(ev)}`);
         const box = await page.locator('#synergy-box').innerText();

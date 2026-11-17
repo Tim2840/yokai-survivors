@@ -438,7 +438,8 @@ describe('一局的模擬（無頭）', () => {
     }
     expect(run.awaitingPick).toBe(false);
     expect(picks).toBe(total);
-    expect(run.picked).toHaveLength(total - techCards);
+    // 主武器自動升級（D93）也記進 picked（能力面板用），不算選卡
+    expect(run.picked.filter((o) => o.cardId !== run.weaponItemId)).toHaveLength(total - techCards);
   });
 
   it('選到生命卡：最大生命與現有生命一起增加', () => {

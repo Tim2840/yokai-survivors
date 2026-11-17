@@ -1,3 +1,4 @@
+import { EVO, SOUL_GEM } from '../data/techniques';
 import type { Rng } from '../lib/random';
 import { STAGE } from '../data/stage';
 import type { TerrainMap } from '../world/terrainMap';
@@ -56,6 +57,8 @@ export interface ElementHost {
   openPick(rarity: Rarity, picks: number, kind: 'offering' | 'chest' | 'fusion'): void;
   /** 合魂祠：現在有沒有湊齊、還沒融合的大招 */
   canFuse(): boolean;
+  /** 給魂玉（D93：試煉碑達到門檻） */
+  grantGem(n: number): void;
   /** 玩家用走的到不到得了這裡（E2：高處的要素、山頂神社要走得到） */
   walkable(x: number, z: number): boolean;
   /** 山頂神社（E2）：現在能不能啟動（頭目出現前才行）、啟動：回傳這一關頭目生命倍率與多掉的寶箱數 */
@@ -153,6 +156,8 @@ export class Elements {
   focus: ElementSlot | null = null;
   /** 玩家在結界圈內時，敵人湧出速率的倍率（給 StageDirector） */
   spawnMult = 1;
+  /** 玩家現在站在結界石圈內（D93：圈內升級必出技法卡、稀有度高一階） */
+  inBarrier = false;
   /** 百鬼試煉碑（E1）：進行中的試煉（一次只有一場）。kills 只算倒在圈內的 */
   readonly trial = { active: false, slot: -1, x: 0, z: 0, left: 0, kills: 0, tier: -1, needs: [0, 0, 0] as number[], rewards: ['common', 'rare', 'epic'] as Rarity[] };
   private nextDrop = 0;
@@ -256,6 +261,7 @@ export class Elements {
     let focusSlot: ElementSlot | null = null;
     let focusD = Infinity;
     let mult = 1;
+    let barrierNow = false;
     for (let i = 0; i < this.slots.length; i++) {
       const s = this.slots[i];
       if (!s.active) continue;
@@ -294,7 +300,10 @@ export class Elements {
             this.host.stats.setMod(key, { pct: { power: v, atkSpeed: v } });
           } else this.host.stats.clearMod(key);
         }
-        if (inside) mult = BARRIER_SPAWN_MULT;
+        if (inside) {
+          mult = BARRIER_SPAWN_MULT;
+          barrierNow = true;
+        }
         if (dist < focusD && dist <= BARRIER_RADIUS + 2) {
           focusD = dist;
           focusSlot = s;
@@ -328,6 +337,7 @@ export class Elements {
     }
     this.focus = focusSlot;
     this.spawnMult = mult;
+    this.inBarrier = barrierNow;
   }
 
   /** 狐面商：玩家站在哪個圈、累積進度；滿了就收下那一個提案 */
@@ -497,6 +507,7 @@ export class Elements {
     t.left = 0;
     const reward = t.rewards[Math.max(0, tier)];
     if (tier >= 0) this.dropChest(t.x, t.z, reward);
+    if (EVO.gem && tier >= SOUL_GEM.trialTier) this.host.grantGem(1);
     s.usedAge = 0;
     s.progress = 1;
     this.host.showResult({ kind: 'trial', rarity: s.rarity, lines: [{ t: 'trial', kills: t.kills, tier, reward }] });

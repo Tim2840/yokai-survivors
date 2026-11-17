@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { PLAYABLE_YOKAI, YOKAI } from '../../src/data/yokai';
-import { ITEMS, WEAPON_LEVELS, itemPoolFor } from '../../src/data/items';
+import { ITEMS, WEAPON_LEVELS, itemPoolFor, WEAPON_AUTO } from '../../src/data/items';
 import { evosFor, techsFor } from '../../src/data/techniques';
 import { defaultUltsOf, ultsOf } from '../../src/data/ultimates';
 import { palette } from '../../src/art/palette';
@@ -18,7 +18,8 @@ describe('每隻可玩的妖怪都有完整的一套', () => {
       const w = y.weapon.id;
       expect(ITEMS.some((x) => x.id === w && x.kind === 'weapon'), `沒有主武器道具 ${w}`).toBe(true);
       expect(WEAPON_LEVELS[w]?.length, `${w} 沒有升級表`).toBeGreaterThanOrEqual(7);
-      expect(itemPoolFor(w)[0], '選卡池第一個要是自己的主武器').toBe(w);
+      expect(itemPoolFor(w), '主武器自動升級（D93），不該出現在選卡池').not.toContain(w);
+      expect(WEAPON_AUTO.steps.length, `${w} 每一級都要有自動升級的時間點`).toBe(WEAPON_LEVELS[w].length);
       const techs = techsFor(w);
       expect(techs.length, `${w} 的技法池太小`).toBeGreaterThanOrEqual(6);
       expect(evosFor(w).map((e) => e.from[1]).sort(), `${w} 的進化要和技法一一對應`).toEqual(techs.map((t) => t.id).sort());
