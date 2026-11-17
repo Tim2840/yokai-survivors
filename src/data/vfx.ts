@@ -12,7 +12,7 @@ export const VFX_STYLE: Record<string, VfxStyle> = {
 };
 
 /** 揮擊的樣子（SwingView，赤鬼的金棒）：停留秒數、透明度、離地高度（震波另一組，比較久、比較亮） */
-export const SWING_VIEW = { life: 0.18, opacity: 0.7, shockLife: 0.32, shockOpacity: 0.85, lift: 0.12 } as const;
+export const SWING_VIEW = { life: 0.2, opacity: 0.8, shockLife: 0.32, shockOpacity: 0.85, lift: 0.12, /** 刀光：內緣在半徑的幾成、掃過整個扇形要用掉壽命的幾分之一、刀光拖多長（扇形的幾成） */ bandInner: 0.55, sweepSpeed: 1.8, trail: 0.6 } as const;
 
 /**
  * 屬性特效引擎（ElementFx）共用的外觀數字：火、水各一份（FIRE_FX、WATER_FX）。

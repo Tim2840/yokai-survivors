@@ -57,9 +57,22 @@ export class SwingView {
     const w = run.tech.weapon;
     const R = run.swingReach * (sw.shock ? (w.shockRadius ?? 1) * run.tech.shockRadiusMult : 1);
     const half = sw.full ? Math.PI : (w.arc ?? Math.PI / 2) / 2;
-    // 從內往外掃：外緣在前半段就到底，內緣跟在後面（一圈刀光，不是整片實心）
-    const outer = R * Math.min(1, 0.35 + k * 2.2);
-    const inner = outer * Math.min(0.85, k * 1.2);
+    // 一般揮擊：一道月牙形的刀光，從扇形的一邊掃到另一邊（貼在半徑外圈，不蓋住自己——以前整片從身體長出來，看起來像翅膀）
+    // 震波：一圈往外擴散的環
+    let inner: number;
+    let outer: number;
+    let a0 = -half;
+    let a1 = half;
+    if (sw.shock || sw.full) {
+      outer = R * Math.min(1, 0.4 + k * 1.6);
+      inner = outer * 0.72;
+    } else {
+      outer = R;
+      inner = R * SWING_VIEW.bandInner;
+      const sweep = Math.min(1, k * SWING_VIEW.sweepSpeed);
+      a1 = -half + 2 * half * sweep;
+      a0 = Math.max(-half, a1 - 2 * half * SWING_VIEW.trail);
+    }
     const fx = sw.dx;
     const fz = sw.dz;
     const rx = fz;
@@ -70,7 +83,7 @@ export class SwingView {
     for (let i = 0; i <= NU; i++) {
       const r = inner + (outer - inner) * (i / NU);
       for (let j = 0; j <= NV; j++) {
-        const ang = (j / NV) * 2 * half - half;
+        const ang = a0 + (a1 - a0) * (j / NV);
         const c = Math.cos(ang);
         const s = Math.sin(ang);
         const x = run.px + (fx * c + rx * s) * r;

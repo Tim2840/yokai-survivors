@@ -121,6 +121,7 @@ export function installDevApi(ctx: DevContext): void {
         form: r.form,
         /** 赤鬼（docs/35）：怒氣層數、最近一次揮擊（距今幾秒、是不是震波） */
         rage: r.rage,
+        frenzyGuard: r.frenzyGuard,
         swing: r.lastSwing ? { age: r.clock - r.lastSwing.at, shock: r.lastSwing.shock, full: r.lastSwing.full } : null,
         techMax: r.tech.max,
         techs: [...r.tech.owned],

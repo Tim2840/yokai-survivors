@@ -21,7 +21,7 @@ await page.evaluate(() => { const g = window.__game; g.spawn('villager', 10); g.
 let shot = 0;
 for (let k = 0; k < 400 && shot < 2; k++) {
   const sw = await page.evaluate(() => { const g = window.__game; g.advance(1 / 30); const r = g.run; return r.swing; });
-  if (sw && sw.age >= 0 && sw.age < 0.08 && (shot === 0 ? !sw.shock : sw.shock)) {
+  if (sw && sw.age >= 0.06 && sw.age < 0.12 && (shot === 0 ? !sw.shock : sw.shock)) {
     await page.evaluate(() => { const g = window.__game; g.freeze(true); g.render(); g.render(); });
     await page.screenshot({ path: `screenshots/oni-${shot === 0 ? 'swing' : 'shock'}-${vp.name}.png` });
     await page.evaluate(() => window.__game.freeze(false));
