@@ -140,6 +140,19 @@ export class BossSkills {
     }
   }
 
+  /** 開發與測試：現在就預告某一招（不看冷卻、範圍；半血限定的也可以） */
+  force(id: string): boolean {
+    const bi = this.run.director.bossIndex;
+    if (bi < 0 || !this.run.enemies.alive[bi]) return false;
+    if (bi !== this.index) this.begin(bi);
+    const k = this.def?.skills.findIndex((s) => s.id === id) ?? -1;
+    if (k < 0) return false;
+    this.skill = this.def!.skills[k];
+    this.left = this.skill.kind === 'charge' ? (this.skill.repeat ?? 1) : this.skill.kind === 'iai' ? (this.skill.hits ?? 1) : 1;
+    this.warn(bi);
+    return true;
+  }
+
   /** 換了一隻頭目（新的一關）：讀它的技能表 */
   private begin(bi: number): void {
     this.reset();

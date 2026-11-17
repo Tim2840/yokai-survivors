@@ -124,6 +124,7 @@ export function buildHud(parent: HTMLElement): Hud {
   let lastXp = '';
   let lastLv = -1;
   let lastNote = '';
+  let lastBossKind = -1;
   let lastBoss = false;
   let lastPortal = -1;
   return {
@@ -218,9 +219,11 @@ export function buildHud(parent: HTMLElement): Hud {
       if (bossAlive !== lastBoss) {
         lastBoss = bossAlive;
         bossBar.classList.toggle('hidden', !bossAlive);
-        // 頭目名字（D95：每關各自的頭目）
-        if (bossAlive) bossName.textContent = t(ENEMIES[ENEMY_IDS[run.enemies.kind[bi]]].name as I18nKey);
       }
+      // 頭目名字（D95：每關各自的頭目）：種類變了就換（不能只靠血條出現／消失，兩隻頭目之間可能沒畫到「沒有頭目」那一幀）
+      const bossKind = bossAlive ? run.enemies.kind[bi] : -1;
+      if (bossAlive && bossKind !== lastBossKind) bossName.textContent = t(ENEMIES[ENEMY_IDS[bossKind]].name as I18nKey);
+      lastBossKind = bossKind;
       if (bossAlive) bossBar.classList.toggle('phase2', run.boss.phase2);
       if (bossAlive) bossFill.style.width = `${Math.max(0, run.enemies.hp[bi] / run.enemies.maxHp[bi]) * 100}%`;
       // 傳送門箭頭：相對鏡頭的方向與距離

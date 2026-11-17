@@ -57,8 +57,8 @@ export const BOSSES: Record<string, BossDef> = {
     firstDelay: 2,
     phase2: { at: 0.5, speedMult: 1.25, cooldownMult: 0.8, flash: 0.6 },
     skills: [
-      { id: 'charge', kind: 'charge', windup: 0.9, cooldown: 6, useRange: 15, damageMult: 1.5, length: 13, width: 2.4, dashSpeed: 16, repeat: 1 },
-      { id: 'seal', kind: 'seal', windup: 1.2, cooldown: 7, useRange: 18, damageMult: 1.2, radius: 3, slow: 0.45, slowSeconds: 2 },
+      { id: 'charge', kind: 'charge', windup: 0.9, cooldown: 5, useRange: 15, damageMult: 1.8, length: 13, width: 2.4, dashSpeed: 16, repeat: 1 },
+      { id: 'seal', kind: 'seal', windup: 1.2, cooldown: 5.5, useRange: 18, damageMult: 1.4, radius: 3, slow: 0.45, slowSeconds: 2 },
       { id: 'summon', kind: 'summon', windup: 0.8, cooldown: 15, useRange: 30, damageMult: 0, count: 12, phase2: true },
     ],
   },
@@ -69,9 +69,9 @@ export const BOSSES: Record<string, BossDef> = {
     firstDelay: 2,
     phase2: { at: 0.5, speedMult: 1.6, cooldownMult: 0.85, flash: 0.6 },
     skills: [
-      { id: 'net', kind: 'net', windup: 0.8, cooldown: 6, useRange: 9, damageMult: 0.6, radius: 8, halfAngle: 0.45, root: 0.8 },
-      { id: 'iai', kind: 'iai', windup: 0.7, cooldown: 7, useRange: 6, damageMult: 1.1, radius: 5, halfAngle: 0.9, hits: 3, hitGap: 0.3 },
-      { id: 'rush', kind: 'charge', windup: 0.8, cooldown: 7, useRange: 16, damageMult: 1.3, length: 12, width: 2.2, dashSpeed: 18, repeat: 2, phase2: true },
+      { id: 'net', kind: 'net', windup: 0.8, cooldown: 5, useRange: 9, damageMult: 0.8, radius: 8, halfAngle: 0.45, root: 0.8 },
+      { id: 'iai', kind: 'iai', windup: 0.7, cooldown: 5.5, useRange: 6, damageMult: 1.4, radius: 5, halfAngle: 0.9, hits: 3, hitGap: 0.3 },
+      { id: 'rush', kind: 'charge', windup: 0.8, cooldown: 6, useRange: 16, damageMult: 1.6, length: 12, width: 2.2, dashSpeed: 18, repeat: 2, phase2: true },
     ],
   },
 };

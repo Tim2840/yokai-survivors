@@ -52,9 +52,9 @@ export const ENEMIES: Record<string, EnemyDef> = {
   },
   /** 退魔僧（頭目佔位，docs/04 第 3.2 節）：M1.5 用放大的村人造型；HP 是 M1.5 手感佔位（docs/04 寫 6000，M1.5 玩家火力還不夠），依試玩調 */
   /** 小頭目（召喚祭壇叫出來的；大頭目那一關同一隻 × 大頭目倍率）。HP 不吃虛擬波數，改吃「召喚時間」（D34） */
-  taimasou: { id: 'taimasou', name: 'enemy.taimasou.name', points: 30, hp: 2500, speed: 1.4, contact: 20, radius: 1.0 },
+  taimasou: { id: 'taimasou', name: 'enemy.taimasou.name', points: 30, hp: 3200, speed: 1.4, contact: 20, radius: 1.0 }, // D95：2500 → 3200（有招式之後頭目戰太短，sim 20～54 秒）
   /** 獵河武士（第 2 關的頭目，D95，docs/34）：投網、居合三連、半血疾走。比退魔僧快、血少一點 */
-  kawagari: { id: 'kawagari', name: 'enemy.kawagari.name', points: 30, hp: 2300, speed: 1.8, contact: 18, radius: 0.95 },
+  kawagari: { id: 'kawagari', name: 'enemy.kawagari.name', points: 30, hp: 4000, speed: 1.8, contact: 18, radius: 0.95 }, // 第 2 關玩家已經強很多：2300 時 sim 19～44 秒就倒；4800 河童打太久（58～95 秒）
 };
 
 /** 新人類第一次出場的提示顯示幾秒 */

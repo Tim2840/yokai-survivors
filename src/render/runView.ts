@@ -431,13 +431,17 @@ export class RunView {
       const aim = e.wind[i] > 0 || bossWarn ? 0.6 + 0.4 * Math.sin(t * 28) : 0;
       // 老練（Q55）：偏藍紫（和精英的紅、頭目的深紅分得開）
       const vt = e.vet[i] === 1;
-      col[n * 3] = f * (vt ? 0.8 : v === 0 ? 1 : 1.5) * (1 + aim * 0.8);
-      col[n * 3 + 1] = f * (vt ? 0.75 : v === 0 ? 1 : v === 1 ? 0.7 : 0.5) * (1 - aim * 0.45);
-      col[n * 3 + 2] = f * (vt ? 1.45 : v === 0 ? 1 : v === 1 ? 0.7 : 0.5) * (1 - aim * 0.45);
+      // 頭目（D95）：只微微偏紅、預告時閃得比較淡（以前整隻染成深紅，Blender 模型看不出是誰；預告靠地上的紅色範圍）
+      const am = v === 2 ? aim * 0.35 : aim;
+      col[n * 3] = f * (vt ? 0.8 : v === 0 ? 1 : v === 1 ? 1.5 : 1.15) * (1 + am * 0.8);
+      col[n * 3 + 1] = f * (vt ? 0.75 : v === 0 ? 1 : v === 1 ? 0.7 : 0.88) * (1 - am * 0.45);
+      col[n * 3 + 2] = f * (vt ? 1.45 : v === 0 ? 1 : v === 1 ? 0.7 : 0.88) * (1 - am * 0.45);
     }
     for (let k = 0; k < this.enemyMeshes.length; k++) {
       const mesh = this.enemyMeshes[k];
       mesh.count = counts[k];
+      // 場上沒有這種人類就不畫（每多一種人類＝多一個圖層；頭目只有一關一隻，D95 加了獵河武士）
+      mesh.visible = counts[k] > 0;
       mesh.instanceMatrix.needsUpdate = true;
       (mesh.instanceColor as THREE.InstancedBufferAttribute).needsUpdate = true;
       (mesh.geometry.getAttribute('aPhase') as THREE.InstancedBufferAttribute).needsUpdate = true;

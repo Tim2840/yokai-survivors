@@ -107,7 +107,7 @@ export function installDevApi(ctx: DevContext): void {
         summit: { mult: r.director.summitMult, chests: r.summitChests },
         boss: (() => {
           const i = r.director.bossIndex;
-          return i >= 0 && r.enemies.alive[i] ? { maxHp: r.enemies.maxHp[i], hp: r.enemies.hp[i] } : null;
+          return i >= 0 && r.enemies.alive[i] ? { maxHp: r.enemies.maxHp[i], hp: r.enemies.hp[i], id: ENEMY_IDS[r.enemies.kind[i]], x: r.enemies.x[i], z: r.enemies.z[i], state: r.boss.state, skill: r.boss.skill?.id ?? null, tele: { ...r.boss.tele }, phase2: r.boss.phase2, hits: r.boss.hits, used: { ...r.boss.used } } : null;
         })(),
         curse: { ...r.curse },
         ult: { equipped: [...r.ults], mods: { ...r.ultModsView }, charge: r.ultCharge, ready: r.ultReady, counts: Object.fromEntries(r.cardCounts), volleyBonus: r.volleyBonus },
@@ -341,6 +341,33 @@ export function installDevApi(ctx: DevContext): void {
     /** 現在就過關（走正常流程：進過關畫面；一般地圖第 1 關過關會跳技法面板，D48） */
     clearStage: () => run()?.devClearStage(),
     summonBoss: () => run()?.devSummonBoss() ?? false,
+    /** 頭目現在就預告某一招（D95；截圖、回歸用）；頭目要先在場 */
+    bossCast: (id: string) => run()?.boss.force(id) ?? false,
+    /** 只留頭目：其他人類全部清掉、停止湧出（頭目技能的回歸用） */
+    bossOnly: () => {
+      const r = run();
+      const b = r?.director.bossIndex ?? -1;
+      if (!r || b < 0) return false;
+      for (let i = 0; i < r.enemies.high; i++) if (r.enemies.alive[i] && i !== b) r.enemies.kill(i);
+      r.director.active = false;
+      return true;
+    },
+    /** 頭目生命設成最大生命的 frac（半血變招的回歸用） */
+    bossHp: (frac: number) => {
+      const r = run();
+      const b = r?.director.bossIndex ?? -1;
+      if (!r || b < 0) return false;
+      r.enemies.hp[b] = r.enemies.maxHp[b] * frac;
+      return true;
+    },
+    /** 頭目移到玩家 (dx, dz) 公尺處 */
+    bossTo: (dx: number, dz: number) => {
+      const r = run();
+      const i = r?.director.bossIndex ?? -1;
+      if (!r || i < 0) return false;
+      r.enemies.relocate(i, r.px + dx, r.pz + dz);
+      return true;
+    },
     /** 把生命設成 v（測回血用） */
     setHp: (v: number) => {
       const r = run();

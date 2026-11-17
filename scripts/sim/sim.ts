@@ -171,8 +171,10 @@ interface Result {
   stagesCleared: number;
   bossSeen: boolean;
   bossKilled: boolean;
-  bossFight: number;
-  bossHurt: number;
+  /** 每關的頭目戰（第 k 關）：秒數（沒打倒 = -1）、頭目在場時被打掉的生命（佔最大生命）、被招式打中幾次 */
+  bossFight: number[];
+  bossHurt: number[];
+  bossSkillHits: number[];
   kills: number;
   level: number;
   elementsUsed: number;
@@ -233,10 +235,15 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   let totalTime = 0;
   let cleared = 0;
   let bossSeen = false;
+  const escape = new Float32Array(2);
   /** 頭目戰（2026-11-17 頭目審查）：出現到倒下幾秒、頭目在場時被打掉幾成生命 */
   let bossFrom = -1;
-  let bossFight = -1;
-  let bossHurt = 0;
+  const bossFight: number[] = [];
+  const bossHurt: number[] = [];
+  const bossSkillHits: number[] = [];
+  let bossStage = -1;
+  let bossKills = 0;
+  let skillHits0 = 0;
   const cards: Record<string, number> = {};
   const maxStage = Math.min(STAGES, run.stageCount);
   let guard = 0;
@@ -316,6 +323,11 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
         mz = Math.sin(t * 0.5);
       }
     }
+    // 躲頭目的招（D95）：看到地上紅色預告就往最近的範圍外走（機器人反應是即時的，比真人好；真人的差距靠試玩紀錄校準）
+    if (DODGE && run.boss.escapeDir(run.px, run.pz, escape)) {
+      mx = escape[0];
+      mz = escape[1];
+    }
     // 躲箭（E-1）：預測這支箭 1.2 秒內會不會從身邊 1.1 公尺內飛過；會就往垂直於箭的方向閃（機器人不會跳，這是保守的）
     if (DODGE && run.shots.aliveCount > 0) {
       const sh = run.shots;
@@ -351,11 +363,21 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     }
     if (run.director.bossIndex >= 0) bossSeen = true;
     const bossUp = run.director.bossIndex >= 0 && run.enemies.alive[run.director.bossIndex] === 1;
-    if (bossUp && bossFrom < 0) bossFrom = run.time;
+    if (bossUp && bossStage !== run.stageIndex) {
+      bossStage = run.stageIndex;
+      bossFrom = run.time;
+      bossFight[bossStage] = -1;
+      bossHurt[bossStage] = 0;
+      skillHits0 = run.boss.hits;
+    }
     const hpBefore = run.hp;
     run.step(DT);
-    if (bossUp && run.hp < hpBefore) bossHurt += (hpBefore - run.hp) / run.maxHp;
-    if (bossFrom >= 0 && bossFight < 0 && run.bossesDefeated > 0) bossFight = run.time - bossFrom;
+    if (bossUp && bossStage >= 0 && run.hp < hpBefore) bossHurt[bossStage] += (hpBefore - run.hp) / run.maxHp;
+    if (bossStage >= 0) bossSkillHits[bossStage] = run.boss.hits - skillHits0;
+    if (run.bossesDefeated > bossKills) {
+      bossKills = run.bossesDefeated;
+      if (bossStage >= 0 && bossFight[bossStage] < 0) bossFight[bossStage] = run.time - bossFrom;
+    }
     if (lastHp >= 0 && run.hp < lastHp && run.time < SECONDS) qHurt[Math.min(3, Math.floor((run.time / SECONDS) * 4))] += lastHp - run.hp;
     lastHp = run.hp;
     if (weapon4At < 0 && run.weaponLevel >= 4) weapon4At = totalTime + run.time;
@@ -394,6 +416,7 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
     bossKilled: run.bossesDefeated > 0,
     bossFight,
     bossHurt,
+    bossSkillHits,
     kills: run.kills,
     level: run.level,
     elementsUsed: used,
@@ -565,7 +588,7 @@ function summarize(rs: Result[]): string {
     `**開局 120 秒內倒下 ${rs.filter((r) => r.survived < EARLY_DEATH_SECONDS).length}/${rs.length} 局**`,
     `過關 ${(clear * 100).toFixed(0)}%`,
     `見頭目 ${((rs.filter((r) => r.bossSeen).length / rs.length) * 100).toFixed(0)}%`,
-    `打倒頭目 ${((rs.filter((r) => r.bossKilled).length / rs.length) * 100).toFixed(0)}%（頭目戰中位 ${pct(rs.filter((r) => r.bossFight >= 0).map((r) => r.bossFight), 50)?.toFixed(0) ?? '-'} 秒、頭目在場時被打掉生命 平均 ${(avg(rs.filter((r) => r.bossFight >= 0).map((r) => r.bossHurt)) * 100).toFixed(0)}%）`,
+    `打倒頭目 ${((rs.filter((r) => r.bossKilled).length / rs.length) * 100).toFixed(0)}%（${[0, 1].filter((k) => rs.some((r) => r.bossFight[k] !== undefined)).map((k) => { const f = rs.filter((r) => (r.bossFight[k] ?? -1) >= 0); return `第 ${k + 1} 關頭目：遇到 ${rs.filter((r) => r.bossFight[k] !== undefined).length} 局、打倒 ${f.length}、頭目戰中位 ${pct(f.map((r) => r.bossFight[k]), 50)?.toFixed(0) ?? '-'} 秒、頭目在場時被打掉生命 平均 ${(avg(f.map((r) => r.bossHurt[k])) * 100).toFixed(0)}%、被招式打中 平均 ${avg(rs.filter((r) => r.bossSkillHits[k] !== undefined).map((r) => r.bossSkillHits[k])).toFixed(1)} 次`; }).join('；')}）`,
     `擊殺 ${avg(rs.map((r) => r.kills)).toFixed(0)}`,
     `等級 ${avg(rs.map((r) => r.level)).toFixed(1)}`,
     `用掉要素 ${avg(rs.map((r) => r.elementsUsed)).toFixed(1)}`,
