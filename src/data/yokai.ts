@@ -94,8 +94,8 @@ export const YOKAI: Record<string, YokaiDef> = {
     base: { maxHp: 110, speed: 4.0, regen: 0.8 },
     weapon: {
       id: 'ghostfire',
-      damage: 10, // D93 夜行：12 → 10（主武器自動升級＋前段升級加快之後，提燈小僧三種機器人都 95～100% 過關；穿透 1 保留，前期才不會被圍死）
-      interval: 0.7,
+      damage: 12, // 2026-11-17：10→12（射速放慢 0.7→0.9 秒，一發打重一點補回開局；使用者「初始攻擊速度要弱一點，太快了」）。D93 夜行：12 → 10（主武器自動升級＋前段升級加快之後，提燈小僧三種機器人都 95～100% 過關；穿透 1 保留，前期才不會被圍死）
+      interval: 0.9, // 2026-11-17：0.7→0.9（使用者：初始攻擊速度太快）
       range: 9,
       volley: 1,
       projectileSpeed: 12,
@@ -119,8 +119,8 @@ YOKAI.kappa = {
   weapon: {
     id: 'waterdisc',
     kind: 'boomerang',
-    damage: 7.2,
-    interval: 1.1,
+    damage: 9, // 2026-11-17：7.2→9（射速放慢，一發打重一點）
+    interval: 1.4, // 2026-11-17：1.1→1.4（使用者：初始攻擊速度太快）
     range: 9,
     volley: 1,
     projectileSpeed: 11,
