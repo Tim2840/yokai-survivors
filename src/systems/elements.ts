@@ -10,16 +10,14 @@ import type { StatId } from '../data/stats';
 import type { ElementResult, ResultLine } from './elementResult';
 import { ALTAR_BOONS, ALTAR_BOON_PCT, ALTAR_CURSE, ALTAR_CURSE_IDS, ALTAR_EFFECT_COUNT, ALTAR_MAX_EFFECTS, type CurseId } from '../data/altar';
 import {
-  ALTAR_HOLD_SECONDS,
   ELEMENT_KINDS,
   ELEMENT_RARITY_BY_WAVE,
   ELEMENT_RULES,
   ELEMENT_WEIGHTS,
   JIZO,
-  JIZO_HOLD_SECONDS,
-  CHEST_HOLD_SECONDS,
   ELEMENT_PER_KIND,
   FOX,
+  KANAME,
   FUSE,
   DOSOJIN,
   TRIAL,
@@ -27,9 +25,7 @@ import {
   ELEVATED,
   SUMMIT,
   OFFERING,
-  OFFERING_HOLD_SECONDS,
   OMIKUJI_EFFECT,
-  OMIKUJI_HOLD_SECONDS,
   OMIKUJI_RESULTS,
   OMIKUJI_WEIGHTS,
   type ElementKind,
@@ -70,6 +66,10 @@ export interface ElementHost {
   showResult(r: ElementResult): void;
   /** 狐面商（D38）：現在能收的取捨道具（沒練滿；新的要有空欄位）、能不能收某一件、收下（回傳新等級） */
   foxCandidates(): readonly string[];
+  /** 狐面商（D99）：按互動 → 開選卡面板（兩個提案＋不要）；i = 要素編號 */
+  openFox(i: number): void;
+  /** 要石（D99）：撐滿 → 三選一整場能力值 */
+  openStatPick(rarity: Rarity): void;
   canTakeItem(cardId: string): boolean;
   grantItem(cardId: string, rarity: Rarity): number;
   emitSpawn(kind: ElementKind, rarity: Rarity): void;
@@ -124,8 +124,6 @@ export interface AltarEffect {
 const USED_FADE = 0.7;
 /** 試煉圈內加成的屬性鍵（D97） */
 const TRIAL_MOD = 'trial:zone';
-/** 各要素按住幾秒 */
-const HOLD: Partial<Record<ElementKind, number>> = { summit: SUMMIT.holdSeconds, trial: TRIAL.holdSeconds, jizo: JIZO_HOLD_SECONDS, altar: ALTAR_HOLD_SECONDS, offering: OFFERING_HOLD_SECONDS, omikuji: OMIKUJI_HOLD_SECONDS, chest: CHEST_HOLD_SECONDS, summon: STAGE.summon.holdSeconds, fuse: FUSE.holdSeconds, dosojin: DOSOJIN.holdSeconds };
 
 function blankSlot(): ElementSlot {
   const n = FOX.offers;
@@ -261,6 +259,7 @@ export class Elements {
     let focusD = Infinity;
     let mult = 1;
     let zoneNow = false;
+    this.kanameAt = null;
     for (let i = 0; i < this.slots.length; i++) {
       const s = this.slots[i];
       if (!s.active) continue;
@@ -304,17 +303,32 @@ export class Elements {
         }
         continue;
       }
+      if (s.kind === 'kaname') {
+        // 要石（D99）：站在小圈裡累積，走出去慢慢退；撐滿 → 三選一
+        const inK = dist <= KANAME.radius && vertical;
+        s.inside = inK;
+        if (inK) {
+          s.progress = Math.min(1, s.progress + dt / KANAME.seconds);
+          mult = Math.max(mult, KANAME.spawnMult);
+          this.kanameAt = s;
+          if (s.progress >= 1) {
+            s.usedAge = 0;
+            this.host.emitUsed(s.kind, s.rarity);
+            this.host.openStatPick(s.rarity);
+            continue;
+          }
+        } else s.progress = Math.max(0, s.progress - (dt * KANAME.decay) / KANAME.seconds);
+        if (dist < focusD && dist <= KANAME.radius + 4) {
+          focusD = dist;
+          focusSlot = s;
+        }
+        continue;
+      }
+      // D99（使用者：「每個地圖要素跟寶箱都要用按按取得比較好，不然站圈子比較不可控」）：靠近只顯示互動鍵，按了才取得（interact）
       const near = dist <= ELEMENT_RULES.useRadius && vertical;
       s.inside = near;
       s.blocked = (s.kind === 'offering' && !this.host.canPayHpFrac(OFFERING[s.rarity].costFrac)) || (s.kind === 'fuse' && !this.host.canFuse()) || (s.kind === 'summit' && !this.host.canSummit());
-      if (near && !s.blocked) {
-        const hold = HOLD[s.kind] ?? JIZO_HOLD_SECONDS;
-        s.progress = Math.min(1, s.progress + dt / hold);
-        if (s.progress >= 1) {
-          this.use(i);
-          continue;
-        }
-      } else s.progress = Math.max(0, s.progress - dt * 3);
+      s.progress = 0;
       if (dist < focusD && dist <= ELEMENT_RULES.useRadius + 4) {
         focusD = dist;
         focusSlot = s;
@@ -325,29 +339,40 @@ export class Elements {
     this.inTrialZone = zoneNow;
   }
 
-  /** 狐面商：玩家站在哪個圈、累積進度；滿了就收下那一個提案 */
-  private updateFox(i: number, dt: number, px: number, py: number, pz: number): void {
+  /** 狐面商（D99）：靠近商人顯示互動鍵；按了開選卡面板（兩個提案＋不要）。圈不再用 */
+  private updateFox(i: number, _dt: number, px: number, py: number, pz: number): void {
     const s = this.slots[i];
     s.ring = -1;
-    for (let k = 0; k < s.offers.length; k++) {
-      s.ringBlocked[k] = !this.host.canTakeItem(s.offers[k]);
-      const inRing = Math.hypot(px - s.ringX[k], pz - s.ringZ[k]) <= FOX.ringRadius && Math.abs(py - this.map.heightAt(s.ringX[k], s.ringZ[k])) <= ELEMENT_RULES.useHeight;
-      if (inRing) s.ring = k;
-      if (inRing && !s.ringBlocked[k]) {
-        s.ringProgress[k] = Math.min(1, s.ringProgress[k] + dt / FOX.acceptSeconds);
-        if (s.ringProgress[k] >= 1) {
-          this.acceptFox(i, k);
-          return;
-        }
-      } else s.ringProgress[k] = Math.max(0, s.ringProgress[k] - dt * 3);
-    }
-    s.inside = s.ring >= 0;
-    let best = 0;
-    for (let k = 0; k < s.offers.length; k++) if (s.ringProgress[k] > best) best = s.ringProgress[k];
-    s.progress = best;
+    for (let k = 0; k < s.offers.length; k++) s.ringBlocked[k] = !this.host.canTakeItem(s.offers[k]);
+    s.inside = Math.hypot(px - s.x, pz - s.z) <= ELEMENT_RULES.useRadius && Math.abs(py - s.y) <= ELEMENT_RULES.useHeight;
+    s.blocked = s.offers.length === 0 || s.ringBlocked.slice(0, s.offers.length).every((x) => x);
+    s.progress = 0;
   }
 
-  private acceptFox(i: number, k: number): void {
+  /** 互動鍵（D99）：腳邊那個要素能不能按、按下去 */
+  private usable(s: ElementSlot | null): s is ElementSlot {
+    return !!s && s.active && s.usedAge < 0 && s.announce <= 0 && s.inside && !s.blocked && s.kind !== 'kaname' && !(s.kind === 'trial' && this.trial.active);
+  }
+  get canInteract(): boolean {
+    return this.usable(this.focus);
+  }
+  /** 按了互動鍵：腳邊的要素取得／開始；回傳有沒有作用 */
+  interact(): boolean {
+    const s = this.focus;
+    if (!this.usable(s)) return false;
+    const i = this.slots.indexOf(s);
+    if (s.kind === 'fox') {
+      this.host.openFox(i);
+      return true;
+    }
+    this.use(i);
+    return true;
+  }
+  /** 要石：玩家這一步站在哪一顆的圈裡（近距離湧出用；沒有 = null） */
+  kanameAt: ElementSlot | null = null;
+
+  /** 狐面商：收下第 k 個提案（Run 的選卡面板選了之後呼叫） */
+  acceptFox(i: number, k: number): void {
     const s = this.slots[i];
     const cardId = s.offers[k];
     const level = this.host.grantItem(cardId, s.rarity);

@@ -5,7 +5,7 @@ import { FORMS, FORM_NOTE_SECONDS, PLAYABLE_YOKAI, YOKAI, formAt, type YokaiDef,
 import { rollAffixes } from '../data/affixes';
 import { TECH_MAX, TECH_SLOTS, mechOf, techById, EVO, SOUL_GEM } from '../data/techniques';
 import { CARD_CHOICES, PROGRESSION, RARITIES_UNLOCKED_M1, XP_BUDGET, cumXp, targetLevel, xpNeed } from '../data/progression';
-import { DOSOJIN, FUSE, SUMMIT, TRIAL, OFFERING_TECH } from '../data/elements';
+import { DOSOJIN, FOX_SKIP, FUSE, KANAME, KANAME_PREFIX, SUMMIT, TRIAL, OFFERING_TECH } from '../data/elements';
 import { ENEMY_INTRO_SECONDS } from '../data/enemies';
 import { SWING, WEAPON_AUTO, itemPoolFor, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById, scaleWeaponStep } from '../data/items';
 import { EVO_CARD_PREFIX, TECH_CARD_PREFIX, TECH_KEEP, TECH_OFFER, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard } from '../data/techniques';
@@ -225,7 +225,7 @@ export class Run {
   bonusMerit = 0;
   lastOmikuji: { id: string; at: number } | null = null;
   /** 目前這個選卡面板的來源：升級／賽錢箱／寶箱；賽錢箱、寶箱的剩餘選卡次數與稀有度 */
-  offerKind: 'levelup' | 'offering' | 'chest' | 'tech' | 'fusion' = 'levelup';
+  offerKind: 'levelup' | 'offering' | 'chest' | 'tech' | 'fusion' | 'fox' | 'kaname' = 'levelup';
   /** 有可以進化、還沒進化的技法組合（D53；事件時更新，每步不重算）；從什麼時候開始有（合魂祠延遲出現用） */
   private hasEvolvable = false;
   private evolvableSince = 0;
@@ -384,6 +384,11 @@ export class Run {
   requestJump(): void {
     this.jumpReq = true;
   }
+  /** 互動鍵（D99；手機的「互動」鈕、鍵盤 E）：下一步對腳邊的要素作用 */
+  requestInteract(): void {
+    this.interactReq = true;
+  }
+  private interactReq = false;
 
   // ── 關卡 ─────────────────────────────────────────────────────
   private buildWorld(): void {
@@ -436,6 +441,8 @@ export class Run {
       },
       showResult: (res) => this.showResult(res),
       foxCandidates: () => TRADE_ITEMS.filter((id) => this.canTakeItem(id)),
+      openFox: (i) => this.openFoxPick(i),
+      openStatPick: (rarity) => this.openKanamePick(rarity),
       canTakeItem: (id) => this.canTakeItem(id),
       grantItem: (id, rarity) => {
         const o = { cardId: id, rarity };
@@ -624,6 +631,11 @@ export class Run {
     if (gained > 0) this.addXp(gained);
 
     this.elements.update(dt, this.time, this.director.duration, this.director.virtualWave(), s.luck, this.px, this.py, this.pz);
+    // 互動鍵（D99）：這一步按了 → 對腳邊的要素作用（面板開著、結果卡開著時不作用）
+    if (this.interactReq) {
+      this.interactReq = false;
+      if (this.offer === null && !this.elementResult) this.elements.interact();
+    }
     // 合魂祠：可以進化之後 appearDelay 秒出現在地圖上（一次一座；D53）
     if (this.hasEvolvable && !this.elements.fuseSlot && this.clock >= this.evolvableSince + FUSE.appearDelay) {
       if (this.elements.placeFuse(this.px, this.pz)) this.bus.emit('fuseShrine', { stage: this.stageNumber });
@@ -643,9 +655,21 @@ export class Run {
     this.director.hpCurse = 1 + this.curse.enemyHp;
     // 試煉碑進行中：一部分湧出改生在碑周圍（D97）
     const tr = this.elements.trial;
+    const km = this.elements.kanameAt;
     if (tr.active) {
       this.nearSpot.x = tr.x;
       this.nearSpot.z = tr.z;
+      this.nearSpot.frac = TRIAL.near.frac;
+      this.nearSpot.min = TRIAL.near.min;
+      this.nearSpot.max = TRIAL.near.max;
+      this.director.near = this.nearSpot;
+    } else if (km) {
+      // 要石（D99）：站在圈裡時人類從近處湧來
+      this.nearSpot.x = km.x;
+      this.nearSpot.z = km.z;
+      this.nearSpot.frac = KANAME.near.frac;
+      this.nearSpot.min = KANAME.near.min;
+      this.nearSpot.max = KANAME.near.max;
       this.director.near = this.nearSpot;
     } else this.director.near = null;
     this.enemies.speedMult = this.frozenEnemies ? 0 : 1 + this.curse.enemySpeed;
@@ -690,7 +714,7 @@ export class Run {
   enemyIntro: { key: string; until: number } | null = null;
   private veteranNoted = false;
   /** 試煉碑近距離湧出的位置（D97；預先配置，每步只改座標） */
-  private readonly nearSpot = { x: 0, z: 0, frac: TRIAL.near.frac, min: TRIAL.near.min, max: TRIAL.near.max };
+  private readonly nearSpot: { x: number; z: number; frac: number; min: number; max: number } = { x: 0, z: 0, frac: TRIAL.near.frac, min: TRIAL.near.min, max: TRIAL.near.max };
 
   private portalReached(): boolean {
     const p = this.portal;
@@ -1483,6 +1507,7 @@ export class Run {
     if (!this.offer || index < 0 || index >= this.offer.length) return this.offer !== null;
     const o = this.offer[index];
     if (this.offerKind === 'tech') return this.chooseTech(o);
+    if (this.offerKind === 'fox' || this.offerKind === 'kaname') return this.chooseSpecial(o);
     if (isEvoCard(o.cardId)) {
       // 進化卡（D53）：兩個材料技法併成一個
       const e = evoOfCard(o.cardId);
@@ -1504,6 +1529,47 @@ export class Run {
     this.bus.emit('cardChosen', { cardId: o.cardId, rarity: o.rarity });
     if (this.offerKind !== 'levelup') this.bonusLeft--;
     else this.pendingPicks--;
+    return this.continueOffers();
+  }
+
+  /** 狐面商（D99）：按互動 → 兩個提案＋「不要」（沿用選卡面板）；收不了的提案不列 */
+  private foxSlot = -1;
+  private openFoxPick(i: number): void {
+    if (this.offer !== null) return;
+    const s = this.elements.slots[i];
+    const cards: CardOffer[] = [];
+    for (let k = 0; k < s.offers.length; k++) if (!s.ringBlocked[k]) cards.push({ cardId: s.offers[k], rarity: s.rarity });
+    if (cards.length === 0) return;
+    cards.push({ cardId: FOX_SKIP, rarity: 'common' });
+    this.foxSlot = i;
+    this.bonusLeft = 1;
+    this.offerKind = 'fox';
+    this.offer = cards;
+    this.bus.emit('levelUp', { level: this.level, pending: 1 });
+  }
+  /** 要石（D99）：三選一，整場能力值 +KANAME.bonus[稀有度] */
+  private kanameSerial = 0;
+  private openKanamePick(rarity: import('../data/rarity').Rarity): void {
+    if (this.offer !== null) return;
+    const pool = [...KANAME.stats];
+    const cards: CardOffer[] = [];
+    while (cards.length < CARD_CHOICES && pool.length > 0) cards.push({ cardId: KANAME_PREFIX + pool.splice(Math.floor(this.rngCards.next() * pool.length), 1)[0], rarity });
+    this.bonusLeft = 1;
+    this.offerKind = 'kaname';
+    this.offer = cards;
+    this.bus.emit('levelUp', { level: this.level, pending: 1 });
+  }
+  private chooseSpecial(o: CardOffer): boolean {
+    if (this.offerKind === 'fox') {
+      const s = this.elements.slots[this.foxSlot];
+      const k = s ? s.offers.indexOf(o.cardId) : -1;
+      if (o.cardId !== FOX_SKIP && k >= 0) this.elements.acceptFox(this.foxSlot, k);
+    } else {
+      const stat = o.cardId.slice(KANAME_PREFIX.length) as import('../data/stats').StatId;
+      this.stats.setMod(`kaname:${this.kanameSerial++}`, { pct: { [stat]: KANAME.bonus[o.rarity] } });
+    }
+    this.bus.emit('cardChosen', { cardId: o.cardId, rarity: o.rarity });
+    this.bonusLeft--;
     return this.continueOffers();
   }
 

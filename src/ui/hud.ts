@@ -13,7 +13,7 @@ import { ULT } from '../data/ultimates';
 import { STAGE } from '../data/stage';
 import { ENEMIES, ENEMY_IDS } from '../data/enemies';
 import { PICKUPS } from '../data/pickups';
-import { DOSOJIN, TRIAL, JIZO, OFFERING, trialNeeds, SUMMIT, OFFERING_TECH } from '../data/elements';
+import { DOSOJIN, KANAME, TRIAL, JIZO, OFFERING, trialNeeds, SUMMIT, OFFERING_TECH } from '../data/elements';
 
 
 /**
@@ -25,6 +25,8 @@ export interface Hud {
   stickBase: HTMLElement;
   stickKnob: HTMLElement;
   jumpButton: HTMLButtonElement;
+  /** 互動鈕（D99）：只在要素旁出現 */
+  interactButton: HTMLButtonElement;
   pauseButton: HTMLButtonElement;
   abilitiesButton: HTMLButtonElement;
   ultButton: HTMLButtonElement;
@@ -64,7 +66,8 @@ export function buildHud(parent: HTMLElement): Hud {
     </div>
     <div class="stick" id="stick-base"><div class="knob" id="stick-knob"></div></div>
     <button class="ult hidden" id="btn-ult" type="button"><span class="ult-fill" id="ult-fill"></span><b>${t('hud.ult')}</b><em id="ult-key">F</em></button>
-    <button class="jump" id="btn-jump" type="button" aria-label="${t('hud.jump')}">${t('hud.jump')}</button>`;
+    <button class="jump" id="btn-jump" type="button" aria-label="${t('hud.jump')}">${t('hud.jump')}</button>
+    <button class="interact hidden" id="btn-interact" type="button"><b>${t('hud.interact')}</b><em>E</em></button>`;
   parent.appendChild(root);
   const minimap = buildMinimap(root);
   let lastMapTime = performance.now();
@@ -114,6 +117,7 @@ export function buildHud(parent: HTMLElement): Hud {
   const elFill = q('element-fill');
   const elAct = q('element-act');
   const ultBtn = q('btn-ult');
+  const interactBtn = q('btn-interact');
   const ultFill = q('ult-fill');
   const ultKey = q('ult-key');
   let lastUlt = '';
@@ -138,6 +142,7 @@ export function buildHud(parent: HTMLElement): Hud {
     stickBase: q('stick-base'),
     stickKnob: q('stick-knob'),
     jumpButton: q<HTMLButtonElement>('btn-jump'),
+    interactButton: q<HTMLButtonElement>('btn-interact'),
     pauseButton: q<HTMLButtonElement>('btn-pause'),
     abilitiesButton: q<HTMLButtonElement>('btn-abilities'),
     ultButton: q<HTMLButtonElement>('btn-ult'),
@@ -324,7 +329,9 @@ export function buildHud(parent: HTMLElement): Hud {
         synBox.textContent = synText;
         synBox.classList.toggle('hidden', synText === '');
       }
-      // 地圖要素：走近時顯示名稱、效果與按住進度
+      // 互動鈕（D99）：腳邊有可以按的要素才出現（選卡、結果卡開著時不出現）
+      interactBtn.classList.toggle('hidden', !(run.elements.canInteract && !run.offer && !run.elementResult));
+      // 地圖要素：走近時顯示名稱、效果（要石顯示撐住的進度）
       const f = run.elements.focus;
       if (!f || f.announce > 0 || f.usedAge >= 0) {
         if (lastEl !== '') {
@@ -340,9 +347,11 @@ export function buildHud(parent: HTMLElement): Hud {
           elBox.classList.remove('hidden');
           elBox.dataset.rarity = f.rarity;
           elTitle.textContent = `${t(`rarity.${f.rarity}`)}・${t(`element.${f.kind}`)}`;
-          elDesc.textContent = f.kind === 'summon' ? t('element.summon.desc', { mult: mult.toFixed(1) }) : f.kind === 'fox' ? describeFox(f, run.cardCounts) : f.kind === 'fuse' ? t(f.blocked ? 'element.fuse.none' : 'element.fuse.desc') : f.kind === 'dosojin' ? t('element.dosojin.desc') : f.kind === 'summit' ? t(f.blocked ? 'element.summit.none' : 'element.summit.desc', { m: SUMMIT.bossMult, n: SUMMIT.extraChests }) : f.kind === 'trial' ? trialHint(f.rarity, run.time / run.director.duration) : describeElement(f, run.tech.offerUp(DESC_RNG, 1).length > 0);
-          elAct.textContent = f.kind === 'fox' ? t('element.fox.act') : t('element.hold');
+          elDesc.textContent = f.kind === 'summon' ? t('element.summon.desc', { mult: mult.toFixed(1) }) : f.kind === 'fox' ? describeFox(f, run.cardCounts) : f.kind === 'fuse' ? t(f.blocked ? 'element.fuse.none' : 'element.fuse.desc') : f.kind === 'dosojin' ? t('element.dosojin.desc') : f.kind === 'summit' ? t(f.blocked ? 'element.summit.none' : 'element.summit.desc', { m: SUMMIT.bossMult, n: SUMMIT.extraChests }) : f.kind === 'trial' ? trialHint(f.rarity, run.time / run.director.duration) : f.kind === 'kaname' ? t('element.kaname.desc', { s: KANAME.seconds, pct: Math.round(KANAME.bonus[f.rarity] * 100) }) : describeElement(f, run.tech.offerUp(DESC_RNG, 1).length > 0);
+          elAct.textContent = f.kind === 'fox' ? t('element.fox.act') : f.kind === 'kaname' ? t('element.kaname.act') : t('element.hold');
         }
+        // D99：只有要石有進度（撐住的秒數）；其他要素按一下就取得，不顯示進度條
+        elFill.parentElement!.classList.toggle('hidden', f.kind !== 'kaname');
         elFill.style.width = `${Math.round(f.progress * 100)}%`;
       }
       const xp = `${Math.round((run.xp / run.xpNeeded) * 1000)}`;

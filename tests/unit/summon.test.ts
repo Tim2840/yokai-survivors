@@ -53,9 +53,10 @@ describe('召喚祭壇（D34）', () => {
     step(run, 3);
     run.devTeleport(s.x, s.z);
     run.setMove(0, 0);
-    step(run, STAGE.summon.holdSeconds - 0.5);
-    expect(run.director.bossSpawned, '還沒按滿').toBe(false);
-    step(run, 1.5);
+    step(run, STAGE.summon.holdSeconds + 1);
+    expect(run.director.bossSpawned, 'D99：只站著不按互動不會召喚').toBe(false);
+    run.requestInteract();
+    step(run, 0.1);
     expect(run.director.bossSpawned).toBe(true);
     expect(log).toEqual(['altar', 'boss']);
     step(run, 1);

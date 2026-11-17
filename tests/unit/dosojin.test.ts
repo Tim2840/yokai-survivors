@@ -37,6 +37,7 @@ function holdOn(run: Run) {
   run.setMove(0, 0);
   for (let i = 0; i < (DOSOJIN.holdSeconds + 1) / DT && run.offerKind !== 'tech'; i++) {
     if (run.awaitingPick && run.offerKind === 'levelup') run.chooseCard(0);
+    run.requestInteract(); // D99：靠近後按互動
     run.step(DT);
   }
   return s;

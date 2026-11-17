@@ -1,7 +1,8 @@
 import type { Rarity } from './rarity';
+import type { StatId } from './stats';
 
 /** 地圖要素（docs/02 第 6 節）。結界石 D97 併進百鬼試煉碑（圈內加成、圈內升級必出技法卡）。 */
-export const ELEMENT_KINDS = ['jizo', 'altar', 'offering', 'omikuji', 'chest', 'summon', 'fox', 'fuse', 'dosojin', 'trial', 'summit'] as const;
+export const ELEMENT_KINDS = ['jizo', 'altar', 'offering', 'omikuji', 'chest', 'summon', 'fox', 'fuse', 'dosojin', 'trial', 'summit', 'kaname'] as const;
 export type ElementKind = (typeof ELEMENT_KINDS)[number];
 
 /** 出現規則（docs/02 第 6.3 節，改成連續關卡：用「關卡經過比例」取代「整備」） */
@@ -30,7 +31,7 @@ export const ELEMENT_RULES = {
 } as const;
 
 /** 要素種類權重（地圖可覆寫） */
-export const ELEMENT_WEIGHTS: Record<ElementKind, number> = { jizo: 1, altar: 1, offering: 1, omikuji: 1, chest: 0.6, summon: 0, fox: 0.8, fuse: 0, dosojin: 0, trial: 1, summit: 0 }; // D97：結界石併進試煉碑，試煉碑 0.8 → 1
+export const ELEMENT_WEIGHTS: Record<ElementKind, number> = { jizo: 1, altar: 1, offering: 1, omikuji: 1, chest: 0.6, summon: 0, fox: 0.8, fuse: 0, dosojin: 0, trial: 1, summit: 0, kaname: 1 }; // D97：結界石併進試煉碑，試煉碑 0.8 → 1；D99：要石 1
 /** 同種同時最多幾個（沒寫的用 ELEMENT_RULES.perKind） */
 export const ELEMENT_PER_KIND: Partial<Record<ElementKind, number>> = { chest: 1, omikuji: 1, summon: 1, fox: 1, fuse: 1, dosojin: 1, trial: 1, summit: 1 };
 
@@ -99,6 +100,25 @@ export const OMIKUJI_EFFECT: Record<OmikujiResult, { seconds: number; pct?: Part
  * 站進其中一圈 acceptSeconds 秒＝收下；不要就走開。提案的稀有度 = 狐面商的稀有度（好處與代價都乘稀有度倍率：越高階越極端）。
  * 不能收的提案（道具欄滿了、已練滿）不會出現；一個都沒有時這一處不放狐面商。
  */
+/**
+ * 要石（D99，使用者：「站圈內（範圍可以很小）撐一段時間就能領取能力值加成」）：傳說壓住地底大鯰魚的石頭。
+ * 半徑 radius 公尺的小圈，站在圈裡累積 seconds 秒（走出去每秒退 decay 秒），期間人類從近處湧來（near、spawnMult）；
+ * 滿了跳三選一：stats 裡挑三項，整場加 bonus[稀有度]。
+ */
+export const KANAME = {
+  radius: 2,
+  seconds: 10,
+  decay: 0.5,
+  spawnMult: 1.4,
+  near: { frac: 0.6, min: 6, max: 9 },
+  stats: ['power', 'atkSpeed', 'area', 'maxHp', 'speed'] as readonly StatId[],
+  bonus: { common: 0.04, rare: 0.06, epic: 0.09, legend: 0.12 } as Record<Rarity, number>,
+} as const;
+
+/** 狐面商面板的「不要」、要石面板的卡片 id 前綴（D99） */
+export const FOX_SKIP = 'fox-skip';
+export const KANAME_PREFIX = 'kaname:';
+
 export const FOX = {
   /** 幾個提案（幾個圈） */
   offers: 2,

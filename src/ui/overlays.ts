@@ -1,6 +1,7 @@
 import { t } from '../i18n';
 import type { I18nKey } from '../i18n/zh-TW';
 import { CARD_FORMAT, type StatId } from '../data/stats';
+import { FOX_SKIP, KANAME, KANAME_PREFIX } from '../data/elements';
 import { setWeaponTextFormatter, type BuildSummary } from '../game/buildSummary';
 import { cardLinks } from '../data/links';
 import { DIFFICULTY } from '../data/difficulty';
@@ -291,11 +292,28 @@ export function buildCardPicker(parent: HTMLElement, onPick: (index: number) => 
   const title = o.el.querySelector<HTMLElement>('#lv-title')!;
   const pending = o.el.querySelector<HTMLElement>('#lv-pending')!;
   return Object.assign(o, {
-    render(offer: CardOffer[], more: number, kind: 'levelup' | 'offering' | 'chest' | 'tech' | 'fusion' = 'levelup', ult: PickerContext = { yokai: '', counts: new Map() }) {
-      title.textContent = t(kind === 'tech' ? (ult.techMode === 'swap' ? 'levelup.dosojin' : 'levelup.tech') : kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? (offer.some((c) => c.cardId.startsWith('tech:')) ? 'levelup.offering' : 'levelup.offeringCard') : kind === 'fusion' ? 'levelup.fusion' : 'levelup.chest');
+    render(offer: CardOffer[], more: number, kind: 'levelup' | 'offering' | 'chest' | 'tech' | 'fusion' | 'fox' | 'kaname' = 'levelup', ult: PickerContext = { yokai: '', counts: new Map() }) {
+      title.textContent = t(kind === 'tech' ? (ult.techMode === 'swap' ? 'levelup.dosojin' : 'levelup.tech') : kind === 'levelup' ? 'levelup.title' : kind === 'offering' ? (offer.some((c) => c.cardId.startsWith('tech:')) ? 'levelup.offering' : 'levelup.offeringCard') : kind === 'fusion' ? 'levelup.fusion' : kind === 'fox' ? 'levelup.fox' : kind === 'kaname' ? 'levelup.kaname' : 'levelup.chest');
       pending.textContent = more > 1 ? t('levelup.pending', { n: more - 1 }) : '';
       cardsEl.innerHTML = '';
       offer.forEach((c, i) => {
+        if (c.cardId === FOX_SKIP || c.cardId.startsWith(KANAME_PREFIX)) {
+          // 狐面商的「不要」、要石的能力值（D99）
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = `card r-${c.cardId === FOX_SKIP ? 'common' : c.rarity}`;
+          b.dataset.card = c.cardId;
+          b.dataset.rarity = c.rarity;
+          b.dataset.index = String(i);
+          if (c.cardId === FOX_SKIP) b.innerHTML = `<b>${t('card.foxSkip')}</b><span class="cdesc">${t('card.foxSkip.desc')}</span>`;
+          else {
+            const stat = c.cardId.slice(KANAME_PREFIX.length) as StatId;
+            b.innerHTML = `<span class="shape ${SHAPES[c.rarity]}" aria-hidden="true"></span><span class="rname">${t(`rarity.${c.rarity}` as I18nKey)}・${t('card.kanameTag')}</span><b>${t(`stat.${stat}` as I18nKey)}</b><span class="cdesc">+${Math.round(KANAME.bonus[c.rarity] * 100)}%</span>`;
+          }
+          b.addEventListener('click', () => onPick(i));
+          cardsEl.appendChild(b);
+          return;
+        }
         if (isEvoCard(c.cardId)) {
           // 進化卡（D53）：寶箱最前面、合魂祠
           const b = document.createElement('button');

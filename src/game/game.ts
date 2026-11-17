@@ -164,7 +164,7 @@ export class Game {
     this.hud = buildHud(ui);
     this.hud.pauseButton.addEventListener('click', () => this.togglePause());
     this.hud.abilitiesButton.addEventListener('click', () => this.openPause());
-    this.input.attachTouch({ stickBase: this.hud.stickBase, stickKnob: this.hud.stickKnob, jumpButton: this.hud.jumpButton, commandButton: this.hud.ultButton });
+    this.input.attachTouch({ stickBase: this.hud.stickBase, stickKnob: this.hud.stickKnob, jumpButton: this.hud.jumpButton, commandButton: this.hud.ultButton, interactButton: this.hud.interactButton });
     this.input.attachLook(this.renderer.pipeline.renderer.domElement);
 
     window.addEventListener('keydown', (e) => {
@@ -272,6 +272,7 @@ export class Game {
         else run.setMove(this.moveOut[0], this.moveOut[1]);
         if (this.input.consumeJump()) run.requestJump();
         if (this.input.consumeCommand()) run.castUltimate();
+        if (this.input.consumeInteract()) run.requestInteract();
         // 頓幀：這一步不前進（輸入照收，畫面照畫）
         if (this.hitStop.consume(dt)) return;
         run.step(dt);

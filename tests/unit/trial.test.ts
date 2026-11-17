@@ -27,6 +27,7 @@ function startTrial(run: Run, rarity: Rarity = 'common') {
   run.setMove(0, 0);
   for (let i = 0; i < 60 * (TRIAL.holdSeconds + 2) && !run.elements.trial.active; i++) {
     if (run.awaitingPick) run.chooseCard(0);
+    run.requestInteract();
     run.step(DT);
   }
   expect(run.elements.trial.active, '按住之後試煉沒有開始').toBe(true);

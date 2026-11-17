@@ -34,6 +34,7 @@ export class Input {
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
       if (e.code === 'Space' && !e.repeat) this.jumpQueued = true;
       if (e.code === 'KeyF' && !e.repeat) this.commandQueued = true;
+      if (e.code === 'KeyE' && !e.repeat) this.interactQueued = true; // 互動鍵（D99）
       this.keys.add(e.code);
       this.markActed();
     });
@@ -81,8 +82,8 @@ export class Input {
   }
 
   /** 接上手機的搖桿、跳躍鈕（與號令鈕，M2 的 HUD） */
-  attachTouch(ui: { stickBase: HTMLElement; stickKnob: HTMLElement; jumpButton: HTMLElement; commandButton?: HTMLElement }) {
-    const { stickBase, stickKnob, jumpButton, commandButton } = ui;
+  attachTouch(ui: { stickBase: HTMLElement; stickKnob: HTMLElement; jumpButton: HTMLElement; commandButton?: HTMLElement; interactButton?: HTMLElement }) {
+    const { stickBase, stickKnob, jumpButton, commandButton, interactButton } = ui;
     let stickId = -1;
     const updateStick = (e: PointerEvent) => {
       const rect = stickBase.getBoundingClientRect();
@@ -133,6 +134,13 @@ export class Input {
       this.commandQueued = true;
       this.markActed();
     });
+    // 互動鈕（D99）：只在要素旁出現；滑鼠點也可以
+    interactButton?.addEventListener('pointerdown', (e) => {
+      if (!this.enabled) return;
+      e.preventDefault();
+      this.interactQueued = true;
+      this.markActed();
+    });
   }
 
   /** 每個模擬步開頭呼叫 */
@@ -174,6 +182,13 @@ export class Input {
     this.jumpQueued = false;
     return v;
   }
+
+  consumeInteract(): boolean {
+    const v = this.interactQueued;
+    this.interactQueued = false;
+    return v;
+  }
+  private interactQueued = false;
 
   consumeCommand(): boolean {
     const v = this.commandQueued;

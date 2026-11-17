@@ -267,6 +267,7 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
     run.setMove(0, 0);
     for (let i = 0; i < 60 * (FUSE.holdSeconds + 3) && !(run.awaitingPick && run.offerKind === 'fusion'); i++) {
       if (run.awaitingPick) run.chooseCard(0);
+      run.requestInteract();
       run.step(DT);
     }
     expect(run.offerKind).toBe('fusion');
@@ -283,6 +284,7 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
     run.devTeleport(s.x, s.z);
     for (let i = 0; i < 60 * (CHEST_HOLD_SECONDS + 1) && !(run.awaitingPick && run.offerKind === 'chest'); i++) {
       if (run.awaitingPick) run.chooseCard(0);
+      run.requestInteract();
       run.step(DT);
     }
     expect(run.offerKind).toBe('chest');

@@ -43,5 +43,6 @@ export const ELEMENT_MARKERS: Record<ElementKind, MarkerStyle> = {
   fuse: { shape: 'star', group: 'upgrade' },
   dosojin: { shape: 'circle', group: 'swap' },
   trial: { shape: 'triangle', group: 'challenge' },
+  kaname: { shape: 'square', group: 'boon' },
   summit: { shape: 'star', group: 'challenge' },
 };

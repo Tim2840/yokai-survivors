@@ -23,6 +23,7 @@ function standUntilResult(run: Run, x: number, z: number, maxSec = 4) {
   run.setMove(0, 0);
   for (let i = 0; i < maxSec / DT && !run.elementResult; i++) {
     if (run.awaitingPick) run.chooseCard(0);
+    run.requestInteract();
     run.step(DT);
   }
   return run.elementResult;
@@ -128,7 +129,10 @@ describe('要素結果卡（D36）', () => {
       const s = run.elements.devForce(kind, 'common', run.px, run.pz)!;
       run.devTeleport(s.x, s.z);
       run.setMove(0, 0);
-      for (let i = 0; i < 60 * 3 && !run.awaitingPick; i++) run.step(DT);
+      for (let i = 0; i < 60 * 3 && !run.awaitingPick; i++) {
+        run.requestInteract();
+        run.step(DT);
+      }
       expect(run.elementResult, kind).toBeNull();
     }
   });

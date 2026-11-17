@@ -42,12 +42,24 @@ function advance(run: Run, sec: number) {
   }
 }
 /** 把玩家放到要素上並站著不動，跑 sec 秒 */
+/** 走到要素上「只站著、不按互動」跑 sec 秒（D99：這樣不該有任何效果） */
+function standNoPress(run: Run, x: number, z: number, sec: number) {
+  run.devTeleport(x, z);
+  run.setMove(0, 0);
+  for (let i = 0; i < Math.round(sec / DT); i++) {
+    if (run.elementResult) run.dismissResult();
+    if (run.awaitingPick) pickSafe(run);
+    run.step(DT);
+  }
+}
+/** 走到要素上、按互動（D99），再跑 sec 秒 */
 function stand(run: Run, x: number, z: number, sec: number) {
   run.devTeleport(x, z);
   run.setMove(0, 0);
   for (let i = 0; i < Math.round(sec / DT); i++) {
     if (run.elementResult) run.dismissResult();
     if (run.awaitingPick) pickSafe(run);
+    run.requestInteract();
     run.step(DT);
   }
 }
@@ -143,15 +155,19 @@ describe('石地藏', () => {
     }
   });
 
-  it('不到一秒就離開 → 進度退回、沒有效果', () => {
+  it('D99：只站在石地藏上不按互動 → 沒有效果、互動鍵可以按；按了才取得（舊版站著就會取得，會紅）', () => {
     const { run } = make(4);
     const slot = run.elements.devForce('jizo', 'epic', run.px, run.pz)!;
     run.hp = 10;
-    stand(run, slot.x, slot.z, 0.5);
-    expect(slot.progress).toBeGreaterThan(0.3);
-    stand(run, slot.x + 10, slot.z, 1);
-    expect(slot.progress).toBe(0);
+    standNoPress(run, slot.x, slot.z, 3);
     expect(run.hp).toBeLessThan(15);
+    expect(slot.usedAge).toBeLessThan(0);
+    expect(run.elements.canInteract).toBe(true);
+    standNoPress(run, slot.x + 10, slot.z, 0.1);
+    expect(run.elements.canInteract, '走開就不能按').toBe(false);
+    stand(run, slot.x, slot.z, 0.1);
+    expect(slot.usedAge).toBeGreaterThanOrEqual(0);
+    expect(run.hp).toBeGreaterThan(15);
   });
 });
 
@@ -196,9 +212,9 @@ describe('詛咒祭壇（D27：隨機抽數個不同效果，含詛咒）', () =
     const s = run.elements.devForce('altar', 'legend', run.px, run.pz)!;
     const fx = s.effects.slice(0, s.effectCount).map((f) => ({ ...f }));
     const before = { ...run.stats.value };
-    stand(run, s.x, s.z, ALTAR_HOLD_SECONDS - 0.4);
-    expect(run.curse.enemyHp + run.curse.enemySpeed + run.curse.enemyDamage + run.curse.spawnRate).toBe(0);
-    stand(run, s.x, s.z, 0.6);
+    standNoPress(run, s.x, s.z, ALTAR_HOLD_SECONDS + 1);
+    expect(run.curse.enemyHp + run.curse.enemySpeed + run.curse.enemyDamage + run.curse.spawnRate, '沒按互動不該生效').toBe(0);
+    stand(run, s.x, s.z, 0.2);
     for (const f of fx) {
       if (f.curse) expect(run.curse[f.id as 'enemyHp']).toBeCloseTo(f.v);
       else expect(run.stats.value[f.id as 'power']).toBeGreaterThan(before[f.id as 'power']);
@@ -283,11 +299,14 @@ describe('賽錢箱、神籤、寶箱（M2-2）', () => {
       const s = run.elements.devForce('offering', r, run.px, run.pz)!;
       const o = OFFERING[r];
       const hp0 = run.hp;
-      stand(run, s.x, s.z, OFFERING_HOLD_SECONDS - 0.3);
-      expect(run.offer, `${r} 未按滿就不該開面板`).toBeNull();
+      standNoPress(run, s.x, s.z, OFFERING_HOLD_SECONDS + 0.5);
+      expect(run.offer, `${r} 沒按互動不該開面板`).toBeNull();
       run.devTeleport(s.x, s.z);
-      for (let i = 0; i < 40 && !run.offer; i++) run.step(DT);
-      expect(run.offer, `${r} 按滿後應開三選一`).not.toBeNull();
+      for (let i = 0; i < 40 && !run.offer; i++) {
+        run.requestInteract();
+        run.step(DT);
+      }
+      expect(run.offer, `${r} 按了互動應開三選一`).not.toBeNull();
       expect(run.offerKind).toBe('offering');
       expect(run.offer!.length).toBe(3);
       expect(run.offer!.filter((c) => itemById(c.cardId).rarityScales).every((c) => c.rarity === o.reward)).toBe(true);
@@ -320,7 +339,10 @@ describe('賽錢箱、神籤、寶箱（M2-2）', () => {
       const s = run.elements.devForce('chest', r, run.px, run.pz)!;
       const hp0 = run.hp;
       run.devTeleport(s.x, s.z);
-      for (let i = 0; i < Math.round((CHEST_HOLD_SECONDS + 0.5) / DT) && !run.offer; i++) run.step(DT);
+      for (let i = 0; i < Math.round((CHEST_HOLD_SECONDS + 0.5) / DT) && !run.offer; i++) {
+        run.requestInteract();
+        run.step(DT);
+      }
       expect(run.offer, r).not.toBeNull();
       expect(run.offerKind).toBe('chest');
       expect(run.offer!.filter((c) => itemById(c.cardId).rarityScales).every((c) => c.rarity === r)).toBe(true);
@@ -405,6 +427,7 @@ describe('賽錢箱、神籤、寶箱（M2-2）', () => {
         let got = '';
         host.notifyOmikuji = (r) => (got = r);
         el.update(0.1, n * 0.1, 600, 1, luck, slot.x, slot.y, slot.z);
+        el.interact(); // D99：按互動才抽
         if (got) counts[got]++;
       }
       return counts;

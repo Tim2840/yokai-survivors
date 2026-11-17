@@ -45,6 +45,7 @@ describe('山頂神社（E2）', () => {
     run.setMove(0, 0);
     for (let i = 0; i < 60 * (SUMMIT.holdSeconds + 2) && !run.elementResult; i++) {
       if (run.awaitingPick) run.chooseCard(0);
+      run.requestInteract();
       run.step(DT);
     }
     expect(run.elementResult, '按住神社後沒有結果卡').toBeTruthy();
@@ -99,6 +100,7 @@ describe('山頂神社（E2）', () => {
     run.setMove(0, 0);
     for (let i = 0; i < 60 * 4; i++) {
       if (run.awaitingPick) run.chooseCard(0);
+      run.requestInteract();
       run.step(DT);
     }
     expect(run.director.summitMult, '頭目出現後不能再啟動').toBe(1);

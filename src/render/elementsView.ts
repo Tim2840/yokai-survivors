@@ -5,7 +5,7 @@ import { glow, soft, softVertexColors } from '../art/materials';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ball, roundedCylinder, teardrop } from '../art/shapes';
 import { RARITIES, type Rarity } from '../data/rarity';
-import { ELEMENT_RULES, FOX, TRIAL } from '../data/elements';
+import { ELEMENT_RULES, FOX, KANAME, TRIAL } from '../data/elements';
 import type { ElementSlot, Elements } from '../systems/elements';
 import type { TerrainMap } from '../world/terrainMap';
 
@@ -27,6 +27,7 @@ interface SlotView {
   dosojin: THREE.Group;
   dosojinLight: THREE.Mesh;
   trial: THREE.Group;
+  kaname: THREE.Group;
   trialOrb: THREE.Mesh;
   summit: THREE.Group;
   summitOrb: THREE.Mesh;
@@ -76,6 +77,9 @@ export class ElementsView {
     const gAltarBase = roundedCylinder(0.75, 0.9, 0.55, 0.15);
     const gAltarTop = roundedCylinder(0.5, 0.65, 0.3, 0.1);
     const gFlame = teardrop(0.32, 0.9, { bulge: 0.35, sharp: 1.4 });
+    const gKStone = ball(0.62, 22, 14);
+    const gShide = new THREE.BoxGeometry(0.1, 0.34, 0.02);
+    const paper = soft('#f4efe4');
     const wood = soft('#8a5a3a');
     const woodDark = soft('#5a3a26');
     const redLid = soft('#b8352c');
@@ -136,7 +140,7 @@ export class ElementsView {
     const gBeam = new THREE.CylinderGeometry(0.4, 0.4, BEAM_H, 20, 1, true);
     const gRing = new THREE.RingGeometry(R.useRadius - 0.12, R.useRadius, 40).rotateX(-Math.PI / 2);
     const gFill = new THREE.CircleGeometry(R.useRadius - 0.12, 40).rotateX(-Math.PI / 2);
-    this.disposables.push(stone, stoneDark, red, rope, purple, gBase, gBody, gHead, gBib, gPillar, gRope, gAltarBase, gAltarTop, gFlame, gBeam, gRing, gFill);
+    this.disposables.push(gKStone, gShide, paper, stone, stoneDark, red, rope, purple, gBase, gBody, gHead, gBib, gPillar, gRope, gAltarBase, gAltarTop, gFlame, gBeam, gRing, gFill);
 
     for (let i = 0; i < this.elements.slots.length; i++) {
       const root = new THREE.Group();
@@ -265,6 +269,21 @@ export class ElementsView {
       const trialOrb = new THREE.Mesh(gOrb, ember);
       trialOrb.position.y = 2.7;
       trial.add(tBase, tPillar, tRope, trialOrb);
+      // 要石（D99）：半埋在地裡的圓胖大石＋綁一圈注連繩＋兩條白色紙垂
+      const kaname = new THREE.Group();
+      const kStone = new THREE.Mesh(gKStone, stone);
+      kStone.position.y = 0.35;
+      kStone.scale.set(1.15, 0.8, 1);
+      const kRope = new THREE.Mesh(gRope, rope);
+      kRope.position.y = 0.62;
+      kRope.scale.set(1.62, 1, 1.42);
+      kaname.add(kStone, kRope);
+      for (const sx of [-1, 1]) {
+        const shide = new THREE.Mesh(gShide, paper);
+        shide.position.set(sx * 0.32, 0.42, 0.66);
+        shide.rotation.z = sx * 0.15;
+        kaname.add(shide);
+      }
       const fox = new THREE.Group();
       const fRobe = new THREE.Mesh(gRobe, robe);
       const fHead = new THREE.Mesh(gFoxHead, robe);
@@ -321,11 +340,11 @@ export class ElementsView {
       this.disposables.push(ringMat, fillMat, beamMat, zg, zoneMat);
       for (const o of [ring, fill, beam, zone, ...foxRings, ...foxFills]) markOverlay(o); // 光圈、光柱、結界圈：不像素化
       // 每個要素靜止、不發光的零件合併成一個網格（頂點色）：一個要素原本 4～7 次繪製（加陰影再一倍），合併後 1 次（2026-11-17 p1：狐面商在畫面裡就多 9 次）
-      for (const k of [jizo, altar, offering, omikuji, chest, summon, fuse, dosojin, trial, summit, fox]) this.bakeStatic(k);
-      root.add(jizo, altar, offering, omikuji, chest, summon, fuse, dosojin, trial, summit, fox, ...foxRings, ...foxFills, ring, fill, beam);
+      for (const k of [jizo, altar, offering, omikuji, chest, summon, fuse, dosojin, trial, kaname, summit, fox]) this.bakeStatic(k);
+      root.add(jizo, altar, offering, omikuji, chest, summon, fuse, dosojin, trial, kaname, summit, fox, ...foxRings, ...foxFills, ring, fill, beam);
       root.visible = false;
       this.group.add(root, zone);
-      this.views.push({ root, jizo, altar, offering, omikuji, chest, summon, orb, fuse, fuseOrbs, dosojin, dosojinLight, trial, trialOrb, summit, summitOrb, fox, foxRings, foxFills, beam, beamMat, ring, ringMat, fill, fillMat, zone, zoneMat, flame, zx: NaN, zz: NaN, zr: NaN });
+      this.views.push({ root, jizo, altar, offering, omikuji, chest, summon, orb, fuse, fuseOrbs, dosojin, dosojinLight, trial, trialOrb, kaname, summit, summitOrb, fox, foxRings, foxFills, beam, beamMat, ring, ringMat, fill, fillMat, zone, zoneMat, flame, zx: NaN, zz: NaN, zr: NaN });
     }
   }
 
@@ -371,6 +390,7 @@ export class ElementsView {
       v.fuse.visible = s.kind === 'fuse';
       v.dosojin.visible = s.kind === 'dosojin';
       v.trial.visible = s.kind === 'trial';
+      v.kaname.visible = s.kind === 'kaname';
       v.summit.visible = s.kind === 'summit';
       v.fox.visible = s.kind === 'fox';
       v.ringMat.color.copy(c);
@@ -391,6 +411,7 @@ export class ElementsView {
       v.fuse.scale.setScalar(g);
       v.dosojin.scale.setScalar(g);
       v.trial.scale.setScalar(g);
+      v.kaname.scale.setScalar(g);
       v.summit.scale.setScalar(g);
       if (s.kind === 'dosojin') v.dosojinLight.position.y = 2.1 + Math.sin(t * 1.8) * 0.1 + s.progress * 0.3;
       if (s.kind === 'fuse') {
@@ -402,7 +423,7 @@ export class ElementsView {
       }
       v.fox.scale.setScalar(g);
       // 狐面商：面向兩個圈的中間；兩個圈貼在各自的地面上，填色 = 站立進度
-      const isFox = s.kind === 'fox' && !ann && !used;
+      const isFox = false; // D99：狐面商改成按互動開面板，兩個圈不再畫
       for (let k = 0; k < v.foxRings.length; k++) {
         const on = isFox && k < s.offers.length;
         v.foxRings[k].visible = on;
@@ -424,12 +445,21 @@ export class ElementsView {
       }
       v.beamMat.opacity = (ann ? 0.26 : (s.kind === 'summit' ? 0.2 : 0.08) + 0.03 * Math.sin(t * 2 + i)) * fade; // 山頂神社的光柱亮一點，遠遠看得到
       // 狐面商用自己的兩個圈；進行中的試煉用範圍圈；其他是互動圈
-      const ownRing = s.kind !== 'fox' && !ann && !(s.kind === 'trial' && this.elements.trial.active);
+      const ownRing = s.kind !== 'kaname' && !ann && !(s.kind === 'trial' && this.elements.trial.active);
       v.ring.visible = ownRing;
       v.fill.visible = ownRing;
       v.fill.scale.setScalar(Math.max(0.001, s.progress * g));
       const trialOn = s.kind === 'trial' && this.elements.trial.active && this.elements.trial.slot === i;
-      v.zone.visible = trialOn && !ann;
+      const kanameOn = s.kind === 'kaname' && !used;
+      v.zone.visible = (trialOn || kanameOn) && !ann;
+      if (kanameOn) {
+        // 要石的小圈：金色，撐得越久越亮；圈內填色 = 進度
+        if (v.zx !== s.x || v.zz !== s.z || v.zr !== KANAME.radius) this.buildZone(v, s, KANAME.radius);
+        v.zoneMat.color.set(palette.pickup.glowTool);
+        v.zoneMat.opacity = (0.35 + 0.45 * s.progress + (s.inside ? 0.12 * Math.sin(t * 8) : 0)) * fade;
+        v.fill.visible = !ann;
+        v.fill.scale.setScalar(Math.max(0.001, (s.progress * KANAME.radius) / ELEMENT_RULES.useRadius));
+      }
       if (trialOn) {
         // 試煉的範圍圈：朱紅色，快沒時間時閃一下
         if (v.zx !== s.x || v.zz !== s.z || v.zr !== TRIAL.radius) this.buildZone(v, s, TRIAL.radius);
