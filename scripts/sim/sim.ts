@@ -95,6 +95,7 @@ function applyTune(): void {
       const [, id, field] = k.split('.');
       (YOKAI[id].weapon as unknown as Record<string, number>)[field] = Number(v);
     }
+    else if (k.startsWith('vet.')) (STAGE.veteran as unknown as Record<string, number>)[k.slice(4)] = Number(v);
     else if (k.startsWith('late.')) (STAGE.late as unknown as Record<string, number>)[k.slice(5)] = Number(v);
     else if (k.startsWith('recycle.')) (STAGE.recycle as unknown as Record<string, number>)[k.slice(8)] = Number(v);
     else if (k.startsWith('w.')) (WAVES as unknown as Record<string, number>)[k.slice(2)] = Number(v);
