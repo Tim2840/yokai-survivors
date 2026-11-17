@@ -87,7 +87,7 @@ export async function run(browser) {
         const li = page.locator('#sum-techs li[data-tech="bounce"]');
         expect((await li.count()) === 1, '技法欄位沒有彈跳');
         const txt = (await li.innerText()).replace(/\s+/g, ' ');
-        for (const w of ['彈跳 Lv1', '第一跳傷害', '主武器 60%', '最多跳', '暴擊率', '暴擊傷害', '詞條']) expect(txt.includes(w), `彈跳的欄位少了「${w}」：${txt}`);
+        for (const w of ['彈跳 Lv1', '第一跳傷害', '鬼火一發的 60%', '最多跳', '暴擊率', '暴擊傷害', '詞條']) expect(txt.includes(w), `彈跳的欄位少了「${w}」：${txt}`);
         const wtxt = await page.locator('#sum-stats').innerText();
         expect(/一發傷害/.test(wtxt) && /出手間隔/.test(wtxt), `主武器沒列一發傷害／出手間隔：${wtxt}`);
         await li.scrollIntoViewIfNeeded();
