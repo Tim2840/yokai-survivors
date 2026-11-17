@@ -119,6 +119,9 @@ export function installDevApi(ctx: DevContext): void {
           return { stage: r.summonStage, bossSpawned: r.director.bossSpawned, altar: s ? { x: s.x, z: s.z, announce: s.announce } : null };
         })(),
         form: r.form,
+        /** 赤鬼（docs/35）：怒氣層數、最近一次揮擊（距今幾秒、是不是震波） */
+        rage: r.rage,
+        swing: r.lastSwing ? { age: r.clock - r.lastSwing.at, shock: r.lastSwing.shock, full: r.lastSwing.full } : null,
         techMax: r.tech.max,
         techs: [...r.tech.owned],
         techLevels: [...r.tech.levels],
@@ -343,6 +346,12 @@ export function installDevApi(ctx: DevContext): void {
     summonBoss: () => run()?.devSummonBoss() ?? false,
     /** 頭目現在就預告某一招（D95；截圖、回歸用）；頭目要先在場 */
     bossCast: (id: string) => run()?.boss.force(id) ?? false,
+    /** 讓玩家受一次傷（走一般受傷流程：無敵、閃避、護身火、怒氣都照算；god 時不扣） */
+    hurtForTest: (raw: number) => {
+      const r = run();
+      if (!r) return false;
+      return r.bossStrike(raw);
+    },
     /** 只留頭目：其他人類全部清掉、停止湧出（頭目技能的回歸用） */
     bossOnly: () => {
       const r = run();
