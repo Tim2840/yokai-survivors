@@ -1,4 +1,4 @@
-// 能力面板技法欄位（2026-11-17）：提燈小僧帶兩個技法＋詞條、河童帶兩個技法，手機直式與桌面
+// 能力面板技法欄位（2026-11-17）：提燈小僧帶兩個技法＋詞條、河童帶兩個技法，手機直式與桌面。D98：武器排第一個、第一個技法進化過（換成進化版的名字）
 import { launch, openPage, waitBlender, levelTo, VIEWPORTS } from './helpers.mjs';
 import { press, waitState } from '../regress/lib.mjs';
 for (const [yk, techs, vpi] of [['chochin-kozo', ['bounce', 'pillar'], 0], ['kappa', ['vortex', 'sumo'], 0], ['chochin-kozo', ['bounce', 'pillar'], 2]]) {
@@ -15,7 +15,7 @@ for (const [yk, techs, vpi] of [['chochin-kozo', ['bounce', 'pillar'], 0], ['kap
   await waitBlender(page);
   await page.evaluate(() => { window.__game.god = true; });
   await levelTo(page, 3);
-  await page.evaluate((ts) => { const g = window.__game; g.giveTech(...ts); }, techs);
+  await page.evaluate((ts) => { const g = window.__game; g.giveTech(...ts); g.evolveTech(ts[0]); }, techs);
   await page.click('#btn-abilities');
   await page.evaluate(() => window.__game.render());
   // 捲到技法欄位

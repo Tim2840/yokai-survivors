@@ -299,3 +299,12 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
     expect(events).toEqual(['evoRing']);
   });
 });
+
+describe('D98：技法的進化說明不再寫「武器更強」', () => {
+  it('技法的進化（不是武器自己的）說明不提武器名稱（舊版「鬼火更強；…」會紅）', () => {
+    for (const e of EVOS.filter((x) => x.from[0] !== x.from[1])) {
+      const name = t(`tech.${e.from[0]}` as I18nKey);
+      expect(t(`evo.${e.id}.desc` as I18nKey).includes(`${name}更強`), e.id).toBe(false);
+    }
+  });
+});
