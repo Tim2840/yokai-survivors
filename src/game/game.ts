@@ -11,6 +11,9 @@ import { RunView } from '../render/runView';
 import { buildHud, type Hud } from '../ui/hud';
 import { buildMenu } from '../ui/menu';
 import { summarizeBuild } from './buildSummary';
+import { PlayLog } from './playLog';
+import { PLAY_LOG } from '../data/playLog';
+import { CONTENT_VERSION } from './changelog';
 import { buildCardPicker, buildIntermission, buildPause, buildResultCard, buildRunEnd, buildSetup, buildShrine, type PickerContext, type ShrineView } from '../ui/overlays';
 import { ULT_UPGRADE, ultMods, ultUpgradePrice, ultsOf } from '../data/ultimates';
 import { PLAYABLE_YOKAI } from '../data/yokai';
@@ -67,6 +70,8 @@ export class Game {
   private readonly inter;
   private readonly end;
   private readonly pause;
+  /** 試玩紀錄（只有測試頁建立；docs/32） */
+  private playLog: PlayLog | null = null;
   private lastEnd: { result: 'death' | 'victory' | 'abandon'; stage: number; kills: number; level: number; merit: number } | null = null;
   // 每幀音效用的上一次數值
   private lastKills = 0;
@@ -288,7 +293,7 @@ export class Game {
         this.resultCard.hide();
         this.loop.release('result');
         this.closePause();
-        if (this.lastEnd) this.end.render(this.lastEnd, this.d.tuneUi ? this.run?.seed : undefined);
+        if (this.lastEnd) this.end.render(this.lastEnd, this.d.tuneUi ? this.run?.seed : undefined, this.playLogLines());
         this.end.show();
         this.audio.setMusic({ theme: 'title' });
       },
@@ -311,6 +316,7 @@ export class Game {
     const seed = subSeed(this.d.seed, this.runIndex++);
     this.run = new Run({ seed, yokaiId: this.selectedYokai, mobile: this.d.mobile, bus: this.b, meritStat: 0, ...loadoutFor(this.save, this.selectedYokai, this.unlockAll) });
     this.view = new RunView(this.run, this.renderer);
+    this.playLog = this.d.tuneUi ? new PlayLog() : null;
     this.lastKills = 0;
     this.lastElite = 0;
     this.hitStop.reset();
@@ -345,9 +351,11 @@ export class Game {
       const run = this.run;
       if (!run || !run.offer) return;
       this.loop.hold('levelup');
+      this.playLog?.level(run.level, run.clock);
       if (this.resultCard.visible) return; // 結果卡關掉後才開選卡
       this.picker.render(run.offer, run.picksLeft, run.offerKind, this.pickerCtx(run));
       this.picker.show();
+      this.playLog?.pickOpened(performance.now() / 1000);
       this.audio.sfx('levelUp');
       this.view?.feelFx.levelBurst();
       this.renderer.rig.shake.add(FEEL.shake.levelUp);
@@ -372,6 +380,7 @@ export class Game {
       this.hitStop.add(FEEL.hitStop.boss);
     });
     b.on('playerHurt', ({ damage }) => {
+      this.playLog?.hurt(this.run?.clock ?? 0);
       this.audio.sfx('hurt');
       this.renderer.rig.shake.add(FEEL.shake.hurt);
       this.hud.flashHurt(hurtStrength(damage, this.run?.maxHp ?? 100));
@@ -381,6 +390,7 @@ export class Game {
       this.hitStop.add(FEEL.hitStop.ult);
     });
     b.on('evolve', () => {
+      this.playLog?.evolve();
       this.renderer.rig.shake.add(FEEL.shake.evolve);
       this.hitStop.add(FEEL.hitStop.evolve);
     });
@@ -404,6 +414,25 @@ export class Game {
     });
   }
 
+  /** 試玩紀錄的文字（測試頁才有；一行一項，結算畫面列出來給試玩的人複製） */
+  private playLogLines(): string[] | undefined {
+    const run = this.run;
+    const end = this.lastEnd;
+    if (!this.playLog || !run || !end) return undefined;
+    const s = this.playLog.summary();
+    const clock = (sec: number): string => (sec < 0 ? t('log.none') : `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`);
+    const one = (v: number): string => v.toFixed(1);
+    return [
+      t('log.run', { v: CONTENT_VERSION, seed: run.seed, yokai: t(`yokai.${run.yokai.id}` as I18nKey) }),
+      t('log.end', { result: t(`end.${end.result}` as I18nKey), stage: end.stage, time: clock(run.clock) }),
+      t('log.level', { lv: end.level, a: clock(s.markAt[0]), b: clock(s.markAt[1]) }),
+      t('log.picks', { n: s.picks, med: one(s.pickMedian), max: one(s.pickMax) }),
+      t('log.slow', { k: PLAY_LOG.slowAfterPicks, s: PLAY_LOG.slowSeconds, n: s.slowPicks }),
+      t('log.early', { s: PLAY_LOG.earlySeconds, n: s.earlyHurts }),
+      t('log.moves', { j: run.jumps, e: s.evolves }),
+    ];
+  }
+
   /** 選卡面板要用的玩家狀態 */
   private pickerCtx(run: Run): PickerContext {
     return { yokai: run.yokai.id, counts: run.cardCounts, techs: run.tech.owned, techLevels: run.tech.levels, techMode: run.techMode };
@@ -414,10 +443,12 @@ export class Game {
     if (!run || !run.offer) return;
     this.audio.sfx('cardFlip', ['common', 'rare', 'epic', 'legend'].indexOf(run.offer[i]?.rarity ?? 'common'));
     const more = run.chooseCard(i);
+    this.playLog?.pickChosen(performance.now() / 1000);
     if (more && run.offer) {
       this.picker.render(run.offer, run.picksLeft, run.offerKind, this.pickerCtx(run));
     } else {
       this.picker.hide();
+      this.playLog?.pickClosed();
       this.loop.release('levelup');
     }
   }
@@ -430,6 +461,7 @@ export class Game {
     if (run && run.offer) {
       this.picker.render(run.offer, run.picksLeft, run.offerKind, this.pickerCtx(run));
       this.picker.show();
+      this.playLog?.pickOpened(performance.now() / 1000);
     }
   }
 

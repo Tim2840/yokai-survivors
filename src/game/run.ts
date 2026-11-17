@@ -253,6 +253,8 @@ export class Run {
   private ultNear = new Int32Array(0);
   /** 這一局累計的模擬秒數（跨關） */
   clock = 0;
+  /** 實際起跳的次數（試玩紀錄用；只是計數，不影響模擬） */
+  jumps = 0;
   private fireCd = 0;
   private readonly near = new Int32Array(COMBAT.queryMax);
   /** 鬼火瞄準用：這一發每顆的目標（最多 COMBAT.maxVolley 顆） */
@@ -651,6 +653,7 @@ export class Run {
     }
     if (this.jumpBuf > 0 && (this.grounded || this.coyote > 0)) {
       this.vy = MOVE.jumpSpeed;
+      this.jumps++;
       this.grounded = false;
       this.coyote = 0;
       this.jumpBuf = 0;

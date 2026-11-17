@@ -432,16 +432,38 @@ export function buildIntermission(parent: HTMLElement, onNext: () => void, onQui
 // ── 結算 ──
 export function buildRunEnd(parent: HTMLElement, onAgain: () => void, onMenu: () => void, onShrine: () => void) {
   const o = overlay(parent, 'runend', `<div class="panel"><h2 id="end-title"></h2><ul class="stats" id="end-stats"></ul>
+    <div id="end-log" class="playlog" hidden><h3>${t('log.title')}</h3><pre id="end-log-text"></pre>${btn('btn-end-copy', 'log.copy', 'secondary')}</div>
     <div class="row">${btn('btn-end-menu', 'end.menu', 'secondary')}${btn('btn-end-shrine', 'end.shrine', 'secondary')}${btn('btn-end-again', 'end.again')}</div></div>`);
+  const logBox = o.el.querySelector<HTMLElement>('#end-log')!;
+  const logText = o.el.querySelector<HTMLElement>('#end-log-text')!;
+  const copyBtn = o.el.querySelector<HTMLButtonElement>('#btn-end-copy')!;
+  // 複製：剪貼簿被擋的環境（部分 App 內頁）退回「把文字選起來」，讓人自己長按複製
+  copyBtn.addEventListener('click', () => {
+    const selectAll = (): void => {
+      const r = document.createRange();
+      r.selectNodeContents(logText);
+      const sel = getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(r);
+    };
+    const done = (): void => {
+      copyBtn.textContent = t('log.copied');
+    };
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(logText.textContent ?? '').then(done, selectAll);
+    else selectAll();
+  });
   o.el.querySelector('#btn-end-again')!.addEventListener('click', onAgain);
   o.el.querySelector('#btn-end-menu')!.addEventListener('click', onMenu);
   o.el.querySelector('#btn-end-shrine')!.addEventListener('click', onShrine);
   return Object.assign(o, {
-    render(r: { result: 'death' | 'victory' | 'abandon'; stage: number; kills: number; level: number; merit: number }, seed?: number) {
+    render(r: { result: 'death' | 'victory' | 'abandon'; stage: number; kills: number; level: number; merit: number }, seed?: number, log?: string[]) {
       o.el.querySelector('#end-title')!.textContent = t(`end.${r.result}` as I18nKey);
       const lines = [t('end.stage', { n: r.stage }), t('end.kills', { n: r.kills }), t('end.level', { n: r.level }), t('end.merit', { n: r.merit })];
       if (seed !== undefined) lines.push(t('end.seed', { seed }));
       o.el.querySelector('#end-stats')!.innerHTML = lines.map((s) => `<li>${s}</li>`).join('');
+      logBox.hidden = !log;
+      logText.textContent = log ? log.join('\n') : '';
+      copyBtn.textContent = t('log.copy');
     },
   });
 }

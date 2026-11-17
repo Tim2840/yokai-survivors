@@ -266,3 +266,8 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 
 /* 百鬼試煉碑（E1）：進行中的打倒數與剩餘秒數 */
 .hud-trial { position: absolute; bottom: calc(max(10px, env(safe-area-inset-bottom)) + 214px); left: 50%; transform: translateX(-50%); padding: 5px 14px; border-radius: 999px; background: rgba(120, 24, 24, 0.82); color: #ffe2b8; font-weight: 700; font-size: 15px; letter-spacing: 0.04em; pointer-events: none; white-space: nowrap; }
+
+/* 試玩紀錄（測試頁的結算畫面） */
+.playlog { margin: 12px 0; padding: 10px 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.08); text-align: left; }
+.playlog h3 { margin: 0 0 6px; font-size: 14px; }
+.playlog pre { margin: 0 0 8px; font: inherit; font-size: 13px; line-height: 1.5; white-space: pre-wrap; user-select: text; -webkit-user-select: text; }
