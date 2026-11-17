@@ -1,7 +1,7 @@
 import { FORMS } from '../data/yokai';
 import type { Run } from './run';
 import { cardById, slotsUsed } from '../systems/cards';
-import { ITEM_SLOTS, SHARDS, WEAPON_LEVELS, itemDown, itemValue, scaleWeaponStep, type ItemKind } from '../data/items';
+import { ITEM_SLOTS, SHARDS, WEAPON_LEVELS, itemById, itemDown, itemValue, scaleWeaponStep, type ItemKind } from '../data/items';
 import { armorMult } from '../systems/stats';
 import { type Rarity } from '../data/rarity';
 import { type StatId } from '../data/stats';
@@ -9,9 +9,9 @@ import { STAT_IDS } from '../data/stats';
 import { ALTAR_CURSE_IDS, type CurseId } from '../data/altar';
 import { tuning } from '../data/tuning';
 import { ULT, ULT_UPGRADE } from '../data/ultimates';
-import { evoById, evosFor, techById } from '../data/techniques';
+import { EVO, evosFor, techById } from '../data/techniques';
 import { TECH_DETAIL, type TechDetailKind } from '../data/techDetail';
-import type { TechStat } from '../data/affixes';
+import { emptyAffixes, type TechStat } from '../data/affixes';
 import { baseLikesOf } from '../data/links';
 
 /** 暫停畫面「能力」面板的資料（純資料，不含文字；文字由介面層用 i18n 組） */
@@ -80,6 +80,25 @@ function techDetailsOf(run: Run): TechDetail[] {
   const s = run.stats.value;
   const hit = run.shotDamage(false);
   const out: TechDetail[] = [];
+  // D98：武器（鬼火、水盤、金棒）就是開局就有的那個技法，排在第一個
+  const wid = run.weaponItemId;
+  const w = run.yokai.weapon;
+  const wEvo = run.tech.evolvedOf(wid);
+  out.push({
+    id: wid,
+    evo: wEvo,
+    level: run.weaponLevel,
+    max: wEvo ? itemById(wid).maxLevel : EVO.capBefore,
+    power: run.tech.evoWeaponDamage,
+    kind: 'weapon',
+    rows: [
+      { label: 'damage', kind: 'n', value: hit },
+      { label: 'interval', kind: 'sec', value: (w.interval * run.cooldownMult * run.tech.intervalMult) / s.atkSpeed },
+    ],
+    crit: s.crit,
+    critDmg: s.critDmg,
+    affixes: emptyAffixes(),
+  });
   for (let i = 0; i < run.tech.owned.length; i++) {
     const id = run.tech.owned[i];
     const base = techById(id);
@@ -102,7 +121,7 @@ function techDetailsOf(run: Run): TechDetail[] {
       else if (kind === 'n' && field === 'count') value = raw + Math.floor(afx.count);
       rows.push({ label, kind, value, ratio });
     }
-    const evo = run.tech.evolved.find((e) => evoById(e).from.includes(id)) ?? null;
+    const evo = run.tech.evolvedOf(id);
     out.push({ id, evo, level: run.tech.levels[i], max: run.tech.capOf(id), power, kind: base.kind, rows, crit: s.crit + afx.crit, critDmg: s.critDmg + afx.critDmg, affixes: afx });
   }
   return out;
@@ -164,11 +183,12 @@ export function summarizeBuild(run: Run): BuildSummary {
     techs: run.tech.owned.map((id, i) => ({ id, level: run.tech.levels[i], evolved: run.tech.isEvolved(id), likes: [...techById(id).likes] })),
     baseLikes: baseLikesOf(run.yokai.id),
     form: { now: run.form, nextLevel: FORMS[run.form]?.level ?? 0, locked: run.tech.lockedByForm() },
-    techSlots: { used: run.tech.slotsUsed, max: run.tech.max },
+    techSlots: { used: run.tech.slotsUsed + 1, max: run.tech.max + 1 }, // D98：武器也佔一格
     gems: run.soulGems,
-    evolutions: evosFor(run.weaponItemId).filter((e) => e.from.every((m) => run.tech.isBase(m) || run.tech.has(m))).map((e) => ({
+    // 還沒進化、手上有的技法（含武器）的進化：進化過的直接換成進化版列在技法欄（D98），這裡只列「還差什麼」
+    evolutions: evosFor(run.weaponItemId).filter((e) => !run.tech.evolved.includes(e.id) && (run.tech.isBase(e.from[1]) || run.tech.has(e.from[1]))).map((e) => ({
       id: e.id,
-      from: e.from.map((m) => ({ id: m, level: run.tech.techLevel(m) })),
+      from: [{ id: e.from[1], level: run.tech.techLevel(e.from[1]) }],
       done: run.tech.evolved.includes(e.id),
       ready: run.tech.evolvable.some((x) => x.id === e.id),
       formLevel: run.tech.levelOf(e.from[1]),

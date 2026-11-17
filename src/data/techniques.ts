@@ -457,11 +457,14 @@ type Block = Record<string, number>;
 export type EvoPatch = Readonly<Record<string, Readonly<Record<string, Block>>>>;
 export interface EvoDef {
   id: string;
-  /** 兩個材料：鬼火 + 一個技法（D56） */
+  /**
+   * D98 起：[這隻妖怪的武器 id（分組用）, 進化的那個技法]。進化看第二個（4 級＋魂玉），進化後那個技法換成進化版。
+   * 武器自己的進化寫成 [武器, 武器]。
+   */
   from: readonly [string, string];
   /** 進化的那一刻：把這幾個技法的參數換掉（直接取代） */
   set: EvoPatch;
-  /** 有鬼火的進化：主武器傷害倍率、穿透、發射數（加在主武器上） */
+  /** 加在武器（鬼火、水盤、金棒）上的：傷害倍率、穿透、發射數。D98 起只有武器自己的進化有 */
   weapon?: { damage: number; pierce: number; volley: number };
   /**
    * 進化時一起併進來的舊招式（鬼火雨／衛星燈／燈油，D57 合併）。D79（使用者 2026-11-10：「為什麼技法還是有詞條以外的加成」）：
@@ -471,61 +474,56 @@ export interface EvoDef {
 }
 
 export const EVOS: readonly EvoDef[] = [
+  // D98：武器自己的進化（原本 27 個進化各給武器 +10～15% 傷害，D98 拿掉後集中到這裡）
+  { id: 'evoGhostfire', from: ['ghostfire', 'ghostfire'], set: {}, weapon: { damage: 0.45, pierce: 1, volley: 1 } },
+  { id: 'evoWaterdisc', from: ['waterdisc', 'waterdisc'], set: {}, weapon: { damage: 0.5, pierce: 0, volley: 1 } },
+  { id: 'evoKanabo', from: ['kanabo', 'kanabo'], set: {}, weapon: { damage: 0.6, pierce: 0, volley: 0 } },
   {
     id: 'evoSplit',
     from: ['ghostfire', 'kitsunebi'],
     set: { kitsunebi: { split: { children: 4, damage: 0.75, range: 9, reSplit: 2 } } },
-    weapon: { damage: 0.15, pierce: 1, volley: 0 },
     unlock: { mech: 'rain' },
   },
   {
     id: 'evoSoul',
     from: ['ghostfire', 'seed'],
     set: { seed: { seed: { delay: 0.6, radius: 2.8, damage: 1.0, max: 20 } } },
-    weapon: { damage: 0.15, pierce: 0, volley: 0.5 },
   },
   {
     id: 'evoBounce',
     from: ['ghostfire', 'bounce'],
     set: { bounce: { bounce: { range: 8, jumps: 5, damage: 0.85 } } },
-    weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoHoming',
     from: ['ghostfire', 'homing'],
     set: { homing: { homing: { returnPierce: 4, speedMult: 1.3 } } },
-    weapon: { damage: 0.1, pierce: 1, volley: 0 },
   },
   {
     id: 'evoPillar',
     from: ['ghostfire', 'pillar'],
     set: { pillar: { pillar: { interval: 2.5, range: 12, radius: 2.2, damage: 3.5, life: 0.5, max: 6 } } },
-    weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoRing',
     from: ['ghostfire', 'ring'],
     set: { ring: { orbit: { baseOrbs: 3, radius: 3.6, damage: 1.7, innerDamage: 0.8 } } },
-    weapon: { damage: 0.1, pierce: 0, volley: 0 },
     unlock: { mech: 'satellite' },
   },
   {
     id: 'evoWard',
     from: ['ghostfire', 'ward'],
     set: { ward: { ward: { chargeSeconds: 3, burstRadius: 3.8, burstDamage: 3 } } },
-    weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoLamp',
     from: ['ghostfire', 'lamp'],
     set: { lamp: { lamp: { count: 2, damage: 1.7 } } },
-    weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoHellfire',
     from: ['ghostfire', 'hellfire'],
     set: { hellfire: { burn: { radius: 2.2, seconds: 4, damage: 0.5 } } },
-    weapon: { damage: 0.1, pierce: 0, volley: 0 },
     unlock: { mech: 'oil' },
   },
   // ── 河童（D63，草案；和鬼火那邊的進化同格式）──
@@ -533,66 +531,57 @@ export const EVOS: readonly EvoDef[] = [
     id: 'evoTorrent',
     from: ['waterdisc', 'torrent'],
     set: { torrent: { bounce: { range: 8, jumps: 5, damage: 0.85 } } },
-    weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoBackwash',
     from: ['waterdisc', 'backwash'],
     set: { backwash: { homing: { returnPierce: 4, speedMult: 1.3, returnDamage: 2 } } },
-    weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoVortex',
     from: ['waterdisc', 'vortex'],
     set: { vortex: { vortex: { radius: 4.2, seconds: 3, pull: 3.5, damage: 0.6, max: 4 } } }, // 平衡第一輪：拉力 7→3.5、傷害 0.45→0.6（基礎值改了，進化要比基礎強）
-    weapon: { damage: 0.15, pierce: 0, volley: 0 },
   },
   {
     id: 'evoWhirl',
     from: ['waterdisc', 'whirl'],
     set: { whirl: { orbit: { baseOrbs: 3, radius: 3.6, damage: 1.7, innerDamage: 0.8 } } },
-    weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoSumo',
     from: ['waterdisc', 'sumo'],
     set: { sumo: { sumo: { interval: 1.9, reach: 4.2, damage: 3.2, knockback: 18, chainDamage: 0.9 } } },
-    weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoWake',
     from: ['waterdisc', 'wake'],
     set: { wake: { wake: { radius: 1.5, seconds: 3.4, damage: 0.65, slow: 0.45 } } },
-    weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoPrison',
     from: ['waterdisc', 'prison'],
     set: { prison: { prison: { radius: 2.6, hold: 3, damage: 1.9, max: 16 } } },
-    weapon: { damage: 0.15, pierce: 0, volley: 0.5 },
   },
   {
     id: 'evoDomain',
     from: ['waterdisc', 'domain'],
     set: { domain: { domain: { radius: 4.4, seconds: 7, slow: 0.5, selfAtkSpeed: 0.4, selfRegen: 3.5, max: 3 } } },
-    weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   {
     id: 'evoGeyser',
     from: ['waterdisc', 'geyser'],
     set: { geyser: { pillar: { interval: 2.5, range: 12, radius: 2.2, damage: 2.6, life: 0.5, max: 6, launchSeconds: 1.3, launchDamage: 0.45 } } },
-    weapon: { damage: 0.1, pierce: 0, volley: 0 },
   },
   // ── 赤鬼（docs/35）：每個技法＋金棒一個進化 ──
-  { id: 'evoCombo', from: ['kanabo', 'combo'], set: { combo: { combo: { extra: 2, damage: 0.75 } } }, weapon: { damage: 0.1, pierce: 0, volley: 0 } },
-  { id: 'evoOnimon', from: ['kanabo', 'onimon'], set: { onimon: { vortex: { radius: 4.6, seconds: 2.6, tick: 0.35, pull: 3.8, damage: 0.5, max: 4 } } }, weapon: { damage: 0.1, pierce: 0, volley: 0 } },
-  { id: 'evoKaminari', from: ['kanabo', 'kaminari'], set: { kaminari: { pillar: { interval: 2.4, range: 13, radius: 2.4, damage: 3.4, life: 0.5, max: 4 } } }, weapon: { damage: 0.1, pierce: 0, volley: 0 } },
-  { id: 'evoSpin', from: ['kanabo', 'spin'], set: { spin: { spin: { damage: 1.05, reach: 1.15 } } }, weapon: { damage: 0.1, pierce: 0, volley: 0 } },
-  { id: 'evoHeavy', from: ['kanabo', 'heavy'], set: { heavy: { heavy: { every: 2, damage: 1.9, radius: 1.2 } } }, weapon: { damage: 0.1, pierce: 0, volley: 0 } },
-  { id: 'evoRoar', from: ['kanabo', 'roar'], set: { roar: { sumo: { interval: 3, reach: 5, arc: 6.3, damage: 1.8, knockback: 20, chainRadius: 0, chainDamage: 0 } } }, weapon: { damage: 0.1, pierce: 0, volley: 0 } },
-  { id: 'evoRift', from: ['kanabo', 'rift'], set: { rift: { rift: { length: 10, width: 2.2, damage: 1.5 } } }, weapon: { damage: 0.1, pierce: 0, volley: 0 } },
-  { id: 'evoAftershock', from: ['kanabo', 'aftershock'], set: { aftershock: { seed: { delay: 0.6, radius: 3.4, damage: 1.8, max: 12 } } }, weapon: { damage: 0.1, pierce: 0, volley: 0 } },
-  { id: 'evoOniward', from: ['kanabo', 'oniward'], set: { oniward: { ward: { chargeSeconds: 4, burstRadius: 3.8, burstDamage: 3.2 } } }, weapon: { damage: 0.1, pierce: 0, volley: 0 } },
+  { id: 'evoCombo', from: ['kanabo', 'combo'], set: { combo: { combo: { extra: 2, damage: 0.75 } } } },
+  { id: 'evoOnimon', from: ['kanabo', 'onimon'], set: { onimon: { vortex: { radius: 4.6, seconds: 2.6, tick: 0.35, pull: 3.8, damage: 0.5, max: 4 } } } },
+  { id: 'evoKaminari', from: ['kanabo', 'kaminari'], set: { kaminari: { pillar: { interval: 2.4, range: 13, radius: 2.4, damage: 3.4, life: 0.5, max: 4 } } } },
+  { id: 'evoSpin', from: ['kanabo', 'spin'], set: { spin: { spin: { damage: 1.05, reach: 1.15 } } } },
+  { id: 'evoHeavy', from: ['kanabo', 'heavy'], set: { heavy: { heavy: { every: 2, damage: 1.9, radius: 1.2 } } } },
+  { id: 'evoRoar', from: ['kanabo', 'roar'], set: { roar: { sumo: { interval: 3, reach: 5, arc: 6.3, damage: 1.8, knockback: 20, chainRadius: 0, chainDamage: 0 } } } },
+  { id: 'evoRift', from: ['kanabo', 'rift'], set: { rift: { rift: { length: 10, width: 2.2, damage: 1.5 } } } },
+  { id: 'evoAftershock', from: ['kanabo', 'aftershock'], set: { aftershock: { seed: { delay: 0.6, radius: 3.4, damage: 1.8, max: 12 } } } },
+  { id: 'evoOniward', from: ['kanabo', 'oniward'], set: { oniward: { ward: { chargeSeconds: 4, burstRadius: 3.8, burstDamage: 3.2 } } } },
 ];
 
 export const evoById = (id: string): EvoDef => {

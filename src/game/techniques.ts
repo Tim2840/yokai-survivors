@@ -269,45 +269,45 @@ export class Techniques {
     return i < 0 ? 0 : this.powerAt(i);
   }
 
-  // ── 進化（D53）──
-  /** 這個技法已經併進某個進化了（鬼火不會被用掉：它可以和不同的技法各進化一次） */
+  // ── 進化（D53；D98 改成「一個技法自己進化」）──
+  /** 這個技法（武器也算）已經進化了 */
   isEvolved(id: string): boolean {
-    if (this.isBase(id)) return false;
-    for (const e of this.evolved) if (evoById(e).from.includes(id)) return true;
-    return false;
+    return this.evolvedOf(id) !== null;
   }
-  /** 是不是這隻妖怪的主武器（鬼火、水盤…；D63 起不再寫死鬼火） */
+  /** 這個技法進化成哪個（沒進化 = null） */
+  evolvedOf(id: string): string | null {
+    for (const e of this.evolved) if (evoById(e).from[1] === id) return e;
+    return null;
+  }
+  /** 是不是這隻妖怪的武器（鬼火、水盤、金棒；D98 起它就是開局就有的那個技法） */
   isBase(id: string): boolean {
     return id === this.run.weaponItemId;
   }
-  /** 這個技法（或鬼火）現在幾級（鬼火 = 主武器等級；沒有 = 0） */
+  /** 這個技法（或武器）現在幾級（武器 = 武器等級；沒有 = 0） */
   techLevel(id: string): number {
     return this.isBase(id) ? this.run.weaponLevel : this.levelOf(id);
   }
-  /** 可以進化的（D93：有魂玉、技法到 EVO.minLevel 級、還沒進化、沒有被別的進化用掉）；EVO.gem = false 時是舊規則 */
+  /** 可以進化的（D93／D98：有魂玉、那個技法到 EVO.minLevel 級、還沒進化）；EVO.gem = false 時是舊規則 */
   get evolvable(): EvoDef[] {
     if (EVO.gem && this.run.soulGems <= 0) return [];
-    // 魂玉制（D93）：主武器不看等級（自動升級），只看技法
-    const ok = (m: string): boolean => !this.isEvolved(m) && (EVO.gem && this.isBase(m) ? true : this.techLevel(m) >= (EVO.gem ? EVO.minLevel : EVO.capBefore));
-    return evosFor(this.run.weaponItemId).filter((e) => !this.evolved.includes(e.id) && e.from.every(ok));
+    const need = EVO.gem ? EVO.minLevel : EVO.capBefore;
+    return evosFor(this.run.weaponItemId).filter((e) => {
+      const m = e.from[1];
+      return !this.evolved.includes(e.id) && (this.isBase(m) || this.has(m)) && !this.isEvolved(m) && this.techLevel(m) >= need;
+    });
   }
-  /** 進化：兩個技法併成一個 */
+  /** 進化：那個技法換成進化版 */
   evolve(id: string): boolean {
     if (!this.evolvable.some((e) => e.id === id)) return false;
     this.evolved.push(id);
     this.recompute();
     return true;
   }
-  /** 目前佔幾個技法欄位（進化的兩個技法併成一格；有鬼火的進化不省格） */
+  /** 目前佔幾個技法欄位（不含武器；D98 起進化不再省格，進化版佔原本那一格） */
   get slotsUsed(): number {
-    let n = this.owned.length;
-    for (const id of this.evolved) {
-      const e = evoById(id);
-      if (!e.from.includes(this.run.weaponItemId) && e.from.every((m) => this.has(m))) n--;
-    }
-    return n;
+    return this.owned.length;
   }
-  /** 進化給主武器的加成（傷害倍率、穿透、發射數） */
+  /** 進化給武器的加成（傷害倍率、穿透、發射數；D98 起只有武器自己的進化） */
   get evoWeaponDamage(): number {
     let m = 1;
     for (const e of this.evolved) m += evoById(e).weapon?.damage ?? 0;
@@ -343,7 +343,7 @@ export class Techniques {
     this.points[i] = 1;
     this.afx[i] = emptyAffixes();
     // 換掉進化過的技法：進化跟著拆掉（兩個材料都要在才算）
-    for (let k = this.evolved.length - 1; k >= 0; k--) if (evoById(this.evolved[k]).from.includes(oldId)) this.evolved.splice(k, 1);
+    for (let k = this.evolved.length - 1; k >= 0; k--) if (evoById(this.evolved[k]).from[1] === oldId) this.evolved.splice(k, 1);
     this.recompute();
     return true;
   }

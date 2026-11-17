@@ -257,16 +257,16 @@ describe('升級曲線與功德', () => {
   });
 });
 
-describe('主武器的養成門檻（D50）', () => {
-  it('主武器下一級要玩家等級 ≥ levelGate × 目前等級；沒到不會出現在卡池（舊版會紅）', async () => {
+describe('武器是技法（D98）：沒有養成門檻、進化前最多 5 級', () => {
+  it('武器沒有 D50 的養成門檻；weaponCap 擋住進化前的第 6 級（舊版會紅）', async () => {
     const { itemById } = await import('../../src/data/items');
-    const gate = itemById('ghostfire').levelGate!;
-    expect(gate).toBeGreaterThan(1);
+    for (const w of ['ghostfire', 'waterdisc', 'kanabo']) expect(itemById(w).levelGate, w).toBeUndefined();
     const d = new CardDealer(new Rng(4), ITEM_POOL, ['common']);
-    const levels = new Map([['ghostfire', 3]]);
-    d.playerLevel = gate * 3 - 1;
-    expect(d.candidates(levels)).not.toContain('ghostfire');
-    d.playerLevel = gate * 3;
-    expect(d.candidates(levels)).toContain('ghostfire');
+    d.playerLevel = 1;
+    expect(d.candidates(new Map([['ghostfire', 3]]))).toContain('ghostfire');
+    d.weaponCap = 5;
+    expect(d.candidates(new Map([['ghostfire', 5]]))).not.toContain('ghostfire');
+    d.weaponCap = Infinity;
+    expect(d.candidates(new Map([['ghostfire', 5]]))).toContain('ghostfire');
   });
 });

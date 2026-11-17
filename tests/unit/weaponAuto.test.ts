@@ -2,10 +2,12 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { resetTuning } from '../../src/data/tuning';
-import { WEAPON_AUTO, WEAPON_LEVELS, itemPoolFor } from '../../src/data/items';
+import { WEAPON_AUTO, itemPoolFor } from '../../src/data/items';
+import { EVO } from '../../src/data/techniques';
 import { xpNeed } from '../../src/data/progression';
 
-// D93（docs/32 C）：主武器隨玩家等級自動升級，不再出現在選卡
+// D98（使用者 2026-11-17：「不要再有主武器的設定，它就算一個技法」）：武器和其他技法一樣靠選卡升級；
+// 進化前最多 EVO.capBefore 級、進化後才能升到滿級。取代 D93 的「主武器自動升級」。
 afterEach(() => resetTuning());
 
 function make(yokaiId?: string) {
@@ -14,48 +16,47 @@ function make(yokaiId?: string) {
   run.god = true;
   return { run, bus };
 }
-/** 升一級並把選卡選掉（選第一張） */
-function levelUp(run: Run): void {
+/** 升一級；選卡時有武器卡就選武器卡，沒有就選第一張 */
+function levelUp(run: Run, preferWeapon: boolean): boolean {
   run.addXp(xpNeed(run.level) - run.xp + 0.01);
-  for (let g = 0; g < 10 && run.awaitingPick; g++) run.chooseCard(0);
+  let saw = false;
+  for (let g = 0; g < 10 && run.awaitingPick; g++) {
+    const k = run.offer ? run.offer.findIndex((o) => o.cardId === run.weaponItemId) : -1;
+    if (k >= 0) saw = true;
+    run.chooseCard(preferWeapon && k >= 0 ? k : 0);
+  }
+  return saw;
 }
 
-describe('主武器自動升級', () => {
-  it('時間表由小到大、每一級一個、化身那兩級（10、20）稀有度最高', () => {
-    const lv = WEAPON_AUTO.steps.map((s) => s.level);
-    expect([...lv].sort((a, b) => a - b)).toEqual(lv);
-    expect(new Set(lv).size).toBe(lv.length);
-    const r = (L: number) => WEAPON_AUTO.steps.find((s) => s.level === L)?.rarity;
-    expect(r(10)).toBe('epic');
-    expect(r(20)).toBe('legend');
+describe('武器就是一個技法（D98）', () => {
+  it('不再自動升級；武器在選卡池（舊版自動升級會紅）', () => {
+    expect(WEAPON_AUTO.on).toBe(false);
+    for (const w of ['ghostfire', 'waterdisc', 'kanabo']) expect(itemPoolFor(w)).toContain(w);
   });
 
-  for (const y of ['chochin-kozo', 'kappa']) {
-    it(`${y}：玩家升到表上的等級，主武器剛好升到對應的級數；選卡裡從來沒有主武器卡；20 級滿級`, () => {
-      const { run, bus } = make(y);
-      let ups = 0;
-      bus.on('weaponUp', () => ups++);
-      let sawWeaponCard = false;
-      while (run.level < 22) {
-        if (run.offer?.some((o) => o.cardId === run.weaponItemId)) sawWeaponCard = true;
-        levelUp(run);
-        const want = 1 + WEAPON_AUTO.steps.filter((s) => s.level <= run.level).length;
-        expect(run.weaponLevel, `玩家 ${run.level} 級`).toBe(want);
-      }
-      expect(sawWeaponCard).toBe(false);
-      expect(run.weaponLevel).toBe(WEAPON_LEVELS[run.weaponItemId].length + 1);
-      expect(ups).toBe(WEAPON_AUTO.steps.length);
-      expect(run.weaponNote?.level).toBe(run.weaponLevel);
+  for (const y of ['chochin-kozo', 'kappa', 'aka-oni']) {
+    it(`${y}：只升級、不選武器卡 → 武器一直 1 級；選武器卡才升；進化前停在 ${EVO.capBefore} 級、進化後才繼續`, () => {
+      const a = make(y).run;
+      let sawA = false;
+      while (a.level < 24) sawA = levelUp(a, false) || sawA;
+      // 只選第一張：武器有出現過，但不一定被選到；等級只會因為選到才變
+      expect(sawA, '武器卡要會出現在選卡').toBe(true);
+      const b = make(y).run;
+      while (b.level < 30) levelUp(b, true);
+      expect(b.weaponLevel, '進化前最多 5 級').toBe(EVO.capBefore);
+      b.soulGems = 1;
+      expect(b.tech.evolve(b.tech.evolvable.find((e) => e.from[1] === b.weaponItemId)!.id)).toBe(true);
+      const lv0 = b.weaponLevel;
+      while (b.level < 45 && b.weaponLevel === lv0) levelUp(b, true);
+      expect(b.weaponLevel, '進化後可以繼續升').toBeGreaterThan(lv0);
     });
   }
+});
 
-  it('舊做法（on = false）主武器還在選卡池：確認這個開關真的控制選卡池', () => {
-    WEAPON_AUTO.on = false;
-    try {
-      expect(itemPoolFor('ghostfire')).toContain('ghostfire');
-    } finally {
-      WEAPON_AUTO.on = true;
-    }
-    expect(itemPoolFor('ghostfire')).not.toContain('ghostfire');
+describe('介面文字不再出現「主武器」（D98）', () => {
+  it('全掃 i18n（更新紀錄是歷史，不算）', async () => {
+    const { zhTW } = await import('../../src/i18n/zh-TW');
+    const bad = Object.entries(zhTW as Record<string, string>).filter(([k, v]) => !k.startsWith('changelog.') && v.includes('主武器'));
+    expect(bad).toEqual([]);
   });
 });

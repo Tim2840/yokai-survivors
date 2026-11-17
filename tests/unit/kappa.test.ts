@@ -47,7 +47,7 @@ describe('河童', () => {
     expect(t.map((x) => x.id).sort()).toEqual(['backwash', 'domain', 'geyser', 'prison', 'sumo', 'torrent', 'vortex', 'wake', 'whirl']);
     for (const f of ['chain', 'near', 'field']) expect(t.filter((x) => x.family === f).length, f).toBe(3);
     expect(new Set(t.map((x) => mechOf(x))).size, '9 種技法要用 9 套不同的機制').toBe(9);
-    expect(evosFor('waterdisc').map((e) => e.from[1]).sort()).toEqual(t.map((x) => x.id).sort());
+    expect(evosFor('waterdisc').map((e) => e.from[1]).sort()).toEqual([...t.map((x) => x.id), 'waterdisc'].sort()); // D98：水盤自己也有進化
     const own = t.filter((x) => mechOf(x) === x.id).map((x) => x.id).sort();
     expect(own, '河童自己的機制').toEqual(['domain', 'prison', 'sumo', 'vortex', 'wake']);
     for (const g of techsFor('ghostfire')) expect(own).not.toContain(mechOf(g));
@@ -261,10 +261,9 @@ describe('河童', () => {
       expect(run.volleyExact, id).toBe(1);
     }
   });
-  it('進化：水盤＋渦盤各 5 級 → 渦潮陣；之後可以升到 8 級', () => {
+  it('進化：渦盤 5 級 → 渦潮陣（D98：不看水盤）；之後可以升到 8 級', () => {
     const run = make(9);
     run.devAddTech('whirl');
-    run.devTechLevel('waterdisc', EVO.capBefore);
     run.devTechLevel('whirl', EVO.capBefore);
     expect(run.tech.evolvable.map((e) => e.id)).toEqual(['evoWhirl']);
     expect(run.tech.evolve('evoWhirl')).toBe(true);
@@ -281,9 +280,9 @@ describe('河童', () => {
     run.castUltimate();
     expect(run.hp).toBeGreaterThan(10 + 20);
   });
-  it('提燈小僧不受影響：技法池還是 9 種、進化 9 個', () => {
+  it('提燈小僧不受影響：技法池還是 9 種、進化 9＋1 個（D98：鬼火自己的進化）', () => {
     expect(techsFor('ghostfire')).toHaveLength(9);
-    expect(evosFor('ghostfire')).toHaveLength(9);
+    expect(evosFor('ghostfire')).toHaveLength(10);
     expect(techById('ring').mech).toBeUndefined();
   });
 });

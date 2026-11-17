@@ -18,11 +18,11 @@ describe('每隻可玩的妖怪都有完整的一套', () => {
       const w = y.weapon.id;
       expect(ITEMS.some((x) => x.id === w && x.kind === 'weapon'), `沒有主武器道具 ${w}`).toBe(true);
       expect(WEAPON_LEVELS[w]?.length, `${w} 沒有升級表`).toBeGreaterThanOrEqual(7);
-      expect(itemPoolFor(w), '主武器自動升級（D93），不該出現在選卡池').not.toContain(w);
-      expect(WEAPON_AUTO.steps.length, `${w} 每一級都要有自動升級的時間點`).toBe(WEAPON_LEVELS[w].length);
+      expect(itemPoolFor(w), 'D98：武器靠選卡升級，要在選卡池').toContain(w);
+      expect(WEAPON_AUTO.on, 'D98：武器不再自動升級').toBe(false);
       const techs = techsFor(w);
       expect(techs.length, `${w} 的技法池太小`).toBeGreaterThanOrEqual(6);
-      expect(evosFor(w).map((e) => e.from[1]).sort(), `${w} 的進化要和技法一一對應`).toEqual(techs.map((t) => t.id).sort());
+      expect(evosFor(w).map((e) => e.from[1]).sort(), `${w} 的進化要和技法（含武器自己）一一對應`).toEqual([...techs.map((t) => t.id), w].sort());
       expect(ultsOf(id).length, '大招至少 2 招').toBeGreaterThanOrEqual(2);
       expect(defaultUltsOf(id).length, '要有一招一開始就有').toBeGreaterThanOrEqual(1);
       expect(palette.fx[id], '沒有特效色組（palette.fx）').toBeTruthy();

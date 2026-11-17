@@ -135,8 +135,8 @@ export function buildShrine(parent: HTMLElement, a: ShrineActions) {
       o.el.querySelector('#shrine-merit')!.textContent = t('shrine.merit', { n: v.merit });
       const sl = v.slots;
       const slotHtml = `<section class="shrine-yokai" id="shrine-slots"><h3>${t('shrine.slots')}</h3><div class="shrine-ult" data-slots="${sl.have}">
-        <b>${t('shrine.slotsHave', { n: sl.have, max: sl.max })}</b><span class="d">${t('shrine.slotsDesc')}</span>
-        <span class="acts">${sl.price === null ? `<span class="badge">${t('shrine.max')}</span>` : `<button class="btn secondary" type="button" data-act="slot" ${v.merit >= sl.price ? '' : 'disabled'}>${t('shrine.slotBuy', { k: sl.have + 1, n: sl.price })}</button>`}</span></div></section>`;
+        <b>${t('shrine.slotsHave', { n: sl.have + 1, max: sl.max + 1 })}</b><span class="d">${t('shrine.slotsDesc')}</span>
+        <span class="acts">${sl.price === null ? `<span class="badge">${t('shrine.max')}</span>` : `<button class="btn secondary" type="button" data-act="slot" ${v.merit >= sl.price ? '' : 'disabled'}>${t('shrine.slotBuy', { k: sl.have + 2, n: sl.price })}</button>`}</span></div></section>`;
       body.innerHTML = slotHtml + v.yokai
         .map(
           (y) => `<section class="shrine-yokai"><h3>${t(`yokai.${y.id}` as I18nKey)}：${t('shrine.ults')}</h3>${y.ults
@@ -191,8 +191,11 @@ export function describeCard(o: CardOffer, levels: ReadonlyMap<string, number> =
   if (d.kind === 'fallback') return { name, desc: t(`card.fmt.${d.id}` as I18nKey, { v: num(itemValue(d, o.rarity)) }), level: '', isNew: false };
   const level = lv === 0 ? t('card.new') : t('card.levelUp', { from: lv, to: lv + 1, max: d.maxLevel });
   if (d.kind === 'weapon') {
+    // D98：武器和其他技法一樣，進化前最多 EVO.capBefore 級（能出現 5 級以上的卡就代表已經進化了）
+    const cap = lv < EVO.capBefore ? EVO.capBefore : d.maxLevel;
+    const wl = t('card.levelUp', { from: lv, to: lv + 1, max: cap });
     const raw = WEAPON_LEVELS[d.id]?.[lv - 1];
-    return { name, desc: raw ? weaponLevelText(scaleWeaponStep(raw, o.rarity)) : '', level, isNew: false };
+    return { name, desc: raw ? weaponLevelText(scaleWeaponStep(raw, o.rarity)) : '', level: wl, isNew: false };
   }
   const v = itemValue(d, o.rarity);
   if (d.kind === 'mod') return { name, desc: t(`card.fmt.${d.mod}` as I18nKey, { v: num(v) }), level, isNew: lv === 0 };
@@ -507,20 +510,21 @@ function cardEffectText(c: BuildSummary['cards'][number]): string {
   return c.down ? `${up}${t('card.down', { text: downText(c.down.stat, c.down.total) })}` : up;
 }
 
-/** 能力面板的「技法」欄位（2026-11-17）：每個技法的觸發方式、傷害、間隔、範圍、數量、暴擊與詞條 */
+/** 能力面板的「技法」欄位（2026-11-17）：每個技法的觸發方式、傷害、間隔、範圍、數量、暴擊與詞條。D98：武器排第一個；進化過的直接換成進化版的名字，等級從進化版 1 級算 */
 function techDetailsHtml(sum: BuildSummary): string {
   const head = `<h3>${t('pause.techTitle', { used: sum.techSlots.used, max: sum.techSlots.max })}</h3>`;
-  if (sum.techDetails.length === 0) return `${head}<p class="sum-diff">${t('pause.techNone')}</p>`;
+  const w = techName(YOKAI[sum.yokai].weapon.id);
+  const likesOf = (id: string): string[] => (id === YOKAI[sum.yokai].weapon.id ? sum.baseLikes : (sum.techs.find((x) => x.id === id)?.likes ?? []));
   const items = sum.techDetails.map((d) => {
     const rows = d.rows.map((r) => {
       const v =
         r.kind === 'dmg'
-          ? t('tdet.fmt.dmg', { v: fix(r.value, 1), p: fix((r.ratio ?? 0) * 100, 0) })
+          ? t('tdet.fmt.dmg', { v: fix(r.value, 1), p: fix((r.ratio ?? 0) * 100, 0), w })
           : r.kind === 'pct'
             ? t('tdet.fmt.pct', { v: fix(r.value * 100, 0) })
             : r.kind === 'n'
               ? fix(r.value, 0)
-              : t(`tdet.fmt.${r.kind}` as I18nKey, { v: fix(r.value, r.kind === 'x' ? 2 : 1) });
+              : t(`tdet.fmt.${r.kind}` as I18nKey, { v: fix(r.value, r.kind === 'x' ? 2 : r.kind === 'sec' && d.kind === 'weapon' ? 2 : 1) });
       return `<div data-row="${r.label}"><dt>${t(`tdet.${r.label}` as I18nKey)}</dt><dd>${v}</dd></div>`;
     });
     rows.push(`<div data-row="crit"><dt>${t('stat.crit')}</dt><dd>${fix(d.crit * 100, 0)}%</dd></div>`);
@@ -529,7 +533,12 @@ function techDetailsHtml(sum: BuildSummary): string {
       .filter((k) => d.affixes[k] > 1e-9)
       .map((k) => (k === 'count' ? t('card.affixCount', { name: t(AFFIX_LABEL[k] as I18nKey), v: Math.floor(d.affixes[k]) }) : k === 'chain' ? t('tdet.chainAffix', { v: fix(d.affixes[k], 1) }) : t('card.affixItem', { name: t(AFFIX_LABEL[k] as I18nKey), v: Math.round(d.affixes[k] * 100) })))
       .join('、');
-    return `<li data-tech="${d.id}" class="${d.evo ? 'fused' : ''}"><b>${t('pause.techLv', { name: techName(d.id), lv: d.level, max: d.max })}</b>${d.evo ? `<i class="ok">${t('pause.techEvo', { name: t(`evo.${d.evo}` as I18nKey) })}</i>` : ''}<em>${t(`tech.${d.id}.desc` as I18nKey)}</em><em>${t(`pause.techTrigger.${d.kind}` as I18nKey)}</em><dl class="sum-stats">${rows.join('')}</dl><em>${afx ? t('pause.techAffix', { list: afx }) : t('pause.techNoAffix')}</em></li>`;
+    // 進化版：名字換掉、等級從進化版的 1 級算（4 級進化 → 進化版 1 級）
+    const off = d.evo ? EVO.minLevel - 1 : 0;
+    const name = d.evo ? t(`evo.${d.evo}` as I18nKey) : techName(d.id);
+    const desc = d.evo ? t(`evo.${d.evo}.desc` as I18nKey) : t(`tech.${d.id}.desc` as I18nKey);
+    const likes = likesOf(d.id).map((x) => t(`card.${x}` as I18nKey)).join('、');
+    return `<li data-tech="${d.id}" class="${d.evo ? 'fused' : ''}"><b>${t('pause.techLv', { name, lv: d.level - off, max: d.max - off })}</b>${d.evo ? `<i class="ok">${t('pause.techEvolved')}</i>` : ''}<em>${desc}</em><em>${t(`pause.techTrigger.${d.kind}` as I18nKey, { w })}</em><dl class="sum-stats">${rows.join('')}</dl>${d.kind === 'weapon' ? '' : `<em>${afx ? t('pause.techAffix', { list: afx }) : t('pause.techNoAffix')}</em>`}${likes ? `<em>${t('pause.techLikes', { items: likes })}</em>` : ''}</li>`;
   });
   return `${head}<ul class="sum-ult sum-tech">${items.join('')}</ul>`;
 }
@@ -555,10 +564,11 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
       cards.innerHTML = '';
       if (sum.cards.length === 0) cards.innerHTML = `<li class="empty">${t('pause.noCards')}</li>`;
       for (const c of sum.cards) {
+        if (c.kind === 'weapon') continue; // D98：武器是技法，列在技法欄
         const li = document.createElement('li');
         li.dataset.card = c.id;
         const chips = (['common', 'rare', 'epic', 'legend'] as const).map((r) => `<i class="chip r-${r}"></i>`.repeat(c.byRarity[r])).join('');
-        li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), lv: c.level, max: c.maxLevel })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}${cardLinkLines(c.id, sum.yokai).map((x) => `<br><span class="clink">${x}</span>`).join('')}${c.kind === 'weapon' ? `<br>${t('pause.techRow', { name: techName(c.id), lv: c.level, items: sum.baseLikes.map((x) => t(`card.${x}` as I18nKey)).join('、') })}` : ''}${c.kind === 'weapon' ? sum.techs.map((x) => `<br>${t('pause.techRow', { name: techName(x.id), lv: x.level, items: x.likes.map((l) => t(`card.${l}` as I18nKey)).join('、') })}`).join('') : ''}</em>`;
+        li.innerHTML = `<b>${t('pause.cardRow', { name: t(`card.${c.id}` as I18nKey), lv: c.level, max: c.maxLevel })}</b><span class="chips">${chips}</span><em>${cardEffectText(c)}${cardLinkLines(c.id, sum.yokai).map((x) => `<br><span class="clink">${x}</span>`).join('')}</em>`;
         cards.appendChild(li);
       }
       const fm = q('sum-form');
@@ -571,7 +581,6 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
             .map(
               (e) =>
                 `<li data-evo="${e.id}" class="${e.done ? 'fused' : ''}"><b>${t(`evo.${e.id}` as I18nKey)}${e.done ? ' ✓' : ''}</b><em>${t(`evo.${e.id}.desc` as I18nKey)}</em><span>${e.from
-                  .filter((m) => !(EVO.gem && m.id === e.from[0].id))
                   .map((m) => `<i class="${m.level >= EVO.minLevel ? 'ok' : ''}">${t('pause.evoPart', { name: techName(m.id), lv: Math.min(m.level, EVO.minLevel), max: EVO.minLevel })}</i>`)
                   .join('')}${EVO.gem && !e.done ? `<i class="${sum.gems > 0 ? 'ok' : ''}">${t('pause.evoGem', { n: sum.gems })}</i>` : ''}${e.ready ? `<i class="ok">${t('pause.evoReady')}</i>` : ''}${e.done ? '' : `<i>${t('pause.evoCap', { max: TECH_LEVELS.max })}</i>`}</span>${
                   e.done
@@ -611,7 +620,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
       if (has('pierce')) rows.push(`<div data-stat="pierce"><dt>${t('sum.pierce')}</dt><dd>${fix(sum.weapon.pierce)}</dd></div>`);
       // 取代發射的技法在場：穿透、濺射、碎裂改成別的效果，說明一次（Q56）；碎裂只對少數出手方式有效，也寫清楚
       if (sum.weapon.converted) rows.push(`<div data-stat="converted" class="weapon-note"><dt>${t(has('pierce') ? 'sum.converted' : 'sum.convertedNoPierce')}</dt><dd></dd></div>`);
-      if (has('splash')) rows.push(`<div data-stat="shardsNote" class="weapon-note"><dt>${t('sum.shardsNote')}</dt><dd></dd></div>`);
+      if (has('splash')) rows.push(`<div data-stat="shardsNote" class="weapon-note"><dt>${t('sum.shardsNote', { w: techName(YOKAI[sum.yokai].weapon.id) })}</dt><dd></dd></div>`);
       stats.innerHTML = rows.join('');
       q('sum-techs').innerHTML = techDetailsHtml(sum);
       const curse = q('sum-curse');

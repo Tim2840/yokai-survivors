@@ -1364,6 +1364,7 @@ export class Run {
 
   private makeOffer(): void {
     this.dealer.playerLevel = this.level;
+    this.dealer.weaponCap = this.tech.isEvolved(this.weaponItemId) ? Infinity : EVO.capBefore; // D98：武器和其他技法一樣，進化前最多 5 級
     this.offer = this.dealer.deal(this.level, this.stats.value.luck, this.cardCounts);
     // 試煉圈內（D97，原結界石 D93）：升級必出技法卡、稀有度高一階
     const zone = this.elements.inTrialZone && this.level >= TECH_OFFER.minLevel; // D97：試煉圈內升級必出技法卡（原結界石）
@@ -1443,6 +1444,7 @@ export class Run {
     // 合魂祠：只有可以進化的（選一個）
     if (this.offerKind === 'fusion') return this.tech.evolvable.slice(0, CARD_CHOICES).map((e) => ({ cardId: EVO_CARD_PREFIX + e.id, rarity: 'legend' as const }));
     this.dealer.playerLevel = this.level;
+    this.dealer.weaponCap = this.tech.isEvolved(this.weaponItemId) ? Infinity : EVO.capBefore; // D98：武器和其他技法一樣，進化前最多 5 級
     const cards = this.dealer.dealRarity(this.bonusRarity, this.cardCounts);
     // 賽錢箱（D93）：三張都是「已有技法升一級」（玩家自己選哪一個），稀有度照賽錢箱、帶詞條；不夠三個就補一般卡
     if (this.offerKind === 'offering' && OFFERING_TECH.on) {

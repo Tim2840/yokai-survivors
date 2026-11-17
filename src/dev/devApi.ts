@@ -441,9 +441,10 @@ export function installDevApi(ctx: DevContext): void {
     evolveTech: (id: string) => {
       const r = run();
       if (!r) return false;
-      const e = evosFor(r.weaponItemId).find((v) => v.from.includes(id));
+      const e = evosFor(r.weaponItemId).find((v) => v.from[1] === id);
       if (!e) return false;
-      for (const m of e.from) if (r.tech.techLevel(m) < EVO.capBefore) r.devTechLevel(m, EVO.capBefore);
+      const m = e.from[1];
+      if (r.tech.techLevel(m) < EVO.capBefore) r.devTechLevel(m, EVO.capBefore);
       if (EVO.gem && r.soulGems <= 0) r.addGem(1);
       const ok = r.tech.evolve(e.id);
       if (ok && EVO.gem) r.soulGems--;

@@ -56,6 +56,8 @@ export class CardDealer {
 
   /** 玩家目前等級（道具的 minLevel 用；Run 發牌前設定，沒設 = 不限制） */
   playerLevel = Infinity;
+  /** 武器（鬼火、水盤、金棒）現在最高能升到幾級（D98：和其他技法一樣，進化前 EVO.capBefore、進化後滿級；Run 發牌前設定） */
+  weaponCap = Infinity;
 
   /** 現在能出現的法具（不含備用） */
   candidates(levels: ReadonlyMap<string, number>): string[] {
@@ -64,6 +66,7 @@ export class CardDealer {
       const d = itemById(id);
       const lv = levels.get(id) ?? 0;
       if (lv >= d.maxLevel) return false;
+      if (d.kind === 'weapon' && lv >= this.weaponCap) return false;
       if (d.minLevel !== undefined && this.playerLevel < d.minLevel) return false;
       // 養成門檻（D50）：下一級要玩家等級 ≥ levelGate × 目前等級
       if (d.levelGate !== undefined && lv > 0 && this.playerLevel < d.levelGate * lv) return false;

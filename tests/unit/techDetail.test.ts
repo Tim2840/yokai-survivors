@@ -29,10 +29,11 @@ describe('能力面板：技法欄位', () => {
   it('傷害 = 主武器一發 × 比例 × 效果倍率；攻擊力詞條會反映', () => {
     const run = new Run({ seed: 4, bus: new EventBus() });
     run.devAddTech('bounce');
-    const a = summarizeBuild(run).techDetails[0].rows.find((r) => r.label === 'jumpDamage')!;
+    // D98：第一個是武器，技法從第二個起
+    const a = summarizeBuild(run).techDetails.find((d) => d.id === 'bounce')!.rows.find((r) => r.label === 'jumpDamage')!;
     expect(a.value).toBeCloseTo(run.shotDamage(false) * 0.6, 5);
     run.tech.addAffixes('bounce', [{ stat: 'power', value: 0.5 }]);
-    const b = summarizeBuild(run).techDetails[0].rows.find((r) => r.label === 'jumpDamage')!;
+    const b = summarizeBuild(run).techDetails.find((d) => d.id === 'bounce')!.rows.find((r) => r.label === 'jumpDamage')!;
     expect(b.value).toBeCloseTo(a.value * 1.5, 5);
   });
 });

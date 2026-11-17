@@ -86,9 +86,9 @@ export const KANABO_LEVELS: readonly WeaponLevel[] = [
 export const WEAPON_LEVELS: Record<string, readonly WeaponLevel[]> = { ghostfire: GHOSTFIRE_LEVELS, waterdisc: WATERDISC_LEVELS, kanabo: KANABO_LEVELS };
 
 export const ITEMS: readonly ItemDef[] = [
-  { id: 'ghostfire', kind: 'weapon', maxLevel: GHOSTFIRE_LEVELS.length + 1, rarityScales: true, levelGate: 4 },
-  { id: 'waterdisc', kind: 'weapon', maxLevel: WATERDISC_LEVELS.length + 1, rarityScales: true, levelGate: 4 },
-  { id: 'kanabo', kind: 'weapon', maxLevel: KANABO_LEVELS.length + 1, rarityScales: true, levelGate: 4 },
+  { id: 'ghostfire', kind: 'weapon', maxLevel: GHOSTFIRE_LEVELS.length + 1, rarityScales: true }, // D98：武器是技法，拿掉 D50 的養成門檻（技法沒有這個門檻）
+  { id: 'waterdisc', kind: 'weapon', maxLevel: WATERDISC_LEVELS.length + 1, rarityScales: true },
+  { id: 'kanabo', kind: 'weapon', maxLevel: KANABO_LEVELS.length + 1, rarityScales: true },
   // 屬性道具（5 級）
   { id: 'power', kind: 'stat', stat: 'power', perLevel: 10, maxLevel: 5, rarityScales: true },
   { id: 'atkSpeed', kind: 'stat', stat: 'atkSpeed', perLevel: 8, maxLevel: 5, rarityScales: true },
@@ -140,7 +140,7 @@ export const SWING = { comboDelay: 0.22, comboDamage: 0.7 } as const;
  * 化身那兩級（10、20）加最多。on = false 退回舊做法（主武器卡；sim 對照用）。
  */
 export const WEAPON_AUTO = {
-  on: true,
+  on: false, // D98（使用者：「不要再有主武器的設定，它就算一個技法」）：主武器和其他技法一樣靠選卡升級
   steps: [
     { level: 3, rarity: 'common' },
     { level: 5, rarity: 'common' },
@@ -165,7 +165,7 @@ export const FALLBACK_ITEMS: readonly string[] = ['heal', 'meritBag'];
 
 /** 出現權重：主武器與已有道具比較容易出現（讓「練滿」有機會） */
 /** D50：主武器 1.6 → 1.2（使用者：「主武器的養成速度太快」；另見 levelGate） */
-export const ITEM_WEIGHT = { weapon: 1.2, owned: 1.3, fresh: 1 } as const;
+export const ITEM_WEIGHT = { weapon: 2.5, owned: 1.3, fresh: 1 } as const;
 
 /** 稀有度里程碑（參考 Brotato）：升到這些等級時，第一張會縮放的卡至少是這個稀有度（受已解鎖的稀有度限制） */
 export function milestoneRarity(level: number): Rarity | null {

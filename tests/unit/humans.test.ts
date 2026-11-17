@@ -139,6 +139,7 @@ describe('盾（足輕）', () => {
     const en = run.enemies;
     const i = en.spawn(kindIndex('ashigaru'), run.px + 4, run.pz, 1, 0, 0);
     en.speed[i] = 0;
+    en.hp[i] = en.maxHp[i] = 1e9; // 量轉向，不能被打死（D98 武器變強後，4 公尺的足輕幾秒就倒）
     run.step(DT);
     expect(en.shielded(i)).toBe(true);
     // 玩家瞬間跑到敵人的另一側

@@ -36,7 +36,8 @@ describe('技法進化資料（D53）', () => {
     expect(new Set(EVOS.map((e) => e.id)).size).toBe(EVOS.length);
     const inEvo = new Set<string>();
     for (const e of EVOS) {
-      expect(e.from[0]).not.toBe(e.from[1]);
+      // D98：武器自己的進化寫成 [武器, 武器]；技法的進化是 [武器（分組）, 技法]
+      expect(BASES.has(e.from[0]), `${e.id} 的第一個要是武器（分組）`).toBe(true);
       for (const m of e.from) {
         if (!BASES.has(m)) expect(() => techById(m), `${e.id} 的材料 ${m}`).not.toThrow();
         inEvo.add(m);
@@ -49,7 +50,9 @@ describe('技法進化資料（D53）', () => {
           for (const k of Object.keys(vals)) expect(k in d[block], `${tid}.${block} 沒有欄位 ${k}`).toBe(true);
         }
       }
-      if (BASES.has(e.from[0])) expect(e.weapon, `${e.id} 有鬼火但沒有主武器加成`).toBeTruthy();
+      // D98：只有武器自己的進化加在武器上；技法的進化不再順便給武器加成
+      if (e.from[1] === e.from[0]) expect(e.weapon, `${e.id} 武器的進化沒有加成`).toBeTruthy();
+      else expect(e.weapon, `${e.id} 技法的進化不該再給武器加成`).toBeUndefined();
       for (const key of [`evo.${e.id}`, `evo.${e.id}.desc`] as const) expect(t(key as I18nKey), key).not.toBe(key);
       // 兩個材料不能互斥（不然一局拿不到）
       const [a, b] = e.from;
@@ -60,10 +63,10 @@ describe('技法進化資料（D53）', () => {
     }
     for (const x of TECHS) expect(inEvo.has(x.id), `${x.id} 不在任何進化裡`).toBe(true);
   });
-  it('D56：每個進化的材料都是「鬼火 + 一個技法」，每個技法剛好一個進化（舊版兩個技法配對會紅）', () => {
+  it('D98：每個技法剛好一個進化、每把武器（鬼火、水盤、金棒）也剛好一個（舊版武器沒有自己的進化會紅）', () => {
     for (const e of EVOS) expect(BASES.has(e.from[0]), e.id).toBe(true);
-    expect(EVOS).toHaveLength(TECHS.length);
-    expect(new Set(EVOS.map((e) => e.from[1]))).toEqual(new Set(TECHS.map((x) => x.id)));
+    expect(EVOS).toHaveLength(TECHS.length + BASES.size);
+    expect(new Set(EVOS.map((e) => e.from[1]))).toEqual(new Set([...TECHS.map((x) => x.id), ...BASES]));
   });
 });
 
@@ -93,7 +96,7 @@ describe('進化形態的升級（D57）：5 級封頂、進化後才能升到 8
     expect(run.tech.levelUp('ring')).toBe(false);
   });
   it('D79：進化後升 6～8 級，技法的參數完全不變（變強只靠詞條）；舊版每級有強化會紅', () => {
-    for (const e of EVOS) {
+    for (const e of EVOS.filter((x) => x.from[0] !== x.from[1])) {
       const run = make(32, YOKAI_OF[e.from[0]]);
       run.devAddTech(e.from[1]);
       run.devTechLevel(e.from[0], EVO.capBefore);
@@ -106,7 +109,7 @@ describe('進化形態的升級（D57）：5 級封頂、進化後才能升到 8
     }
   });
   it('全掃：每個進化都能練到 8 級、每一級的資料不產生 NaN／負數的關鍵欄位', () => {
-    for (const e of EVOS) {
+    for (const e of EVOS.filter((x) => x.from[0] !== x.from[1])) {
       const run = make(33, YOKAI_OF[e.from[0]]);
       run.devAddTech(e.from[1]);
       run.devTechLevel(e.from[0], EVO.capBefore);
@@ -169,42 +172,33 @@ describe('每一次升級卡都有稀有度（D53）', () => {
 });
 
 describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
-  it('舊規則（EVO.gem = false，sim 對照用）：主武器與技法都 5 級才能進化，差一級不行', () => {
+  it('舊規則（EVO.gem = false，sim 對照用）：技法 5 級才能進化，差一級不行（D98：不再看武器的等級）', () => {
     expect(EVO.capBefore).toBe(5);
     EVO.gem = false;
     try {
     const run = make(21);
     run.devAddTech('kitsunebi');
     expect(run.tech.evolvable).toHaveLength(0);
+    run.devTechLevel('kitsunebi', EVO.capBefore - 1);
+    expect(run.tech.evolvable.map((e) => e.id), '差一級').toEqual([]);
     run.devTechLevel('kitsunebi', EVO.capBefore);
-    run.devTechLevel(BASE_TECH_ID, EVO.capBefore - 1);
-    expect(run.tech.evolvable.map((e) => e.id), '鬼火差一級').toEqual([]);
-    run.devTechLevel(BASE_TECH_ID, EVO.capBefore);
-    expect(run.tech.evolvable.map((e) => e.id)).toEqual(['evoSplit']);
-    // 技法差一級也不行（鬼火已經 5 級）
-    const r2 = make(22);
-    r2.devAddTech('ring');
-    r2.devTechLevel(BASE_TECH_ID, EVO.capBefore);
-    r2.devTechLevel('ring', EVO.capBefore - 1);
-    expect(r2.tech.evolvable).toHaveLength(0);
-    r2.devTechLevel('ring', EVO.capBefore);
-    expect(r2.tech.evolvable.map((e) => e.id)).toEqual(['evoRing']);
+    expect(run.tech.evolvable.map((e) => e.id), '武器 1 級也能進化技法').toEqual(['evoSplit']);
     } finally {
       EVO.gem = true;
     }
   });
 
-  it('進化：技法效果 × EVO.power、參數換成進化後的值、鬼火加成；有鬼火不省格；只能進化一次', () => {
+  it('進化：技法效果 × EVO.power、參數換成進化後的值；進化版佔原本那一格；只能進化一次', () => {
     const run = make(22);
     run.devAddTech('ring', 'ward');
     const used0 = run.tech.slotsUsed;
     run.devTechLevel('ring', EVO.capBefore);
-    run.devTechLevel(BASE_TECH_ID, EVO.capBefore);
     const pr0 = run.tech.powerOf('ring');
     const ps0 = run.tech.powerOf('ward');
     expect(run.tech.evolve('evoRing')).toBe(true);
     expect(run.tech.evolve('evoRing'), '不能再進化一次').toBe(false);
-    expect(run.tech.slotsUsed, '有鬼火的進化不省格').toBe(used0);
+    expect(run.tech.slotsUsed, '進化版佔原本那一格').toBe(used0);
+    expect(run.tech.evolvedOf('ring')).toBe('evoRing');
     expect(run.tech.powerOf('ring')).toBeCloseTo(pr0 * EVO.power);
     expect(run.tech.powerOf('ward'), '另一個技法不受影響').toBeCloseTo(ps0);
     expect(run.tech.act.ring!.orbit!.baseOrbs).toBe(evoById('evoRing').set.ring.orbit.baseOrbs);
@@ -212,33 +206,37 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
     expect(run.tech.isEvolved('ward')).toBe(false);
   });
 
-  it('不限次數：鬼火可以和不同技法各進化一次（最多跟著手上的技法數）；進化過的技法不能再進化；鬼火不會被用掉', () => {
+  it('不限次數：每個技法（含武器）各自進化一次；進化過的不能再進化（D98）', () => {
     const run = make(23);
     expect(TECH_MAX).toBe(3);
     run.devAddTech('ring', 'ward', 'lamp');
     for (const id of ['ring', 'ward', 'lamp']) run.devTechLevel(id, EVO.capBefore);
     run.devTechLevel(BASE_TECH_ID, EVO.capBefore);
-    expect(run.tech.evolvable.map((e) => e.id)).toEqual(['evoRing', 'evoWard', 'evoLamp']);
+    expect(run.tech.evolvable.map((e) => e.id)).toEqual(['evoGhostfire', 'evoRing', 'evoWard', 'evoLamp']);
     for (const id of ['evoRing', 'evoWard', 'evoLamp']) expect(run.tech.evolve(id), id).toBe(true);
     expect(run.tech.evolved).toEqual(['evoRing', 'evoWard', 'evoLamp']);
     expect(run.tech.isEvolved(BASE_TECH_ID)).toBe(false);
+    expect(run.tech.evolve('evoGhostfire')).toBe(true);
+    expect(run.tech.isEvolved(BASE_TECH_ID)).toBe(true);
     expect(run.tech.evolvable, '都進化完了').toEqual([]);
     expect(run.tech.evolve('evoRing')).toBe(false);
     expect(run.tech.evolve('evoSplit'), '狐火分裂沒拿到').toBe(false);
   });
 
-  it('進化給主武器加成（鬼火＋狐火分裂：傷害 +15%、穿透 +1）', () => {
+  it('D98：技法的進化不再給武器加成；武器自己進化才加（冥府鬼火：傷害、穿透、發射數）', () => {
     const run = make(24);
     run.devAddTech('kitsunebi');
-    const d0 = run.shotDamage(false);
     run.devTechLevel('kitsunebi', EVO.capBefore);
     run.devTechLevel(BASE_TECH_ID, EVO.capBefore);
     const d1 = run.shotDamage(false);
     run.tech.evolve('evoSplit');
-    const w = evoById('evoSplit').weapon!;
+    expect(run.shotDamage(false), '狐火分裂進化不動鬼火').toBeCloseTo(d1);
+    expect(run.tech.evoPierce).toBe(0);
+    run.tech.evolve('evoGhostfire');
+    const w = evoById('evoGhostfire').weapon!;
     expect(run.shotDamage(false)).toBeCloseTo(d1 * (1 + w.damage));
-    expect(d1).toBeGreaterThan(d0);
     expect(run.tech.evoPierce).toBe(w.pierce);
+    expect(run.tech.evoVolley).toBe(w.volley);
   });
 
   it('道祖神換掉進化過的技法：進化跟著拆掉', () => {
@@ -257,7 +255,6 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
     run.director.active = false;
     run.devAddTech('ring');
     run.devTechLevel('ring', EVO.capBefore);
-    run.devTechLevel(BASE_TECH_ID, EVO.capBefore);
     expect(run.tech.evolvable).toHaveLength(1);
     // 合魂祠
     for (let i = 0; i < 60 * (FUSE.appearDelay + 2) && !run.elements.fuseSlot; i++) {
@@ -298,7 +295,6 @@ describe('進化（D53；D54 起材料 5 級、不限次數）', () => {
     const events: string[] = [];
     bus.on('evolveReady', (e) => events.push(e.id));
     run.devAddTech('ring');
-    run.devTechLevel(BASE_TECH_ID, EVO.capBefore);
     run.devTechLevel('ring', EVO.capBefore);
     expect(events).toEqual(['evoRing']);
   });
