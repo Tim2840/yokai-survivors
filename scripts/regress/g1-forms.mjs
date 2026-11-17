@@ -1,5 +1,5 @@
 // g1：化身、化身限定技法、局外解鎖技法格子（D83、D84，docs/25）。玩家會做的事：
-// 神社看到「技法格子 3／5」→ 功德不夠買不了 → 領測試功德 → 真的點「開第 4 格」→ page.reload() 之後還在 → 開局這一局有 4 格；
+// 神社看到「技法格子 4／6」（D98：武器也佔一格）→ 功德不夠買不了 → 領測試功德 → 真的點「開第 5 格」→ page.reload() 之後還在 → 開局這一局有 4 格；
 // 一路升級（真的點卡）到 10 級 → 畫面提示化身、角色變大、能力面板寫出化身名稱與還沒解鎖的技法 → 之後的技法卡出現「化身限定」。
 // 三種畫面，卡住偵測。
 import { openPage, waitState, press, step, expect, shot, reportErrors, startRun, hudTopOk, VIEWPORTS } from './lib.mjs';
@@ -20,22 +20,22 @@ export async function run(browser) {
     const ctx = await openPage(browser, vp, '?q=4&seed=77');
     const { page } = ctx;
     try {
-      await step(`${vp.name} 神社：技法格子 3／5，功德不夠時按鈕不能按`, async () => {
+      await step(`${vp.name} 神社：技法格子 4／6（含武器），功德不夠時按鈕不能按`, async () => {
         await waitState(page, 'MENU');
         await press(ctx, '#btn-shrine');
         await page.waitForFunction(() => window.__game.screens.includes('shrine'), null, { timeout: 10000 });
         const s = await slotInfo(page);
-        expect(s.have === '3' && /3／5/.test(s.t) && s.btn && s.btn.disabled && /開第 4 格/.test(s.btn.t), `技法格子那一列不對：${JSON.stringify(s)}`);
+        expect(s.have === '3' && /4／6/.test(s.t) && s.btn && s.btn.disabled && /開第 5 格/.test(s.btn.t), `技法格子那一列不對：${JSON.stringify(s)}`);
       });
 
-      await step(`${vp.name} 領功德 → 真的點「開第 4 格」→ 4／5、功德扣掉`, async () => {
+      await step(`${vp.name} 領功德 → 真的點「開第 5 格」→ 5／6、功德扣掉`, async () => {
         await press(ctx, '#btn-shrine-cheat');
         const m0 = await page.locator('#shrine-merit').innerText();
         await page.locator('#shrine-slots button[data-act="slot"]').scrollIntoViewIfNeeded();
         await press(ctx, '#shrine-slots button[data-act="slot"]');
         const s = await slotInfo(page);
         const m1 = await page.locator('#shrine-merit').innerText();
-        expect(s.have === '4' && /4／5/.test(s.t) && /開第 5 格/.test(s.btn?.t ?? ''), `買了之後不是 4 格：${JSON.stringify(s)}`);
+        expect(s.have === '4' && /5／6/.test(s.t) && /開第 6 格/.test(s.btn?.t ?? ''), `買了之後不是 4 格：${JSON.stringify(s)}`);
         expect(m0 !== m1, `功德沒有扣：${m0} → ${m1}`);
         files.push(await shot(ctx, 'g1-shrine'));
       });

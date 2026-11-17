@@ -562,7 +562,7 @@ export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: ()
       q('sum-slots').textContent = t('pause.slots', { used: sum.slotsUsed, max: sum.slots });
       const cards = q('sum-cards');
       cards.innerHTML = '';
-      if (sum.cards.length === 0) cards.innerHTML = `<li class="empty">${t('pause.noCards')}</li>`;
+      if (!sum.cards.some((c) => c.kind !== 'weapon')) cards.innerHTML = `<li class="empty">${t('pause.noCards')}</li>`;
       for (const c of sum.cards) {
         if (c.kind === 'weapon') continue; // D98：武器是技法，列在技法欄
         const li = document.createElement('li');

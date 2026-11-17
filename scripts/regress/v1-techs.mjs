@@ -94,8 +94,9 @@ export async function run(browser) {
       await step(`${vp.name} 能力面板寫出技法`, async () => {
         await press(ctx, '#btn-abilities');
         await page.waitForFunction(() => window.__game.screens.includes('pause'));
-        const txt = await page.locator('#sum-cards li[data-card="ghostfire"]').innerText();
-        expect(/技法 \S+ Lv\d：適合/.test(txt), `能力面板沒寫技法：${txt}`);
+        // D98：技法（含鬼火）列在技法欄，各自寫適合的法具
+        const txt = (await page.locator('#sum-techs').innerText()).replace(/\s+/g, ' ');
+        expect(/鬼火 Lv\d\/5/.test(txt) && (txt.match(/適合法具：/g) ?? []).length >= 2, `能力面板沒寫技法：${txt}`);
         await press(ctx, '#btn-pause-resume');
         await page.waitForFunction(() => !window.__game.screens.includes('pause'));
       });
@@ -170,8 +171,8 @@ export async function run(browser) {
         expect(/技法換成「/.test(box), `HUD 沒有寫換成什麼：${box}`);
         await press(ctx, '#btn-abilities');
         await page.waitForFunction(() => window.__game.screens.includes('pause'));
-        const txt = await page.locator('#sum-cards li[data-card="ghostfire"]').innerText();
-        expect(/技法 \S+ Lv\d：適合/.test(txt), `換了之後能力面板沒有技法：${txt}`);
+        const txt = (await page.locator('#sum-techs').innerText()).replace(/\s+/g, ' ');
+        expect(/鬼火 Lv\d\/5/.test(txt) && (txt.match(/適合法具：/g) ?? []).length >= 2, `換了之後能力面板沒有技法：${txt}`);
         await press(ctx, '#btn-pause-resume');
         await page.waitForFunction(() => !window.__game.screens.includes('pause'));
         for (let i = 0; i < 50; i++) {

@@ -110,15 +110,13 @@ export async function run(browser) {
         await page.evaluate(() => window.__game.techLevel('ring', 7)); // 進化形態 7 級（D79：只顯示等級，沒有專屬強化）
         await press(ctx, '#btn-abilities');
         await page.waitForFunction(() => window.__game.screens.includes('pause'));
-        const evo = await page.evaluate(() => [...document.querySelectorAll('#sum-evo li')].map((li) => ({ id: li.dataset.evo, done: li.classList.contains('fused'), t: li.innerText.replace(/\s+/g, ' ') })));
-        expect(evo.some((e) => e.id === 'evoRing' && e.done && /燈籠環 Lv4\/4/.test(e.t)), `能力面板沒列出已進化：${JSON.stringify(evo)}`);
-        const form = await page.evaluate(() => {
-          const el = document.querySelector('#sum-evo li[data-evo="evoRing"] .evo-form');
-          return el ? { lv: el.dataset.formLevel, items: [...el.querySelectorAll('i')].map((i) => ({ ok: i.classList.contains('ok'), t: i.innerText })) } : null;
-        });
-        expect(form && form.lv === '7' && form.items.length === 1 && form.items[0].ok && /進化形態 Lv7\/8/.test(form.items[0].t), `進化形態的等級列不對（D79 起只有等級）：${JSON.stringify(form)}`);
-        const txt = await page.locator('#sum-cards li[data-card="ghostfire"]').innerText();
-        expect(/技法 燈籠環 Lv7：適合 .+/.test(txt) && /技法 鬼火 Lv\d：適合 .+/.test(txt), `技法列沒寫出適合的法具（詳細在暫停頁）：${txt}`);
+        // D98：進化過的技法直接換成進化版（新名字、從進化版 1 級算：7 級 → 進化版 4／5 級），不再留著原本的名字
+        const ring = (await page.locator('#sum-techs li[data-tech="ring"]').innerText()).replace(/\s+/g, ' ');
+        expect(/百鬼環 Lv4\/5/.test(ring) && /已進化/.test(ring) && !/燈籠環 Lv/.test(ring), `進化後沒有換成進化版：${ring}`);
+        const done = await page.evaluate(() => [...document.querySelectorAll('#sum-evo li')].map((li) => li.dataset.evo));
+        expect(!done.includes('evoRing'), `已進化的不該再列在「還能進化」：${done.join(',')}`);
+        const gf = (await page.locator('#sum-techs li[data-tech="ghostfire"]').innerText()).replace(/\s+/g, ' ');
+        expect(/適合法具：.+/.test(ring) && /鬼火 Lv\d\/5/.test(gf) && /適合法具：.+/.test(gf), `技法列沒寫出適合的法具：${ring} / ${gf}`);
         // 提燈小僧的畫面不准出現河童的字（新角色加進來之後最容易漏的是共用畫面）
         const body = await page.evaluate(() => document.body.innerText);
         const foreign = ['水盤', '河童', '激流盤', '水花', '渦盤', '水衣', '水坑', '間歇泉', '雨乞', '大波', '回潮', '渦流', '相撲', '滑水', '水域', '水牢'].filter((w) => body.includes(w));

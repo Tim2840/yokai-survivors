@@ -22,11 +22,13 @@ export async function run(browser) {
         }
         expect(b.x >= 0 && b.x + b.width <= vp.width, `「能力」鈕超出畫面（${vp.name}）`);
       });
-      await step(`${vp.name} 開局：只有主武器鬼火 Lv1、道具欄 0/6`, async () => {
+      await step(`${vp.name} 開局：技法欄只有鬼火 Lv1（D98：武器是技法）、道具欄 0/6`, async () => {
         await press(ctx, '#btn-abilities');
         await page.waitForFunction(() => window.__game.screens.includes('pause'));
+        const tech = await page.locator('#sum-techs').innerText();
+        expect(/鬼火 Lv1\/5/.test(tech) && /技法（1\/4 格）/.test(tech), `開局技法欄應該只有鬼火 Lv1、1/4 格：${tech}`);
         const txt = await page.locator('#sum-cards').innerText();
-        expect(/鬼火 Lv1\/8/.test(txt), `開局應該只看到鬼火 Lv1：${txt}`);
+        expect(!/鬼火/.test(txt), `鬼火不該再列在法具欄：${txt}`);
         const slots = await page.locator('#sum-slots').innerText();
         expect(/0\/6/.test(slots), `道具欄應該是 0/6：${slots}`);
         await press(ctx, '#btn-pause-resume');
