@@ -29,10 +29,12 @@ function standFor(run: Run, x: number, z: number, sec: number) {
 }
 
 describe('要石（D99）', () => {
-  it('資料：在要素名單裡；圈很小；越稀有加越多；有名稱與說明', () => {
+  it('資料：在要素名單裡；圈很小；越稀有加越多、撐越久；有名稱與說明', () => {
     expect(ELEMENT_KINDS).toContain('kaname');
     expect(KANAME.radius).toBeLessThanOrEqual(2.5);
     for (let k = 1; k < RARITIES.length; k++) expect(KANAME.bonus[RARITIES[k]]).toBeGreaterThan(KANAME.bonus[RARITIES[k - 1]]);
+    // 越稀有要撐越久（使用者 2026-11-18；舊版全部 10 秒會紅）
+    for (let k = 1; k < RARITIES.length; k++) expect(KANAME.seconds[RARITIES[k]], RARITIES[k]).toBeGreaterThan(KANAME.seconds[RARITIES[k - 1]]);
     for (const key of ['element.kaname', 'element.kaname.desc', 'element.kaname.act', 'levelup.kaname', 'card.kanameTag']) expect(t(key as I18nKey), key).not.toBe(key);
   });
 
@@ -40,9 +42,9 @@ describe('要石（D99）', () => {
     for (const r of RARITIES) {
       const run = make(41);
       const s = run.elements.devForce('kaname', r, run.px, run.pz)!;
-      standFor(run, s.x, s.z, KANAME.seconds * 0.5);
+      standFor(run, s.x, s.z, KANAME.seconds[r] * 0.5);
       expect(run.offerKind, `${r} 撐一半還沒好`).not.toBe('kaname');
-      standFor(run, s.x, s.z, KANAME.seconds * 0.6);
+      standFor(run, s.x, s.z, KANAME.seconds[r] * 0.6);
       expect(run.offerKind, r).toBe('kaname');
       const ids = run.offer!.map((o) => o.cardId);
       expect(new Set(ids).size).toBe(3);
@@ -59,7 +61,7 @@ describe('要石（D99）', () => {
   it('走出圈外進度慢慢退；按互動沒有用（要石要撐，不是按）', () => {
     const run = make(42);
     const s = run.elements.devForce('kaname', 'rare', run.px, run.pz)!;
-    standFor(run, s.x, s.z, KANAME.seconds * 0.6);
+    standFor(run, s.x, s.z, KANAME.seconds.rare * 0.6);
     const p0 = s.progress;
     expect(p0).toBeGreaterThan(0.5);
     standFor(run, s.x + KANAME.radius + 4, s.z, 2);

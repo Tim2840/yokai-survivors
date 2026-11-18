@@ -308,7 +308,7 @@ export class Elements {
         const inK = dist <= KANAME.radius && vertical;
         s.inside = inK;
         if (inK) {
-          s.progress = Math.min(1, s.progress + dt / KANAME.seconds);
+          s.progress = Math.min(1, s.progress + dt / KANAME.seconds[s.rarity]);
           mult = Math.max(mult, KANAME.spawnMult);
           this.kanameAt = s;
           if (s.progress >= 1) {
@@ -317,7 +317,7 @@ export class Elements {
             this.host.openStatPick(s.rarity);
             continue;
           }
-        } else s.progress = Math.max(0, s.progress - (dt * KANAME.decay) / KANAME.seconds);
+        } else s.progress = Math.max(0, s.progress - (dt * KANAME.decay) / KANAME.seconds[s.rarity]);
         if (dist < focusD && dist <= KANAME.radius + 4) {
           focusD = dist;
           focusSlot = s;

@@ -107,7 +107,8 @@ export const OMIKUJI_EFFECT: Record<OmikujiResult, { seconds: number; pct?: Part
  */
 export const KANAME = {
   radius: 2,
-  seconds: 10,
+  /** 要撐滿的秒數：越稀有越久（使用者 2026-11-18：「秒數要依據稀有度遞增」），加成也越大 */
+  seconds: { common: 6, rare: 8, epic: 10, legend: 12 } as Record<Rarity, number>,
   decay: 0.5,
   spawnMult: 1.4,
   near: { frac: 0.6, min: 6, max: 9 },
