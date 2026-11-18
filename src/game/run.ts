@@ -1128,7 +1128,7 @@ export class Run {
     this.elements.noteKill(x, z);
     this.enemies.kill(e);
     if (EVO.gem && isBoss) this.addGem(SOUL_GEM.boss + (this.summitChests > 0 ? SOUL_GEM.summitExtra : 0));
-    else if (EVO.gem && isElite && !this.stageGemGiven) {
+    else if (EVO.gem && isElite && !this.stageGemGiven && SOUL_GEM.firstElitePerStage > 0) {
       this.stageGemGiven = true;
       this.addGem(SOUL_GEM.firstElitePerStage);
     }

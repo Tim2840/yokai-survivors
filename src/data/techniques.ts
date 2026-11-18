@@ -445,12 +445,13 @@ export const BASE_TECH_LIKES: readonly string[] = ['power', 'atkSpeed', 'volley'
  * 進化（D93 夜行 D）：**技法 minLevel 級 ＋ 1 顆魂玉**（主武器自動升級，不再是材料條件）；進化前技法最多 capBefore 級。
  * gem = false 退回舊規則（主武器與技法都 5 級、不用魂玉；sim 對照用）。
  */
-export const EVO = { power: 1.25, minLevel: 4, capBefore: 5, gem: true };
+/** D101（使用者 2026-11-18：「技法太容易合成新的技法，我覺得需要增加難度」）：minLevel 4 → 5（練滿才能進化） */
+export const EVO = { power: 1.25, minLevel: 5, capBefore: 5, gem: true };
 /**
- * 魂玉（D93、docs/32 D）：進化的材料，從地圖拿。每關打倒的第一隻精英保證掉一顆（人人都能進化一次）；
+ * 魂玉（D93、docs/32 D）：進化的材料，從地圖拿。~~每關打倒的第一隻精英保證掉一顆~~（D101 拿掉：firstElitePerStage 1 → 0，進化太容易）；
  * 頭目（召喚的小頭目、大關頭目）每隻一顆；山頂神社啟動過再多一顆；試煉碑達到第 trialTier 段（0 起）以上一顆。
  */
-export const SOUL_GEM = { firstElitePerStage: 1, boss: 1, summitExtra: 1, trialTier: 1, noteSeconds: 5 } as const;
+export const SOUL_GEM = { firstElitePerStage: 0, boss: 1, summitExtra: 1, trialTier: 1, noteSeconds: 5 } as const;
 
 type Block = Record<string, number>;
 /** 技法 id → 區塊名 → 欄位 → 數值（換成新值，或加上去，看用在哪） */

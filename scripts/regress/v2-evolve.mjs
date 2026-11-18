@@ -3,7 +3,7 @@
 // 用開發介面 giveTech／techLevel 直接把技法練到 5 級（真的練要很久），其餘全是真實操作。
 import { openPage, startRun, press, step, expect, shot, reportErrors, walkOnto, hudTopOk, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'v2', desc: '技法進化：技法 4 級＋魂玉→提示→合魂祠出現、箭頭→走過去按互動→進化面板→點進化卡→HUD 進化成功→能力面板列出進化、少佔一格；技法卡帶詞條、不再有適合加成（三種畫面）', max: 240, stall: 60 };
+export const meta = { id: 'v2', desc: '技法進化：技法 5 級（練滿，D101）＋魂玉→提示→合魂祠出現、箭頭→走過去按互動→進化面板→點進化卡→HUD 進化成功→能力面板列出進化、少佔一格；技法卡帶詞條、不再有適合加成（三種畫面）', max: 240, stall: 60 };
 
 const inViewOf = (vp) => (c) => c.r.x >= 0 && c.r.y >= 0 && c.r.x + c.r.w <= vp.width + 1 && c.r.y + c.r.h <= vp.height + 1;
 
@@ -43,7 +43,7 @@ export async function run(browser) {
         await dismiss();
       }, 60);
 
-      await step(`${vp.name} 技法練到 4 級、打倒精英拿到魂玉（HUD 提示）：HUD 提示「材料齊了」、合魂祠出現、箭頭指過去`, async () => {
+      await step(`${vp.name} 技法 4 級＋魂玉還不能進化（D101）→練滿 5 級、拿到魂玉（HUD 提示）：HUD 提示「材料齊了」、合魂祠出現、箭頭指過去`, async () => {
         await page.evaluate(() => {
           const g = window.__game;
           g.giveTech('ring');
@@ -53,12 +53,14 @@ export async function run(browser) {
         expect((await page.evaluate(() => window.__game.run.evolvable)).length === 0, '還沒有魂玉就可以進化了');
         await page.evaluate(() => {
           const g = window.__game;
-          g.eliteKill();
+          g.giveGem(1); // D101：精英不再保證掉；魂玉從頭目、山頂神社、試煉碑拿（這裡用開發介面直接給）
           g.advance(0.1);
           g.render();
         });
         const note = await page.evaluate(() => document.querySelector('#wave-note')?.textContent ?? '');
-        expect(/魂玉/.test(note), `打倒精英後沒有魂玉提示：「${note}」`);
+        expect(/魂玉/.test(note) && /5 級/.test(note), `拿到魂玉後提示不對（要寫練到 5 級）：「${note}」`);
+        expect((await page.evaluate(() => window.__game.run.evolvable)).length === 0, '4 級＋魂玉就可以進化了（D101 要練滿 5 級）');
+        await page.evaluate(() => { const g = window.__game; g.techLevel('ring', 5); g.advance(0.1); g.render(); });
         const ev = await page.evaluate(() => window.__game.run.evolvable);
         expect(ev.includes('evoRing'), `沒有可以進化的：${JSON.stringify(ev)}`);
         const box = await page.locator('#synergy-box').innerText();
@@ -89,7 +91,7 @@ export async function run(browser) {
         await page.evaluate(() => window.__game.render());
         expect(await open(), `按互動後合魂祠沒有開進化面板`);
         const cs = await cardsInfo();
-        expect(cs.length === 1 && cs[0].id === 'evo:evoRing' && /進化/.test(cs[0].t) && /燈籠環 Lv4 ＋ 魂玉/.test(cs[0].t) && !/鬼火 Lv/.test(cs[0].t), `進化卡不對（D93：材料是「技法 4 級＋魂玉」）：${JSON.stringify(cs)}`);
+        expect(cs.length === 1 && cs[0].id === 'evo:evoRing' && /進化/.test(cs[0].t) && /燈籠環 Lv5 ＋ 魂玉/.test(cs[0].t) && !/鬼火 Lv/.test(cs[0].t), `進化卡不對（D101：材料是「技法 5 級＋魂玉」）：${JSON.stringify(cs)}`);
         for (const c of cs) expect(inView(c), `進化卡超出畫面（${vp.name}）：${JSON.stringify(c.r)}`);
         files.push(await shot(ctx, 'v2-pick'));
         const used0 = await page.evaluate(() => window.__game.run.techs.length);
@@ -110,9 +112,9 @@ export async function run(browser) {
         await page.evaluate(() => window.__game.techLevel('ring', 7)); // 進化形態 7 級（D79：只顯示等級，沒有專屬強化）
         await press(ctx, '#btn-abilities');
         await page.waitForFunction(() => window.__game.screens.includes('pause'));
-        // D98：進化過的技法直接換成進化版（新名字、從進化版 1 級算：7 級 → 進化版 4／5 級），不再留著原本的名字
+        // D98：進化過的技法直接換成進化版（新名字、從進化版 1 級算）；D101 起 5 級進化：7 級 → 進化版 3／4 級
         const ring = (await page.locator('#sum-techs li[data-tech="ring"]').innerText()).replace(/\s+/g, ' ');
-        expect(/百鬼環 Lv4\/5/.test(ring) && /已進化/.test(ring) && !/燈籠環 Lv/.test(ring), `進化後沒有換成進化版：${ring}`);
+        expect(/百鬼環 Lv3\/4/.test(ring) && /已進化/.test(ring) && !/燈籠環 Lv/.test(ring), `進化後沒有換成進化版：${ring}`);
         const done = await page.evaluate(() => [...document.querySelectorAll('#sum-evo li')].map((li) => li.dataset.evo));
         expect(!done.includes('evoRing'), `已進化的不該再列在「還能進化」：${done.join(',')}`);
         const gf = (await page.locator('#sum-techs li[data-tech="ghostfire"]').innerText()).replace(/\s+/g, ' ');

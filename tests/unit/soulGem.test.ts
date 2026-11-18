@@ -50,16 +50,13 @@ describe('魂玉與進化', () => {
     expect(r3.soulGems).toBe(0);
   });
 
-  it('每關第一隻精英給一顆，第二隻不給；下一關又給（舊版沒有魂玉會紅）', () => {
+  it('D101：精英不再保證掉魂玉（進化太容易，使用者 2026-11-18；舊版第一隻精英給一顆會紅）；進化要練滿', () => {
+    expect(SOUL_GEM.firstElitePerStage).toBe(0);
+    expect(EVO.minLevel).toBe(EVO.capBefore);
     const run = make();
     killVariant(run, 1);
-    expect(run.soulGems).toBe(SOUL_GEM.firstElitePerStage);
     killVariant(run, 1);
-    expect(run.soulGems).toBe(SOUL_GEM.firstElitePerStage);
-    run.startNextStage();
-    run.director.active = false;
-    killVariant(run, 1);
-    expect(run.soulGems).toBe(2 * SOUL_GEM.firstElitePerStage);
+    expect(run.soulGems).toBe(0);
   });
 
   it('頭目給一顆；山頂神社啟動過再多一顆', () => {
@@ -74,7 +71,7 @@ describe('魂玉與進化', () => {
 
   it('拿到魂玉有 HUD 提示；能力面板顯示手上幾顆', async () => {
     const run = make();
-    killVariant(run, 1);
+    killVariant(run, 2); // D101：精英不再掉，改用頭目
     expect(run.gemNote && run.gemNote.until > run.clock).toBe(true);
     const { summarizeBuild } = await import('../../src/game/buildSummary');
     expect(summarizeBuild(run).gems).toBe(1);

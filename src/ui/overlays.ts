@@ -551,7 +551,7 @@ function techDetailsHtml(sum: BuildSummary): string {
       .filter((k) => d.affixes[k] > 1e-9)
       .map((k) => (k === 'count' ? t('card.affixCount', { name: t(AFFIX_LABEL[k] as I18nKey), v: Math.floor(d.affixes[k]) }) : k === 'chain' ? t('tdet.chainAffix', { v: fix(d.affixes[k], 1) }) : t('card.affixItem', { name: t(AFFIX_LABEL[k] as I18nKey), v: Math.round(d.affixes[k] * 100) })))
       .join('、');
-    // 進化版：名字換掉、等級從進化版的 1 級算（4 級進化 → 進化版 1 級）
+    // 進化版：名字換掉、等級從進化版的 1 級算（EVO.minLevel 級進化 → 進化版 1 級）
     const off = d.evo ? EVO.minLevel - 1 : 0;
     const name = d.evo ? t(`evo.${d.evo}` as I18nKey) : techName(d.id);
     const desc = d.evo ? t(`evo.${d.evo}.desc` as I18nKey) : t(`tech.${d.id}.desc` as I18nKey);
