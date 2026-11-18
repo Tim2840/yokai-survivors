@@ -15,6 +15,10 @@ import { ENEMIES, ENEMY_IDS } from '../data/enemies';
 import { PICKUPS } from '../data/pickups';
 import { DOSOJIN, KANAME, TRIAL, JIZO, OFFERING, trialNeeds, SUMMIT, OFFERING_TECH } from '../data/elements';
 
+let coarse: boolean | null = null;
+/** 觸控為主的裝置（只查一次）：提示不寫鍵盤鍵 */
+const touchUi = (): boolean => (coarse ??= window.matchMedia('(pointer: coarse)').matches);
+
 
 /**
  * 戰鬥 HUD（docs/08 第 5 節）：左上生命、上中波數與倒數、右上暫停鈕、下方魂火條與等級、左下虛擬搖桿（觸控裝置）。
@@ -348,7 +352,7 @@ export function buildHud(parent: HTMLElement): Hud {
           elBox.dataset.rarity = f.rarity;
           elTitle.textContent = `${t(`rarity.${f.rarity}`)}・${t(`element.${f.kind}`)}`;
           elDesc.textContent = f.kind === 'summon' ? t('element.summon.desc', { mult: mult.toFixed(1) }) : f.kind === 'fox' ? describeFox(f, run.cardCounts) : f.kind === 'fuse' ? t(f.blocked ? 'element.fuse.none' : 'element.fuse.desc') : f.kind === 'dosojin' ? t('element.dosojin.desc') : f.kind === 'summit' ? t(f.blocked ? 'element.summit.none' : 'element.summit.desc', { m: SUMMIT.bossMult, n: SUMMIT.extraChests }) : f.kind === 'trial' ? trialHint(f.rarity, run.time / run.director.duration) : f.kind === 'kaname' ? t('element.kaname.desc', { s: KANAME.seconds, pct: Math.round(KANAME.bonus[f.rarity] * 100) }) : describeElement(f, run.tech.offerUp(DESC_RNG, 1).length > 0);
-          elAct.textContent = f.kind === 'fox' ? t('element.fox.act') : f.kind === 'kaname' ? t('element.kaname.act') : t('element.hold');
+          elAct.textContent = f.kind === 'fox' ? t('element.fox.act') : f.kind === 'kaname' ? t('element.kaname.act') : t(touchUi() ? 'element.hold.touch' : 'element.hold');
         }
         // D99：只有要石有進度（撐住的秒數）；其他要素按一下就取得，不顯示進度條
         elFill.parentElement!.classList.toggle('hidden', f.kind !== 'kaname');

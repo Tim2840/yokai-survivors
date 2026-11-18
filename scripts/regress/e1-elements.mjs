@@ -98,7 +98,7 @@ export async function run(browser) {
         expect(await page.locator('#element-box').isVisible(), `走近了但沒有要素提示（${vp.name}）`);
         const title = await page.locator('#element-title').innerText();
         expect(title === '良・石地藏', `提示標題不對：${title}`);
-        expect(/互動/.test(await page.locator('#element-act').innerText()), '提示沒寫要按互動');
+        { const act = await page.locator('#element-act').innerText(); expect(/互動/.test(act) && (/鍵盤/.test(act) === !vp.hasTouch), `提示不對（手機不寫鍵盤，桌面要寫）：${act}`); }
         expect(await page.locator('#btn-interact').isVisible(), `「互動」鈕沒出現（${vp.name}）`);
         files.push(await shot(ctx, 'e1-jizo'));
         // D99：站著 3 秒也不會取得（以前站 1 秒就取得）
