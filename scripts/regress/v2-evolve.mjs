@@ -1,9 +1,9 @@
-// v2：技法進化（D53）。兩個技法都練到 5 級 → 「可以進化」提示 → 合魂祠出現（箭頭指過去）→ 走過去按住 → 進化面板（只列進化）→ 真的點進化卡 →
+// v2：技法進化（D53）。兩個技法都練到 5 級 → 「可以進化」提示 → 合魂祠出現（箭頭指過去）→ 走過去按互動 → 進化面板（只列進化）→ 真的點進化卡 →
 // HUD「進化成功」→ 能力面板的「技法進化」列出已進化 → 少佔一格。另外：選卡畫面的技法卡帶詞條（條數看稀有度）、法具卡只寫會影響的現有招式。三種畫面，卡住偵測。
 // 用開發介面 giveTech／techLevel 直接把技法練到 5 級（真的練要很久），其餘全是真實操作。
 import { openPage, startRun, press, step, expect, shot, reportErrors, walkOnto, hudTopOk, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'v2', desc: '技法進化：技法 4 級＋魂玉→提示→合魂祠出現、箭頭→走過去按住→進化面板→點進化卡→HUD 進化成功→能力面板列出進化、少佔一格；技法卡帶詞條、不再有適合加成（三種畫面）', max: 240, stall: 60 };
+export const meta = { id: 'v2', desc: '技法進化：技法 4 級＋魂玉→提示→合魂祠出現、箭頭→走過去按互動→進化面板→點進化卡→HUD 進化成功→能力面板列出進化、少佔一格；技法卡帶詞條、不再有適合加成（三種畫面）', max: 240, stall: 60 };
 
 const inViewOf = (vp) => (c) => c.r.x >= 0 && c.r.y >= 0 && c.r.x + c.r.w <= vp.width + 1 && c.r.y + c.r.h <= vp.height + 1;
 
@@ -76,7 +76,7 @@ export async function run(browser) {
         files.push(await shot(ctx, 'v2-shrine'));
       }, 90);
 
-      await step(`${vp.name} 走過去按住 → 進化面板只列進化 → 點進化卡 → 進化成功`, async () => {
+      await step(`${vp.name} 走過去按互動 → 進化面板只列進化 → 點進化卡 → 進化成功`, async () => {
         const spot = await page.evaluate(() => window.__game.run.fuseSlot);
         for (let tries = 0; tries < 3 && !(await walkOnto(ctx, spot.x, spot.z)); tries++) await dismiss();
         const open = async () => (await page.evaluate(() => window.__game.screens)).includes('levelup') && (await page.locator('#lv-title').innerText()).includes('合魂祠');
@@ -87,7 +87,7 @@ export async function run(browser) {
           await page.evaluate(() => window.__game.advance(0.25));
         }
         await page.evaluate(() => window.__game.render());
-        expect(await open(), `按住合魂祠沒有開進化面板`);
+        expect(await open(), `按互動後合魂祠沒有開進化面板`);
         const cs = await cardsInfo();
         expect(cs.length === 1 && cs[0].id === 'evo:evoRing' && /進化/.test(cs[0].t) && /燈籠環 Lv4 ＋ 魂玉/.test(cs[0].t) && !/鬼火 Lv/.test(cs[0].t), `進化卡不對（D93：材料是「技法 4 級＋魂玉」）：${JSON.stringify(cs)}`);
         for (const c of cs) expect(inView(c), `進化卡超出畫面（${vp.name}）：${JSON.stringify(c.r)}`);

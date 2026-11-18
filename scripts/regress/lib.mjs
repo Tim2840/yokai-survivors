@@ -159,7 +159,7 @@ const WALK_SIDES = [[-3, 0, 'KeyD', 1, 0], [3, 0, 'KeyA', -1, 0], [0, -3, 'KeyS'
  * 傳送到 (x,z) 旁 3 公尺（挑沒被擋的一邊；鏡頭沒轉時螢幕方向 = 世界方向），再用真實輸入（鍵盤／搖桿）走到 0.8 公尺內放開。
  * 升級選卡跳出來（模擬暫停）就先停下來，回傳 false 讓呼叫端選完卡再走一次。
  */
-export async function walkOnto(ctx, x, z) {
+export async function walkOnto(ctx, x, z, { press = true } = {}) {
   const { page, vp } = ctx;
   let side = null;
   for (const sd of WALK_SIDES) {
@@ -185,7 +185,30 @@ export async function walkOnto(ctx, x, z) {
   }
   if (!vp.hasTouch) await page.keyboard.up(side[2]);
   else await page.mouse.up();
+  // D99：走到要素上之後要按互動（桌面按 E、手機點「互動」鈕）
+  if (arrived && press) await pressInteract(ctx);
   return arrived;
+}
+
+/** 按互動鍵（D99）：桌面按 E；手機點畫面上的「互動」鈕（要看得到才點，看不到就失敗）。沒有可以按的要素時不做事 */
+export async function pressInteract(ctx) {
+  const { page, vp } = ctx;
+  await page.evaluate(() => { window.__game.advance(0.05); window.__game.render(); });
+  const can = await page.evaluate(() => !document.querySelector('#btn-interact')?.classList.contains('hidden'));
+  if (!can) return false;
+  if (!vp.hasTouch) await page.keyboard.press('KeyE');
+  else {
+    const btn = page.locator('#btn-interact');
+    expect(await btn.isVisible(), `「互動」鈕看不到（${vp.name}）`);
+    // 鈕有呼吸動畫（Playwright 會判定「不穩定」一直等）：直接點中心，跟手指一樣；並確認沒被別的東西蓋住、沒超出畫面
+    const b = await btn.boundingBox();
+    expect(b && b.x >= 0 && b.y >= 0 && b.x + b.width <= vp.width + 1 && b.y + b.height <= vp.height + 1, `「互動」鈕超出畫面（${vp.name}）：${JSON.stringify(b)}`);
+    const hit = await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest('#btn-interact'), [b.x + b.width / 2, b.y + b.height / 2]);
+    expect(hit, `「互動」鈕被別的東西蓋住（${vp.name}）`);
+    await page.touchscreen.tap(b.x + b.width / 2, b.y + b.height / 2);
+  }
+  await page.evaluate(() => { window.__game.advance(0.1); window.__game.render(); });
+  return true;
 }
 
 /** HUD 頂端列沒有被中間的長提示擠壞：「能力」鈕只有一行字、血條夠長、三塊互不重疊、提示不蓋住兩側（全畫面尺寸都要過） */

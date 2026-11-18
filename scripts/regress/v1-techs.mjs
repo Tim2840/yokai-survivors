@@ -1,10 +1,10 @@
 // v1：技法（D48；D49 起技法卡機率混在一般升級卡裡、最高 8 級、分稀有度）。主武器 4 級不再跳面板 → 升級卡裡出現一張技法卡（標稀有度、「技法」、適合）
 // → 真的點 → 學會、戰鬥中看得到效果 → 再拿一張（新的，或已有的下一級：卡上寫 Lv1→Lv2）→ 能力面板寫出技法
-// → 第 1 關過關：過關畫面不再跳技法面板，直接出發 → 第 2 關道祖神（D47）：HUD 提示與箭頭（15 秒後收掉）→ 走過去按住
+// → 第 1 關過關：過關畫面不再跳技法面板，直接出發 → 第 2 關道祖神（D47）：HUD 提示與箭頭（15 秒後收掉）→ 走過去按互動
 // → 面板是「換掉 X → Y」提案＋「維持現狀」→ 點換 → 技法換了、HUD 提示、能力面板仍列出技法；同一關不再出現。
 import { openPage, startRun, press, step, expect, shot, reportErrors, walkOnto, hudTopOk, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'v1', desc: '技法：升級卡裡的技法卡→真的點→效果出現→再拿一張（新的或升級）→能力面板→過關畫面不跳技法→道祖神（箭頭→走過去按住→換掉一個）（三種畫面）', max: 600, stall: 60 };
+export const meta = { id: 'v1', desc: '技法：升級卡裡的技法卡→真的點→效果出現→再拿一張（新的或升級）→能力面板→過關畫面不跳技法→道祖神（箭頭→走過去按互動→換掉一個）（三種畫面）', max: 600, stall: 60 };
 
 /** 道祖神的提示秒數（DOSOJIN.hintSeconds） */
 const HINT = 15;
@@ -140,7 +140,7 @@ export async function run(browser) {
         expect(!/道祖神/.test(note2) && !arrowOn, `道祖神的提示一直沒收掉：${note2}`);
         expect(await dos(), '道祖神自己不見了');
       }, 90);
-      await step(`${vp.name} 走過去按住 → 換掉一個技法`, async () => {
+      await step(`${vp.name} 走過去按互動 → 換掉一個技法`, async () => {
         const before = await techs();
         for (let tries = 0; tries < 3 && !(await walkOnto(ctx, spot.x, spot.z)); tries++) await dismiss();
         const dosOpen = async () => (await page.evaluate(() => window.__game.screens)).includes('levelup') && (await page.locator('#lv-title').innerText()).includes('道祖神');
@@ -152,7 +152,7 @@ export async function run(browser) {
         }
         await page.evaluate(() => window.__game.render());
         const title = await page.locator('#lv-title').innerText();
-        expect(/道祖神/.test(title), `按住道祖神沒有開技法面板：${title}`);
+        expect(/道祖神/.test(title), `按互動後道祖神沒有開技法面板：${title}`);
         const cards = await cardsInfo();
         const swaps = cards.filter((c) => c.id.startsWith('tech-swap:'));
         const keep = cards.filter((c) => c.id === 'tech-keep');

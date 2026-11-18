@@ -1,9 +1,9 @@
-// e2：用地形的要素（E2，D54）。每關在地圖最高、走得到的平地放一座「山頂神社」：開局頂端提示＋HUD 箭頭指過去 → 走過去按住 →
+// e2：用地形的要素（E2，D54）。每關在地圖最高、走得到的平地放一座「山頂神社」：開局頂端提示＋HUD 箭頭指過去 → 走過去按互動 →
 // 結果卡寫出「頭目生命 ×1.5、多掉 1 個寶箱」→ 之後召喚的頭目真的比較肥（生命倍率 1.5）。三種畫面，卡住偵測。
-// 「走得到」由單元測試用同一套走路規則全掃；這裡用真實輸入走最後一段（站上去按住）。
+// 「走得到」由單元測試用同一套走路規則全掃；這裡用真實輸入走最後一段（站上去按互動）。
 import { openPage, startRun, press, step, expect, shot, reportErrors, walkOnto, hudTopOk, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'e2', desc: '山頂神社：開局提示與箭頭→走過去按住→結果卡（頭目 ×1.5、多掉寶箱）→召喚的頭目真的更肥；頭目出現後來不及（三種畫面）', max: 240, stall: 60 };
+export const meta = { id: 'e2', desc: '山頂神社：開局提示與箭頭→走過去按互動→結果卡（頭目 ×1.5、多掉寶箱）→召喚的頭目真的更肥；頭目出現後來不及（三種畫面）', max: 240, stall: 60 };
 
 export async function run(browser) {
   const files = [];
@@ -37,7 +37,7 @@ export async function run(browser) {
         files.push(await shot(ctx, 'e2-hint'));
       });
 
-      await step(`${vp.name} 走過去按住 → 結果卡寫出頭目生命 ×1.5、多掉 1 個寶箱`, async () => {
+      await step(`${vp.name} 走過去按互動 → 結果卡寫出頭目生命 ×1.5、多掉 1 個寶箱`, async () => {
         for (let tries = 0; tries < 3 && !(await walkOnto(ctx, summit.x, summit.z)); tries++) await dismiss();
         const open = async () => (await page.evaluate(() => window.__game.screens)).includes('result');
         for (let i = 0; i < 24 && !(await open()); i++) {
@@ -47,7 +47,7 @@ export async function run(browser) {
           await page.evaluate(() => window.__game.advance(0.25));
         }
         await page.evaluate(() => window.__game.render());
-        expect(await open(), `按住山頂神社後沒有結果卡（${vp.name}）`);
+        expect(await open(), `按互動後山頂神社後沒有結果卡（${vp.name}）`);
         const card = await page.evaluate(() => {
           const o = document.querySelector('.overlay[data-screen="result"]');
           return { title: o.querySelector('h2').textContent, text: o.innerText.replace(/\s+/g, ' ') };

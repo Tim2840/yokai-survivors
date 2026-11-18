@@ -338,6 +338,8 @@ export function installDevApi(ctx: DevContext): void {
     },
     /** 大招量表直接充滿（測試用；發動仍要真的按大招鈕或 F 鍵） */
     chargeUlt: () => run()?.devChargeUlt(),
+    /** 按互動鍵（D99；等同桌面 E） */
+    interact: () => run()?.requestInteract(),
     /** 換成指定的大招（可帶升級等級） */
     setUlt: (id: string, level = 0) => run()?.devSetUlt(id, level),
     /** 頭目現在就倒下（走正常的擊殺流程，傳送門會開） */

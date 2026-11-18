@@ -1,9 +1,9 @@
-// e1：地圖要素（M2-1）。真的走進去、按住不動：石地藏（護甲）、詛咒祭壇（一升一降）、百鬼試煉碑（D97：試煉中圈內加成，原結界石）。
+// e1：地圖要素（M2-1）。真的走過去、按互動（D99：桌面 E、手機「互動」鈕）：石地藏（護甲）、詛咒祭壇、賽錢箱、寶箱、神籤、狐面商（面板）、百鬼試煉碑、要石（站在小圈裡撐滿）。
 // D36：集滿後跳結果卡（模擬停住、列出拿到什麼、防誤觸、真的點「繼續」或按 Enter；同時升級時先結果卡再選卡）。
 // 要素用開發介面放到玩家身邊（隨機落下的位置不固定），其餘（走路、HUD 提示、效果）全用真實輸入與畫面。三種畫面各一次，卡住偵測。
-import { openPage, startRun, step, expect, shot, reportErrors, snapshotOf, walkOnto, hudTopOk, VIEWPORTS } from './lib.mjs';
+import { pressInteract, openPage, startRun, step, expect, shot, reportErrors, snapshotOf, walkOnto, hudTopOk, VIEWPORTS } from './lib.mjs';
 
-export const meta = { id: 'e1', desc: '地圖要素：走近→提示→按住→結果卡（停住、列出拿到什麼、防誤觸、點繼續）→效果（石地藏、詛咒祭壇、賽錢箱、寶箱、神籤、百鬼試煉碑（含圈內加成）、狐面商走進紅圈收下）三種畫面', max: 600, stall: 60 };
+export const meta = { id: 'e1', desc: '地圖要素：走近→提示→按互動（D99）→結果卡（停住、列出拿到什麼、防誤觸、點繼續）→效果（石地藏、詛咒祭壇、賽錢箱、寶箱、神籤、百鬼試煉碑（含圈內加成）、狐面商面板、要石撐滿三選一）三種畫面', max: 600, stall: 60 };
 
 const SIDES = [[0, 3, 'KeyW', 0, -1], [0, -3, 'KeyS', 0, 1], [-3, 0, 'KeyD', 1, 0], [3, 0, 'KeyA', -1, 0]];
 
@@ -60,7 +60,7 @@ export async function run(browser) {
         return spot;
       };
       const screens = () => page.evaluate(() => window.__game.screens);
-      /** 等結果卡出現（按住集滿後）：回傳卡上的標題與每一行 */
+      /** 等結果卡出現（按互動後）：回傳卡上的標題與每一行 */
       const waitResult = async (label) => {
         for (let i = 0; i < 16 && !(await screens()).includes('result'); i++) await page.evaluate(() => window.__game.advance(0.25));
         expect((await screens()).includes('result'), `${label}集滿後沒有結果卡（${vp.name}）`);
@@ -91,16 +91,20 @@ export async function run(browser) {
         await page.evaluate(() => window.__game.advance(0.3));
       };
 
-      await step(`${vp.name} 石地藏：走近出現提示、按住 1 秒 → 護甲 +1 整場（良階）`, async () => {
+      await step(`${vp.name} 石地藏：走近出現提示與「互動」鈕、只站著不會取得、按了才取得 → 護甲 +1 整場（良階）`, async () => {
         const s0 = await stats();
         const spot = await approach('jizo', 'rare');
         await page.evaluate(() => { window.__game.advance(0.4); window.__game.render(); });
         expect(await page.locator('#element-box').isVisible(), `走近了但沒有要素提示（${vp.name}）`);
         const title = await page.locator('#element-title').innerText();
         expect(title === '良・石地藏', `提示標題不對：${title}`);
-        const fill = await page.locator('#element-fill').evaluate((n) => parseFloat(n.style.width));
-        expect(fill > 5 && fill < 100, `按住途中進度條應該在中間：${fill}`);
+        expect(/互動/.test(await page.locator('#element-act').innerText()), '提示沒寫要按互動');
+        expect(await page.locator('#btn-interact').isVisible(), `「互動」鈕沒出現（${vp.name}）`);
         files.push(await shot(ctx, 'e1-jizo'));
+        // D99：站著 3 秒也不會取得（以前站 1 秒就取得）
+        await page.evaluate(() => { for (let i = 0; i < 30; i++) window.__game.advance(0.1); });
+        expect(!(await screens()).includes('result'), `只站著就取得了（D99 要按互動，${vp.name}）`);
+        expect(await pressInteract(ctx), `按不到互動（${vp.name}）`);
         const card = await waitResult('石地藏');
         expect(card.title === '良・石地藏', `結果卡標題不對：${card.title}`);
         expect(card.lines.some((l) => /^回復 \d+ 生命$|^生命已滿$/.test(l.text)) && card.lines.some((l) => l.text === '護甲 +1（整場）'), `結果卡內容不對：${JSON.stringify(card.lines)}`);
@@ -115,11 +119,12 @@ export async function run(browser) {
         expect(Math.abs(s1.armor - s0.armor - 1) < 1e-6, `石地藏護甲沒加 1（良階，D78）：${s0.armor} → ${s1.armor}`);
         await leave(spot);
         expect(!(await page.locator('#element-box').isVisible()), `離開了提示還在（${vp.name}）`);
-      });
+      }, 60);
 
-      await step(`${vp.name} 詛咒祭壇：按住 1.5 秒 → 隨機數個效果（好處加屬性、詛咒讓敵人變強）`, async () => {
+      await step(`${vp.name} 詛咒祭壇：按互動 → 隨機數個效果（好處加屬性、詛咒讓敵人變強）`, async () => {
         const s0 = await stats();
         const spot = await approach('altar', 'epic');
+        await page.evaluate(() => { window.__game.advance(0.2); window.__game.render(); });
         const info = (await el()).find((e) => e.kind === 'altar' && Math.hypot(e.x - spot.x, e.z - spot.z) < 0.01);
         expect(info, '找不到剛放的祭壇');
         expect(info.effects.length === 3, `珍階祭壇應該抽 3 個效果：${JSON.stringify(info.effects)}`);
@@ -129,6 +134,7 @@ export async function run(browser) {
         expect(shown === 3, `祭壇說明應該列出 3 個效果：${desc}`);
         expect(/敵人/.test(desc), `說明裡沒有詛咒（敵人變強）：${desc}`);
         files.push(await shot(ctx, 'e1-altar'));
+        await pressInteract(ctx);
         const card = await waitResult('詛咒祭壇');
         expect(card.lines.length === 3, `結果卡應列出 3 個效果：${JSON.stringify(card.lines)}`);
         expect(card.lines.some((l) => l.t === 'curse' && /bad/.test(l.cls) && /敵人/.test(l.text)), `結果卡沒標出詛咒：${JSON.stringify(card.lines)}`);
@@ -144,14 +150,15 @@ export async function run(browser) {
         await leave(spot);
       });
 
-      await step(`${vp.name} 賽錢箱：按住 → 扣生命 → 三選一面板（標題不同）→ 真的點卡 → 繼續`, async () => {
+      await step(`${vp.name} 賽錢箱：按互動 → 扣生命 → 三選一面板（標題不同）→ 真的點卡 → 繼續`, async () => {
         const hp0 = (await page.evaluate(() => window.__game.run)).hp;
         const spot = await approach('offering', 'rare');
         await page.evaluate(() => { window.__game.advance(0.3); window.__game.render(); });
         const desc = await page.locator('#element-desc').innerText();
         expect(/20%/.test(desc), `賽錢箱說明沒寫出代價 20%：${desc}`);
+        await pressInteract(ctx);
         for (let i = 0; i < 12 && !(await page.evaluate(() => window.__game.screens)).includes('levelup'); i++) await page.evaluate(() => window.__game.advance(0.25));
-        expect((await page.evaluate(() => window.__game.screens)).includes('levelup'), `按住賽錢箱後沒有開選卡面板（${vp.name}）`);
+        expect((await page.evaluate(() => window.__game.screens)).includes('levelup'), `按互動後賽錢箱沒有開選卡面板（${vp.name}）`);
         const title = await page.locator('.overlay[data-screen="levelup"] h2').innerText();
         expect(/賽錢箱/.test(title), `面板標題不對：${title}`);
         // D53：每一次升級卡都有稀有度（主武器、多重、穿透、備用獎勵也算）：良階賽錢箱的三張卡全部是珍階
@@ -164,11 +171,12 @@ export async function run(browser) {
         await leave(spot);
       });
 
-      await step(`${vp.name} 寶箱：按住 → 免費三選一`, async () => {
+      await step(`${vp.name} 寶箱：按互動 → 免費三選一`, async () => {
         const hp0 = (await page.evaluate(() => window.__game.run)).hp;
         const spot = await approach('chest', 'epic');
+        await pressInteract(ctx);
         for (let i = 0; i < 12 && !(await page.evaluate(() => window.__game.screens)).includes('levelup'); i++) await page.evaluate(() => window.__game.advance(0.25));
-        expect((await page.evaluate(() => window.__game.screens)).includes('levelup'), `按住寶箱後沒有開選卡面板（${vp.name}）`);
+        expect((await page.evaluate(() => window.__game.screens)).includes('levelup'), `按互動後寶箱沒有開選卡面板（${vp.name}）`);
         const title = await page.locator('.overlay[data-screen="levelup"] h2').innerText();
         expect(/寶箱/.test(title), `面板標題不對：${title}`);
         await page.locator('.overlay[data-screen="levelup"] .card').nth(1).click();
@@ -178,8 +186,10 @@ export async function run(browser) {
         await leave(spot);
       });
 
-      await step(`${vp.name} 神籤：按住 → 結果卡寫出籤名與效果`, async () => {
+      await step(`${vp.name} 神籤：按互動 → 結果卡寫出籤名與效果`, async () => {
         const spot = await approach('omikuji', 'epic');
+        await page.evaluate(() => { window.__game.advance(0.2); window.__game.render(); });
+        await pressInteract(ctx);
         const card = await waitResult('神籤');
         expect(card.title === '珍・神籤', `結果卡標題不對：${card.title}`);
         expect(card.lines[0].t === 'omikuji' && /大吉|中吉|小吉|末吉|凶/.test(card.lines[0].text), `神籤結果文字不對：${JSON.stringify(card.lines)}`);
@@ -189,55 +199,81 @@ export async function run(browser) {
         await leave(spot);
       });
 
-      await step(`${vp.name} 狐面商：走近 → 提示寫出紅圈、藍圈兩個提案 → 真的走進紅圈站 1 秒 → 結果卡寫出拿到的取捨道具`, async () => {
-        const spot = await page.evaluate(() => window.__game.forceElement('fox', 'rare'));
-        expect(spot, `放不下狐面商（${vp.name}）`);
+      await step(`${vp.name} 狐面商：走近 → 提示寫出兩個提案 → 按互動 → 面板（兩個提案＋不要）→ 點第一個 → 結果卡寫出拿到的取捨道具`, async () => {
+        const spot = await approach('fox', 'rare');
         // 自然落下的狐面商也可能在場：只看剛剛強制放的那一個（離 spot 最近的）
         const fox = (await el()).filter((e) => e.kind === 'fox').sort((p, q) => Math.hypot(p.x - spot.x, p.z - spot.z) - Math.hypot(q.x - spot.x, q.z - spot.z))[0];
-        expect(fox && fox.offers.length === 2 && fox.rings.length === 2, `狐面商的提案或圈不對：${JSON.stringify(fox)}`);
-        // 先站到商人旁邊看提示
-        await page.evaluate(([x, z]) => { window.__game.teleport(x + 0.5, z); window.__game.advance(0.2); window.__game.render(); }, [spot.x, spot.z]);
+        expect(fox && fox.offers.length === 2, `狐面商的提案不對：${JSON.stringify(fox)}`);
+        await page.evaluate(() => { window.__game.advance(0.2); window.__game.render(); });
         expect(await page.locator('#element-box').isVisible(), `走近狐面商沒有提示（${vp.name}）`);
         const title = await page.locator('#element-title').innerText();
         expect(title === '良・狐面商', `提示標題不對：${title}`);
         const desc = await page.locator('#element-desc').innerText();
-        expect(/紅圈：.+，但.+/.test(desc) && /藍圈：.+，但.+/.test(desc), `提示沒寫出兩個提案與代價：${desc}`);
+        expect(/：.+，但.+/.test(desc), `提示沒寫出提案與代價：${desc}`);
         files.push(await shot(ctx, 'e1-fox'));
-        // 用真實輸入走進紅圈
-        const r0 = fox.rings[0];
         const before = await page.evaluate((id) => window.__game.run.ult.counts[id] ?? 0, fox.offers[0]);
-        let arrived = false;
-        for (let tries = 0; tries < 3 && !arrived; tries++) {
-          arrived = await walkOnto(ctx, r0.x, r0.z);
-          await dismiss();
-        }
-        expect(arrived, `走不進紅圈（${vp.name}）`);
+        expect(await pressInteract(ctx), `狐面商按不到互動（${vp.name}）`);
+        expect((await screens()).includes('levelup'), `按了互動沒有開狐面商面板（${vp.name}）`);
+        const pt = await page.locator('.overlay[data-screen="levelup"] h2').innerText();
+        expect(/狐面商/.test(pt), `面板標題不對：${pt}`);
+        const cards = await page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card')].map((c) => ({ id: c.dataset.card, t: c.innerText.replace(/\s+/g, ' ') })));
+        expect(cards.length === 3 && cards[2].id === 'fox-skip' && /不要/.test(cards[2].t), `面板應該是兩個提案＋不要：${JSON.stringify(cards)}`);
+        files.push(await shot(ctx, 'e1-fox-panel'));
+        await page.locator(`.overlay[data-screen="levelup"] .card[data-card="${fox.offers[0]}"]`).click();
         const card = await waitResult('狐面商');
         expect(card.title === '良・狐面商', `結果卡標題不對：${card.title}`);
         expect(card.lines.length === 1 && card.lines[0].t === 'item' && /Lv\d：.+，但.+/.test(card.lines[0].text), `結果卡沒寫出拿到的道具：${JSON.stringify(card.lines)}`);
-        files.push(await shot(ctx, 'e1-fox-result'));
         await closeResult();
         await dismiss();
         const after = await page.evaluate((id) => window.__game.run.ult.counts[id] ?? 0, fox.offers[0]);
-        expect(after === before + 1, `紅圈的道具沒有升一級：${before} → ${after}`);
+        expect(after === before + 1, `選的道具沒有升一級：${before} → ${after}`);
+        await leave(spot);
+      }, 60);
+
+      await step(`${vp.name} 要石：走近 → 提示寫出撐幾秒、加多少 → 站在圈裡撐滿（中途進度條在中間）→ 三選一能力值 → 點了真的變強`, async () => {
+        const spot = await approach('kaname', 'epic');
+        await page.evaluate(() => { window.__game.god = true; window.__game.advance(0.2); window.__game.render(); });
+        const desc = await page.locator('#element-desc').innerText();
+        expect(/撐 10 秒/.test(desc) && /\+9%/.test(desc), `要石說明不對（珍階 +9%）：${desc}`);
+        expect(!(await page.locator('#btn-interact').isVisible()), '要石不用按，「互動」鈕不該出現');
+        await page.evaluate(([x, z]) => window.__game.teleport(x, z), [spot.x, spot.z]);
+        await page.evaluate(() => { for (let i = 0; i < 40; i++) window.__game.advance(0.1); window.__game.render(); });
+        const fill = await page.locator('#element-fill').evaluate((n) => parseFloat(n.style.width));
+        expect(fill > 20 && fill < 80, `撐到一半時進度條應該在中間：${fill}`);
+        files.push(await shot(ctx, 'e1-kaname'));
+        for (let i = 0; i < 100 && !(await screens()).includes('levelup'); i++) {
+          await page.evaluate(([x, z]) => { window.__game.teleport(x, z); window.__game.advance(0.1); }, [spot.x, spot.z]);
+        }
+        const pt = await page.locator('.overlay[data-screen="levelup"] h2').innerText();
+        expect(/要石/.test(pt), `撐滿後沒有要石面板：${pt}`);
+        const ids = await page.evaluate(() => [...document.querySelectorAll('.overlay[data-screen="levelup"] .card')].map((c) => c.dataset.card));
+        expect(ids.length === 3 && ids.every((x) => x.startsWith('kaname:')), `要石面板不對：${ids}`);
+        files.push(await shot(ctx, 'e1-kaname-pick'));
+        const stat = ids[0].slice(7);
+        const v0 = (await stats())[stat];
+        await page.locator('.overlay[data-screen="levelup"] .card').first().click();
+        await page.waitForFunction(() => !window.__game.screens.includes('levelup'), null, { timeout: 5000 });
+        const v1 = (await stats())[stat];
+        expect(v1 > v0, `選了 ${stat} 沒有變強：${v0} → ${v1}`);
         await leave(spot);
       }, 60);
 
       // 試煉要跑 30 秒、期間升級選卡會把道具欄填滿，所以放在狐面商（要有空欄位）之後
-      await step(`${vp.name} 百鬼試煉碑：走近 → 提示寫出三段門檻與寶箱 → 按住啟動 → HUD 倒數與打倒數 → 放大招打倒的算進去 → 時間到結果卡寫出成績與寶箱`, async () => {
+      await step(`${vp.name} 百鬼試煉碑：走近 → 提示寫出三段門檻與寶箱 → 按互動啟動 → HUD 倒數與打倒數 → 放大招打倒的算進去 → 時間到結果卡寫出成績與寶箱`, async () => {
         const spot = await approach('trial', 'rare');
         await page.evaluate(() => { window.__game.advance(0.2); window.__game.render(); });
         const title = await page.locator('#element-title').innerText();
         expect(title === '良・百鬼試煉碑', `提示標題不對：${title}`);
         const desc = await page.locator('#element-desc').innerText();
         const m = /打倒 (\d+)／(\d+)／(\d+) 隻/.exec(desc);
-        expect(/按住開始/.test(desc) && m && +m[1] < +m[2] && +m[2] < +m[3] && +m[1] >= 75, `提示沒寫出門檻（良階碑第 1 段至少 75 隻）：${desc}`);
+        expect(/按「互動」開始/.test(desc) && m && +m[1] < +m[2] && +m[2] < +m[3] && +m[1] >= 75, `提示沒寫出門檻（良階碑第 1 段至少 75 隻）：${desc}`);
         const need0 = +m[1];
         // D97：結界石併進試煉碑——提示寫出圈內加成（良 +32%），試煉開始後站在圈內攻擊力真的多 0.32
         expect(/攻擊力、攻擊速度 \+32%/.test(desc), `提示沒寫出圈內加成 +32%：${desc}`);
         const s0 = await stats();
-        for (let i = 0; i < 12 && !(await page.evaluate(() => window.__game.run.trial.active)); i++) await page.evaluate(() => window.__game.advance(0.25));
-        expect(await page.evaluate(() => window.__game.run.trial.active), `按住之後試煉沒有開始（${vp.name}）`);
+        await pressInteract(ctx);
+        for (let i = 0; i < 4 && !(await page.evaluate(() => window.__game.run.trial.active)); i++) await page.evaluate(() => window.__game.advance(0.25));
+        expect(await page.evaluate(() => window.__game.run.trial.active), `按了互動試煉沒有開始（${vp.name}）`);
         await page.evaluate(() => window.__game.advance(0.1));
         const s1 = await stats();
         expect(Math.abs(s1.power - s0.power - 0.32) < 1e-6, `試煉圈內攻擊力不對：${s0.power} → ${s1.power}（應該多 0.32）`);
@@ -278,7 +314,10 @@ export async function run(browser) {
         // 同一個 evaluate 裡：快進到結果卡出現，馬上點（不經過頁面的空檔）
         const r = await page.evaluate(() => {
           const g = window.__game;
-          for (let i = 0; i < 80 && !g.screens.includes('result'); i++) g.advance(0.05);
+          for (let i = 0; i < 80 && !g.screens.includes('result'); i++) {
+            g.interact();
+            g.advance(0.05);
+          }
           const opened = g.screens.includes('result');
           document.querySelector('#btn-result-ok').click();
           return { opened, still: g.screens.includes('result') };
