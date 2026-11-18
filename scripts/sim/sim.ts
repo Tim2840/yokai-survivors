@@ -17,7 +17,7 @@ import { PROGRESSION, XP_BUDGET, cumXp as cumXpDbg } from '../../src/data/progre
 import { WAVES } from '../../src/data/waves';
 import { STAGE } from '../../src/data/stage';
 import { SHARDS } from '../../src/data/items';
-import { ELEMENT_WEIGHTS } from '../../src/data/elements';
+import { ELEMENT_WEIGHTS, FOX_SKIP } from '../../src/data/elements';
 import type { TerrainMap } from '../../src/world/terrainMap';
 
 const DT = 1 / 60;
@@ -137,6 +137,12 @@ function choose(run: Run, strategy: string, rnd: () => number): number {
   const offer = run.offer!;
   // 道祖神的技法面板：機器人不換（維持現狀）
   if (run.offerKind === 'tech') return Math.max(0, offer.findIndex((o) => o.cardId === 'tech-keep'));
+  // 狐面商（D99）：照原本的挑法（foxChoice），不想要就選「不要」
+  if (run.offerKind === 'fox') {
+    const ids = offer.filter((o) => o.cardId !== FOX_SKIP).map((o) => o.cardId);
+    const k = foxChoice(run, ids, ids.map(() => false), strategy, run.px + run.pz);
+    return k < 0 ? offer.findIndex((o) => o.cardId === FOX_SKIP) : k;
+  }
   if (strategy === 'random') return Math.floor(rnd() * offer.length);
   // 寶箱／合魂祠裡的進化卡（D53）：會玩的人一定拿
   const evo = offer.findIndex((o) => o.cardId.startsWith('evo:'));
@@ -366,6 +372,11 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
       }
     }
     run.setMove(mx, mz);
+    // 互動鍵（D99）：走到要素上就按（召喚祭壇照 --summonAt 的時間）
+    {
+      const f = run.elements.focus;
+      if (run.elements.canInteract && f && (f.kind !== 'summon' || run.time >= SUMMON_AT * run.director.duration) && (useElements || f.kind === 'chest' || f.kind === 'summon' || f.kind === 'fuse')) run.requestInteract();
+    }
     // 大招：量表滿了、附近敵人多（或頭目在場）才發動
     if (CAST && run.ultReady && (n >= 0 && run.enemies.within(run.px, run.pz, 7, scratch) >= 12 || (run.director.bossIndex >= 0 && run.enemies.alive[run.director.bossIndex] === 1))) {
       run.castUltimate();
@@ -550,11 +561,8 @@ function nearestElement(run: Run, strategy: string): { x: number; z: number } | 
     let tx = s.x;
     let tz = s.z;
     if (s.kind === 'fox') {
-      // 狐面商（D38）：依策略挑一個圈（亂選：看位置決定），收不下或不想要就不去
-      const k = foxChoice(run, s.offers, s.ringBlocked, strategy, s.x + s.z);
-      if (k < 0) continue;
-      tx = s.ringX[k];
-      tz = s.ringZ[k];
+      // 狐面商（D38；D99 起走到商人身上按互動、在面板選）：沒有想要的就不去
+      if (foxChoice(run, s.offers, s.ringBlocked, strategy, s.x + s.z) < 0) continue;
     }
     const d = Math.hypot(tx - run.px, tz - run.pz);
     if (d < bd) {
