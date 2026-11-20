@@ -18,6 +18,7 @@ import { WAVES } from '../../src/data/waves';
 import { STAGE } from '../../src/data/stage';
 import { SHARDS } from '../../src/data/items';
 import { ELEMENT_WEIGHTS, FOX_SKIP } from '../../src/data/elements';
+import { TOD_BONUS } from '../../src/data/timeOfDay';
 import type { TerrainMap } from '../../src/world/terrainMap';
 
 const DT = 1 / 60;
@@ -110,6 +111,7 @@ function applyTune(): void {
     else if (k.startsWith('tech.')) (TECH_OFFER as unknown as Record<string, number>)[k.slice(5)] = Number(v);
     else if (k.startsWith('shards.')) (SHARDS as unknown as Record<string, number>)[k.slice(7)] = Number(v);
     else if (k.startsWith('evo.')) (EVO as unknown as Record<string, number>)[k.slice(4)] = Number(v);
+    else if (/^tod\.(night|dusk|day)\.\w+$/.test(k)) (TOD_BONUS as unknown as Record<string, Record<string, number>>)[k.split('.')[1]][k.split('.')[2]] = Number(v); // tod.day.xp=-0.1
     else if (k.startsWith('gem.')) (SOUL_GEM as unknown as Record<string, number>)[k.slice(4)] = Number(v);
     else if (k.startsWith('xp.')) (PROGRESSION as unknown as Record<string, number>)[k.slice(3)] = Number(v);
     else if (/^budget\.t\d$/.test(k)) (XP_BUDGET.targets as unknown as number[][])[Number(k.slice(8))][1] = Number(v); // budget.t1=9：第 1 關第 i 個目標點的等級
