@@ -6,7 +6,7 @@ import { openPage, startRun, step, expect, shot, reportErrors, hudTopOk, VIEWPOR
 export const meta = { id: 'd1', desc: '時段加成：開局字幕寫出加成→關卡旁的時段標籤→頂端列不擠壞→字幕收掉標籤還在→能力值真的變（手機直式三個時段、橫式與桌面白天）', max: 300, stall: 60 };
 
 const NAME = { night: '夜晚', dusk: '黃昏', day: '白天' };
-const NOTE = { night: /^夜晚：大招充能 \+15%、吸取範圍 \+20%$/, dusk: /^黃昏：經驗 \+20%，寶箱 10% 機率高一階$/, day: /^白天：移速 \+10%、回復 0\.5\/秒\n人類與經驗 −20%$/ };
+const NOTE = { night: /^夜晚：大招充能 \+15%、吸取範圍 \+20%$/, dusk: /^黃昏：經驗 \+20%，寶箱 10% 機率高一階$/, day: /^白天：移速 \+10%、回復 0\.5\/秒\n人類 −20%、經驗 −10%$/ };
 
 export async function run(browser) {
   const files = [];

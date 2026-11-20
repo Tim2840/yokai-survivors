@@ -24,7 +24,8 @@ export interface TodBonus {
 export const TOD_BONUS: Record<TimeOfDay, TodBonus> = {
   night: { ultCharge: 0.15, pct: { pickup: 0.2 }, regen: 0, xp: 0, chestUp: 0, spawn: 0 },
   dusk: { ultCharge: 0, pct: {}, regen: 0, xp: 0.2, chestUp: 0.1, spawn: 0 },
-  day: { ultCharge: 0, pct: { speed: 0.1 }, regen: 0.5, xp: -0.2, chestUp: 0, spawn: -0.2 },
+  // 白天經驗 −20% → −10%（sim 2026-11-20：−20% 時過關率比夜晚低最多 20 點，不像「喘息」；−10% 和夜晚同一區間、等級少約 1 級）
+  day: { ultCharge: 0, pct: { speed: 0.1 }, regen: 0.5, xp: -0.1, chestUp: 0, spawn: -0.2 },
 };
 
 /** 什麼時候是特殊時段：黃昏＝大關（每第 3 張地圖）的中間關；白天＝其他關各 dayChance 機率（用種子決定，可重現） */

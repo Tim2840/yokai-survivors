@@ -298,7 +298,7 @@ export const zhTW = {
   'hud.tod.day': '白天',
   'hud.todNote.night': '夜晚：大招充能 {ult}、吸取範圍 {pick}',
   'hud.todNote.dusk': '黃昏：經驗 {xp}，寶箱 {chest}% 機率高一階',
-  'hud.todNote.day': '白天：移速 {s}、回復 {r}/秒\n人類與經驗 {f}',
+  'hud.todNote.day': '白天：移速 {s}、回復 {r}/秒\n人類 {f}、經驗 {x}',
   'hud.jump': '跳',
   'hud.bossDown': '頭目倒下了，去傳送門！',
   'hud.level': 'Lv {n}',

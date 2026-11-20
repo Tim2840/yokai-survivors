@@ -66,7 +66,7 @@ describe('時段加成（D96）', () => {
     expect(ULT.perSecond).toBeGreaterThan(0);
   });
 
-  it('白天：移速 +10%、每秒回復 +0.5、湧出 ×0.8、每點經驗 ×0.8（成長預算不會把白天的 −20% 補回來）', () => {
+  it('白天：移速 +10%、每秒回復 +0.5、湧出 ×0.8、經驗變少（成長預算不會把白天的減少補回來）', () => {
     const n = make('night', 9);
     const d = make('day', 9);
     expect(d.run.stats.value.speed / n.run.stats.value.speed).toBeCloseTo(1 + (TOD_BONUS.day.pct.speed ?? 0), 5);
@@ -110,8 +110,6 @@ describe('時段加成（D96）', () => {
   });
 
   it('文字：三個時段都有標籤與開局字幕（不帶角色專屬字）', () => {
-    // 白天的字幕寫成「人類與經驗 −20%」：兩個數不一樣時這句就錯了
-    expect(TOD_BONUS.day.spawn).toBe(TOD_BONUS.day.xp);
     for (const k of Object.keys(TIME_OF_DAY)) {
       for (const key of [`hud.tod.${k}`, `hud.todNote.${k}`]) {
         // 用實際數字填進去再量長度（佔位符本身比數字長）

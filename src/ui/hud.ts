@@ -25,7 +25,7 @@ function todNote(tod: TimeOfDay): string {
   const b = TOD_BONUS[tod];
   if (tod === 'night') return t('hud.todNote.night', { ult: pct(b.ultCharge), pick: pct(b.pct.pickup ?? 0) });
   if (tod === 'dusk') return t('hud.todNote.dusk', { xp: pct(b.xp), chest: Math.round(b.chestUp * 100) });
-  return t('hud.todNote.day', { s: pct(b.pct.speed ?? 0), r: b.regen, f: pct(b.spawn) }); // 人類與經驗同一個數（單元測試守著）
+  return t('hud.todNote.day', { s: pct(b.pct.speed ?? 0), r: b.regen, f: pct(b.spawn), x: pct(b.xp) });
 }
 
 let coarse: boolean | null = null;
