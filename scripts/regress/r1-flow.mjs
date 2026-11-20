@@ -34,7 +34,7 @@ export async function run(browser) {
         const t = await page.locator('.hud-wave span').innerText();
         expect(/^\d+:\d\d$/.test(t) && t !== '10:00', `HUD 倒數沒走：${t}`);
         const st = await page.locator('.hud-wave b').innerText();
-        expect(st === '第 1 關', `HUD 關卡名稱不對：${st}`);
+        expect(/^第 1 關(夜晚|黃昏|白天)$/.test(st), `HUD 關卡名稱不對（D96 起後面接時段標籤）：${st}`);
       });
 
       const walkOnto = (x, z, o) => walkOntoLib(ctx, x, z, o);
@@ -155,10 +155,22 @@ export async function run(browser) {
 
       await step(`${vp.name} 點「出發」→ 第 2 關（地圖換了、敵人清空、計時重來）`, async () => {
         // 過關清場收的魂火可能升級：先選完卡
-        if ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await dismissLevelUps();
+        // 魂火還在飛、過關收的魂火升到化身等級（化身演出完才開選卡）：等到連續幾輪都沒有新的選卡再按「出發」
+        for (let quiet = 0, i = 0; quiet < 3 && i < 20; i++) {
+          // 化身演出中（D94）選卡會晚幾秒才開（真實時間）：有等著的選卡就等它開出來
+          await page.waitForFunction(() => !window.__game.offer || window.__game.screens.includes('levelup'), null, { timeout: 15000 });
+          if ((await page.evaluate(() => window.__game.screens)).includes('levelup')) {
+            await dismissLevelUps();
+            quiet = 0;
+          } else quiet++;
+          await page.evaluate(() => { window.__game.advance(0.5); window.__game.render(); });
+        }
+        expect(!(await page.evaluate(() => window.__game.screens)).includes('levelup'), `過關畫面一直跳選卡（${vp.name}）`);
         const before = await page.evaluate(() => window.__game.map);
         await press(ctx, '#btn-inter-next');
-        await page.waitForFunction(() => window.__game.state === 'COMBAT' && window.__game.run.stage === 2);
+        await page.waitForFunction(() => window.__game.state === 'COMBAT' && window.__game.run.stage === 2, null, { timeout: 20000 }).catch(async () => {
+          throw new Error(`點「出發」後沒進第 2 關：${await page.evaluate(() => JSON.stringify({ state: window.__game.state, stage: window.__game.run?.stage, screens: window.__game.screens }))}`);
+        });
         const r = await page.evaluate(() => window.__game.run);
         const after = await page.evaluate(() => window.__game);
         expect(r.time < 1 && r.timeLeft > 590, `第 2 關計時沒重來：${JSON.stringify(r)}`);
@@ -167,7 +179,7 @@ export async function run(browser) {
         expect(JSON.stringify(m2.plateaus) !== JSON.stringify(before.plateaus), `第 2 關的地圖沒換（${vp.name}）`);
         const st2 = await page.locator('.hud-wave b').innerText();
         const df2 = await page.locator('#wave-diff').innerText();
-        expect(st2 === '第 2 關' && df2 === '難度 +50%', `HUD 沒更新成第 2 關（含難度）：${st2}／${df2}`);
+        expect(/^第 2 關(夜晚|黃昏|白天)$/.test(st2) && df2 === '難度 +50%', `HUD 沒更新成第 2 關（含難度）：${st2}／${df2}`);
         await hudTopOk(ctx, '・第 2 關難度');
         void after;
         await page.evaluate(() => { window.__game.advance(1); window.__game.render(); });
