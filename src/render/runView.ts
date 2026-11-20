@@ -129,8 +129,8 @@ export class RunView {
   ) {
     const scene = renderer.scene;
     const { map } = run;
-    // 場景主題：日系風格依關卡換時段（第 1 關白天、第 2 關黃昏、大頭目夜晚）
-    this.amb = ambienceFor(map.def.id, currentLook().timeOfDay ? timeOfDaySuffix() : '');
+    // 場景主題：這一關的時段（D96：一般是夜晚，黃昏與白天是特殊情況，Run.tod）
+    this.amb = ambienceFor(map.def.id, currentLook().timeOfDay ? timeOfDaySuffix(run.tod) : '');
     this.world = buildWorldView(map, run.seed, this.amb);
     this.group.add(this.world.group);
     // 場景氣氛（美術第一輪 A）：天空、月、星、草叢、花、遠景樹、光點；顏色與霧跟著地圖主題

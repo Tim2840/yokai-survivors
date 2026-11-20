@@ -26,8 +26,11 @@ export async function run(browser) {
         while ((await page.evaluate(() => window.__game.screens)).includes('levelup')) await page.locator('.overlay[data-screen="levelup"] .card').first().click();
       };
 
-      await step(`${vp.name} 開局頂端提示「山頂有座神社」、HUD 箭頭寫出「山頂神社 N 公尺」、神社比出生點高`, async () => {
+      await step(`${vp.name} 開局頂端先是時段字幕（D96），之後提示「山頂有座神社」、HUD 箭頭寫出「山頂神社 N 公尺」、神社比出生點高`, async () => {
         await page.evaluate(() => { window.__game.advance(0.3); window.__game.render(); });
+        const first = await page.locator('#wave-note').innerText();
+        expect(/^(夜晚|黃昏|白天)：/.test(first), `開局頂端不是時段字幕：${first}`);
+        await page.evaluate(() => { for (let i = 0; i < 7; i++) window.__game.advance(1); window.__game.render(); });
         const note = await page.locator('#wave-note').innerText();
         expect(/山頂有座神社/.test(note), `頂端沒有提示：${note}`);
         expect(await page.locator('#portal-box').isVisible() && /山頂神社 \d+ 公尺/.test(await page.locator('#portal-text').innerText()), `沒有指向山頂神社的箭頭`);

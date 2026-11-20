@@ -26,6 +26,8 @@ export interface GameEvents {
   cardChosen: { cardId: string; rarity: string };
   /** 關卡開始（stage 從 1 起） */
   stageStart: { stage: number };
+  /** 這一關的時段（D96）：開局字幕、頂端標籤、天空 */
+  timeOfDay: { stage: number; tod: 'night' | 'dusk' | 'day' };
   /** 過關（走進傳送門）；last = 這是最後一關 */
   stageClear: { stage: number; last: boolean };
   /** 頭目倒下（傳送門已開） */

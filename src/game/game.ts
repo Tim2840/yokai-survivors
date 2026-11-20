@@ -1,3 +1,4 @@
+import { forcedTod } from '../data/ambience';
 import { FORM_BURST } from '../data/yokai';
 import { bus, type EventBus } from '../core/bus';
 import type { AudioEngine } from '../core/audio';
@@ -319,7 +320,7 @@ export class Game {
     this.d.backdrop.visible = false;
     this.renderer.rig.reset();
     const seed = subSeed(this.d.seed, this.runIndex++);
-    this.run = new Run({ seed, yokaiId: this.selectedYokai, mobile: this.d.mobile, bus: this.b, meritStat: 0, ...loadoutFor(this.save, this.selectedYokai, this.unlockAll) });
+    this.run = new Run({ seed, yokaiId: this.selectedYokai, mobile: this.d.mobile, bus: this.b, meritStat: 0, forceTod: forcedTod(), ...loadoutFor(this.save, this.selectedYokai, this.unlockAll) });
     this.view = new RunView(this.run, this.renderer);
     this.playLog = this.d.tuneUi ? new PlayLog() : null;
     this.lastKills = 0;

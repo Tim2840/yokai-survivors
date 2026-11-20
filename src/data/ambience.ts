@@ -103,20 +103,24 @@ AMBIENCE['highlands@dusk'] = {
 
 /**
  * 時段（D88，使用者 2026-11-12：「主題其實是想要在夜晚的，特殊情況才在白天」；取代 D72 的「第 1 關白天、第 2 關黃昏」）：
- * **一般關卡一律是夜晚**（沒有後綴的基本主題）；黃昏與白天是「特殊情況」，由呼叫端傳進 special（目前還沒有任何地方傳：
- * 什麼時候是特殊情況、各時段的加成是什麼，等使用者回答 Q58，見 docs/28）。開發版可用網址 ?tod=day／dusk 強制（截圖用）。
+ * **一般關卡一律是夜晚**（沒有後綴的基本主題）；黃昏與白天是「特殊情況」：D96 起由 `src/data/timeOfDay.ts` 的 todForStage 決定、
+ * Run.tod 記著，加成在 TOD_BONUS（docs/28 第四節）。開發版可用網址 ?tod=day／dusk 強制（截圖用）。
  */
 export const TIME_OF_DAY = { night: '', dusk: '@dusk', day: '@day' } as const;
 export type TimeOfDay = keyof typeof TIME_OF_DAY;
-export function timeOfDaySuffix(special: TimeOfDay = 'night'): string {
-  let forced: string | null = null;
+/** 開發版網址 ?tod=night|dusk|day 強制的時段（主網址不讀；沒給回傳 undefined）。D96 起也會強制那一關的加成 */
+export function forcedTod(): TimeOfDay | undefined {
   try {
-    if (import.meta.env.MODE !== 'single-main') forced = new URLSearchParams(location.search).get('tod');
+    if (import.meta.env.MODE === 'single-main') return undefined;
+    const f = new URLSearchParams(location.search).get('tod');
+    return f && f in TIME_OF_DAY ? (f as TimeOfDay) : undefined;
   } catch {
-    /* 非瀏覽器環境 */
+    return undefined; // 非瀏覽器環境
   }
-  const t = (forced && forced in TIME_OF_DAY ? forced : special) as TimeOfDay;
-  return TIME_OF_DAY[t];
+}
+/** 場景主題的後綴：這一關的時段（D96：Run.tod）；開發版 ?tod= 優先 */
+export function timeOfDaySuffix(special: TimeOfDay = 'night'): string {
+  return TIME_OF_DAY[forcedTod() ?? special];
 }
 
 /** mapId 的主題；suffix（例 '@day'）有對應的就用，沒有就退回 mapId、再退回 highlands */

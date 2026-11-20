@@ -40,6 +40,8 @@ import { Elements, type ElementCarry } from '../systems/elements';
 import { computeMerit } from '../systems/merit';
 import { ULT, ultById, ultMods, defaultUltsOf, ULT_SLOTS, type UltEffect, type UltMods } from '../data/ultimates';
 import { ALTAR_CURSE_IDS, type CurseId } from '../data/altar';
+import { TOD_BONUS, todForStage } from '../data/timeOfDay';
+import type { TimeOfDay } from '../data/ambience';
 
 export interface RunOptions {
   seed: number;
@@ -51,6 +53,8 @@ export interface RunOptions {
   bus?: EventBus;
   /** 這一局打的是第幾張地圖（從 1 起，D26 章節制；預設 1） */
   mapNumber?: number;
+  /** 強制每一關的時段（開發版 ?tod=、sim --tod；D96）；沒給就照 todForStage */
+  forceTod?: TimeOfDay;
   /** 之前通關過嗎（功德 +200） */
   clearedBefore?: boolean;
   /** 局外的功德加成（M3） */
@@ -506,6 +510,7 @@ export class Run {
     this.dosojinAt = this.tech.owned.length > 0 ? this.clock + DOSOJIN.appearDelay : Infinity;
     this.elements.start(this.px, this.pz, this.director.duration, this.director.virtualWave(), this.stats.value.luck);
     this.elements.placeSummit(); // 山頂神社（E2）：每關一座，放在地圖最高的、走得到的平地
+    this.applyTod();
     this.fireCd = 0.3;
     this.spawnBase = this.enemies.spawnedPoints;
     this.spawnCum.fill(0);
@@ -603,7 +608,7 @@ export class Run {
     }
     this.time += dt;
     this.clock += dt;
-    if (!this.ultCooling) this.ultCharge = Math.min(ULT.max, this.ultCharge + ULT.perSecond * this.ultModsNow.charge * dt);
+    if (!this.ultCooling) this.ultCharge = Math.min(ULT.max, this.ultCharge + ULT.perSecond * this.ultModsNow.charge * (1 + TOD_BONUS[this.tod].ultCharge) * dt);
     if (this.frenzyUntil > 0 && this.clock >= this.frenzyUntil) {
       this.stats.clearMod('ult:frenzy');
       this.frenzyUntil = 0;
@@ -651,7 +656,7 @@ export class Run {
         this.bus.emit('summonAltar', { stage: this.stageNumber });
       }
     }
-    this.director.extraMult = this.elements.spawnMult * (1 + this.curse.spawnRate) * (1 + this.difficulty * DIFFICULTY.spawn);
+    this.director.extraMult = this.elements.spawnMult * (1 + this.curse.spawnRate) * (1 + this.difficulty * DIFFICULTY.spawn) * (1 + TOD_BONUS[this.tod].spawn);
     this.director.hpCurse = 1 + this.curse.enemyHp;
     // 試煉碑進行中：一部分湧出改生在碑周圍（D97）
     const tr = this.elements.trial;
@@ -1117,7 +1122,7 @@ export class Run {
     this.deathLog[di + 2] = this.enemies.variant[e];
     this.deathLog[di + 3] = this.enemies.scale[e];
     if (this.enemies.variant[e] === 1) this.eliteKills++;
-    if (!this.ultCooling) this.ultCharge = Math.min(ULT.max, this.ultCharge + (this.enemies.variant[e] === 2 ? ULT.perBoss : this.enemies.variant[e] === 1 ? ULT.perElite : ULT.perKill) * this.ultModsNow.charge);
+    if (!this.ultCooling) this.ultCharge = Math.min(ULT.max, this.ultCharge + (this.enemies.variant[e] === 2 ? ULT.perBoss : this.enemies.variant[e] === 1 ? ULT.perElite : ULT.perKill) * this.ultModsNow.charge * (1 + TOD_BONUS[this.tod].ultCharge));
     // 後段加壓（Q60）：一般人類的經驗打折（數量翻倍、總經驗不翻倍）
     const value = XP_BUDGET.on ? this.enemies.points(e) * this.xpPerPoint : this.enemies.points(e) * PROGRESSION.orbPerPoint * (this.enemies.variant[e] === 0 ? this.director.xpScale() : 1);
     const x = this.enemies.x[e];
@@ -1302,6 +1307,18 @@ export class Run {
 
   // ── 成長 ─────────────────────────────────────────────────────
   /** 這一關目前的目標等級（成長預算制） */
+  /** 這一關的時段（D96；startNextStage 決定） */
+  tod: TimeOfDay = 'night';
+
+  /** 決定這一關的時段，套上整關加成（能力值用 setMod，其餘在用到的地方乘 TOD_BONUS） */
+  private applyTod(): void {
+    this.tod = this.opts.forceTod ?? todForStage(this.mapNumber, this.stageIndex, this.seed);
+    const b = TOD_BONUS[this.tod];
+    this.stats.setMod('tod', { pct: { ...b.pct }, flat: b.regen ? { regen: b.regen } : {} });
+    this.elements.chestUpChance = b.chestUp;
+    this.bus.emit('timeOfDay', { stage: this.stageNumber, tod: this.tod });
+  }
+
   get targetLevel(): number {
     return targetLevel(this.stageIndex, this.time / this.director.duration);
   }
@@ -1321,8 +1338,11 @@ export class Run {
     const u0 = Math.max(0, (this.time - dt) / D);
     const u1 = this.time / D;
     const rate = (cumXp(targetLevel(this.stageIndex, u1)) - cumXp(targetLevel(this.stageIndex, u0))) / dt;
-    const behind = this.targetLevel - (this.level + this.xp / xpNeed(this.level)) >= B.catchUpBehind;
-    this.xpPerPoint = (rate / Math.max(0.5, spawnRate)) * (behind ? B.catchUpMult : 1);
+    // 落後才補（D96：時段的經驗倍率也算進目標，白天的 −20% 不會被追趕補回來；倍率 1 時和舊判斷一樣）
+    const xpMul = 1 + TOD_BONUS[this.tod].xp;
+    const mine = cumXp(this.level) + this.xp;
+    const behind = mine <= cumXp(Math.max(0, this.targetLevel - B.catchUpBehind)) * xpMul;
+    this.xpPerPoint = (rate / Math.max(0.5, spawnRate)) * (behind ? B.catchUpMult : 1) * xpMul;
   }
 
   addXp(v: number): void {

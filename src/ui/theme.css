@@ -130,6 +130,11 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 .hud-wave i.hidden { display: none; }
 .hud-abilities { white-space: nowrap; }
 .hud-wave b { font-size: clamp(16px, 4vw, 22px); }
+/* 時段標籤（D96）：關卡名稱旁的小標籤 */
+.hud-wave b small.tod { margin-left: 4px; padding: 0 5px; border-radius: 6px; font-size: 11px; font-weight: 700; vertical-align: middle; text-shadow: none; }
+.hud-wave b small.tod-night { background: #2a3566; color: #cfd8ff; }
+.hud-wave b small.tod-dusk { background: #a8542c; color: #ffe2c4; }
+.hud-wave b small.tod-day { background: #f2d36b; color: #4a3410; }
 .hud-wave span { font-size: clamp(18px, 4.5vw, 26px); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); }
 .hud-btns { justify-self: end; display: flex; gap: 8px; align-items: center; }
 .hud-abilities { pointer-events: auto !important; height: 44px; padding: 0 14px; border-radius: 22px; border: 2px solid rgba(255,255,255,0.35); background: rgba(0,0,0,0.4); color: var(--text); font-weight: 700; font-size: 14px; cursor: pointer; font-family: inherit; }
@@ -154,7 +159,7 @@ html, body { -webkit-tap-highlight-color: transparent; margin: 0; height: 100%; 
 
 /* ── M1.5：關卡計時、頭目血條、傳送門箭頭、跳躍鈕 ── */
 /* 提示浮在頂端列下方、不佔中間欄的寬度（長提示不會把血條與右上的鈕擠壞） */
-.hud-wave em { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: max-content; max-width: min(92vw, 520px); font-style: normal; font-size: 13px; min-height: 1.2em; color: var(--text); text-shadow: var(--hud-shadow); }
+.hud-wave em { white-space: pre-line; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: max-content; max-width: min(92vw, 520px); font-style: normal; font-size: 13px; min-height: 1.2em; color: var(--text); text-shadow: var(--hud-shadow); }
 .hud-wave em.alarm { color: #ff8a7a; font-weight: 700; }
 .hud-boss { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 58px + var(--diff-shift, 0px)); left: 50%; transform: translateX(-50%); width: min(60vw, 360px); display: flex; flex-direction: column; align-items: center; gap: 2px; text-shadow: var(--hud-shadow); }
 .hud-boss span { font-size: 14px; font-weight: 700; }

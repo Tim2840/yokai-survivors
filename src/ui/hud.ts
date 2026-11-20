@@ -15,6 +15,18 @@ import { ENEMIES, ENEMY_IDS } from '../data/enemies';
 import { PICKUPS } from '../data/pickups';
 import { DOSOJIN, KANAME, TRIAL, JIZO, OFFERING, trialNeeds, SUMMIT, OFFERING_TECH } from '../data/elements';
 import { EVO } from '../data/techniques';
+import { TOD_BONUS } from '../data/timeOfDay';
+import type { TimeOfDay } from '../data/ambience';
+
+const TOD_NOTE_SECONDS = 6;
+const pct = (v: number): string => `${v > 0 ? '+' : '−'}${Math.round(Math.abs(v) * 100)}%`;
+/** 時段的開局字幕：全部從 TOD_BONUS 算（改數字不用改文字） */
+function todNote(tod: TimeOfDay): string {
+  const b = TOD_BONUS[tod];
+  if (tod === 'night') return t('hud.todNote.night', { ult: pct(b.ultCharge), pick: pct(b.pct.pickup ?? 0) });
+  if (tod === 'dusk') return t('hud.todNote.dusk', { xp: pct(b.xp), chest: Math.round(b.chestUp * 100) });
+  return t('hud.todNote.day', { s: pct(b.pct.speed ?? 0), r: b.regen, f: pct(b.spawn) }); // 人類與經驗同一個數（單元測試守著）
+}
 
 let coarse: boolean | null = null;
 /** 觸控為主的裝置（只查一次）：提示不寫鍵盤鍵 */
@@ -195,10 +207,11 @@ export function buildHud(parent: HTMLElement): Hud {
         if (nb > 0) placeBuffs();
       }
       const diff = Math.round(run.difficulty * 100);
-      const waveKey = run.stageNumber * 10000 + diff;
+      const waveKey = run.stageNumber * 10000 + diff + (run.tod === 'day' ? 0.2 : run.tod === 'dusk' ? 0.1 : 0);
       if (waveKey !== lastWave) {
         lastWave = waveKey;
-        waveText.textContent = t('hud.stage', { n: run.stageNumber });
+        // 時段標籤（D96）：關卡名稱旁常駐一個小標籤（夜晚／黃昏／白天）
+        waveText.innerHTML = `${t('hud.stage', { n: run.stageNumber })}<small class="tod tod-${run.tod}">${t(`hud.tod.${run.tod}` as I18nKey)}</small>`;
         // 難度另起一行（中間欄要窄，不把血條與右上的鈕擠壞）
         waveDiff.textContent = diff > 0 ? t('hud.diff', { d: diff }) : '';
         waveDiff.classList.toggle('hidden', diff <= 0);
@@ -223,7 +236,9 @@ export function buildHud(parent: HTMLElement): Hud {
       const wnote = run.weaponNote && run.clock < run.weaponNote.until ? t('hud.weaponNote', { weapon: t(`tech.${run.weaponItemId}` as I18nKey), lv: run.weaponNote.level }) : '';
       const gnote = run.gemNote && run.clock < run.gemNote.until ? t('hud.gemNote', { lv: EVO.minLevel }) : '';
       const hnote = run.highNote && run.clock < run.highNote.until ? t('hud.highGround') : '';
-      const noteText = run.director.swarm ? t('hud.swarm') : fnote ? fnote : gnote ? gnote : wnote ? wnote : hnote ? hnote : intro ? t(intro as I18nKey) : run.portal.active ? t('hud.bossDown') : altar ? t('hud.summonNote') : shrine ? t('hud.fuseNote') : dosojin ? t('hud.dosojinNote') : summit && run.time < 15 ? t('hud.summitNote') : '';
+      // 開局前幾秒：這一關的時段與加成（D96，數字從 TOD_BONUS 算）
+      const tnote = run.time < TOD_NOTE_SECONDS ? todNote(run.tod) : '';
+      const noteText = run.director.swarm ? t('hud.swarm') : fnote ? fnote : gnote ? gnote : wnote ? wnote : hnote ? hnote : intro ? t(intro as I18nKey) : tnote ? tnote : run.portal.active ? t('hud.bossDown') : altar ? t('hud.summonNote') : shrine ? t('hud.fuseNote') : dosojin ? t('hud.dosojinNote') : summit && run.time < TOD_NOTE_SECONDS + 15 ? t('hud.summitNote') : '';
       if (noteText !== lastNote) {
         lastNote = noteText;
         note.textContent = noteText;

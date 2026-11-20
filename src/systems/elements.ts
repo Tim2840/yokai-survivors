@@ -663,8 +663,12 @@ export class Elements {
     return true;
   }
 
+  /** 寶箱放下時往上一階的機率（D96 黃昏；Run 每關設定） */
+  chestUpChance = 0;
+
   private place(i: number, kind: ElementKind, rarity: Rarity, x: number, z: number, announce: number, px = x + 1, pz = z): void {
     const s = this.slots[i];
+    if (kind === 'chest' && this.chestUpChance > 0 && rarity !== RARITIES[RARITIES.length - 1] && this.rng.next() < this.chestUpChance) rarity = RARITIES[RARITIES.indexOf(rarity) + 1];
     s.active = true;
     s.kind = kind;
     s.rarity = rarity;

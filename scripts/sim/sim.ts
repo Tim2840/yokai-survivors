@@ -47,6 +47,8 @@ const CAST = arg('cast', 'on') === 'on';
 const TECH_PREF = arg('techs', '');
 /** --yokai kappa：換妖怪（D63；沒給 = 提燈小僧）；主武器卡的分數用 ghostfire 那一格，技法偏好用對應的清單 */
 const YOKAI_ID = arg('yokai', 'chochin-kozo');
+/** --tod night|dusk|day：每一關強制這個時段（D96 校準用；沒給就照種子） */
+const TOD = arg('tod', '') as '' | 'night' | 'dusk' | 'day';
 /** --give a,b：開局直接給這幾個技法；--techMax N：一局最多 N 個（給 2 個再 --techMax 2 = 只測這一對，不會再抽到別的） */
 const GIVE = arg('give', '');
 const TECH_MAX_ARG = arg('techMax', '');
@@ -228,7 +230,7 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
   applyTune();
   const rnd = lcg(seed * 7919);
   tuning.stageSeconds = SECONDS;
-  const run = new Run({ seed, bus: new EventBus(), yokaiId: YOKAI_ID, mapNumber: 1, mobile: MOBILE, ults: ULT_ID ? [ULT_ID] : undefined, ultLevels: ULT_ID ? { [ULT_ID]: ULT_LV } : undefined });
+  const run = new Run({ seed, bus: new EventBus(), yokaiId: YOKAI_ID, mapNumber: 1, mobile: MOBILE, forceTod: TOD || undefined, ults: ULT_ID ? [ULT_ID] : undefined, ultLevels: ULT_ID ? { [ULT_ID]: ULT_LV } : undefined });
   if (TECH_MAX_ARG) run.tech.max = Number(TECH_MAX_ARG);
   if (GIVE) run.devAddTech(...GIVE.split(','));
   if (GIVE_SETS > 0) {
