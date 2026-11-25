@@ -14,9 +14,9 @@ const ARROW_HEIGHT = 0.8;
 const DISC_CAPACITY = ENEMY_ZONE_CAPACITY * 2 + 16;
 const DISC_LIFT = 0.15;
 /** 護法／鼓舞範圍的亮度（很淡，只是讓人看出「這群人被加持了」） */
-const AURA_GLOW = 0.22;
+const AURA_GLOW = 0.1;
 /** 精英詞綴的腳下光圈：半徑（× 體型）與亮度 */
-const AFFIX_RING = { r: 0.9, glow: 0.7 } as const;
+const AFFIX_RING = { r: 0.7, glow: 0.8 } as const;
 
 /**
  * 敵方的箭與弓手的瞄準預告（E-1）：兩個實例化圖層、固定容量、每幀不配置。
@@ -68,12 +68,13 @@ export class EnemyShotsView {
     markOverlay(this.lines); // 瞄準預告線：指示，不像素化
     this.group.add(this.lines);
     // 地上的圓：中心暗、邊緣亮的圓片（頂點色），加法混合、不寫深度、蓋在地形上（大範圍在坡上不會被切掉）
-    const dg = new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2);
+    // 用分成幾圈的圓環（內徑接近 0）：CircleGeometry 只有中心＋外圈頂點，顏色只能線性內插，邊緣亮不起來
+    const dg = new THREE.RingGeometry(0.001, 1, 28, 6).rotateX(-Math.PI / 2);
     const dpos = dg.attributes.position;
     const dcol = new Float32Array(dpos.count * 3);
     for (let v = 0; v < dpos.count; v++) {
       const r = Math.hypot(dpos.getX(v), dpos.getZ(v));
-      const k = 0.25 + 0.75 * r * r;
+      const k = 0.06 + 0.94 * r ** 4; // 邊緣亮、中間很淡：看起來像一個圈，不是一整片
       dcol[v * 3] = dcol[v * 3 + 1] = dcol[v * 3 + 2] = k;
     }
     dg.setAttribute('color', new THREE.BufferAttribute(dcol, 3));

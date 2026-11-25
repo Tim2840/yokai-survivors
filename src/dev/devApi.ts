@@ -101,6 +101,7 @@ export function installDevApi(ctx: DevContext): void {
         god: r.god,
         seed: r.seed,
         tod: r.tod,
+        curseZones: r.shots.zoneCount,
         picked: r.picked.length,
         stats: { ...r.stats.value },
         elements: r.elements.slots.filter((s) => s.active).map((s) => ({ kind: s.kind, rarity: s.rarity, x: s.x, y: s.y, z: s.z, announce: s.announce, progress: s.progress, used: s.usedAge >= 0, effects: s.effects.slice(0, s.effectCount).map((f) => ({ ...f })), offers: [...s.offers], rings: s.offers.map((_, k) => ({ x: s.ringX[k], z: s.ringZ[k], progress: s.ringProgress[k], blocked: s.ringBlocked[k] })) })),
@@ -321,6 +322,8 @@ export function installDevApi(ctx: DevContext): void {
       }
       return i;
     },
+    /** 給第 i 隻敵人掛精英詞綴（E-2；code = AFFIX_IDS 的順序 + 1） */
+    setAffix: (i: number, code: number) => run()?.enemies.setAffix(i, code),
     /** 場上敵人的生命設成極大（行為測試用） */
     tankEnemies: () => run()?.devTankEnemies(),
     /** 用世界座標的方向走（不看輸入；null = 還給輸入）；閃箭測試要精準方向 */
