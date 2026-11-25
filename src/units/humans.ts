@@ -155,6 +155,63 @@ export function buildKawagariGeometry(): THREE.BufferGeometry {
  * 所有種類的人類共用一份，疊在本體上畫（一個實例化圖層）——不另外做每種人類的老練造型（圖層數會翻倍）。
  * 俯視鏡頭最看得出來的是「高出頭頂的旗」，所以旗做得大、顏色和三種人類的衣服都不撞。
  */
+/** 僧兵（E-2）：白色裹頭（包住頭、只露出臉）、灰紫僧衣、右手一把長薙刀（長柄＋彎刃）——輪廓靠「白頭巾＋長柄刀」 */
+export function buildSoheiGeometry(): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  base(parts, { robe: palette.human.soheiRobe, belt: palette.human.hood, bodyScale: [1.12, 1.12, 1.02] });
+  // 裹頭：比頭大一圈的白布，往後包住（臉露在前面）＋垂到肩上的布尾
+  parts.push(paint(ball(CHIBI.headR * 1.12, 8, 5).scale(1.05, 1.0, 0.9).translate(0, CHIBI.headY + 0.05, -0.08), palette.human.hood, 1.1));
+  parts.push(paint(new THREE.BoxGeometry(0.36, 0.22, 0.06).translate(0, CHIBI.headY - 0.24, -0.2), palette.human.hood, 1.05));
+  // 薙刀：右手邊一根長柄（比人高）＋頂端彎刃
+  parts.push(paint(new THREE.CylinderGeometry(0.024, 0.024, 1.3, 5).translate(0.36, 0.62, 0.08), palette.human.wood));
+  parts.push(paint(new THREE.ConeGeometry(0.06, 0.32, 4).scale(1, 1, 0.35).rotateZ(-0.25).translate(0.39, 1.4, 0.08), palette.human.steel, 1.35));
+  return merge(parts);
+}
+
+/** 探子（E-2）：深藍緊身衣、遮住下半臉的面巾、額頭一條深色帶子＋飄在後面的長巾、背後一把短刀——輪廓靠「蒙面＋飄巾」，體型瘦小 */
+export function buildShinobiGeometry(): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  base(parts, { robe: palette.human.shinobi, belt: palette.human.mask, bodyScale: [0.88, 1.05, 0.88], collar: false });
+  hairBack(parts, palette.human.mask);
+  // 面巾：蓋住臉的下半（眼睛露出來）
+  parts.push(paint(new THREE.SphereGeometry(CHIBI.headR * 1.02, 8, 4, 0, Math.PI * 2, Math.PI * 0.55, Math.PI * 0.45).translate(0, CHIBI.headY, 0.02), palette.human.mask, 1.05));
+  // 額帶＋後面飄的長巾（往後斜下）
+  parts.push(paint(new THREE.TorusGeometry(CHIBI.headR * 1.0, 0.035, 3, 8).rotateX(Math.PI / 2 - 0.1).translate(0, CHIBI.headY + 0.1, 0), palette.human.mask, 1.0));
+  parts.push(paint(new THREE.BoxGeometry(0.07, 0.04, 0.5).rotateX(-0.5).translate(0.06, CHIBI.headY + 0.0, -CHIBI.headR - 0.22), palette.human.band, 1.15));
+  // 背後斜背的短刀
+  parts.push(paint(new THREE.CylinderGeometry(0.028, 0.028, 0.6, 5).rotateZ(0.7).translate(0, 0.62, -0.24), palette.human.robe, 1.1));
+  return merge(parts);
+}
+
+/** 陰陽師（E-2）：高高的黑色烏帽子、淡藍白狩衣、袖子寬、手上一張白色符紙——輪廓靠「高帽子」 */
+export function buildOnmyojiGeometry(): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  base(parts, { robe: palette.human.onmyoji, belt: palette.human.robe, bodyScale: [1.08, 1.12, 1.0] });
+  hairBack(parts, C.hair);
+  // 烏帽子：頭頂一個往後微斜的高帽
+  parts.push(paint(new THREE.CylinderGeometry(0.13, 0.17, 0.4, 7).rotateX(-0.25).translate(0, CHIBI.headY + 0.42, -0.08), palette.human.eboshi, 1.05));
+  // 寬袖：身體兩側往下垂的兩片
+  for (const sx of [-1, 1]) parts.push(paint(new THREE.BoxGeometry(0.1, 0.28, 0.22).translate(sx * (CHIBI.bodyR + 0.08), CHIBI.bodyY - 0.02, 0.02), palette.human.onmyoji, 1.15));
+  // 符紙：右手前面一張豎起來的白紙（紅色印）
+  parts.push(paint(new THREE.BoxGeometry(0.12, 0.24, 0.015).translate(0.32, CHIBI.bodyY + 0.18, 0.2), palette.human.ofuda, 1.3));
+  parts.push(paint(new THREE.BoxGeometry(0.05, 0.05, 0.02).translate(0.32, CHIBI.bodyY + 0.22, 0.21), palette.human.band, 1.2));
+  return merge(parts);
+}
+
+/** 太鼓兵（E-2）：紅頭帶、土黃短衣、肚子前面一面大太鼓（朱紅鼓身、米白鼓面）、兩手各一根鼓棒——輪廓靠「大鼓」 */
+export function buildTaikoGeometry(): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  base(parts, { robe: palette.human.straw, belt: palette.human.band, bodyScale: [1.08, 1.05, 1.0], collar: false });
+  hairBack(parts, C.hair);
+  parts.push(paint(new THREE.TorusGeometry(CHIBI.headR * 1.0, 0.04, 3, 8).rotateX(Math.PI / 2 - 0.1).translate(0, CHIBI.headY + 0.1, 0), palette.human.band, 1.2));
+  // 大鼓：胸前橫掛（鼓面朝前），鼓身朱紅、鼓面米白
+  parts.push(paint(new THREE.CylinderGeometry(0.26, 0.26, 0.22, 10).rotateX(Math.PI / 2).translate(0, CHIBI.bodyY + 0.04, CHIBI.bodyR + 0.1), palette.human.drum, 1.15));
+  parts.push(paint(new THREE.CircleGeometry(0.22, 10).translate(0, CHIBI.bodyY + 0.04, CHIBI.bodyR + 0.215), palette.human.drumHead, 1.25));
+  // 鼓棒：兩手各一根，往上斜
+  for (const sx of [-1, 1]) parts.push(paint(new THREE.CylinderGeometry(0.022, 0.022, 0.4, 4).rotateZ(sx * 0.6).translate(sx * 0.36, CHIBI.bodyY + 0.2, 0.1), palette.human.wood, 1.1));
+  return merge(parts);
+}
+
 export function buildVeteranGearGeometry(): THREE.BufferGeometry {
   const H = palette.human;
   const parts: THREE.BufferGeometry[] = [];

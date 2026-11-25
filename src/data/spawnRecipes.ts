@@ -18,17 +18,25 @@ export const SPAWN_RECIPES: readonly (readonly RecipeEntry[])[] = [
     { id: 'ashigaru', from: 0.15, weight: 3, cap: 12 },
     { id: 'yumi', from: 0.3, weight: 2, cap: 6 },
   ],
-  // 第 2 關：足輕更早、弓手更多
-  [
-    { id: 'villager', from: 0, weight: 8 },
-    { id: 'ashigaru', from: 0.1, weight: 4, cap: 16 },
-    { id: 'yumi', from: 0.3, weight: 3, cap: 10 },
-  ],
-  // 第 3 關起：沿用最後一行（E-2 會加新種類）
+  // 第 2 關（E-2 專屬配方）：新面孔依序登場——探子開局、僧兵 20%、陰陽師 40%、太鼓兵 55%；村人少一點，讓新敵人看得到
   [
     { id: 'villager', from: 0, weight: 7 },
-    { id: 'ashigaru', from: 0, weight: 5, cap: 20 },
-    { id: 'yumi', from: 0.15, weight: 4, cap: 14 },
+    { id: 'ashigaru', from: 0.1, weight: 3, cap: 14 },
+    { id: 'yumi', from: 0.25, weight: 2, cap: 8 },
+    { id: 'shinobi', from: 0, weight: 2, cap: 10 },
+    { id: 'sohei', from: 0.2, weight: 1.2, cap: 6 },
+    { id: 'onmyoji', from: 0.4, weight: 1, cap: 4 },
+    { id: 'taiko', from: 0.55, weight: 0.8, cap: 3 },
+  ],
+  // 第 3 關起：全部開局就有（大關的中間關、最後一關）
+  [
+    { id: 'villager', from: 0, weight: 6 },
+    { id: 'ashigaru', from: 0, weight: 4, cap: 18 },
+    { id: 'yumi', from: 0.1, weight: 3, cap: 12 },
+    { id: 'shinobi', from: 0, weight: 2.5, cap: 12 },
+    { id: 'sohei', from: 0, weight: 1.5, cap: 8 },
+    { id: 'onmyoji', from: 0.1, weight: 1.2, cap: 5 },
+    { id: 'taiko', from: 0.2, weight: 1, cap: 4 },
   ],
 ];
 

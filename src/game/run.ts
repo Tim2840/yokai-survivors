@@ -843,6 +843,11 @@ export class Run {
 
   /** 敵方的箭：前進一步；打中就走和接觸傷害同一條受傷流程。跳起來（腳離地超過 arrowClear）箭從腳下飛過 */
   private arrowDamage(dt: number): void {
+    // 陰陽師的紅圈（E-2）：跳起來躲不掉，要走出圈
+    if (this.shots.zoneCount > 0) {
+      const zd = this.shots.updateZones(dt, this.px, this.pz, COMBAT.playerRadius, this.invul <= 0 && !this.god && !this.frozenEnemies);
+      if (zd > 0 && this.rngCombat.next() >= this.stats.value.dodge) this.hurtPlayer(zd);
+    }
     if (this.shots.aliveCount === 0) return;
     const airborne = this.py - this.map.heightAt(this.px, this.pz) > COMBAT.arrowClear;
     const canHit = this.invul <= 0 && !this.god && !this.frozenEnemies && !airborne;

@@ -14,7 +14,14 @@ const KIND_GROWTH = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].hpPerWave
 const KIND_SPEED = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].speed));
 const KIND_CONTACT = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].contact));
 const KIND_RADIUS = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].radius));
-const KIND_BEHAVIOR = new Uint8Array(ENEMY_IDS.map((id) => (ENEMIES[id].behavior === 'shield' ? 1 : ENEMIES[id].behavior === 'ranged' ? 2 : 0)));
+const BEHAVIOR_CODE = { chase: 0, shield: 1, ranged: 2, aura: 3, drum: 4, dash: 5, caster: 6 } as const;
+const KIND_BEHAVIOR = new Uint8Array(ENEMY_IDS.map((id) => BEHAVIOR_CODE[ENEMIES[id].behavior ?? 'chase']));
+const BEH_AURA = 3;
+const BEH_DRUM = 4;
+const BEH_DASH = 5;
+const BEH_CASTER = 6;
+/** 會影響同伴的種類（僧兵、太鼓兵）：有活著的才跑增益那一輪 */
+const BUFFER_KINDS = ENEMY_IDS.map((_, k) => k).filter((k) => KIND_BEHAVIOR[k] === BEH_AURA || KIND_BEHAVIOR[k] === BEH_DRUM);
 const BEH_SHIELD = 1;
 const KIND_SHIELD_REDUCTION = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].shield?.reduction ?? 0));
 const KIND_SHIELD_COS = new Float32Array(ENEMY_IDS.map((id) => Math.cos(ENEMIES[id].shield?.halfArc ?? 0)));
@@ -54,6 +61,11 @@ export class Enemies {
   readonly shootCd: Float32Array;
   readonly aimX: Float32Array;
   readonly aimZ: Float32Array;
+  /** 護法（僧兵）給的受傷倍率（1 = 沒有；每步重算）與鼓舞（太鼓兵）給的速度倍率 */
+  readonly guardMul: Float32Array;
+  readonly buffSpd: Float32Array;
+  /** 衝刺（探子）剩幾秒（> 0 = 正在衝，方向是 aimX／aimZ） */
+  readonly dashT: Float32Array;
   /** 每種敵人現在活著幾隻（出場配方的同時上限用） */
   readonly kindCount = new Int32Array(ENEMY_IDS.length);
   readonly kind: Uint8Array;
@@ -112,6 +124,9 @@ export class Enemies {
     this.shootCd = f();
     this.aimX = f();
     this.aimZ = f();
+    this.guardMul = f().fill(1);
+    this.buffSpd = f().fill(1);
+    this.dashT = f();
     this.kind = new Uint8Array(capacity);
     this.variant = new Uint8Array(capacity);
     this.vet = new Uint8Array(capacity);
@@ -185,7 +200,13 @@ export class Enemies {
     this.face[i] = FACE_UNSET;
     this.wind[i] = 0;
     // 遠程：每隻的第一發錯開（用 phase 當種子，別一整群同時開火）
-    this.shootCd[i] = KIND_BEHAVIOR[kind] === BEH_RANGED ? (ENEMIES[ENEMY_IDS[kind]].ranged?.cooldown ?? 1) * (0.4 + 0.6 * ((phase * 7.13) % 1)) : 0;
+    const kb = KIND_BEHAVIOR[kind];
+    const def = ENEMIES[ENEMY_IDS[kind]];
+    const cd = kb === BEH_RANGED ? def.ranged!.cooldown : kb === BEH_CASTER ? def.caster!.cooldown : kb === BEH_DASH ? def.dash!.cooldown : 0;
+    this.shootCd[i] = cd * (0.4 + 0.6 * ((phase * 7.13) % 1));
+    this.guardMul[i] = 1;
+    this.buffSpd[i] = 1;
+    this.dashT[i] = 0;
     this.aimX[i] = 0;
     this.aimZ[i] = 1;
     this.kindCount[kind]++;
@@ -258,7 +279,35 @@ export class Enemies {
 
   /** 盾擋掉一部分之後的傷害（沒有盾、或玩家在盾面之外就原樣回傳）。武器傷害都要先過這裡再 hurt */
   guard(i: number, dmg: number): number {
-    return this.shielded(i) ? dmg * (1 - KIND_SHIELD_REDUCTION[this.kind[i]]) : dmg;
+    return (this.shielded(i) ? dmg * (1 - KIND_SHIELD_REDUCTION[this.kind[i]]) : dmg) * this.guardMul[i];
+  }
+
+  /** 增益那一輪（E-2）：先全部歸 1，再讓每個僧兵／太鼓兵把範圍內的同伴標上（用上一步的空間雜湊；頭目不吃） */
+  private buffsDirty = false;
+  private applyBuffs(): void {
+    let any = false;
+    for (const k of BUFFER_KINDS) if (this.kindCount[k] > 0) any = true;
+    if (!any && !this.buffsDirty) return;
+    for (let i = 0; i < this.high; i++) {
+      this.guardMul[i] = 1;
+      this.buffSpd[i] = 1;
+    }
+    this.buffsDirty = any;
+    if (!any) return;
+    for (let i = 0; i < this.high; i++) {
+      if (!this.alive[i]) continue;
+      const b = KIND_BEHAVIOR[this.kind[i]];
+      if (b !== BEH_AURA && b !== BEH_DRUM) continue;
+      const def = ENEMIES[ENEMY_IDS[this.kind[i]]];
+      const r = b === BEH_AURA ? def.aura!.radius : def.drum!.radius;
+      const n = this.hash.queryInto(this.x[i], this.z[i], r, this.x, this.z, this.near);
+      for (let q = 0; q < n; q++) {
+        const j = this.near[q];
+        if (j === i || this.variant[j] === 2) continue;
+        if (b === BEH_AURA) this.guardMul[j] = Math.min(this.guardMul[j], 1 - def.aura!.reduction);
+        else this.buffSpd[j] = Math.max(this.buffSpd[j], 1 + def.drum!.speed);
+      }
+    }
   }
 
   /** 對一隻造成傷害並擊退；回傳是否死亡 */
@@ -285,6 +334,7 @@ export class Enemies {
     const soft = this.aliveCount >= COMBAT.softPushMin;
     const dir = this.dir;
     const auraR2 = auraRadius * auraRadius;
+    this.applyBuffs();
     for (let i = 0; i < this.high; i++) {
       if (!this.alive[i]) continue;
       const ex = this.x[i];
@@ -304,7 +354,7 @@ export class Enemies {
         mx = dir[0];
         mz = dir[1];
       }
-      let spd = this.speed[i] * this.speedMult * map.speedAt(ex, ez);
+      let spd = this.speed[i] * this.speedMult * map.speedAt(ex, ez) * this.buffSpd[i];
       if (d2 < auraR2) spd *= 1 - auraSlow;
       if (this.slowT[i] > 0) {
         this.slowT[i] -= dt;
@@ -357,6 +407,72 @@ export class Enemies {
             mz = -mz;
             spd *= 0.7;
           } else if (d <= rg.keep) spd = 0;
+        }
+      } else if (beh === BEH_CASTER) {
+        // 陰陽師：停在 keep 外；冷卻好了、玩家在 range 內 → 在玩家腳下畫圈（圈本身會倒數、落下，見 EnemyShots.zone）
+        const cs = ENEMIES[ENEMY_IDS[this.kind[i]]].caster!;
+        const d = Math.sqrt(d2);
+        faceYaw = Math.atan2(dx, dz);
+        if (this.speedMult <= 0) spd = 0;
+        else if (this.wind[i] > 0) {
+          // 施法的那一下：站定（看起來在唸咒）
+          spd = 0;
+          this.wind[i] -= dt;
+        } else {
+          this.shootCd[i] -= dt;
+          if (this.shootCd[i] <= 0 && d <= cs.range) {
+            this.shootCd[i] = cs.cooldown;
+            this.wind[i] = cs.pose;
+            shots?.zone(px, pz, cs.radius, cs.windup, this.damage[i] * cs.damageMult);
+            spd = 0;
+          } else if (d < cs.keep * 0.75) {
+            mx = -mx;
+            mz = -mz;
+            spd *= 0.7;
+          } else if (d <= cs.keep) spd = 0;
+        }
+      } else if (beh === BEH_DRUM) {
+        // 太鼓兵：躲在 keep 外（後排敲鼓）
+        const dr = ENEMIES[ENEMY_IDS[this.kind[i]]].drum!;
+        const d = Math.sqrt(d2);
+        if (d < dr.keep * 0.75) {
+          mx = -mx;
+          mz = -mz;
+          spd *= 0.7;
+        } else if (d <= dr.keep) spd = 0;
+      } else if (beh === BEH_DASH) {
+        const ds = ENEMIES[ENEMY_IDS[this.kind[i]]].dash!;
+        if (this.speedMult <= 0 || this.hold[i] > 0) {
+          spd = 0;
+          this.dashT[i] = 0;
+        } else if (this.dashT[i] > 0) {
+          // 衝刺中：照鎖定的方向衝，不轉彎
+          this.dashT[i] -= dt;
+          mx = this.aimX[i];
+          mz = this.aimZ[i];
+          spd = ds.speed * this.speedMult;
+          faceYaw = Math.atan2(mx, mz);
+        } else if (this.wind[i] > 0) {
+          // 預告：站定、臉朝要衝的方向；時間到就衝
+          spd = 0;
+          faceYaw = Math.atan2(this.aimX[i], this.aimZ[i]);
+          this.wind[i] -= dt;
+          if (this.wind[i] <= 0) {
+            this.wind[i] = 0;
+            this.dashT[i] = ds.seconds;
+            this.shootCd[i] = ds.cooldown;
+          }
+        } else {
+          this.shootCd[i] -= dt;
+          const d = Math.sqrt(d2);
+          if (this.shootCd[i] <= 0 && d <= ds.trigger && d > 1e-3) {
+            // 從側面切進來：朝玩家再偏左或偏右 side 弧度（每隻固定一邊，用 phase 決定）
+            const a = Math.atan2(dx, dz) + (this.phase[i] % 2 < 1 ? ds.side : -ds.side);
+            this.aimX[i] = Math.sin(a);
+            this.aimZ[i] = Math.cos(a);
+            this.wind[i] = ds.windup;
+            spd = 0;
+          }
         }
       }
       let vx = mx * spd + this.kx[i];

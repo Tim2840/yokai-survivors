@@ -47,6 +47,16 @@ describe('人類資料全掃', () => {
         expect(r.windup).toBeGreaterThan(0.3); // 預告至少要讓人反應得過來
         expect(r.shotSpeed * r.windup).toBeGreaterThan(0);
       } else expect(d.ranged, `${id} 不是遠程卻有遠程欄位`).toBeUndefined();
+      // E-2：每種行為的欄位只在那種行為上；預告至少 0.3 秒、範圍合理
+      const fields = { aura: d.aura, drum: d.drum, dash: d.dash, caster: d.caster } as const;
+      for (const [b, f] of Object.entries(fields)) {
+        if (d.behavior === b) expect(f, `${id} 是 ${b} 卻沒有 ${b} 欄位`).toBeTruthy();
+        else expect(f, `${id} 不是 ${b} 卻有 ${b} 欄位`).toBeUndefined();
+      }
+      if (d.aura) expect(d.aura.reduction).toBeGreaterThan(0), expect(d.aura.reduction).toBeLessThan(1);
+      if (d.dash) expect(d.dash.windup).toBeGreaterThan(0.3), expect(d.dash.trigger).toBeLessThan(d.dash.speed * d.dash.seconds + 2);
+      if (d.caster) expect(d.caster.windup).toBeGreaterThanOrEqual(1), expect(d.caster.range).toBeGreaterThanOrEqual(d.caster.keep);
+      if (d.drum) expect(d.drum.radius).toBeGreaterThan(d.radius);
     }
   });
   it('新人類第一次出場的提示 ≤ 36 字，且不帶角色專屬字', () => {
