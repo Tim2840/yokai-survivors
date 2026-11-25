@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { EventBus } from '../../src/core/bus';
 import { Run } from '../../src/game/run';
 import { tuning, resetTuning } from '../../src/data/tuning';
-import { ENEMIES } from '../../src/data/enemies';
+import { ENEMIES, ELITE_AFFIXES, AFFIX_IDS } from '../../src/data/enemies';
 import { recipeFor } from '../../src/data/spawnRecipes';
 import { kindIndex } from '../../src/systems/enemies';
 import { ZONE_LINGER } from '../../src/systems/enemyShots';
@@ -138,5 +138,62 @@ describe('出場配方（E-2）', () => {
     const order = fresh.map((id) => s2.find((e) => e.id === id)!.from);
     expect(Math.max(...order)).toBeLessThan(0.7);
     for (const id of fresh) expect(recipeFor(2).find((e) => e.id === id)!.from).toBeLessThanOrEqual(0.2);
+  });
+});
+
+describe('精英詞綴（E-2）', () => {
+  /** 用導演生一隻精英（走正式的 spawnOne：詞綴在這裡掛上） */
+  const elite = (run: Run): number => (run.director as unknown as { spawnOne: (k: number, v: number, px: number, pz: number, n: number) => number }).spawnOne(kindIndex('villager'), 1, run.px, run.pz, 0);
+  const stage2 = (seed = 4): Run => {
+    const run = make(seed);
+    run.devClearStage();
+    run.startNextStage();
+    run.director.active = false;
+    for (let i = 0; i < run.enemies.high; i++) if (run.enemies.alive[i]) run.enemies.kill(i);
+    return run;
+  };
+
+  it('第 1 關的精英沒有詞綴；第 2 關起每隻都有，四種都會出現（舊版沒有詞綴會紅）', () => {
+    const r1 = make();
+    for (let k = 0; k < 10; k++) expect(r1.enemies.affix[elite(r1)]).toBe(0);
+    const run = stage2();
+    const seen = new Set<number>();
+    for (let k = 0; k < 60; k++) {
+      const i = elite(run);
+      expect(run.enemies.affix[i]).toBeGreaterThan(0);
+      seen.add(run.enemies.affix[i]);
+      run.enemies.kill(i);
+    }
+    expect(seen.size).toBe(AFFIX_IDS.length);
+  });
+
+  it('加速：速度 ×swift；護盾：受傷 × (1 − ward)；分身：倒下時變成 split 隻；召喚：每 every 秒叫 count 個村人', () => {
+    const run = stage2();
+    const en = run.enemies;
+    const code = (id: string) => AFFIX_IDS.indexOf(id as (typeof AFFIX_IDS)[number]) + 1;
+    const a = en.spawn(kindIndex('villager'), run.px + 6, run.pz, 1, 0, 0, 1);
+    const s0 = en.speed[a];
+    en.setAffix(a, code('swift'));
+    expect(en.speed[a]).toBeCloseTo(s0 * ELITE_AFFIXES.swift.speed, 5);
+    const b = en.spawn(kindIndex('villager'), run.px - 6, run.pz, 1, 0, 0, 1);
+    en.setAffix(b, code('ward'));
+    expect(en.guard(b, 100)).toBeCloseTo(100 * (1 - ELITE_AFFIXES.ward.reduction), 5);
+    // 分身：真的打倒（走 Run 的擊殺流程）
+    const c = en.spawn(kindIndex('villager'), run.px, run.pz + 6, 1, 0, 0, 1);
+    en.setAffix(c, code('split'));
+    const before = en.aliveCount;
+    (run as unknown as { onKill: (e: number) => void }).onKill(c); // 擊殺流程（同武器、技法打倒時）
+    // （c 的格子會被分身拿去重用，所以不看 alive[c]）
+    expect(en.aliveCount, '分身').toBe(before - 1 + ELITE_AFFIXES.split.count);
+    // 召喚
+    for (let i = 0; i < en.high; i++) if (en.alive[i]) en.kill(i);
+    const d = en.spawn(kindIndex('villager'), run.px + 10, run.pz + 10, 1, 0, 0, 1);
+    en.hp[d] = en.maxHp[d] = 1e6;
+    en.setAffix(d, code('summon'));
+    run.director.active = true;
+    (run.director as unknown as { pending: number }).pending = -1e9; // 只看召喚，不讓一般湧出干擾
+    const v0 = en.kindCount[kindIndex('villager')];
+    for (let k = 0; k < Math.round((ELITE_AFFIXES.summon.every + 0.2) / DT); k++) run.director.update(DT, run.px, run.pz, 0, false);
+    expect(en.kindCount[kindIndex('villager')] - v0, '召喚').toBeGreaterThanOrEqual(ELITE_AFFIXES.summon.count - 1);
   });
 });

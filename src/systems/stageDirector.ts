@@ -1,4 +1,7 @@
 import { STAGE } from '../data/stage';
+import { ELITE_AFFIXES, AFFIX_IDS } from '../data/enemies';
+
+const AFFIX_SUMMON = AFFIX_IDS.indexOf('summon') + 1;
 import { WAVES, threat } from '../data/waves';
 import { tuning } from '../data/tuning';
 import type { Rng } from '../lib/random';
@@ -62,7 +65,10 @@ export class StageDirector {
   summitMult = 1;
 
   /** stage = 第幾關（0 起）；hpMult = 難度帶來的敵人生命倍率（含關卡）；bossMult = 大頭目倍率 */
+  /** 這一關是第幾關（0 起；精英詞綴從第幾關開始用） */
+  private stage = 0;
   start(stage: number, bossMult = 1, opts: { autoBoss?: boolean; hpMult?: number; bossKind?: number } = {}): void {
+    this.stage = stage;
     if (opts.bossKind !== undefined) this.kindBoss = opts.bossKind;
     this.recipe = recipeFor(stage).map((r: RecipeEntry) => ({ kind: kindIndex(r.id), from: r.from, weight: r.weight, cap: r.cap ?? Infinity }));
     this.stageMult = opts.hpMult ?? 1;
@@ -243,12 +249,49 @@ export class StageDirector {
 
   private spawnOne(kind: number, variant: number, px: number, pz: number, night: number, vet = 0): number {
     if (!this.findSpot(px, pz)) return -1;
+    const i = this.spawnRaw(kind, variant, night, vet);
+    // 精英詞綴（E-2）：第 fromStage 關起，每隻精英隨機一個
+    if (i >= 0 && variant === 1 && this.stage >= ELITE_AFFIXES.fromStage) this.enemies.setAffix(i, 1 + Math.floor(this.rng.next() * AFFIX_IDS.length));
+    return i;
+  }
+
+  /** 在 (x, z) 附近 spread 公尺內生 n 隻一般的人類（分身、召喚用；走不到的位置就少生），回傳生了幾隻 */
+  spawnNear(kind: number, x: number, z: number, n: number, spread: number, night: number): number {
+    let made = 0;
+    for (let k = 0; k < n && this.enemies.aliveCount < this.enemies.capacity; k++) {
+      const a = this.rng.range(0, Math.PI * 2);
+      const r = this.rng.range(0.5, spread);
+      const sx = x + Math.cos(a) * r;
+      const sz = z + Math.sin(a) * r;
+      if (this.map.isBlocked(sx, sz)) continue;
+      this.spot[0] = sx;
+      this.spot[1] = sz;
+      if (this.spawnRaw(kind, 0, night, 0) >= 0) made++;
+    }
+    return made;
+  }
+
+  /** 召喚詞綴的精英：倒數到了就叫村人過來 */
+  private updateSummoners(dt: number, night: number): void {
+    const e = this.enemies;
+    const S = ELITE_AFFIXES.summon;
+    for (let i = 0; i < e.high; i++) {
+      if (!e.alive[i] || e.affix[i] !== AFFIX_SUMMON) continue;
+      e.affixCd[i] -= dt;
+      if (e.affixCd[i] > 0) continue;
+      e.affixCd[i] = S.every;
+      this.spawnNear(this.kindVillager, e.x[i], e.z[i], S.count, S.spread, night);
+    }
+  }
+
+  private spawnRaw(kind: number, variant: number, night: number, vet: number): number {
     return this.enemies.spawn(kind, this.spot[0], this.spot[1], this.virtualWave(), night, this.rng.range(0, Math.PI * 2), variant, (variant === 2 ? this.stageMult * this.bossMult * this.summonMult * this.summitMult : this.stageMult * (variant === 0 ? this.lateHp() : 1)) * this.hpCurse, vet);
   }
 
   update(dt: number, px: number, pz: number, night: number, bossDefeated: boolean): void {
     if (!this.active) return;
     this.time += dt;
+    this.updateSummoners(dt, night);
     const dur = this.duration;
     // 定時事件
     while (this.eventsFired < STAGE.events.length && this.time >= STAGE.events[this.eventsFired].at * dur) {

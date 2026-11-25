@@ -6,7 +6,7 @@ import { rollAffixes } from '../data/affixes';
 import { TECH_MAX, TECH_SLOTS, mechOf, techById, EVO, SOUL_GEM } from '../data/techniques';
 import { CARD_CHOICES, PROGRESSION, RARITIES_UNLOCKED_M1, XP_BUDGET, cumXp, targetLevel, xpNeed } from '../data/progression';
 import { DOSOJIN, FOX_SKIP, FUSE, KANAME, KANAME_PREFIX, SUMMIT, TRIAL, OFFERING_TECH } from '../data/elements';
-import { ENEMY_INTRO_SECONDS } from '../data/enemies';
+import { ENEMY_INTRO_SECONDS, ELITE_AFFIXES, AFFIX_IDS } from '../data/enemies';
 import { SWING, WEAPON_AUTO, itemPoolFor, ITEM_RARITY_MULT, ITEM_SLOTS, SHARDS, TRADE_ITEMS, WEAPON_LEVELS, itemDown, itemValue, itemById, scaleWeaponStep } from '../data/items';
 import { EVO_CARD_PREFIX, TECH_CARD_PREFIX, TECH_KEEP, TECH_OFFER, TECH_SWAP_PREFIX, evoOfCard, isEvoCard, isTechCard } from '../data/techniques';
 import { Techniques } from './techniques';
@@ -41,6 +41,8 @@ import { computeMerit } from '../systems/merit';
 import { ULT, ultById, ultMods, defaultUltsOf, ULT_SLOTS, type UltEffect, type UltMods } from '../data/ultimates';
 import { ALTAR_CURSE_IDS, type CurseId } from '../data/altar';
 import { TOD_BONUS, todForStage } from '../data/timeOfDay';
+
+const AFFIX_SPLIT = AFFIX_IDS.indexOf('split') + 1;
 import type { TimeOfDay } from '../data/ambience';
 
 export interface RunOptions {
@@ -1136,7 +1138,10 @@ export class Run {
     const isElite = this.enemies.variant[e] === 1;
     if (!this.orbs.spawn(x, z, value)) this.addXp(value);
     this.elements.noteKill(x, z);
+    const splitKind = this.enemies.affix[e] === AFFIX_SPLIT ? this.enemies.kind[e] : -1;
     this.enemies.kill(e);
+    // 分身詞綴（E-2）：倒下時分成幾隻一般的同種人類
+    if (splitKind >= 0) this.director.spawnNear(splitKind, x, z, ELITE_AFFIXES.split.count, 1.5, this.night);
     if (EVO.gem && isBoss) this.addGem(SOUL_GEM.boss + (this.summitChests > 0 ? SOUL_GEM.summitExtra : 0));
     else if (EVO.gem && isElite && !this.stageGemGiven && SOUL_GEM.firstElitePerStage > 0) {
       this.stageGemGiven = true;

@@ -1,4 +1,4 @@
-import { ENEMIES, ENEMY_IDS } from '../data/enemies';
+import { ENEMIES, ENEMY_IDS, ELITE_AFFIXES, AFFIX_IDS } from '../data/enemies';
 import { COMBAT } from '../data/combat';
 import { tuning } from '../data/tuning';
 import { STAGE } from '../data/stage';
@@ -27,6 +27,7 @@ const KIND_SHIELD_REDUCTION = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id]
 const KIND_SHIELD_COS = new Float32Array(ENEMY_IDS.map((id) => Math.cos(ENEMIES[id].shield?.halfArc ?? 0)));
 const KIND_SHIELD_TURN = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].shield?.turn ?? 0));
 const FACE_UNSET = 99;
+const AFFIX_WARD = AFFIX_IDS.indexOf('ward') + 1;
 const BEH_RANGED = 2;
 const KIND_POINTS = new Float32Array(ENEMY_IDS.map((id) => ENEMIES[id].points));
 export const kindIndex = (id: string): number => {
@@ -64,6 +65,9 @@ export class Enemies {
   /** 護法（僧兵）給的受傷倍率（1 = 沒有；每步重算）與鼓舞（太鼓兵）給的速度倍率 */
   readonly guardMul: Float32Array;
   readonly buffSpd: Float32Array;
+  /** 精英詞綴（E-2）：0 = 沒有，1～4 = AFFIX_IDS 的順序 + 1；召喚的倒數 */
+  readonly affix: Uint8Array;
+  readonly affixCd: Float32Array;
   /** 衝刺（探子）剩幾秒（> 0 = 正在衝，方向是 aimX／aimZ） */
   readonly dashT: Float32Array;
   /** 每種敵人現在活著幾隻（出場配方的同時上限用） */
@@ -127,6 +131,8 @@ export class Enemies {
     this.guardMul = f().fill(1);
     this.buffSpd = f().fill(1);
     this.dashT = f();
+    this.affix = new Uint8Array(capacity);
+    this.affixCd = f();
     this.kind = new Uint8Array(capacity);
     this.variant = new Uint8Array(capacity);
     this.vet = new Uint8Array(capacity);
@@ -207,6 +213,8 @@ export class Enemies {
     this.guardMul[i] = 1;
     this.buffSpd[i] = 1;
     this.dashT[i] = 0;
+    this.affix[i] = 0;
+    this.affixCd[i] = 0;
     this.aimX[i] = 0;
     this.aimZ[i] = 1;
     this.kindCount[kind]++;
@@ -279,7 +287,16 @@ export class Enemies {
 
   /** 盾擋掉一部分之後的傷害（沒有盾、或玩家在盾面之外就原樣回傳）。武器傷害都要先過這裡再 hurt */
   guard(i: number, dmg: number): number {
-    return (this.shielded(i) ? dmg * (1 - KIND_SHIELD_REDUCTION[this.kind[i]]) : dmg) * this.guardMul[i];
+    const ward = this.affix[i] === AFFIX_WARD ? 1 - ELITE_AFFIXES.ward.reduction : 1;
+    return (this.shielded(i) ? dmg * (1 - KIND_SHIELD_REDUCTION[this.kind[i]]) : dmg) * this.guardMul[i] * ward;
+  }
+
+  /** 給一隻精英掛上詞綴（代號見 AFFIX_IDS；加速直接改速度，召喚從滿冷卻開始） */
+  setAffix(i: number, code: number): void {
+    this.affix[i] = code;
+    const id = AFFIX_IDS[code - 1];
+    if (id === 'swift') this.speed[i] *= ELITE_AFFIXES.swift.speed;
+    if (id === 'summon') this.affixCd[i] = ELITE_AFFIXES.summon.every;
   }
 
   /** 增益那一輪（E-2）：先全部歸 1，再讓每個僧兵／太鼓兵把範圍內的同伴標上（用上一步的空間雜湊；頭目不吃） */

@@ -22,6 +22,10 @@ export const palette = {
   terrain: { grass: '#4f7a55', shallow: '#4c7f8f', deep: '#25506b', mud: '#5b4a3a', rock: '#7b7d82', bamboo: '#5d8a58', stone: '#9a9488', spring: '#7fb6b0' },
   /** 頭目招式的地面預告（D95）：範圍底色、填滿的進度、出手那一下 */
   bossTele: { area: '#ff3a2a', fill: '#ff5a3a', strike: '#ffd7a0' },
+  /** E-2：陰陽師的紅圈、僧兵（護法，藍）與太鼓兵（鼓舞，金）的範圍 */
+  enemyZone: { curse: '#ff3a2a', strike: '#ffd7a0', aura: '#6fa8ff', drum: '#ffc04a' },
+  /** 精英詞綴（E-2）腳下光圈的顏色：加速、護盾、分身、召喚（順序同 AFFIX_IDS） */
+  affix: ['#7dffa0', '#9fdcff', '#d79bff', '#ff9a3c'] as readonly string[],
   water: { shallow: '#7cc4d8', deep: '#1c4e78' },
   /** 小地圖（D66）：符號顏色依「功能」分組，不依屬性；每個符號再配不同的形狀（色盲也分得出來） */
   minimap: { boon: '#7ddc8a', risk: '#ff6b6b', trade: '#ffd24d', reward: '#ffb347', luck: '#c79bff', boss: '#ff4d4d', upgrade: '#6fe3ff', swap: '#9fe8ff', challenge: '#ff9a3c', player: '#ffffff', portal: '#b88cff', elite: '#ff5a5a', water: '#2f6f9c', shallow: '#5aa2c4', land: '#4f7a55', rock: '#7b7d82', mud: '#6b5646', blocked: '#2e3a34' },

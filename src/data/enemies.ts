@@ -119,6 +119,21 @@ export const ENEMIES: Record<string, EnemyDef> = {
   kawagari: { id: 'kawagari', name: 'enemy.kawagari.name', points: 30, hp: 4000, speed: 1.8, contact: 18, radius: 0.95 }, // 第 2 關玩家已經強很多：2300 時 sim 19～44 秒就倒；4800 河童打太久（58～95 秒）
 };
 
+/**
+ * 精英詞綴（E-2，docs/22）：第 fromStage 關（0 起）起，每隻精英隨機帶一個（同機率）。名稱依功能、不帶角色專屬字。
+ * 加速：移動速度 ×speed；護盾：受到的傷害 × (1 − reduction)；分身：倒下時分成 count 隻一般的同種人類；召喚：每 every 秒叫 count 個村人到身邊。
+ */
+export const ELITE_AFFIXES = {
+  fromStage: 1,
+  swift: { speed: 1.6 },
+  ward: { reduction: 0.45 },
+  split: { count: 3 },
+  summon: { every: 7, count: 3, spread: 2.5 },
+} as const;
+/** 詞綴的順序＝Enemies.affix 的代號 − 1（0 = 沒有） */
+export const AFFIX_IDS = ['swift', 'ward', 'split', 'summon'] as const;
+export type AffixId = (typeof AFFIX_IDS)[number];
+
 /** 新人類第一次出場的提示顯示幾秒 */
 export const ENEMY_INTRO_SECONDS = 7;
 
