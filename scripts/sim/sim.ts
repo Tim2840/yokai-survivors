@@ -19,6 +19,7 @@ import { STAGE } from '../../src/data/stage';
 import { SHARDS } from '../../src/data/items';
 import { ELEMENT_WEIGHTS, FOX_SKIP } from '../../src/data/elements';
 import { TOD_BONUS } from '../../src/data/timeOfDay';
+import { ENEMIES, ELITE_AFFIXES } from '../../src/data/enemies';
 import type { TerrainMap } from '../../src/world/terrainMap';
 
 const DT = 1 / 60;
@@ -111,6 +112,13 @@ function applyTune(): void {
     else if (k.startsWith('tech.')) (TECH_OFFER as unknown as Record<string, number>)[k.slice(5)] = Number(v);
     else if (k.startsWith('shards.')) (SHARDS as unknown as Record<string, number>)[k.slice(7)] = Number(v);
     else if (k.startsWith('evo.')) (EVO as unknown as Record<string, number>)[k.slice(4)] = Number(v);
+    else if (k.startsWith('en.')) {
+      // en.<人類 id>.<欄位>[.<子欄位>]：例 en.onmyoji.caster.damageMult=1.8、en.shinobi.contact=5、en.affix.ward.reduction=0.3
+      const path = k.slice(3).split('.');
+      let o: Record<string, unknown> = path[0] === 'affix' ? (ELITE_AFFIXES as unknown as Record<string, unknown>) : (ENEMIES as unknown as Record<string, unknown>)[path[0]] as Record<string, unknown>;
+      for (const p of path.slice(1, -1)) o = o[p] as Record<string, unknown>;
+      o[path[path.length - 1]] = Number(v);
+    }
     else if (/^tod\.(night|dusk|day)\.\w+$/.test(k)) (TOD_BONUS as unknown as Record<string, Record<string, number>>)[k.split('.')[1]][k.split('.')[2]] = Number(v); // tod.day.xp=-0.1
     else if (k.startsWith('gem.')) (SOUL_GEM as unknown as Record<string, number>)[k.slice(4)] = Number(v);
     else if (k.startsWith('xp.')) (PROGRESSION as unknown as Record<string, number>)[k.slice(3)] = Number(v);
