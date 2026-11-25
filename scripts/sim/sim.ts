@@ -375,6 +375,21 @@ function play(seed: number, strategy: string, useElements: boolean): Result {
         break;
       }
     }
+    // 躲紅圈（E-2 陰陽師）：站在還沒落下的圈裡就往圈外走（離圓心的方向）；探子的衝刺不躲（保守）
+    if (DODGE && run.shots.zoneCount > 0) {
+      const sh = run.shots;
+      for (let i = 0; i < sh.zAlive.length; i++) {
+        if (!sh.zAlive[i] || sh.zt[i] <= 0) continue;
+        const ox = run.px - sh.zx[i];
+        const oz = run.pz - sh.zz[i];
+        const d = Math.hypot(ox, oz);
+        if (d > sh.zr[i] + 0.4) continue;
+        const inv = d > 1e-3 ? 1 / d : 0;
+        mx = d > 1e-3 ? ox * inv * 1.6 : 1.6;
+        mz = oz * inv * 1.6;
+        break;
+      }
+    }
     run.setMove(mx, mz);
     // 互動鍵（D99）：走到要素上就按（召喚祭壇照 --summonAt 的時間）
     {

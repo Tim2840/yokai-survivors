@@ -16,6 +16,10 @@ import oniF2Url from '../assets/models/aka-oni-f2.glb?inline';
 import villagerUrl from '../assets/models/villager.glb?inline';
 import ashigaruUrl from '../assets/models/ashigaru.glb?inline';
 import yumiUrl from '../assets/models/yumi.glb?inline';
+import soheiUrl from '../assets/models/sohei.glb?inline';
+import shinobiUrl from '../assets/models/shinobi.glb?inline';
+import onmyojiUrl from '../assets/models/onmyoji.glb?inline';
+import taikoUrl from '../assets/models/taiko.glb?inline';
 import taimasouUrl from '../assets/models/taimasou.glb?inline';
 import kawagariUrl from '../assets/models/kawagari.glb?inline';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -182,6 +186,10 @@ export const BLENDER_ENEMIES: Record<string, { url: string; fire?: string }> = {
   villager: { url: villagerUrl, fire: palette.fire.torch },
   ashigaru: { url: ashigaruUrl },
   yumi: { url: yumiUrl },
+  sohei: { url: soheiUrl },
+  shinobi: { url: shinobiUrl },
+  onmyoji: { url: onmyojiUrl },
+  taiko: { url: taikoUrl },
   taimasou: { url: taimasouUrl },
   kawagari: { url: kawagariUrl },
 };

@@ -700,6 +700,84 @@ def build_kawagari():
     return finish_enemy(b, KAWAGARI_SPEC, '獵河武士', 'Kawagari', 'kawagari.glb')
 
 
+SOHEI_SPEC = {'head': ['head'], 'hair': ['hood'], 'eyes': ['eye'], 'max_tris': 700, 'loose_ok': ['hl']}
+
+
+def hood_line(x, y):
+    """裹頭的邊緣：前面在額頭（和頭髮一樣），兩側與後面一路包到脖子（只露出臉）"""
+    yn = -y / (HR * HS[1])
+    f = smooth((yn + 0.05) / 0.9)
+    front = HC_Z + HR * (0.45 - 0.12 * smooth(abs(x) / (0.8 * HR)))
+    back = HC_Z - HR * 0.95
+    return back + (front - back) * f
+SHINOBI_SPEC = {'head': ['head'], 'hair': ['hair'], 'eyes': ['eye'], 'max_tris': 700, 'loose_ok': ['hl']}
+ONMYOJI_SPEC = {'head': ['head'], 'hair': ['hair'], 'eyes': ['eye'], 'max_tris': 700, 'loose_ok': ['hl']}
+TAIKO_SPEC = {'head': ['head'], 'hair': ['hair'], 'eyes': ['eye'], 'max_tris': 700, 'loose_ok': ['hl']}
+
+
+def build_sohei():
+    """僧兵（E-2，護法）：白色裹頭（往後包住頭、臉露在前面）、灰紫僧衣、右手長薙刀——輪廓靠「白頭巾＋比人高的長柄刀」"""
+    lib.reset()
+    use_head(0.86, 0.31, (1.02, 0.98, 0.96))
+    b = Builder()
+    enemy_base(b, '#4b4f63', bscale=(1.12, 1.02, 1.12), hair=None, eye_z=0.8)
+    # 裹頭：像頭髮一樣貼著頭的一整片白布（只露出臉，邊緣在額頭）＋垂到肩膀的布尾
+    hair_shell(b, 'hood', hood_line, '#dfe8f6', seg=(12, 8), grow=1.1)  # 冷白（暖白在暖光下會像皮膚，轉檯圖抓到的）
+    b.sphere('hoodtail', 0.16, (0, 0.2, HC_Z - 0.26), '#dfe8f6', None, scale=(1.4, 0.6, 1.0), seg=6, rings=4)
+    # 薙刀：右手一根長柄＋頂端的彎刃
+    rod(b, 'pole', (0.36, -0.1, 0.0), (0.36, -0.1, 1.32), 0.024, 0.024, '#6a4b2e', None, seg=5)
+    b.cone('blade', 0.07, 0.0, 0.34, (0.38, -0.1, 1.48), '#d6dde4', None, rot=(0, 0.2, 0), seg=4, scale=(1, 0.35, 1))
+    return finish_enemy(b, SOHEI_SPEC, '僧兵', 'Sohei', 'sohei.glb')
+
+
+def build_shinobi():
+    """探子（E-2，衝刺）：深藍緊身衣、深色頭巾、面巾遮住下半臉、紅色長巾往後飄、背後斜背短刀——輪廓靠「蒙面＋紅飄巾」，體型瘦小"""
+    lib.reset()
+    use_head(0.86, 0.31, (1.02, 0.98, 0.96))
+    b = Builder()
+    enemy_base(b, '#2c3350', bscale=(0.9, 0.88, 1.08), hair='#3a4266', collar=False)
+    # 面巾：蓋住臉的下半（在眼睛下面）
+    b.sphere('mask', HR * 0.98, (0, -0.02, HC_Z - 0.1), '#3a4266', None, scale=(1.04, 1.0, 0.62), seg=10, rings=6)
+    # 紅長巾：從後腦往後下方飄
+    rod(b, 'scarf', (0.0, HR * 0.9, HC_Z + 0.05), (0.08, HR * 1.6, HC_Z - 0.2), 0.035, 0.03, '#d8453a', None, seg=4)
+    # 背後斜背的短刀
+    rod(b, 'blade', (-0.2, 0.24, 0.3), (0.2, 0.26, 0.82), 0.028, 0.028, '#2b2b30', None, seg=5)
+    return finish_enemy(b, SHINOBI_SPEC, '探子', 'Shinobi', 'shinobi.glb')
+
+
+def build_onmyoji():
+    """陰陽師（E-2，紅圈）：高高的黑色烏帽子、淡藍白狩衣、兩邊垂下的寬袖、右手一張白符紙（紅印）——輪廓靠「高帽子」"""
+    lib.reset()
+    use_head(0.86, 0.31, (1.02, 0.98, 0.96))
+    b = Builder()
+    enemy_base(b, '#dfe8f2', bscale=(1.08, 1.0, 1.12))
+    # 烏帽子：頭頂一個往後微斜的高帽（底部壓進頭髮裡）
+    b.cone('eboshi', 0.17, 0.12, 0.42, (0, 0.06, HC_Z + HR * 0.85 + 0.17), '#1f1f26', None, rot=(0.22, 0, 0), seg=8)
+    # 寬袖：身體兩側往下垂
+    for sx in (-1, 1):
+        b.sphere('sleeve', 0.15, (sx * 0.33, 0.0, 0.33), '#dfe8f2', None, scale=(0.55, 0.9, 1.15), seg=7, rings=5)
+    # 符紙：右手前面一張豎起來的白紙＋紅印
+    b.box('ofuda', (0.12, 0.016, 0.24), (0.3, -0.24, 0.52), '#f6efd2', None)
+    b.box('seal', (0.05, 0.02, 0.05), (0.3, -0.25, 0.56), '#d8453a', None)
+    return finish_enemy(b, ONMYOJI_SPEC, '陰陽師', 'Onmyoji', 'onmyoji.glb')
+
+
+def build_taiko():
+    """太鼓兵（E-2，鼓舞）：紅頭帶、土黃短衣、胸前一面大太鼓（朱紅鼓身、米白鼓面）、兩手各一根鼓棒——輪廓靠「大鼓」"""
+    lib.reset()
+    use_head(0.86, 0.31, (1.02, 0.98, 0.96))
+    b = Builder()
+    enemy_base(b, '#c9a86a', bscale=(1.08, 1.0, 1.08), collar=False)
+    b.torus('band', HR * 1.03, 0.036, (0, 0, HC_Z + HR * 0.3), '#d8453a', None, rot=(-0.12, 0, 0), seg=10, tube=3, scale=(HS[0], HS[1], 1))
+    # 大鼓：胸前橫掛，鼓面朝前
+    b.cone('drum', 0.26, 0.26, 0.22, (0, -0.38, 0.4), '#c8402f', None, rot=(math.pi / 2, 0, 0), seg=12)
+    b.cone('drumhead', 0.22, 0.22, 0.02, (0, -0.5, 0.4), '#efe2c4', None, rot=(math.pi / 2, 0, 0), seg=12)
+    # 鼓棒
+    for sx in (-1, 1):
+        rod(b, 'stick', (sx * 0.3, -0.1, 0.38), (sx * 0.42, -0.3, 0.72), 0.022, 0.022, '#6a4b2e', None, seg=4)
+    return finish_enemy(b, TAIKO_SPEC, '太鼓兵', 'Taiko', 'taiko.glb')
+
+
 def build_torii():
     lib.reset()
     b = Builder()
@@ -746,6 +824,6 @@ if __name__ == '__main__':
     n3 = build_kappa()
     nf = [build_chochin(1), build_chochin(2), build_kappa(1), build_kappa(2), build_oni(), build_oni(1), build_oni(2)]
     n4 = build_villager()
-    n5 = [build_ashigaru(), build_yumi(), build_taimasou(), build_kawagari()]
+    n5 = [build_ashigaru(), build_yumi(), build_taimasou(), build_kawagari(), build_sohei(), build_shinobi(), build_onmyoji(), build_taiko()]
     n2 = build_torii()
     print('faces: forms', nf, 'chochin', n1, 'kappa', n3, 'torii', n2, 'villager tris', n4, 'ashigaru/yumi/taimasou tris', n5)
