@@ -30,7 +30,7 @@
 - Blender 的 glTF 匯入器會自己產生一顆 Icosphere（骨頭顯示用），不是檔案裡的東西。
 
 ## 5. 第二輪：貼圖（2026-11-27，建模師，docs/37 第一批）
-- **ambientCG 下載不了**：API 查得到，但 `ambientcg.com/get?file=…` 會轉到 `acg-download.struffelproductions.com`，環境代理擋（403，不在允許清單）。沒有繞過；改用 Poly Haven。要用 ambientCG 的話，請主 session 評估把那個網域加進環境的允許清單。
+- **ambientCG 下載不了**：API 查得到，但 `ambientcg.com/get?file=…` 會轉到 `acg-download.struffelproductions.com`，環境代理擋（403，不在允許清單）。沒有繞過；改用 Poly Haven。**2026-11-27 使用者同意，已把 `acg-download.struffelproductions.com` 加進環境的允許清單**（Default 環境），`curl -L "https://ambientcg.com/get?file=<id>_1K-JPG.zip"` 可以下載了（ambientCG 全站 CC0）。
 - **Poly Haven**：`node scripts/assets/fetch-polyhaven.mjs <id…>` → `candidates/polyhaven/<id>/`（1k 的 Diffuse、nor_gl、AO；記作者與來源到 `candidates/manifest.json`）。全站 CC0。
 - 採用：`sparse_grass`（草）、`park_dirt`（泥土）、`grey_stone_path`（石板）、`rock_face_03`（岩石）、`weathered_planks`（木頭）；`tools/textures/prep_layers.py` 轉成 512 的中性灰細節貼圖（顏色由色票決定）→ `src/assets/textures/ground-*.jpg`，已寫進 `LICENSES.json`（作者照 Poly Haven 頁面）。
 - 沒採用：`leafy_grass`、`forrest_ground_01`（顏色斑駁，轉灰之後和 sparse_grass 差不多）、`stone_pathway_02`（方整的石板，比較像西式廣場）、`monastery_stone_floor`、`rock_face`（偏紅）、`japanese_cedar_planks`（太新、太亮；之後做木造建築可以再試）。
