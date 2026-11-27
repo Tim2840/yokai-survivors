@@ -7,3 +7,4 @@ screenshots
 dist-artifact
 dist-sim
 __pycache__/
+candidates/

@@ -327,6 +327,43 @@ export function installDevApi(ctx: DevContext): void {
       }
       return i;
     },
+    /**
+     * 試用外部素材（使用者 2026-11-27：自動抓免費素材來試）：載入一個 glb（開發伺服器上的路徑，例 /candidates/glb/x.glb）放在玩家前方 (dx, dz)，
+     * 臉朝鏡頭；回傳三角形數。只在開發版，不進遊戲流程。
+     */
+    previewGlb: async (url: string, dx: number, dz: number, yaw = 0) => {
+      const r = run();
+      if (!r) return -1;
+      const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+      const g = await new GLTFLoader().loadAsync(url);
+      const root = g.scene;
+      const x = r.px + dx;
+      const z = r.pz + dz;
+      root.position.set(x, r.map.heightAt(x, z), z);
+      root.rotation.y = yaw;
+      let tris = 0;
+      root.traverse((o) => {
+        const m = o as unknown as { isMesh?: boolean; geometry?: { index: { count: number } | null; attributes: { position: { count: number } } } };
+        if (m.isMesh && m.geometry) tris += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3;
+      });
+      ctx.renderer.scene.add(root);
+      // 有動畫的話擺成待機姿勢的第一格（不然是 T 字）
+      const idle = g.animations.find((c) => /idle/i.test(c.name)) ?? g.animations[0];
+      if (idle) {
+        const THREE = await import('three');
+        const mixer = new THREE.AnimationMixer(root);
+        mixer.clipAction(idle).play();
+        mixer.update(0.3);
+      }
+      root.updateMatrixWorld(true);
+      const info: string[] = [];
+      root.traverse((o) => {
+        const m = o as unknown as { isMesh?: boolean; isSkinnedMesh?: boolean; name: string; visible: boolean; frustumCulled: boolean; material?: { opacity: number; transparent: boolean; visible: boolean; type: string } };
+        if (m.isMesh) info.push(`${m.name} skin=${!!m.isSkinnedMesh} vis=${m.visible} mat=${m.material?.type} op=${m.material?.opacity} tr=${m.material?.transparent}`);
+      });
+      (window as unknown as { __lastPreview?: unknown }).__lastPreview = { info, pos: [root.position.x, root.position.y, root.position.z], anims: g.animations.map((c) => c.name) };
+      return tris;
+    },
     /** 給第 i 隻敵人掛精英詞綴（E-2；code = AFFIX_IDS 的順序 + 1） */
     setAffix: (i: number, code: number) => run()?.enemies.setAffix(i, code),
     /** 場上敵人的生命設成極大（行為測試用） */

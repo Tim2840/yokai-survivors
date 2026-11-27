@@ -36,6 +36,7 @@
 | 引入 Blender（模型流程） | `docs/26-blender-pipeline.md`（D87 試作、**Q54 通過（D92）：主網址與測試頁都用 Blender 模型**，開發版要帶 `?model=blender`；`npm run check:main` 會擋「主網址沒內嵌 .glb」） |
 | 敵人設計、關卡變化、難度怎麼來 | `docs/22-enemy-design.md`（E-1 已完成 D70：足輕、弓手、出場配方；E-2 待開工） |
 | 美術：日系 RPG 像素風（D72，**D89 起已被乾淨卡通取代**，歷史紀錄）、場景氣氛、角色 Q 版造型、地圖精緻化排程 | `docs/23-art-pass.md` |
+| **外部免費素材（下載、轉檔、對照、授權紀錄）** | `docs/36-external-assets.md`（`scripts/assets/fetch-oga.mjs` 只收 CC0、`tools/blender/convert.py`、`scripts/shots/candidates.mjs`、`__game.previewGlb`） |
 | **新增任何「所有角色共用」或「新角色」的內容前** | `docs/19-generalization.md`（舉一反三檢查表：已發生的錯、可預見的場景、5 個自問） |
 
 ## 專案 skill（`.claude/skills/`，2026-11-16；評估與理由在 `docs/31-skills.md`）
