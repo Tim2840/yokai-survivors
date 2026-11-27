@@ -91,6 +91,9 @@
 
 **驗收**：`model:build`（稽核自我測試＋全部模型稽核通過）、轉檯圖 `turnaround-chochin-v5`、`turnaround-chochin-v5-f2`、改前改後同一鏡頭 `artcmp-before-*`／`artcmp-after-*`、參道 `sando-after-*`、p1。
 
+**回歸**：p1 ✓、e1 ✓、o1 ✓；**e3、e4、y1 ✗，但在 `main`（改動前）用同一台機器跑也是同樣失敗**（e4：「站在紅圈裡沒被打到 103.76 → 106.80」，數字完全一樣；e3、y1 也在 main 上失敗）→ 既有問題，不是這一批造成的，交主 session 查。
+typecheck ✓、npm test 464 ✓、check:main ✓。
+
 **我自己看到的缺點（還沒處理）**
 - 燈籠紙不再有光暈（亮度沒超過光暈門檻），「透光」感比改前弱；家紋在球面上被壓扁、形狀粗糙。
 - 頭髮的髮束條紋太規則，近看像南瓜的稜。
