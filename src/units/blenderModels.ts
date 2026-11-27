@@ -28,6 +28,8 @@ import fenceUrl from '../assets/models/fence.glb?inline';
 import { LAYER_MEAN } from '../art/worldMaterial';
 import monkAtlasUrl from '../assets/textures/chochin-atlas.png?inline';
 import monkGlowUrl from '../assets/textures/chochin-glow.png?inline';
+import kappaAtlasUrl from '../assets/textures/kappa-atlas.png?inline';
+import oniAtlasUrl from '../assets/textures/oni-atlas.png?inline';
 
 /**
  * Blender 模型（docs/26；D87 試作、Q54 通過 D92）：用 Blender 腳本（tools/blender/build.py）建的模型，匯出 .glb 後內嵌進來。
@@ -104,19 +106,21 @@ function dress(root: THREE.Object3D, mats: THREE.Material[], glowColor: string =
 }
 
 /** 提燈小僧（Blender 版） */
-const MONK_SKIN: Skin = { map: monkAtlasUrl, glow: monkGlowUrl, glowPower: 1.6 };
+const MONK_SKIN: Skin = { map: monkAtlasUrl, glow: monkGlowUrl, glowPower: 2.3 };
 export const loadBlenderMonk = (): Promise<Character> => loadRigged(monkUrl, undefined, undefined, MONK_SKIN);
 /** 河童（Blender 版）：頭頂的水與手上的水盤是發光的網格（顏色取河童的特效色，只發一點光） */
-export const loadBlenderKappa = (): Promise<Character> => loadRigged(kappaUrl, palette.fx.kappa.light, 0.6);
+const KAPPA_SKIN: Skin = { map: kappaAtlasUrl };
+const ONI_SKIN: Skin = { map: oniAtlasUrl };
+export const loadBlenderKappa = (): Promise<Character> => loadRigged(kappaUrl, palette.fx.kappa.light, 0.6, KAPPA_SKIN);
 
 /** 赤鬼（Blender 版，docs/35）：化身二身上的火紋與雷鼓是發光的網格（取赤鬼的特效色） */
-export const loadBlenderOni = (): Promise<Character> => loadRigged(oniUrl, palette.fx['aka-oni'].light, 0.7);
+export const loadBlenderOni = (): Promise<Character> => loadRigged(oniUrl, palette.fx['aka-oni'].light, 0.7, ONI_SKIN);
 
 /** 化身的造型（D94、docs/33）：[化身一, 化身二]；沒有的妖怪回傳空陣列（只放大，不換造型） */
 export async function loadBlenderForms(yokaiId: string): Promise<Character[]> {
   if (yokaiId === 'chochin-kozo') return Promise.all([loadRigged(monkF1Url, undefined, undefined, MONK_SKIN), loadRigged(monkF2Url, undefined, undefined, MONK_SKIN)]);
-  if (yokaiId === 'kappa') return Promise.all([loadRigged(kappaF1Url, palette.fx.kappa.light, 0.6), loadRigged(kappaF2Url, palette.fx.kappa.light, 0.6)]);
-  if (yokaiId === 'aka-oni') return Promise.all([loadRigged(oniF1Url, palette.fx['aka-oni'].light, 0.7), loadRigged(oniF2Url, palette.fx['aka-oni'].light, 0.7)]);
+  if (yokaiId === 'kappa') return Promise.all([loadRigged(kappaF1Url, palette.fx.kappa.light, 0.6, KAPPA_SKIN), loadRigged(kappaF2Url, palette.fx.kappa.light, 0.6, KAPPA_SKIN)]);
+  if (yokaiId === 'aka-oni') return Promise.all([loadRigged(oniF1Url, palette.fx['aka-oni'].light, 0.7, ONI_SKIN), loadRigged(oniF2Url, palette.fx['aka-oni'].light, 0.7, ONI_SKIN)]);
   return [];
 }
 

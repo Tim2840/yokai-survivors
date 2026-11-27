@@ -157,7 +157,19 @@ def decal(b, name, cx, cz, w, h, rect, bone='head', lift=0.0015, n=(6, 6)):
         bm.faces.new((a, c, edgeb[(k + 1) % len(edge)], edgeb[k]))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     b.uv(('fn', lambda co: rect_uv(rect, (co.x - (cx - w / 2)) / w, 1 - (co.z - (cz - h / 2)) / h)))
-    return b._finish(bm, name, WHITE, bone)
+    ob = b._finish(bm, name, WHITE, bone)
+    # 法線照抄頭的（頭的法線是在粗網格上內插的，和真正的橢球法線有一點差）：不抄的話，卡通著色的明暗在貼片上和旁邊的臉不一樣，
+    # 深色皮膚（河童、赤鬼）會看到一個方框（第二批轉檯圖抓到的）
+    head = next((p for p in b.parts if p.name.split('.')[0] == 'head'), None)
+    if head is not None:
+        m = ob.modifiers.new('nrm', 'DATA_TRANSFER')
+        m.object = head
+        m.use_loop_data = True
+        m.data_types_loops = {'CUSTOM_NORMAL'}
+        m.loop_mapping = 'POLYINTERP_NEAREST'
+        bpy.context.view_layer.objects.active = ob
+        bpy.ops.object.modifier_apply(modifier=m.name)
+    return ob
 
 
 # 稽核用：哪些零件是頭、頭髮、眼睛、嘴（名稱是 Builder 零件名，不含 .001 這種流水號）
@@ -317,6 +329,8 @@ K_BELLY = '#e6f3c6'
 K_SHELL = '#6b4f2c'
 K_SHELL_L = '#9c7a40'
 K_HAIR = '#1f6b4a'
+K_HAIR_TEX = '#237652'  # 髮束貼圖（平均約 0.88）乘上去之後和舊的 K_HAIR 差不多亮
+K_SHELL_TEX = '#76582f'  # 龜殼貼圖（甲片的暗溝）乘上去之後整體和舊的 K_SHELL 差不多
 K_BEAK = '#ffc23d'
 K_DISH = '#f4f8f2'
 K_WATER = '#7fd6e8'
@@ -336,11 +350,13 @@ def kappa_hairline(x, y):
 def build_kappa(form=0):
     """form 1 = 化身一（龜殼水晶稜、盤子發光、雙層水盤）；2 = 化身二「河伯」（再加蓮花冠、身邊水環）。D94、docs/33。"""
     lib.reset()
-    b = Builder()
+    paint_atlas.paint(OUT.rsplit('/', 1)[0] + '/textures', 'kappa')  # 貼圖集（docs/37 第二批）
+    b = Builder(atlas_white=rect_uv(CA['white'], 0.5, 0.5))
+    cyl = lambda key: ('cyl', lambda s_, t_: rect_uv(CA[key], s_, t_))  # noqa: E731
     # 身體：圓滾滾、淺色肚子、背後龜殼（一圈淺色殼緣＋三片甲紋）
     b.sphere('torso', 0.31, (0, 0, 0.4), K_SKIN, 'body', scale=(1.05, 0.95, 1.02), seg=28, rings=18)
     b.sphere('belly', 0.25, (0, -0.115, 0.38), K_BELLY, 'body', scale=(0.92, 0.8, 1.0), seg=20, rings=14)
-    b.sphere('shell', 0.3, (0, 0.13, 0.44), K_SHELL, 'body', scale=(1.06, 0.85, 1.06), seg=24, rings=16)
+    b.uv(cyl('robe')).sphere('shell', 0.3, (0, 0.13, 0.44), K_SHELL_TEX, 'body', scale=(1.06, 0.85, 1.06), seg=24, rings=16)
     b.torus('shellrim', 0.29, 0.03, (0, 0.12, 0.44), K_SHELL_L, 'body', rot=(math.pi / 2, 0, 0), seg=28, tube=8, scale=(1.06, 1.06, 1))
     for (px, pz) in ((0, 0.52), (-0.13, 0.36), (0.13, 0.36)):
         b.sphere('scute', 0.085, (px, 0.365, pz), K_SHELL_L, 'body', scale=(1, 0.35, 1), seg=10, rings=6)
@@ -365,17 +381,12 @@ def build_kappa(form=0):
         b.sphere('foot', 0.12, (sx * 0.14, -0.08, 0.06), K_BEAK, bone, scale=(1.0, 1.45, 0.5), seg=14, rings=8)
     # 頭：同一套臉的規則（眼睛放低、一個大高光、沒有多餘的線）；嘴是黃色的扁嘴
     b.sphere('head', HR, (0, 0, HC_Z), K_SKIN, 'head', scale=HS, seg=32, rings=20)
-    hair_shell(b, 'hair', kappa_hairline, K_HAIR)
+    b.uv(cyl('hair'))
+    hair_shell(b, 'hair', kappa_hairline, K_HAIR_TEX)
+    # 第二版（docs/37 第二批）：眼睛與腮紅是畫出來的（同提燈小僧的做法；嘴仍是立體的黃色扁嘴）
     for sx in (-1, 1):
-        ex, ez = sx * 0.13, 0.9
-        rx, rz = head_tilt(ex, ez)
-        b.sphere('eye', 0.08, (ex, head_y(ex, ez) + 0.004, ez), ('#10262e', '#2f8f7a'), 'head', scale=(0.78, 0.36, 1.2), rot=(rx, 0, rz), seg=20, rings=14)
-        hx, hz = ex - sx * 0.018, ez + 0.048
-        t = head_tilt(hx, hz)
-        b.sphere('hl', 0.03, (hx, head_y(hx, hz) - 0.02, hz), WHITE, 'head', scale=(1.0, 0.3, 1.2), rot=(t[0], 0, t[1]), seg=10, rings=8)
-        bx, bz = sx * 0.255, 0.775
-        t = head_tilt(bx, bz)
-        b.sphere('blush', 0.054, (bx, head_y(bx, bz) + 0.004, bz), ('#ffb0a0', '#ff9a8a'), 'head', scale=(1.1, 0.3, 0.6), rot=(t[0], 0, t[1]), seg=12, rings=8)
+        decal(b, 'eye', sx * 0.14, 0.9, EYE_W, EYE_H, CA['eyeR' if sx > 0 else 'eyeL'], lift=0.002)
+        decal(b, 'blush', sx * 0.27, 0.765, 0.12, 0.08, CA['blush'], lift=0.001)
     bz = 0.725
     b.sphere('beak', 0.1, (0, head_y(0, bz) + 0.035, bz), (K_BEAK, '#f0a020'), 'head', scale=(1.25, 0.9, 0.45), seg=18, rings=12)
     # 頭頂的盤子（白色淺盤）：邊緣壓在頭髮上，裡面的水是另一個會發光的網格
@@ -436,6 +447,7 @@ def build_kappa(form=0):
 O_SKIN = '#d9503f'
 O_SKIN_D = '#b8382c'
 O_HAIR = '#3a2620'
+O_HAIR_TEX = '#43302a'  # 捲髮貼圖（平均約 0.88）乘上去之後和舊的 O_HAIR 差不多亮
 O_HORN = '#f4e6c8'
 O_TIGER = '#f2c14e'
 O_STRIPE = '#3a2a1e'
@@ -456,15 +468,15 @@ def oni_hairline(x, y):
 def build_oni(form=0):
     """form 1 = 化身一「大鬼」（角變長、金手環、金棒加金箍）；2 = 化身二「鬼神」（再加身上發光火紋、背後一圈雷鼓）。"""
     lib.reset()
-    b = Builder()
+    paint_atlas.paint(OUT.rsplit('/', 1)[0] + '/textures', 'oni')  # 貼圖集（docs/37 第二批）
+    b = Builder(atlas_white=rect_uv(CA['white'], 0.5, 0.5))
+    cyl = lambda key: ('cyl', lambda s_, t_: rect_uv(CA[key], s_, t_))  # noqa: E731
     # 身體：寬一點、胸前淺一點的紅
     b.sphere('torso', 0.33, (0, 0, 0.42), O_SKIN, 'body', scale=(1.12, 0.96, 1.02), seg=28, rings=18)
     b.sphere('chest', 0.24, (0, -0.11, 0.48), O_SKIN_D, 'body', scale=(1.0, 0.7, 0.8), seg=20, rings=12)
     # 虎皮腰布：腰下一圈黃底、三條深色條紋
-    b.sphere('cloth', 0.335, (0, 0, 0.3), O_TIGER, 'body', scale=(1.14, 1.0, 0.52), seg=24, rings=12)
-    for k, a in enumerate((-0.7, 0.0, 0.7, math.pi - 0.5, math.pi + 0.5)):
-        x, y = math.sin(a) * 0.37, -math.cos(a) * 0.33
-        b.sphere('stripe', 0.05, (x, y, 0.3), O_STRIPE, 'body', scale=(0.5, 0.5, 1.5), rot=(0, 0, -a), seg=8, rings=6)
+    # 虎皮（第二版）：條紋畫在貼圖上（第一版是幾顆深色球，近看像斑點）
+    b.uv(cyl('robe')).sphere('cloth', 0.335, (0, 0, 0.3), O_TIGER, 'body', scale=(1.14, 1.0, 0.52), seg=28, rings=14)
     b.sphere('neck', 0.14, (0, 0, 0.66), O_SKIN, 'body', seg=12, rings=8)
     # 手：左手握拳垂著、右手往上扛金棒
     for sx, bone in ((-1, 'armL'), (1, 'armR')):
@@ -501,24 +513,13 @@ def build_oni(form=0):
         b.sphere('foot', 0.13, (sx * 0.15, -0.08, 0.06), O_SKIN_D, bone, scale=(1.0, 1.4, 0.5), seg=14, rings=8)
     # 頭：同一套臉的規則；嘴是咧開的小嘴＋兩顆小獠牙
     b.sphere('head', HR, (0, 0, HC_Z), O_SKIN, 'head', scale=HS, seg=32, rings=20)
-    hair_shell(b, 'hair', oni_hairline, O_HAIR)
+    b.uv(cyl('hair'))
+    hair_shell(b, 'hair', oni_hairline, O_HAIR_TEX)
+    # 第二版（docs/37 第二批）：眼睛（粗眉、金色虹彩）、腮紅、咧開的嘴＋兩顆小獠牙都是畫出來的
     for sx in (-1, 1):
-        ex, ez = sx * 0.13, 0.9
-        rx, rz = head_tilt(ex, ez)
-        b.sphere('eye', 0.08, (ex, head_y(ex, ez) + 0.004, ez), ('#1a0c0a', '#7a2a1a'), 'head', scale=(0.78, 0.36, 1.2), rot=(rx, 0, rz), seg=20, rings=14)
-        hx, hz = ex - sx * 0.018, ez + 0.048
-        t = head_tilt(hx, hz)
-        b.sphere('hl', 0.03, (hx, head_y(hx, hz) - 0.02, hz), WHITE, 'head', scale=(1.0, 0.3, 1.2), rot=(t[0], 0, t[1]), seg=10, rings=8)
-        bx, bz = sx * 0.255, 0.775
-        t = head_tilt(bx, bz)
-        b.sphere('blush', 0.054, (bx, head_y(bx, bz) + 0.004, bz), ('#ff8a7a', '#ff7060'), 'head', scale=(1.1, 0.3, 0.6), rot=(t[0], 0, t[1]), seg=12, rings=8)
-    mz = 0.74
-    t = head_tilt(0, mz)
-    b.sphere('mouth', 0.06, (0, head_y(0, mz) + 0.006, mz), '#5a1a14', 'head', scale=(1.5, 0.3, 0.55), rot=(t[0], 0, t[1]), seg=14, rings=8)
-    for sx in (-1, 1):
-        fx, fz = sx * 0.045, mz + 0.01
-        t = head_tilt(fx, fz)
-        b.sphere('fang', 0.02, (fx, head_y(fx, fz) - 0.004, fz), WHITE, 'head', scale=(0.8, 0.6, 1.2), rot=(t[0], 0, t[1]), seg=8, rings=6)
+        decal(b, 'eye', sx * 0.14, 0.9, EYE_W, EYE_H, CA['eyeR' if sx > 0 else 'eyeL'], lift=0.002)
+        decal(b, 'blush', sx * 0.27, 0.765, 0.12, 0.08, CA['blush'], lift=0.001)
+    decal(b, 'mouth', 0.0, 0.738, 0.1, 0.064, CA['mouth'], n=(5, 4))
     # 角：從頭髮上方長出來（底部埋進頭裡、圓頭不尖）；化身一更長、稍微往外彎
     hl = 0.2 if not form else 0.28
     for sx in (-1, 1):

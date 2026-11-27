@@ -174,10 +174,22 @@
       "author": "Dario Barresi, Dimitrios Savva",
       "note": "tools/textures/prep_layers.py 轉成中性灰的細節貼圖（512）"
     },
+    "textures/kappa-atlas.png": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/paint_atlas.py",
+      "author": "本專案"
+    },
     "textures/layers.json": {
       "origin": "own",
       "license": "own",
       "source": "tools/textures/prep_layers.py",
+      "author": "本專案"
+    },
+    "textures/oni-atlas.png": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/paint_atlas.py",
       "author": "本專案"
     }
   }
