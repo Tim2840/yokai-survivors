@@ -7,6 +7,7 @@ import { ball } from '../art/shapes';
 import type { Run } from '../game/run';
 import { COMBAT } from '../data/combat';
 import { buildLanternMonk, type Character } from '../units/lanternMonk';
+import { SANDO } from '../data/scenery';
 import { buildKappa } from '../units/kappa';
 import { buildAkaOni } from '../units/akaOni';
 import { ENEMY_MODELS } from '../units/enemyModels';
@@ -155,8 +156,19 @@ export class RunView {
           monk?.dispose();
           return;
         }
-        const tx = run.px + 5;
-        const tz = run.pz - 6;
+        // 參道（docs/37）：鳥居、石燈籠、柵欄的位置在 src/data/scenery.ts
+        const tx = map.def.playerStart.x + SANDO.torii.x;
+        const tz = map.def.playerStart.z + SANDO.torii.z;
+        const props = await mod.loadBlenderProps();
+        if (this.disposed) {
+          torii.dispose();
+          monk?.dispose();
+          return;
+        }
+        this.world.upgradeProps(props);
+        props.lanternStone.dispose();
+        props.lanternGlow.dispose();
+        props.fence.dispose();
         torii.root.position.set(tx, map.heightAt(tx, tz), tz);
         this.group.add(torii.root);
         this.trialProps.push(torii);

@@ -23,13 +23,51 @@ def reset():
 class Builder:
     """收集零件（各自的顏色與骨頭），最後合併成一個網格。"""
 
-    def __init__(self):
+    def __init__(self, atlas_white=None):
+        """atlas_white：有貼圖集的模型（docs/37）給「純白」那一格的 UV；每個零件都會有 UV，沒指定貼法的零件指到純白（只用頂點色）。
+        None = 沒有貼圖（舊模型，匯出的 .glb 和以前一樣）。"""
         self.parts = []
+        self.atlas_white = atlas_white
+        self.next_uv = None
+
+    def uv(self, mode):
+        """下一個零件的貼法：('cyl', rect函式) 繞零件自己的 Z 軸展開（u = 角度、v = 高度，上緣 v = 0）；('fn', f) f(局部座標) → (u, v)"""
+        self.next_uv = mode
+        return self
+
+    def _apply_uv(self, me, mode):
+        layer = me.uv_layers.new(name='UVMap')
+        if mode is None:
+            for d in layer.data:
+                d.uv = self.atlas_white
+            return
+        kind, f = mode
+        if kind == 'fn':
+            for li, loop in enumerate(me.loops):
+                layer.data[li].uv = f(me.vertices[loop.vertex_index].co)
+            return
+        zs = [v.co.z for v in me.vertices]
+        lo, hi = min(zs), max(zs)
+        for p in me.polygons:
+            # 每個面自己決定角度的分支：跨過接縫（角度 ±180°）的面不會被拉成一整圈
+            angs = [math.atan2(me.vertices[me.loops[li].vertex_index].co.y, me.vertices[me.loops[li].vertex_index].co.x) for li in p.loop_indices]
+            ref = angs[0]
+            for li, a in zip(p.loop_indices, angs):
+                while a - ref > math.pi:
+                    a -= 2 * math.pi
+                while a - ref < -math.pi:
+                    a += 2 * math.pi
+                s = (a / (2 * math.pi)) % 1.0 if a == ref else (ref / (2 * math.pi)) % 1.0 + (a - ref) / (2 * math.pi)
+                t = 1 - (me.vertices[me.loops[li].vertex_index].co.z - lo) / max(hi - lo, 1e-6)
+                layer.data[li].uv = f(s, t)
 
     def _finish(self, bm, name, color, bone, loc=(0, 0, 0), rot=(0, 0, 0), scale=(1, 1, 1), smooth=True):
         me = bpy.data.meshes.new(name)
         bm.to_mesh(me)
         bm.free()
+        if self.atlas_white is not None:
+            self._apply_uv(me, self.next_uv)
+        self.next_uv = None
         ob = bpy.data.objects.new(name, me)
         bpy.context.scene.collection.objects.link(ob)
         ob.matrix_world = Matrix.Translation(Vector(loc)) @ Euler(rot).to_matrix().to_4x4() @ Matrix.Diagonal((*scale, 1))
