@@ -1,0 +1,119 @@
+{
+  "_說明": "src/assets 底下每個檔案的來源與授權（使用者 2026-11-27 放寬：CC0、CC-BY、OGA-BY 可用；SA／GPL／NC 不用）。origin=own 是我們自己的腳本產生的；外部素材要寫 source（網址）、author、license，標示作者的授權會自動列進製作名單。單元測試 assetLicenses.test.ts 守著。",
+  "files": {
+    "models/aka-oni-f1.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "models/aka-oni-f2.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "models/aka-oni.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "models/ashigaru.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "models/chochin-kozo-f1.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "models/chochin-kozo-f2.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "models/chochin-kozo.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "models/kappa-f1.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "models/kappa-f2.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "models/kappa.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "models/kawagari.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "models/onmyoji.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "models/shinobi.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "models/sohei.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "models/taiko.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "models/taimasou.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "models/torii.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "models/villager.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "models/yumi.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    }
+  }
+}
