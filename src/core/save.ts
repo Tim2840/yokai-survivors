@@ -23,7 +23,8 @@ export interface SaveData {
   /** 圖鑑：人類 id → 擊敗數 */
   codex: { humans: Record<string, number> };
   maxNightDepth: number;
-  settings: { sfx: number; music: number; quality: Quality; lang: string };
+  /** 設定（D103 設定畫面）：fx = 特效（full／low／off）、text = 字級（normal／large）、minimapRotate = 小地圖跟著鏡頭轉 */
+  settings: { sfx: number; music: number; quality: Quality; lang: string; fx: string; text: string; minimapRotate: boolean };
   stats: { runs: number; bestStage: number };
   /** 玩家看過的更新紀錄版本（changelog.ts 的 CONTENT_VERSION） */
   seenContentVersion: number;
@@ -44,7 +45,7 @@ export function defaultSave(): SaveData {
     techSlots: 0,
     codex: { humans: {} },
     maxNightDepth: 0,
-    settings: { sfx: 0.8, music: 0.6, quality: 'auto', lang: 'zh-TW' },
+    settings: { sfx: 0.8, music: 0.6, quality: 'auto', lang: 'zh-TW', fx: 'full', text: 'normal', minimapRotate: false },
     stats: { runs: 0, bestStage: 0 },
     seenContentVersion: 0,
   };

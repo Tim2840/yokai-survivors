@@ -1,3 +1,4 @@
+import { feel } from '../core/feel';
 import { xpNeed } from '../data/progression';
 import { FORMS } from '../data/yokai';
 import { CAMERA } from '../data/camera';
@@ -61,6 +62,10 @@ export function installDevApi(ctx: DevContext): void {
     },
     get audio() {
       return ctx.audio.debug();
+    },
+    /** 設定（D103）：存檔裡的值、目前的手感倍率、字級變數 */
+    get settings() {
+      return { saved: ctx.game.settingsSnapshot, feel: { ...feel }, ts: getComputedStyle(document.documentElement).getPropertyValue('--ts').trim() };
     },
     /** 畫面上看得到的畫面名稱（卡住偵測用） */
     get screens() {

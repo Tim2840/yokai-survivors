@@ -67,7 +67,7 @@ export class AudioEngine {
 
   /** 除錯：音樂目前放哪首 */
   debug() {
-    return { ready: this.ready, theme: this.music?.theme ?? null };
+    return { ready: this.ready, theme: this.music?.theme ?? null, volumes: { ...this.volumes } };
   }
 
   unlock() {

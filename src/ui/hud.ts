@@ -39,6 +39,8 @@ const touchUi = (): boolean => (coarse ??= window.matchMedia('(pointer: coarse)'
  */
 export interface Hud {
   root: HTMLElement;
+  /** 小地圖跟著鏡頭轉（D103 設定） */
+  setMinimapRotate(on: boolean): void;
   stickBase: HTMLElement;
   stickKnob: HTMLElement;
   jumpButton: HTMLButtonElement;
@@ -156,6 +158,7 @@ export function buildHud(parent: HTMLElement): Hud {
   let lastPortal = -1;
   return {
     root,
+    setMinimapRotate: (on: boolean) => minimap.setRotate(on),
     stickBase: q('stick-base'),
     stickKnob: q('stick-knob'),
     jumpButton: q<HTMLButtonElement>('btn-jump'),

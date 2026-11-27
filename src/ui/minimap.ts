@@ -21,10 +21,13 @@ export interface Minimap {
   /** 每幀呼叫（內部自己限頻）：yaw = 鏡頭 yaw */
   update(run: Run, yaw: number, dtSeconds: number): void;
   setVisible(v: boolean): void;
+  /** 跟著鏡頭轉（D103 設定）：鏡頭看的方向永遠朝上，地圖剪成圓形 */
+  setRotate(on: boolean): void;
   dispose(): void;
 }
 
 export function buildMinimap(parent: HTMLElement): Minimap {
+  let rotate = false;
   const root = document.createElement('button');
   root.type = 'button';
   root.className = 'minimap hidden';
@@ -153,6 +156,19 @@ export function buildMinimap(parent: HTMLElement): Minimap {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, size, size);
       ctx.globalAlpha = 1;
+      if (rotate) {
+        // 鏡頭前方（地圖座標）轉到正上方；剪成圓形，轉的時候角落不會露出空白
+        const camAng = Math.atan2(-Math.cos(yaw), -Math.sin(yaw));
+        const th = -Math.PI / 2 - camAng;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.translate(size / 2, size / 2);
+        ctx.rotate(th);
+        ctx.translate(-size / 2, -size / 2);
+        root.dataset.rot = th.toFixed(2);
+      } else delete root.dataset.rot;
       ctx.drawImage(base, 0, 0, size, size);
       const map = run.map;
       const n = collectMarkers(run);
@@ -201,10 +217,16 @@ export function buildMinimap(parent: HTMLElement): Minimap {
       ctx.strokeStyle = 'rgba(0,0,0,0.8)';
       ctx.lineWidth = 1;
       ctx.stroke();
+      if (rotate) ctx.restore();
     },
     setVisible(v) {
       root.classList.toggle('hidden', !v);
       if (v) acc = 1;
+    },
+    setRotate(on) {
+      rotate = on;
+      root.classList.toggle('rotating', on);
+      acc = 1;
     },
     dispose() {
       root.remove();

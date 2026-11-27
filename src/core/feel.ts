@@ -1,19 +1,24 @@
 import { FEEL } from '../data/feel';
+import { FX_LEVELS, type FxLevel } from '../data/settings';
 
 /**
  * 手感的總開關（減少特效）：shake／hitStop／vignette／pops 各一個倍率，0 = 關。
  * 來源：網址 `?fx=off`（全關）、`?fx=low`（減半）、系統的 prefers-reduced-motion（全關震動與頓幀，暈邊與爆圈減半）；
- * 之後設定畫面會寫同一組數字（並存進存檔）。
+ * 設定畫面（D103）的「特效」是起點（存檔），系統減少動態效果與網址只會再往下壓。
  */
 export const feel = { shake: 1, hitStop: 1, vignette: 1, pops: 1 };
 
-export function initFeel(search: string, reducedMotion: boolean): void {
-  feel.shake = feel.hitStop = feel.vignette = feel.pops = 1;
+export function initFeel(search: string, reducedMotion: boolean, level: string = 'full'): void {
+  const base = FX_LEVELS[(level in FX_LEVELS ? level : 'full') as FxLevel];
+  feel.shake = base.shake;
+  feel.hitStop = base.hitStop;
+  feel.vignette = base.vignette;
+  feel.pops = base.pops;
   if (reducedMotion) {
     feel.shake = 0;
     feel.hitStop = 0;
-    feel.vignette = 0.5;
-    feel.pops = 0.5;
+    feel.vignette = Math.min(feel.vignette, 0.5);
+    feel.pops = Math.min(feel.pops, 0.5);
   }
   const fx = new URLSearchParams(search).get('fx');
   if (fx === 'off') feel.shake = feel.hitStop = feel.vignette = feel.pops = 0;

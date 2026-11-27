@@ -562,17 +562,18 @@ function techDetailsHtml(sum: BuildSummary): string {
 }
 
 // ── 暫停（含「已拿到的卡」與「目前的能力」）──
-export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: () => void) {
+export function buildPause(parent: HTMLElement, onResume: () => void, onQuit: () => void, onSettings?: () => void) {
   const o = overlay(
     parent,
     'pause',
     `<div class="panel pause-panel"><h2>${t('pause.title')}</h2><p id="pause-status"></p>
       <div class="sum"><section class="sum-col"><h3>${t('pause.cards')} <span id="sum-slots"></span></h3><ul class="sum-cards" id="sum-cards"></ul><div id="sum-form"></div><div id="sum-evo"></div><div id="sum-ult"></div></section>
       <section class="sum-col"><h3>${t('pause.abilities')}</h3><dl class="sum-stats" id="sum-stats"></dl><div id="sum-techs"></div><div id="sum-curse"></div></section></div>
-      <div class="row">${btn('btn-pause-quit', 'pause.quit', 'secondary')}${btn('btn-pause-resume', 'pause.resume')}</div></div>`,
+      <div class="row">${btn('btn-pause-quit', 'pause.quit', 'secondary')}${btn('btn-pause-settings', 'settings.open', 'secondary')}${btn('btn-pause-resume', 'pause.resume')}</div></div>`,
   );
   o.el.querySelector('#btn-pause-resume')!.addEventListener('click', onResume);
   o.el.querySelector('#btn-pause-quit')!.addEventListener('click', onQuit);
+  o.el.querySelector('#btn-pause-settings')!.addEventListener('click', () => onSettings?.());
   const q = (id: string) => o.el.querySelector<HTMLElement>('#' + id)!;
   return Object.assign(o, {
     render(sum: BuildSummary) {

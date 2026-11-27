@@ -22,6 +22,7 @@ import { PLAYABLE_YOKAI } from '../data/yokai';
 import { buyTechSlot, buyUlt, equipUlt, equippedUlt, isUltUnlocked, loadoutFor, nextTechSlotPrice, ultLevel, upgradeUlt } from './ultLoadout';
 import { TECH_MAX, TECH_SLOTS } from '../data/techniques';
 import { t } from '../i18n';
+import { buildSettings, applyTextSize } from '../ui/settings';
 import type { I18nKey } from '../i18n/zh-TW';
 import { tuning } from '../data/tuning';
 import { CAMERA } from '../data/camera';
@@ -100,7 +101,8 @@ export class Game {
     this.audio = d.audio;
     this.input = d.input;
     this.save = d.save;
-    initFeel(typeof location !== 'undefined' ? location.search : '', typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches);
+    this.applyFeel();
+    applyTextSize(this.save.settings.text);
     const ui = d.ui;
 
     const tune = d.tuneUi ? d.tuneUi(ui) : null;
@@ -112,8 +114,19 @@ export class Game {
       ui,
       () => this.go('RUN_SETUP'),
       () => this.go('META_SHOP'),
-      tune ? [tune.button(() => (this.audio.sfx('click'), tune.show()))] : [],
+      [this.settingsButton(), ...(tune ? [tune.button(() => (this.audio.sfx('click'), tune.show()))] : [])],
     );
+    this.settings = buildSettings(ui, this.save, {
+      onVolume: (sfx, music) => this.audio.setVolumes({ sfx, music }),
+      onQuality: (q) => this.renderer.pipeline.setMode(q),
+      onFx: () => this.applyFeel(),
+      onMinimapRotate: (on) => this.hud.setMinimapRotate(on),
+      onSave: () => {
+        this.audio.sfx('click');
+        writeSave(this.save);
+      },
+      onClose: () => this.closeSettings(),
+    });
     this.setup = buildSetup(
       ui,
       (id) => {
@@ -161,8 +174,9 @@ export class Game {
       () => this.go('MENU'),
       () => this.go('META_SHOP'),
     );
-    this.pause = buildPause(ui, () => this.closePause(), () => this.quitRun());
+    this.pause = buildPause(ui, () => this.closePause(), () => this.quitRun(), () => this.openSettings(true));
     this.hud = buildHud(ui);
+    this.hud.setMinimapRotate(this.save.settings.minimapRotate);
     this.hud.pauseButton.addEventListener('click', () => this.togglePause());
     this.hud.abilitiesButton.addEventListener('click', () => this.openPause());
     this.input.attachTouch({ stickBase: this.hud.stickBase, stickKnob: this.hud.stickKnob, jumpButton: this.hud.jumpButton, commandButton: this.hud.ultButton, interactButton: this.hud.interactButton });
@@ -498,6 +512,36 @@ export class Game {
     }
   }
 
+  // ── 設定（D103）──
+  private settings!: ReturnType<typeof buildSettings>;
+  /** 設定是從暫停頁開的（關掉要回暫停頁） */
+  private settingsFromPause = false;
+  private applyFeel(): void {
+    initFeel(typeof location !== 'undefined' ? location.search : '', typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches, this.save.settings.fx);
+  }
+  private settingsButton(): HTMLElement {
+    const b = document.createElement('button');
+    b.className = 'btn secondary';
+    b.id = 'btn-settings';
+    b.textContent = t('settings.open');
+    b.addEventListener('click', () => {
+      this.audio.sfx('click');
+      this.openSettings(false);
+    });
+    return b;
+  }
+  private openSettings(fromPause: boolean): void {
+    this.settingsFromPause = fromPause;
+    if (fromPause) this.pause.hide();
+    this.settings.show();
+  }
+  private closeSettings(): void {
+    this.settings.hide();
+    this.audio.sfx('confirm');
+    if (this.settingsFromPause && this.fsm.state === 'COMBAT') this.pause.show();
+    this.settingsFromPause = false;
+  }
+
   // ── 暫停 ──
   private openPause(): void {
     if (this.fsm.state !== 'COMBAT' || this.picker.visible || this.resultCard.visible) return;
@@ -513,7 +557,8 @@ export class Game {
   }
 
   private togglePause(): void {
-    if (this.pause.visible) this.closePause();
+    if (this.settings.visible) this.closeSettings();
+    else if (this.pause.visible) this.closePause();
     else this.openPause();
   }
 
@@ -586,6 +631,11 @@ export class Game {
   }
   get tuningInfo() {
     return { ...tuning };
+  }
+
+  /** 目前的設定（開發介面讀，D103） */
+  get settingsSnapshot(): SaveData['settings'] {
+    return { ...this.save.settings };
   }
 
   reloadSave(): SaveData {
