@@ -8,7 +8,10 @@ import { TERRAIN_IDS } from '../data/terrain';
 import type { TerrainMap } from './terrainMap';
 import { ambienceFor, type AmbienceDef } from '../data/ambience';
 import { groundDetailTexture, groundDetailGain } from '../art/groundTexture';
-import { GROUND_LAYERS } from '../data/look';
+import { GROUND_LAYERS, WORLD_TEX, currentLook } from '../data/look';
+import { SANDO } from '../data/scenery';
+import { worldMaterial, setSplat, setColor, LAYER_MEAN, SPLAT } from '../art/worldMaterial';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /**
  * 地形與場景物件的 3D 外觀（高度圖網格、水面、石頭與石燈籠）。一局建一次、結束時 dispose。
@@ -16,6 +19,13 @@ import { GROUND_LAYERS } from '../data/look';
  */
 export interface WorldView {
   group: THREE.Group;
+  /**
+   * 換上 Blender 的場景道具（載好之後呼叫）：石燈籠換成 Blender 版、加上參道兩側的石燈籠與木柵欄（docs/37）。
+   * 幾何是「已經轉好世界座標以外」的原始幾何（含 color、aSplat）；這裡依每個擺放位置複製、合併進區塊。
+   */
+  upgradeProps(p: { lanternStone: THREE.BufferGeometry; lanternGlow: THREE.BufferGeometry; fence: THREE.BufferGeometry }): void;
+  /** 測試與量測用：靜態道具的區塊網格數 */
+  chunkMeshes(): number;
   dispose(): void;
 }
 
@@ -37,9 +47,26 @@ export function buildWorldView(map: TerrainMap, seed: number, amb: AmbienceDef =
   const rockColor = new THREE.Color(palette.terrain.rock);
   const tint = new THREE.Color(amb.terrainTint ?? '#ffffff');
   const detail = amb.groundDetail.strength > 0;
+  // 場景貼圖（docs/37）：預設用 Poly Haven 的細節貼圖分層混合；像素風（?look=jrpg）保留舊的小草符號貼圖
+  const textured = detail && currentLook().id !== 'jrpg';
   // 貼了細節貼圖（平均亮度 < 1）之後，頂點色要乘回來，整體亮度才不變
-  const detailGain = detail ? groundDetailGain(amb.groundDetail.strength) : 1;
+  const detailGain = textured ? 1 / LAYER_MEAN : detail ? groundDetailGain(amb.groundDetail.strength) : 1;
   const uv = new Float32Array(vc * vr * 2);
+  const splat = new Float32Array(vc * vr * 4);
+  const sx0 = map.def.playerStart.x;
+  const sz0 = map.def.playerStart.z;
+  /** 參道（石板路）：點到線段的距離 → 石板權重；路邊一圈泥土 */
+  const sando = (x: number, z: number): [number, number] => {
+    const ax = sx0 + SANDO.from.x;
+    const az = sz0 + SANDO.from.z;
+    const bx = sx0 + SANDO.to.x - ax;
+    const bz = sz0 + SANDO.to.z - az;
+    const t = Math.max(0, Math.min(1, ((x - ax) * bx + (z - az) * bz) / (bx * bx + bz * bz)));
+    const d = Math.hypot(x - ax - bx * t, z - az - bz * t) + (fbm(x * 1.3, z * 1.3, seed ^ 0x5a, 2) - 0.5) * 0.5;
+    const stone = 1 - Math.min(1, Math.max(0, (d - SANDO.halfWidth) / 0.25));
+    const dirt = 1 - Math.min(1, Math.max(0, (d - SANDO.halfWidth) / SANDO.edge));
+    return [stone, dirt];
+  };
   for (let j = 0; j < vr; j++) {
     for (let i = 0; i < vc; i++) {
       const k = j * vc + i;
@@ -87,6 +114,46 @@ export function buildWorldView(map: TerrainMap, seed: number, amb: AmbienceDef =
       col[k * 3 + 2] = c.b * detailGain * tint.b;
       uv[k * 2] = x / amb.groundDetail.tile;
       uv[k * 2 + 1] = z / amb.groundDetail.tile;
+      if (textured) {
+        // 貼圖層的權重：周圍四格的地形種類平均（泥地 → 泥土、岩地 → 岩石、石地 → 石板、水底 → 泥土）＋陡處岩石＋零星的泥土斑塊＋參道
+        let wd = 0;
+        let ws = 0;
+        let wr = 0;
+        let m = 0;
+        for (const [di, dj] of [[-1, -1], [0, -1], [-1, 0], [0, 0]] as const) {
+          const ci = i + di;
+          const cj = j + dj;
+          if (ci < 0 || cj < 0 || ci >= map.cols || cj >= map.rows) continue;
+          const t = TERRAIN_IDS[map.types[cj * map.cols + ci]];
+          if (t === 'mud' || t === 'spring') wd += 1;
+          else if (t === 'shallow' || t === 'deep') wd += WORLD_TEX.waterBed;
+          else if (t === 'rock') wr += 1;
+          else if (t === 'stone') ws += 1;
+          m++;
+        }
+        wd /= m;
+        ws /= m;
+        wr = Math.max(wr / m, steep);
+        const P = WORLD_TEX.dirtPatch;
+        const dpatch = fbm(x * P.scale + 7, z * P.scale - 3, seed ^ 0x77, 3);
+        wd = Math.max(wd, Math.min(1, Math.max(0, (dpatch - P.from) / (P.to - P.from))) * P.max);
+        const [sStone, sDirt] = sando(x, z);
+        ws = Math.max(ws, sStone);
+        wd = Math.max(wd, sDirt * 0.8) * (1 - sStone);
+        // 權重總和 ≤ 1（剩下的是草）：岩石優先（懸崖）、其次石板
+        wr = Math.min(1, wr);
+        ws = Math.min(ws, 1 - wr);
+        wd = Math.min(wd, 1 - wr - ws);
+        splat.set([wd, ws, wr, 0], k * 4);
+        // 頂點色也跟著換：石板是石頭的灰、泥土斑塊與路邊是泥土色（不然石板會被草地的綠染成綠色）
+        const lerpTo = (hex: string, w: number) => {
+          if (w <= 0) return;
+          tmp.set(hex);
+          for (let q = 0; q < 3; q++) col[k * 3 + q] += (tmp.toArray()[q] * detailGain * [tint.r, tint.g, tint.b][q] * (1 + patch) - col[k * 3 + q]) * w;
+        };
+        lerpTo(palette.terrain.stone, ws);
+        lerpTo(palette.terrain.mud, Math.min(1, wd) * 0.75);
+      }
     }
   }
   const idx = new Uint32Array(map.cols * map.rows * 6);
@@ -102,10 +169,13 @@ export function buildWorldView(map: TerrainMap, seed: number, amb: AmbienceDef =
   tg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   tg.setAttribute('color', new THREE.BufferAttribute(col, 3));
   tg.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  if (textured) tg.setAttribute('aSplat', new THREE.BufferAttribute(splat, 4));
   tg.setIndex(new THREE.BufferAttribute(idx, 1));
   tg.computeVertexNormals();
-  const detailTex = detail ? groundDetailTexture(seed, amb.groundDetail.strength) : null;
-  const terrainMat = trackM(softVertexColors(detailTex ? { map: detailTex } : {}));
+  const detailTex = detail && !textured ? groundDetailTexture(seed, amb.groundDetail.strength) : null;
+  // 場景貼圖材質：地形、岩石、石燈籠、柵欄共用這一個（同一個著色器程式）
+  const worldMat = trackM(worldMaterial());
+  const terrainMat = textured ? worldMat : trackM(softVertexColors(detailTex ? { map: detailTex } : {}));
   if (detailTex) texs.push(detailTex);
   const terrain = new THREE.Mesh(tg, terrainMat);
   terrain.receiveShadow = true;
@@ -139,45 +209,110 @@ export function buildWorldView(map: TerrainMap, seed: number, amb: AmbienceDef =
     group.add(water);
   }
 
-  // ── 障礙：岩石（鵝卵石）與石燈籠 ──
+  // ── 障礙：岩石（鵝卵石）與石燈籠（docs/37：按區塊合併成少數幾個網格，岩石、石燈籠用場景貼圖材質）──
   const rng = new Rng(seed ^ 0x51ed);
-  const rockMat = trackM(soft(palette.terrain.rock));
-  const stoneMat = trackM(soft(palette.terrain.stone));
   const lampMat = trackM(glow(palette.fire.torch, 2.2));
+  const rockMat = textured ? worldMat : trackM(soft(palette.terrain.rock));
+  const stoneMat = textured ? worldMat : trackM(soft(palette.terrain.stone));
+  // 每一筆：已經轉到世界座標的幾何、用哪個材質、屬於哪一類（換 Blender 版時整類換掉）
+  type Piece = { geo: THREE.BufferGeometry; mat: THREE.Material; kind: 'rock' | 'lantern' | 'decor'; x: number; z: number };
+  let pieces: Piece[] = [];
+  const m4 = new THREE.Matrix4();
+  const place = (g: THREE.BufferGeometry, mat: THREE.Material, kind: Piece['kind'], x: number, y: number, z: number, yaw = 0, sx = 1, sy = 1, sz = 1, color?: string, layer?: number) => {
+    const out = (g.index ? g.toNonIndexed() : g.clone()).applyMatrix4(m4.compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(sx, sy, sz)));
+    if (out.getAttribute('uv')) out.deleteAttribute('uv');
+    if (color) setColor(out, color, textured ? 1 / LAYER_MEAN : 1);
+    if (layer !== undefined) {
+      const w: [number, number, number, number] = [0, 0, 0, 0];
+      w[layer] = 1;
+      setSplat(out, w);
+    }
+    pieces.push({ geo: out, mat, kind, x, z });
+  };
+  const lanternSpots: { x: number; y: number; z: number; s: number; yaw: number }[] = [];
   for (const o of map.def.obstacles) {
     const y = map.heightAt(o.x, o.z);
     if (o.kind === 'rock') {
-      const g = track(pebble(o.r * 1.15, rng, 0.14));
-      const m = mesh(g, rockMat);
-      m.position.set(o.x, y + o.r * 0.55, o.z);
-      m.scale.set(1, 0.8, 1);
-      m.rotation.y = rng.range(0, Math.PI * 2);
-      group.add(m);
+      const g = pebble(o.r * 1.15, rng, 0.14, 12);
+      place(g, rockMat, 'rock', o.x, y + o.r * 0.55, o.z, rng.range(0, Math.PI * 2), 1, 0.8, 1, palette.terrain.rock, SPLAT.rock);
+      g.dispose();
     } else {
-      // 石燈籠：底座、柱、燈室（發光）、笠
-      const lamp = new THREE.Group();
-      const base = mesh(track(roundedCylinder(0.34, 0.4, 0.18, 0.05)), stoneMat);
-      const pillar = mesh(track(roundedCylinder(0.13, 0.15, 0.7, 0.04)), stoneMat);
-      pillar.position.y = 0.18;
-      const box = mesh(track(roundedCylinder(0.26, 0.26, 0.34, 0.07)), lampMat, false);
-      box.position.y = 0.88;
-      const cap = mesh(track(roundedCylinder(0.0, 0.46, 0.2, 0.08)), stoneMat);
-      cap.scale.y = 1;
-      cap.position.y = 1.22;
-      cap.rotation.x = Math.PI;
-      cap.position.y = 1.42;
-      const top = mesh(track(ball(0.09)), stoneMat);
-      top.position.y = 1.5;
-      lamp.add(base, pillar, box, cap, top);
-      lamp.position.set(o.x, y, o.z);
-      lamp.scale.setScalar(Math.max(0.8, o.r / 0.6));
-      group.add(lamp);
+      lanternSpots.push({ x: o.x, y, z: o.z, s: Math.max(0.8, o.r / 0.6), yaw: rng.range(0, Math.PI * 2) });
     }
   }
+  // 程式建的石燈籠（Blender 版載好之前、或開發版沒帶 ?model=blender）：底座、柱、燈室（發光）、笠。
+  // 合併成區塊後整塊一起畫（看不到的那幾座也算三角形），所以分段數比以前少（p1 的三角形預算）
+  const codeLantern = (() => {
+    const parts: THREE.BufferGeometry[] = [];
+    const add = (g: THREE.BufferGeometry, y: number, flip = false) => {
+      if (flip) g.rotateX(Math.PI);
+      g.translate(0, y, 0);
+      parts.push(g.index ? g.toNonIndexed() : g);
+    };
+    add(roundedCylinder(0.34, 0.4, 0.18, 0.05, 12), 0);
+    add(roundedCylinder(0.13, 0.15, 0.7, 0.04, 10), 0.18);
+    add(roundedCylinder(0.0, 0.46, 0.2, 0.08, 12), 1.42, true);
+    add(ball(0.09, 10, 6), 1.5);
+    for (const p of parts) if (p.getAttribute('uv')) p.deleteAttribute('uv');
+    const stone = mergeGeometries(parts, false);
+    const box = roundedCylinder(0.26, 0.26, 0.34, 0.07, 12).translate(0, 0.88, 0);
+    parts.forEach((p) => p.dispose());
+    return { stone, glow: box };
+  })();
+  const addLanterns = (stone: THREE.BufferGeometry, glowGeo: THREE.BufferGeometry, fromModel: boolean) => {
+    const spots = fromModel ? [...lanternSpots, ...SANDO.lanterns.map((l) => ({ x: sx0 + l.x, y: map.heightAt(sx0 + l.x, sz0 + l.z), z: sz0 + l.z, s: 1, yaw: 0 }))] : lanternSpots;
+    for (const l of spots) {
+      place(stone, stoneMat, 'lantern', l.x, l.y, l.z, l.yaw, l.s, l.s, l.s, fromModel ? undefined : palette.terrain.stone, fromModel ? undefined : SPLAT.rock);
+      place(glowGeo, lampMat, 'lantern', l.x, l.y, l.z, l.yaw, l.s, l.s, l.s);
+    }
+  };
+  addLanterns(codeLantern.stone, codeLantern.glow, false);
+  codeLantern.stone.dispose();
+  codeLantern.glow.dispose();
+
+  // 區塊：WORLD_TEX.chunk 公尺見方一格，同一格、同一個材質的全部合併成一個網格（保留視錐剔除；draw call = 看得到的格數）
+  const chunkGroup = new THREE.Group();
+  group.add(chunkGroup);
+  let chunkGeos: THREE.BufferGeometry[] = [];
+  const rebuildChunks = () => {
+    for (const g of chunkGeos) g.dispose();
+    chunkGeos = [];
+    chunkGroup.clear();
+    const cells = new Map<string, Piece[]>();
+    const C = WORLD_TEX.chunk;
+    for (const p of pieces) {
+      const key = `${Math.floor(p.x / C)},${Math.floor(p.z / C)},${p.mat.uuid}`;
+      (cells.get(key) ?? cells.set(key, []).get(key)!).push(p);
+    }
+    for (const list of cells.values()) {
+      const geo = mergeGeometries(list.map((p) => p.geo), false);
+      if (!geo) continue;
+      geo.computeBoundingSphere();
+      chunkGeos.push(geo);
+      const isGlow = list[0].mat === lampMat;
+      chunkGroup.add(mesh(geo, list[0].mat, !isGlow, !isGlow));
+    }
+  };
+  rebuildChunks();
 
   return {
     group,
+    upgradeProps({ lanternStone, lanternGlow, fence }) {
+      if (!textured) return;
+      for (const p of pieces) if (p.kind === 'lantern') p.geo.dispose();
+      pieces = pieces.filter((p) => p.kind !== 'lantern');
+      addLanterns(lanternStone, lanternGlow, true);
+      for (const f of SANDO.fences) {
+        const x = sx0 + f.x;
+        const z = sz0 + f.z;
+        place(fence, worldMat, 'decor', x, map.heightAt(x, z), z, Math.PI / 2);
+      }
+      rebuildChunks();
+    },
+    chunkMeshes: () => chunkGroup.children.length,
     dispose() {
+      for (const p of pieces) p.geo.dispose();
+      for (const g of chunkGeos) g.dispose();
       for (const g of geos) g.dispose();
       for (const m of mats) m.dispose();
       for (const t of texs) t.dispose();

@@ -74,3 +74,15 @@ export function currentLook(): LookDef {
  * bigPatch = 大片明暗色塊的幅度（亮處偏暖、暗處偏冷）；cavity = 比周圍低多少公尺就暗多少（每公尺）、上限 cavityMax、看周圍幾格（cavityRadius）。
  */
 export const GROUND_LAYERS = { bigPatch: 0.26, cavity: 0.22, cavityMax: 0.3, cavityRadius: 2 };
+
+/**
+ * 場景貼圖（docs/37 第一批，src/art/worldMaterial.ts）：每一層細節貼圖鋪多大（公尺；貼圖是 512 像素）。
+ * 地面的權重：泥土斑塊（草地裡零星的泥土，打散重複感；fbm 超過 from 開始、到 to 是 max）、水底是泥土、陡處是岩石。
+ * 靜態道具（岩石、石燈籠、柵欄）按 chunk 公尺見方合併成一個網格（少 draw call，又保留視錐剔除）。
+ */
+export const WORLD_TEX = {
+  tile: { grass: 3.2, dirt: 4, stone: 2.6, rock: 2.5 },
+  dirtPatch: { scale: 0.09, from: 0.6, to: 0.78, max: 0.7 },
+  waterBed: 0.85,
+  chunk: 30,
+};

@@ -1,0 +1,30 @@
+{
+ "mean": 0.72,
+ "layers": {
+  "grass": {
+   "source": "sparse_grass",
+   "mean": 0.714,
+   "bytes": 137621
+  },
+  "dirt": {
+   "source": "park_dirt",
+   "mean": 0.72,
+   "bytes": 122403
+  },
+  "stone": {
+   "source": "grey_stone_path",
+   "mean": 0.72,
+   "bytes": 91702
+  },
+  "rock": {
+   "source": "rock_face_03",
+   "mean": 0.719,
+   "bytes": 103388
+  },
+  "wood": {
+   "source": "weathered_planks",
+   "mean": 0.72,
+   "bytes": 68879
+  }
+ }
+}

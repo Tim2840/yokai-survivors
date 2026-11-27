@@ -18,7 +18,7 @@
     "sim": "vite build -c vite.sim.config.ts && node dist-sim/sim.mjs",
     "model:build": "python3 tools/blender/audit_selftest.py \"$BPY_HOME\" && python3 tools/blender/build.py \"$BPY_HOME\" src/assets/models",
     "model:turnaround": "node scripts/shots/turnaround.mjs",
-    "pack:test": "npm run build:single && python3 scripts/pack-artifact.py dist-artifact/yokai-test.html \"百鬼陣 測試版\""
+    "pack:test": "npm run build:single && mkdir -p dist-artifact && python3 scripts/pack-artifact.py dist-artifact/yokai-test.html \"百鬼陣 測試版\""
   },
   "dependencies": {
     "three": "^0.186.1"

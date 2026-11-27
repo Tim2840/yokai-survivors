@@ -43,6 +43,12 @@
       "source": "tools/blender/build.py",
       "author": "本專案"
     },
+    "models/fence.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
     "models/kappa-f1.glb": {
       "origin": "own",
       "license": "own",
@@ -85,6 +91,12 @@
       "source": "tools/blender/build.py",
       "author": "本專案"
     },
+    "models/stone-lantern.glb": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
     "models/taiko.glb": {
       "origin": "own",
       "license": "own",
@@ -113,6 +125,59 @@
       "origin": "own",
       "license": "own",
       "source": "tools/blender/build.py",
+      "author": "本專案"
+    },
+    "textures/chochin-atlas.png": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/paint_atlas.py",
+      "author": "本專案"
+    },
+    "textures/chochin-glow.png": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/blender/paint_atlas.py",
+      "author": "本專案"
+    },
+    "textures/ground-dirt.jpg": {
+      "origin": "polyhaven",
+      "license": "CC0",
+      "source": "https://polyhaven.com/a/park_dirt",
+      "author": "Christopher Melani",
+      "note": "tools/textures/prep_layers.py 轉成中性灰的細節貼圖（512）"
+    },
+    "textures/ground-grass.jpg": {
+      "origin": "polyhaven",
+      "license": "CC0",
+      "source": "https://polyhaven.com/a/sparse_grass",
+      "author": "Amal Kumar",
+      "note": "tools/textures/prep_layers.py 轉成中性灰的細節貼圖（512）"
+    },
+    "textures/ground-rock.jpg": {
+      "origin": "polyhaven",
+      "license": "CC0",
+      "source": "https://polyhaven.com/a/rock_face_03",
+      "author": "Dario Barresi, Rico Cilliers",
+      "note": "tools/textures/prep_layers.py 轉成中性灰的細節貼圖（512）"
+    },
+    "textures/ground-stone.jpg": {
+      "origin": "polyhaven",
+      "license": "CC0",
+      "source": "https://polyhaven.com/a/grey_stone_path",
+      "author": "Amal Kumar",
+      "note": "tools/textures/prep_layers.py 轉成中性灰的細節貼圖（512）"
+    },
+    "textures/ground-wood.jpg": {
+      "origin": "polyhaven",
+      "license": "CC0",
+      "source": "https://polyhaven.com/a/weathered_planks",
+      "author": "Dario Barresi, Dimitrios Savva",
+      "note": "tools/textures/prep_layers.py 轉成中性灰的細節貼圖（512）"
+    },
+    "textures/layers.json": {
+      "origin": "own",
+      "license": "own",
+      "source": "tools/textures/prep_layers.py",
       "author": "本專案"
     }
   }

@@ -244,3 +244,50 @@ def run(parts, spec, label='character', strict=True):
     if problems and strict:
         raise SystemExit(1)
     return problems
+
+
+def audit_prop(parts, spec, label='prop'):
+    """場景道具（docs/37 第一批：石燈籠、木柵欄；沒有頭）：E 懸空零件、G 三角形上限、H 底部貼地（最低點 z 在 ±1 公分內——不然放在地上會浮起來或陷下去）、F 太細（警告）。
+    spec：{'max_tris': 數字, 'loose_ok': [...]}"""
+    problems, warnings, m = [], [], {}
+    trees = [(o, tree([o]), bbox([o])) for o in parts]
+    loose_ok = set(spec.get('loose_ok', []))
+    for o, t, (alo, ahi) in trees:
+        if base(o) in loose_ok or t is None:
+            continue
+        touching = any(
+            p is not o and pt is not None
+            and not (alo.x > bhi.x or blo.x > ahi.x or alo.y > bhi.y or blo.y > ahi.y or alo.z > bhi.z or blo.z > ahi.z)
+            and t.overlap(pt)
+            for p, pt, (blo, bhi) in trees
+        )
+        if not touching:
+            problems.append(f'零件「{o.name}」懸空：沒有碰到任何別的零件')
+    tris = sum(len(pl.vertices) - 2 for o in parts for pl in o.data.polygons)
+    m['三角形'] = tris
+    if spec.get('max_tris') and tris > spec['max_tris']:
+        problems.append(f'三角形太多：{tris}（上限 {spec["max_tris"]}）')
+    lo, hi = bbox(parts)
+    m['尺寸（寬×深×高）'] = f'{hi.x - lo.x:.2f}×{hi.y - lo.y:.2f}×{hi.z - lo.z:.2f}'
+    if abs(lo.z) > 0.01:
+        problems.append(f'底部沒有貼地：最低點 z = {lo.z:.3f}')
+    for o, _, (alo, ahi) in trees:
+        d = min(ahi.x - alo.x, ahi.y - alo.y, ahi.z - alo.z)
+        if d < RULES['thin']:
+            warnings.append(f'零件「{o.name}」最細只有 {d:.4f} 公尺，手機上會變雜點')
+    return problems, warnings, m
+
+
+def run_prop(parts, spec, label='prop', strict=True):
+    problems, warnings, m = audit_prop(parts, spec, label)
+    print(f'── 道具稽核：{label} ──')
+    for k, v in m.items():
+        print(f'   {k}：{v}')
+    for w in warnings:
+        print(f'   ⚠ {w}')
+    for p in problems:
+        print(f'   ✗ {p}')
+    print(f'   結果：{"✗ 不通過（" + str(len(problems)) + " 項）" if problems else "✓ 通過"}')
+    if problems and strict:
+        raise SystemExit(1)
+    return problems

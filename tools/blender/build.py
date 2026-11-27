@@ -13,7 +13,10 @@ import bmesh  # noqa: E402
 from mathutils import Vector  # noqa: E402
 import lib  # noqa: E402
 import audit  # noqa: E402
+import atlas  # noqa: E402
+import paint_atlas  # noqa: E402
 from lib import Builder  # noqa: E402
+from atlas import CHOCHIN as CA, rect_uv  # noqa: E402
 
 # 顏色（和 src/art/palette.ts 對齊）
 ROBE = '#3b52a8'
@@ -118,17 +121,62 @@ def hair_shell(b, name, line=None, color=None, seg=(56, 36), grow=1.045):
     return b._finish(bm, name, color or HAIR, 'head', (0, 0, HC_Z), (0, 0, 0), HS)
 
 
+def decal(b, name, cx, cz, w, h, rect, bone='head', lift=0.0015, n=(6, 6)):
+    """畫出來的五官（docs/37）：從頭的表面切下一小片（貼著曲面、往外浮 lift 公尺），貼上貼圖集裡 rect 那一格。
+    做成有厚度的薄殼（背面在頭皮裡面 6 公釐）：和頭相交，稽核的「五官貼在臉上」「懸空零件」照樣量得到；
+    零件的外框 = 貼圖那一格的範圍，所以稽核量到的眼寬、眼距、嘴的高度就是畫出來的位置。"""
+    bm = bmesh.new()
+    nx, nz = n
+
+    def surf(x, z, off):
+        y = head_y(x, z)
+        a, bb, c = HR * HS[0], HR * HS[1], HR * HS[2]
+        nv = Vector((x / a ** 2, y / bb ** 2, (z - HC_Z) / c ** 2)).normalized()
+        return Vector((x, y, z)) + nv * off
+
+    grids = []
+    for off in (lift, -0.006):
+        g = []
+        for j in range(nz + 1):
+            row = []
+            for i in range(nx + 1):
+                x = cx - w / 2 + w * i / nx
+                z = cz - h / 2 + h * j / nz
+                row.append(bm.verts.new(surf(x, z, off)))
+            g.append(row)
+        grids.append(g)
+    front, back = grids
+    for j in range(nz):
+        for i in range(nx):
+            bm.faces.new((front[j][i], front[j + 1][i], front[j + 1][i + 1], front[j][i + 1]))
+            bm.faces.new((back[j][i], back[j][i + 1], back[j + 1][i + 1], back[j + 1][i]))
+    edge = [front[0][i] for i in range(nx + 1)] + [front[j][nx] for j in range(1, nz + 1)] + [front[nz][i] for i in range(nx - 1, -1, -1)] + [front[j][0] for j in range(nz - 1, 0, -1)]
+    edgeb = [back[0][i] for i in range(nx + 1)] + [back[j][nx] for j in range(1, nz + 1)] + [back[nz][i] for i in range(nx - 1, -1, -1)] + [back[j][0] for j in range(nz - 1, 0, -1)]
+    for k in range(len(edge)):
+        a, c = edge[k], edge[(k + 1) % len(edge)]
+        bm.faces.new((a, c, edgeb[(k + 1) % len(edge)], edgeb[k]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    b.uv(('fn', lambda co: rect_uv(rect, (co.x - (cx - w / 2)) / w, 1 - (co.z - (cz - h / 2)) / h)))
+    return b._finish(bm, name, WHITE, bone)
+
+
 # 稽核用：哪些零件是頭、頭髮、眼睛、嘴（名稱是 Builder 零件名，不含 .001 這種流水號）
+# 畫出來的眼睛：中心、貼片大小（貼片 = 貼圖那一格，畫的眼睛約佔 84% 寬、80% 高）
+EYE_X, EYE_Z, EYE_W, EYE_H = 0.14, 0.862, 0.145, 0.235
+# 頭髮的頂點色比 HAIR 亮一點：貼圖（髮束線條＋天使環）平均約 0.83，乘上去之後整體亮度和以前差不多
+HAIR_TEX = '#6a463c'
 CHOCHIN_SPEC = {'head': ['head'], 'hair': ['hair'], 'eyes': ['eye'], 'mouth': ['mouth'], 'loose_ok': ['halo', 'haloflame', 'minilamp', 'minicap']}
 
 
 def build_chochin(form=0):
     """form 0 = 一般；1 = 化身一「燈籠僧」（金邊、斗笠垂穗、燈籠變大＋火冠）；2 = 化身二「百燈法師」（再加火焰光背、身邊兩盞小燈籠）。D94、docs/33。"""
     lib.reset()
-    b = Builder()
+    paint_atlas.paint(OUT.rsplit('/', 1)[0] + '/textures')  # 貼圖集（docs/37）：每次建模都重畫，版面和 UV 一定對得上
+    b = Builder(atlas_white=rect_uv(CA['white'], 0.5, 0.5))
+    cyl = lambda key: ('cyl', lambda s_, t_: rect_uv(CA[key], s_, t_))  # noqa: E731
     trim = GOLD if form else HEM
     # ── 身體（D88 第二版）：短胖的僧衣，下襬一條淺色滾邊、細腰帶＋背後的蝴蝶結、清楚的白色交領 ──
-    b.lathe('robe', [(0.28, 0.2), (0.325, 0.24), (0.315, 0.32), (0.27, 0.44), (0.205, 0.57), (0.115, 0.64)], (0, 0, 0), ROBE, 'body', seg=28)
+    b.uv(cyl('robe')).lathe('robe', [(0.28, 0.2), (0.325, 0.24), (0.315, 0.32), (0.27, 0.44), (0.205, 0.57), (0.115, 0.64)], (0, 0, 0), ROBE, 'body', seg=28)
     b.torus('hem', 0.322, 0.024, (0, 0, 0.212), trim, 'body', seg=28, tube=6)
     b.torus('hem2', 0.318, 0.012, (0, 0, 0.262), ROBE_SHADE, 'body', seg=28, tube=5)
     b.torus('sash', 0.286, 0.032, (0, 0, 0.4), SASH, 'body', seg=28, tube=8, scale=(1, 1, 1.15))
@@ -144,31 +192,28 @@ def build_chochin(form=0):
     for sx, bone in ((-1, 'armL'), (1, 'armR')):
         sh = Vector((sx * 0.22, 0, 0.55))
         hand = Vector((sx * 0.43, -0.03, 0.36)) if sx < 0 else Vector((0.485, -0.073, 0.6))
+        b.uv(cyl('robe'))
         rod(b, 'sleeve', sh, sh + (hand - sh) * 0.86, 0.075, 0.12, ROBE, bone, seg=14)
         b.torus('cuff', 0.105, 0.016, tuple(sh + (hand - sh) * 0.86), trim, bone, rot=tuple(Vector((0, 0, 1)).rotation_difference((hand - sh).normalized()).to_euler()), seg=14, tube=6)
         b.sphere('hand', 0.085, tuple(hand), SKIN, bone, seg=12, rings=8)
     # ── 頭（第四版，使用者：「五官正確的位置」「瀏海跟後面頭髮分離」）──
     # 五官：眼睛在臉的上半部偏下（髮際線到下巴的 45% 處）、眼距約一個眼寬、嘴在 75% 處；位置用 head_y 算在表面上、依法線傾斜。
     # 頭髮：一整片貼著頭骨的外殼（hair_shell），髮際線是連續曲線，瀏海、鬢角、後頸同一片。
-    b.sphere('head', HR, (0, 0, HC_Z), SKIN, 'head', scale=HS, seg=32, rings=20)
-    hair_shell(b, 'hair')
+    b.sphere('head', HR, (0, 0, HC_Z), SKIN, 'head', scale=HS, seg=32, rings=22)
+    b.uv(cyl('hair'))
+    hair_shell(b, 'hair', color=HAIR_TEX)
     for sx in (-1, 1):
         b.sphere('ear', 0.075, (sx * 0.385, 0.02, 0.88), SKIN, 'head', scale=(0.55, 0.8, 1), seg=10, rings=8)
-        ex, ez = sx * 0.132, 0.865
-        rx, rz = head_tilt(ex, ez)
-        b.sphere('eye', 0.086, (ex, head_y(ex, ez) + 0.004, ez), ('#2a1830', '#a8601e'), 'head', scale=(0.76, 0.36, 1.22), rot=(rx, 0, rz), seg=20, rings=14)
-        hx, hz = ex - sx * 0.02, ez + 0.052
-        b.sphere('hl', 0.032, (hx, head_y(hx, hz) - 0.02, hz), WHITE, 'head', scale=(1.0, 0.3, 1.2), rot=head_tilt(hx, hz)[0:1] + (0, head_tilt(hx, hz)[1]), seg=10, rings=8)
-        bx, bz = sx * 0.255, 0.765
-        b.sphere('blush', 0.056, (bx, head_y(bx, bz) + 0.004, bz), ('#ff9a92', '#ff8088'), 'head', scale=(1.1, 0.3, 0.6), rot=(head_tilt(bx, bz)[0], 0, head_tilt(bx, bz)[1]), seg=12, rings=8)
-    # 嘴：一條小小的微笑弧線（兩小段），在眼睛和下巴之間偏下
-    mz = 0.715
-    for a, c in (((-0.04, mz + 0.012), (0.0, mz)), ((0.0, mz), (0.04, mz + 0.012))):
-        rod(b, 'mouth', (a[0], head_y(a[0], a[1]) + 0.004, a[1]), (c[0], head_y(c[0], c[1]) + 0.004, c[1]), 0.014, 0.014, '#7a2030', 'head', seg=6)
+    # 第五版（docs/37 第一批）：臉是「畫出來的」——眼睛（虹彩漸層、瞳孔、兩個高光、上眼皮與睫毛）、嘴、腮紅都是貼圖，貼在貼著臉的薄片上。
+    # 位置仍用 head_y 算在表面上；稽核量的是貼片的範圍（= 畫的範圍）。
+    for sx in (-1, 1):
+        decal(b, 'eye', sx * EYE_X, EYE_Z, EYE_W, EYE_H, CA['eyeR' if sx > 0 else 'eyeL'], lift=0.002)
+        decal(b, 'blush', sx * 0.268, 0.74, 0.12, 0.08, CA['blush'], lift=0.001)
+    decal(b, 'mouth', 0.0, 0.706, 0.09, 0.058, CA['mouth'], n=(5, 4))
     # ── 斗笠（第二版）：抬高、小一圈、前緣微微翹起，露出額頭與瀏海；去掉下巴的紅帶 ──
     HZ = 1.2
     TILT = -0.15
-    b.lathe('hat', [(0.52, 0.0), (0.53, 0.02), (0.36, 0.11), (0.16, 0.25), (0.03, 0.31)], (0, 0, HZ), STRAW, 'head', seg=32, rot=(TILT, 0, 0))
+    b.uv(cyl('straw')).lathe('hat', [(0.52, 0.0), (0.53, 0.02), (0.36, 0.11), (0.16, 0.25), (0.03, 0.31)], (0, 0, HZ), STRAW, 'head', seg=32, rot=(TILT, 0, 0))
     b.torus('hatrim', 0.525, 0.018, (0, 0, HZ + 0.012), STRAW_DARK, 'head', seg=32, tube=6, rot=(TILT, 0, 0))
     for r, z in ((0.445, 0.065), (0.247, 0.19)):  # 半徑 = 帽面在那個高度的半徑（稽核抓到以前第二圈浮在外面）
         b.torus('hatline', r, 0.007, (0, -z * math.sin(TILT), HZ + z), STRAW_DARK, 'head', seg=28, tube=4, rot=(TILT, 0, 0))
@@ -183,6 +228,7 @@ def build_chochin(form=0):
     # ── 腳：白襪＋木屐（兩齒） ──
     for sx, bone in ((-1, 'legL'), (1, 'legR')):
         b.sphere('tabi', 0.11, (sx * 0.14, -0.1, 0.14), WHITE, bone, scale=(1, 1.45, 0.85), seg=12, rings=8)
+        b.uv(('fn', lambda co: rect_uv(CA['wood'], co.x / 0.21 + 0.5, co.y / 0.34 + 0.5)))
         b.box('geta', (0.21, 0.34, 0.04), (sx * 0.14, -0.1, 0.06), WOOD, bone, bevel=0.012)
         for dy in (-0.08, 0.07):
             b.box('tooth', (0.19, 0.05, 0.045), (sx * 0.14, -0.1 + dy, 0.022), WOOD, bone)
@@ -204,9 +250,10 @@ def build_chochin(form=0):
     b.cone('captop', 0.11 * ls, 0.09 * ls, 0.05, tuple(lam + Vector((0, 0, 0.215 * ls))), DARK, 'lantern', seg=14)
     b.cone('capbot', 0.09 * ls, 0.11 * ls, 0.05, tuple(lam + Vector((0, 0, -0.215 * ls))), DARK, 'lantern', seg=14)
     rod(b, 'tassel', lam + Vector((0, 0, -0.22 * ls)), lam + Vector((0, 0, -0.36 * ls)), 0.02, 0.006, RED, 'lantern', seg=6)
+    # 燈籠紙（docs/37）：身體的一部分（貼圖的真實顏色＋發光貼圖），不再是獨立的發光網格——少一次 draw call，紙上看得到竹骨的影子與家紋
+    b.uv(cyl('paper')).sphere('paper', 0.17 * ls, tuple(lam), WHITE, 'lantern', scale=(1, 1, 1.25), seg=20, rings=14)
     # 數字稽核（docs/29）：頭髮連續、五官位置、懸空零件；不過就不匯出
     g = Builder()
-    g.sphere('paper', 0.17 * ls, tuple(lam), LAMP, 'lantern', scale=(1, 1, 1.25), seg=18, rings=12)
     if form:
         # 火冠：燈籠頂上三片火舌（發光）
         for k, a in enumerate((-0.5, 0, 0.5)):
@@ -225,7 +272,7 @@ def build_chochin(form=0):
             b.cone('minicap', 0.05, 0.04, 0.025, tuple(c + Vector((0, 0, 0.11))), DARK, 'body', seg=10)
     audit.run(b.parts + g.parts, CHOCHIN_SPEC, '提燈小僧' + ('' if not form else f'（化身{form}）'))
     body = b.join('Monk')
-    glow = g.join('GlowLantern')
+    glow = g.join('GlowLantern') if g.parts else None
 
     arm = lib.make_armature('MonkRig', {
         'root': ((0, 0, 0), (0, 0, 0.12), None),
@@ -238,7 +285,8 @@ def build_chochin(form=0):
         'lantern': ((0.66, -0.1, 0.97), (0.66, -0.1, 1.15), 'armR'),
     })
     lib.bind(body, arm)
-    lib.bind(glow, arm)
+    if glow:
+        lib.bind(glow, arm)
     # 走路（16 幀循環）：兩腳前後擺、手跟著擺、身體上下彈＋左右晃、頭反向穩住、燈籠晃
     s = 0.6
     lib.make_action(arm, 'walk', 16, {
@@ -257,8 +305,9 @@ def build_chochin(form=0):
         'armL': {1: {'rot': (0, 0, 0)}, 25: {'rot': (0.05, 0, 0)}, 49: {'rot': (0, 0, 0)}},
         'lantern': {1: {'rot': (0.08, 0, 0.1)}, 25: {'rot': (-0.08, 0, -0.1)}, 49: {'rot': (0.08, 0, 0.1)}},
     })
-    lib.export_glb(OUT + '/chochin-kozo' + ('' if not form else f'-f{form}') + '.glb', [body, glow, arm], animations=True)
-    return sum(len(o.data.polygons) for o in (body, glow))
+    objs = [body] + ([glow] if glow else [])
+    lib.export_glb(OUT + '/chochin-kozo' + ('' if not form else f'-f{form}') + '.glb', objs + [arm], animations=True)
+    return sum(len(o.data.polygons) for o in objs)
 
 
 # ── 河童（D88 重新設計，照 docs/28 的臉部規則與 docs/29 的驗收）──
@@ -819,6 +868,79 @@ def build_torii():
     return len(ob.data.polygons)
 
 
+# ── 場景道具（docs/37 第一批）：石燈籠、木柵欄 ──
+# 遊戲端用場景的貼圖材質（src/art/worldMaterial.ts：三向投影的岩石／木頭細節貼圖）；哪一層寫在頂點色的 alpha：0.125 + 0.25 × 層（2 = 岩石、3 = 木頭）
+def layer_color(h, layer):
+    c = lib.hex_color(h)
+    return (c[0], c[1], c[2], 0.125 + 0.25 * layer)
+
+
+ROCK, WOODL = 2, 3
+LANTERN_STONE = '#a39d90'
+LANTERN_STONE_D = '#8c8678'
+MOSS = '#7d8a5e'
+
+
+def build_stone_lantern():
+    """春日型石燈籠（約 1.6 公尺）：六角的基礎、圓柱（中間一圈節）、中台、火袋（六根細柱，中間是發光的燈室）、六角的笠（角往上翹）、寶珠。"""
+    lib.reset()
+    b = Builder()
+    st = layer_color(LANTERN_STONE, ROCK)
+    sd = layer_color(LANTERN_STONE_D, ROCK)
+    b.lathe('kiso', [(0.38, 0.0), (0.38, 0.1), (0.33, 0.14), (0.2, 0.18)], (0, 0, 0), st, seg=6, rot=(0, 0, math.pi / 6))
+    b.lathe('kisomoss', [(0.36, 0.0), (0.395, 0.01), (0.395, 0.055), (0.36, 0.075)], (0, 0, 0), layer_color(MOSS, ROCK), seg=6, rot=(0, 0, math.pi / 6))
+    b.cone('sao', 0.1, 0.12, 0.66, (0, 0, 0.17 + 0.33), st, seg=12, caps=False)
+    b.torus('fushi', 0.115, 0.022, (0, 0, 0.5), sd, seg=12, tube=5)
+    b.lathe('chudai', [(0.14, 0.82), (0.24, 0.86), (0.3, 0.9), (0.3, 0.95)], (0, 0, 0), st, seg=6, rot=(0, 0, math.pi / 6))
+    # 火袋：上下兩片六角板＋六根細柱（中間看得到發光的燈室）
+    b.lathe('hibot', [(0.24, 0.95), (0.24, 0.99)], (0, 0, 0), sd, seg=6, rot=(0, 0, math.pi / 6))
+    b.lathe('hitop', [(0.25, 1.24), (0.25, 1.28)], (0, 0, 0), sd, seg=6, rot=(0, 0, math.pi / 6))
+    for k in range(6):
+        a = k * math.pi / 3
+        b.cone('hashira', 0.032, 0.032, 0.27, (math.cos(a) * 0.215, math.sin(a) * 0.215, 1.115), st, seg=6)
+    # 笠：六角、邊緣往外延伸，六個角往上翹（蕨手）
+    hat = b.lathe('kasa', [(0.47, 1.28), (0.47, 1.31), (0.36, 1.36), (0.2, 1.43), (0.07, 1.48)], (0, 0, 0), st, seg=6, rot=(0, 0, math.pi / 6))
+    for v in hat.data.vertices:
+        r = math.hypot(v.co.x, v.co.y)
+        if r > 0.4:
+            v.co.z += 0.045
+    for k in range(6):
+        a = k * math.pi / 3 + math.pi / 6
+        b.sphere('warabite', 0.035, (math.cos(a) * 0.47, math.sin(a) * 0.47, 1.365), st, seg=6, rings=4)
+    b.cone('ukebana', 0.05, 0.08, 0.06, (0, 0, 1.5), sd, seg=12)
+    b.sphere('hoju', 0.07, (0, 0, 1.57), st, scale=(1, 1, 1.15), seg=10, rings=6)
+    b.cone('hojutip', 0.0, 0.04, 0.06, (0, 0, 1.66), st, seg=10)
+    g = Builder()
+    g.lathe('light', [(0.175, 0.985), (0.175, 1.245)], (0, 0, 0), layer_color('#ffcf7a', ROCK), seg=6, rot=(0, 0, math.pi / 6))
+    audit.run_prop(b.parts + g.parts, {'max_tris': 1000}, '石燈籠')  # 一張地圖約 16 座，按區塊合併成少數幾個網格（worldView）
+    ob = b.join('StoneLantern')
+    gl = g.join('GlowLantern')
+    lib.export_glb(OUT + '/stone-lantern.glb', [ob, gl], animations=False)
+    return len(ob.data.polygons)
+
+
+def build_fence():
+    """四目垣風的木柵欄（一段 2 公尺、高 0.85）：三根方柱、三條橫的竹子、直的竹子，交叉處綁黑繩。沿 X 軸。"""
+    lib.reset()
+    b = Builder()
+    post = layer_color('#7a5234', WOODL)
+    bamboo = layer_color('#c2ad72', WOODL)
+    rope = layer_color('#3a2a24', WOODL)
+    for x in (-1.0, 0.0, 1.0):
+        b.box('post', (0.09, 0.09, 0.9), (x, 0, 0.45), post, bevel=0.015)
+        b.cone('postcap', 0.0, 0.07, 0.05, (x, 0, 0.92), post, seg=4, rot=(0, 0, math.pi / 4))
+    for z in (0.3, 0.62):
+        rod(b, 'rail', (-1.04, 0.06, z), (1.04, 0.06, z), 0.024, 0.024, bamboo, None, seg=8)
+    for k in range(8):
+        x = -0.875 + k * 0.25
+        rod(b, 'slat', (x, 0.1, 0.04), (x, 0.1, 0.82), 0.018, 0.016, bamboo, None, seg=6)
+        b.sphere('tie', 0.026, (x, 0.08, 0.62), rope, scale=(1, 0.9, 1.3), seg=6, rings=4)
+    audit.run_prop(b.parts, {'max_tris': 900}, '木柵欄')
+    ob = b.join('Fence')
+    lib.export_glb(OUT + '/fence.glb', [ob], animations=False)
+    return len(ob.data.polygons)
+
+
 if __name__ == '__main__':
     n1 = build_chochin()
     n3 = build_kappa()
@@ -826,4 +948,5 @@ if __name__ == '__main__':
     n4 = build_villager()
     n5 = [build_ashigaru(), build_yumi(), build_taimasou(), build_kawagari(), build_sohei(), build_shinobi(), build_onmyoji(), build_taiko()]
     n2 = build_torii()
-    print('faces: forms', nf, 'chochin', n1, 'kappa', n3, 'torii', n2, 'villager tris', n4, 'ashigaru/yumi/taimasou tris', n5)
+    n6 = [build_stone_lantern(), build_fence()]
+    print('faces: forms', nf, 'chochin', n1, 'kappa', n3, 'torii', n2, 'villager tris', n4, 'props', n6, 'ashigaru/yumi/taimasou tris', n5)
